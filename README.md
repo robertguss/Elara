@@ -104,3 +104,5 @@ mix format
 ```
 
 Tests do not call the network. They use `Harness.Provider.Scripted`.
+
+Session persistence is planned in `design/sessions/overview.md`. Build one slice per session.

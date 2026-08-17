@@ -5,6 +5,7 @@ A Pi-like Elixir coding agent on OTP 29 / Elixir 1.20. One Mix app, one dependen
 ```bash
 mix harness.login
 mix harness.ask "what files are in this repo?"
+mix harness.chat
 ```
 
 Or BYOK / tests:

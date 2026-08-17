@@ -63,8 +63,14 @@ defmodule Harness.Chat.Core do
     in_turn_event(prompt, event)
   end
 
-  def step({:exiting, _code} = phase, {:line, _}), do: {phase, []}
-  def step({:exiting, _code} = phase, :eof), do: {phase, []}
+  def step({:exiting, code} = phase, {:line, line}) do
+    case parse(line) do
+      :quit -> {phase, [{:halt, code}]}
+      _ -> {phase, []}
+    end
+  end
+
+  def step({:exiting, code} = phase, :eof), do: {phase, [{:halt, code}]}
   def step({:exiting, _code} = phase, :ask_rejected), do: {phase, []}
   def step({:exiting, _}, {:session_down, _}), do: halt_down()
 

@@ -28,7 +28,8 @@ defmodule Harness.Message do
   @type t :: User.t() | Assistant.t() | ToolResult.t()
 
   @doc "The only way to build an Assistant message. Rejects the empty message."
-  @spec assistant(String.t() | nil, [ToolCall.t()]) :: {:ok, Assistant.t()} | {:error, :empty_assistant}
+  @spec assistant(String.t() | nil, [ToolCall.t()]) ::
+          {:ok, Assistant.t()} | {:error, :empty_assistant}
   def assistant(text, tool_calls)
       when (is_binary(text) or is_nil(text)) and is_list(tool_calls) do
     text_empty? = text == nil or text == ""

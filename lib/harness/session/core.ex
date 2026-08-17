@@ -75,7 +75,10 @@ defmodule Harness.Session.Core do
 
   def step(%State{phase: :idle} = state, _fact), do: {state, []}
 
-  def step(%State{phase: {:calling_provider, r, _it}} = state, {:provider_result, r, {:ok, %Assistant{} = asst}}) do
+  def step(
+        %State{phase: {:calling_provider, r, _it}} = state,
+        {:provider_result, r, {:ok, %Assistant{} = asst}}
+      ) do
     history = state.history ++ [asst]
     state = %{state | history: history}
     base = [{:emit, {:message_appended, asst}}]
@@ -92,7 +95,10 @@ defmodule Harness.Session.Core do
     end
   end
 
-  def step(%State{phase: {:calling_provider, r, _}} = state, {:provider_result, r, {:error, error}}) do
+  def step(
+        %State{phase: {:calling_provider, r, _}} = state,
+        {:provider_result, r, {:error, error}}
+      ) do
     {%{state | phase: :idle}, [{:emit, {:turn_ended, {:provider_error, error}}}]}
   end
 
@@ -101,7 +107,13 @@ defmodule Harness.Session.Core do
   end
 
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_result, r, outcome}) do
-    finish_tool(state, call, rest, it, truncate_outcome(outcome, state.config.max_tool_output_bytes))
+    finish_tool(
+      state,
+      call,
+      rest,
+      it,
+      truncate_outcome(outcome, state.config.max_tool_output_bytes)
+    )
   end
 
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_crashed, r, reason}) do
@@ -183,6 +195,7 @@ defmodule Harness.Session.Core do
       true ->
         tool = Map.fetch!(state.config.tools, call.name)
         {ref, state} = take_ref(state)
+
         effects = [
           {:emit, {:tool_started, call}},
           {:run_tool, ref, call, tool}

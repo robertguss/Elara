@@ -7,7 +7,7 @@ defmodule Harness.Session.CoreTest do
   alias Harness.Session.Core
   alias Harness.Tool
 
-  defp config(opts \\ []) do
+  defp config(opts) do
     tools =
       Tool.table([
         %Tool{
@@ -105,7 +105,9 @@ defmodule Harness.Session.CoreTest do
     assert Enum.count(state.history) == 4
 
     assert Enum.any?(effects, &match?({:call_provider, 2, _}, &1))
-    assert Enum.count(effects, &match?({:emit, {:message_appended, %Message.ToolResult{}}}, &1)) == 2
+
+    assert Enum.count(effects, &match?({:emit, {:message_appended, %Message.ToolResult{}}}, &1)) ==
+             2
   end
 
   test "row 5: provider error ends turn without appending assistant" do
@@ -196,7 +198,11 @@ defmodule Harness.Session.CoreTest do
     {state, effects} = Core.step(state, {:tool_result, 2, {:ok, "x"}})
 
     assert Core.idle?(state)
-    assert [{:emit, {:message_appended, %Message.ToolResult{}}}, {:emit, {:turn_ended, :turn_limit}}] =
+
+    assert [
+             {:emit, {:message_appended, %Message.ToolResult{}}},
+             {:emit, {:turn_ended, :turn_limit}}
+           ] =
              effects
   end
 
@@ -219,7 +225,8 @@ defmodule Harness.Session.CoreTest do
 
     # Second identical call should append error and go to provider, not run_tool
     assert Enum.any?(effects, fn
-             {:emit, {:message_appended, %Message.ToolResult{outcome: {:error, "repeated tool call"}}}} ->
+             {:emit,
+              {:message_appended, %Message.ToolResult{outcome: {:error, "repeated tool call"}}}} ->
                true
 
              _ ->

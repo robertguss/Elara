@@ -13,13 +13,16 @@ defmodule Harness.MessageTest do
     assert {:ok, %Message.Assistant{text: "hi", tool_calls: []}} = Message.assistant("hi", [])
 
     call = %ToolCall{id: "1", name: "read", args: {:ok, %{}}}
-    assert {:ok, %Message.Assistant{text: nil, tool_calls: [^call]}} = Message.assistant(nil, [call])
+
+    assert {:ok, %Message.Assistant{text: nil, tool_calls: [^call]}} =
+             Message.assistant(nil, [call])
   end
 
   test "user/1 and tool_result/2 constructors" do
     assert %Message.User{text: "q"} = Message.user("q")
 
     call = %ToolCall{id: "1", name: "bash", args: {:ok, %{}}}
+
     assert %Message.ToolResult{call_id: "1", name: "bash", outcome: {:ok, "out"}} =
              Message.tool_result(call, {:ok, "out"})
   end

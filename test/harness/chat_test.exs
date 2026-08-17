@@ -151,4 +151,71 @@ defmodule Harness.ChatTest do
     send(chat, {:stdin, "/quit\n"})
     assert 0 = Task.await(task, 5_000)
   end
+
+  test "/tree lists turns and re-submits a selected turn on a new branch" do
+    cwd = unique_cwd()
+    provider = script([{:ok, asst("a1")}, {:ok, asst("a2")}, {:ok, asst("alternate")}])
+    {:ok, session} = Harness.start_session(provider: provider, tools: [], cwd: cwd)
+    {:ok, out} = StringIO.open("")
+    task = Task.async(fn -> Harness.Chat.run(session, out) end)
+    chat = task.pid
+
+    assert await_output(out, "> ")
+    send(chat, {:stdin, "q1\n"})
+    assert await_idle_after(out, "a1")
+    send(chat, {:stdin, "q2\n"})
+    assert await_idle_after(out, "a2")
+    send(chat, {:stdin, "/tree\n"})
+
+    listing = await_idle_after(out, "choose with /tree N")
+    assert listing =~ "1  q1\n"
+    assert listing =~ "2  q2\n"
+
+    send(chat, {:stdin, "/tree 2\n"})
+    assert await_idle_after(out, "alternate")
+
+    assert Harness.transcript(session) == [
+             Message.user("q1"),
+             asst("a1"),
+             Message.user("q2"),
+             asst("alternate")
+           ]
+
+    [info] = Store.list(cwd)
+    {:ok, store} = Store.open(info.path, cwd)
+    assert length(store.entries) == 6
+
+    send(chat, {:stdin, "/quit\n"})
+    assert 0 = Task.await(task, 5_000)
+  end
+
+  test "/clone and /name create and label a separate session" do
+    cwd = unique_cwd()
+
+    {:ok, session} =
+      Harness.start_session(provider: script([{:ok, asst("answer")}]), tools: [], cwd: cwd)
+
+    {:ok, out} = StringIO.open("")
+    task = Task.async(fn -> Harness.Chat.run(session, out) end)
+    chat = task.pid
+
+    assert await_output(out, "> ")
+    send(chat, {:stdin, "question\n"})
+    assert await_idle_after(out, "answer")
+    [source] = Store.list(cwd)
+
+    send(chat, {:stdin, "/clone\n"})
+    assert await_idle_after(out, "cloned session")
+    send(chat, {:stdin, "/name alternate\n"})
+    assert await_idle_after(out, "session named")
+    send(chat, {:stdin, "/resume\n"})
+    listing = await_idle_after(out, "alternate")
+
+    assert listing =~ "alternate"
+    assert length(Store.list(cwd)) == 2
+    assert Enum.any?(Store.list(cwd), &(&1.path == source.path))
+
+    send(chat, {:stdin, "/quit\n"})
+    assert 0 = Task.await(task, 5_000)
+  end
 end

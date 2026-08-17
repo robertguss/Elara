@@ -106,6 +106,42 @@ defmodule Harness.Session do
     {:reply, shell.cwd, shell}
   end
 
+  def handle_call(:user_entries, _from, shell) do
+    entries =
+      shell.store
+      |> Store.user_entries()
+      |> Enum.map(&%{id: &1.id, text: &1.message.text})
+
+    {:reply, entries, shell}
+  end
+
+  def handle_call({:tree, id}, _from, shell) do
+    idle_store_change(shell, fn store -> Store.move_before_user(store, id) end)
+  end
+
+  def handle_call(:clone, _from, shell) do
+    idle_store_change(shell, fn store ->
+      with {:ok, target} <- Store.clone(store) do
+        {:ok, target, nil}
+      end
+    end)
+  end
+
+  def handle_call({:fork, id}, _from, shell) do
+    idle_store_change(shell, fn store -> Store.fork_before_user(store, id) end)
+  end
+
+  def handle_call({:name, name}, _from, shell) do
+    if Core.idle?(shell.core) do
+      case Store.rename(shell.store, name) do
+        {:ok, store} -> {:reply, :ok, %{shell | store: store}}
+        {:error, reason} -> {:reply, {:error, reason}, shell}
+      end
+    else
+      {:reply, {:error, :busy}, shell}
+    end
+  end
+
   def handle_call({:hydrate, store}, _from, shell) do
     if Core.idle?(shell.core) do
       case hydrate(store, shell.core.config) do
@@ -114,6 +150,7 @@ defmodule Harness.Session do
             Store.release(shell.store)
           end
 
+          core = Core.rebase_history(shell.core, core.history)
           {:reply, {:ok, core.history}, %{shell | store: store, core: core}}
 
         {:error, reason} ->
@@ -202,11 +239,40 @@ defmodule Harness.Session do
     end
   end
 
+  def handle_info(
+        {port, {:exit_status, status}},
+        %Shell{store: %Store{lock_handle: port}} = shell
+      ) do
+    {:stop, {:session_lock_lost, status}, shell}
+  end
+
   def handle_info(_msg, shell), do: {:noreply, shell}
 
   defp hydrate(store, config) do
     with {:ok, store} <- Store.claim(store) do
       persist_repairs(store, Core.new(config, Store.history(store)))
+    end
+  end
+
+  defp idle_store_change(shell, change) do
+    if Core.idle?(shell.core) do
+      case change.(shell.store) do
+        {:ok, store, prompt} ->
+          case Store.claim(store) do
+            {:ok, store} ->
+              if store.path != shell.store.path, do: Store.release(shell.store)
+              core = Core.rebase_history(shell.core, Store.history(store))
+              {:reply, {:ok, prompt, core.history}, %{shell | store: store, core: core}}
+
+            {:error, reason} ->
+              {:reply, {:error, reason}, shell}
+          end
+
+        {:error, reason} ->
+          {:reply, {:error, reason}, shell}
+      end
+    else
+      {:reply, {:error, :busy}, shell}
     end
   end
 

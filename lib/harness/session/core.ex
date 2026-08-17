@@ -59,6 +59,11 @@ defmodule Harness.Session.Core do
     %State{config: config, history: repair_history(history), phase: :idle, next_ref: 1}
   end
 
+  @spec rebase_history(State.t(), [Message.t()]) :: State.t()
+  def rebase_history(%State{phase: :idle} = state, history) when is_list(history) do
+    %{state | history: repair_history(history)}
+  end
+
   @spec repair_history([Message.t()]) :: [Message.t()]
   def repair_history(history) when is_list(history) do
     {trailing_results, rest} =

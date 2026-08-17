@@ -6,7 +6,7 @@ defmodule Harness.Chat.Core do
   alias Harness.Message.{Assistant, ToolCall, ToolResult, User}
 
   @type phase :: :idle | {:in_turn, String.t()} | {:exiting, 0 | 1}
-  @type session_row :: %{id: String.t(), timestamp: integer()}
+  @type session_row :: %{id: String.t(), timestamp: integer(), name: String.t() | nil}
 
   @type input ::
           {:line, String.t()}
@@ -15,6 +15,9 @@ defmodule Harness.Chat.Core do
           | {:session_down, term()}
           | {:sessions_listed, [session_row()]}
           | {:resume_result, {:ok, [Message.t()]} | {:error, term()}}
+          | {:user_entries_listed, :tree | :fork, [map()]}
+          | {:branch_result, :tree | :fork, {:ok, String.t(), [Message.t()]} | {:error, term()}}
+          | {:action_result, :clone | :name, :ok | {:error, term()}}
           | :ask_rejected
 
   @type effect ::
@@ -22,6 +25,10 @@ defmodule Harness.Chat.Core do
           | {:ask, String.t()}
           | :list_sessions
           | {:resume_session, pos_integer()}
+          | {:list_user_entries, :tree | :fork}
+          | {:select_user_entry, :tree | :fork, pos_integer()}
+          | :clone_session
+          | {:name_session, String.t()}
           | :interrupt
           | {:halt, 0 | 1}
 
@@ -32,6 +39,9 @@ defmodule Harness.Chat.Core do
     "/interrupt" => :interrupt,
     "/stop" => :interrupt,
     "/resume" => :resume_list,
+    "/tree" => :tree_list,
+    "/fork" => :fork_list,
+    "/clone" => :clone,
     "/help" => :help,
     "/h" => :help,
     "/?" => :help
@@ -42,6 +52,10 @@ defmodule Harness.Chat.Core do
   /interrupt  cancel the current turn
   /resume     list saved sessions
   /resume N   resume saved session N
+  /tree       list user turns; /tree N branches in this session
+  /fork       list user turns; /fork N branches into a new session
+  /clone      copy the current path into a new session
+  /name TEXT  name the current session
   /quit       exit
   """
 
@@ -59,6 +73,28 @@ defmodule Harness.Chat.Core do
   def step(:idle, :ask_rejected), do: {:idle, print([@rejected, @prompt])}
   def step(:idle, {:session_down, _}), do: halt_down()
   def step(:idle, {:sessions_listed, infos}), do: {:idle, print([session_list(infos), @prompt])}
+
+  def step(:idle, {:user_entries_listed, kind, entries}) do
+    {:idle, print([user_entry_list(kind, entries), @prompt])}
+  end
+
+  def step(:idle, {:branch_result, kind, {:ok, prompt, _history}}) do
+    label = if kind == :tree, do: "branched in current session\n", else: "forked session\n"
+    {{:in_turn, prompt}, print(label) ++ [{:print, user_block(prompt)}, {:ask, prompt}]}
+  end
+
+  def step(:idle, {:branch_result, _kind, {:error, reason}}) do
+    {:idle, print([action_error(reason), @prompt])}
+  end
+
+  def step(:idle, {:action_result, kind, :ok}) do
+    text = if kind == :clone, do: "cloned session\n", else: "session named\n"
+    {:idle, print([text, @prompt])}
+  end
+
+  def step(:idle, {:action_result, _kind, {:error, reason}}) do
+    {:idle, print([action_error(reason), @prompt])}
+  end
 
   def step(:idle, {:resume_result, {:ok, history}}) do
     {:idle, print([render_transcript(history), @prompt])}
@@ -79,6 +115,9 @@ defmodule Harness.Chat.Core do
   def step({:in_turn, _}, {:session_down, _}), do: halt_down()
   def step({:in_turn, _} = phase, {:sessions_listed, _}), do: {phase, []}
   def step({:in_turn, _} = phase, {:resume_result, _}), do: {phase, []}
+  def step({:in_turn, _} = phase, {:user_entries_listed, _, _}), do: {phase, []}
+  def step({:in_turn, _} = phase, {:branch_result, _, _}), do: {phase, []}
+  def step({:in_turn, _} = phase, {:action_result, _, _}), do: {phase, []}
 
   def step({:in_turn, prompt}, {:event, event}) do
     in_turn_event(prompt, event)
@@ -96,6 +135,9 @@ defmodule Harness.Chat.Core do
   def step({:exiting, _}, {:session_down, _}), do: halt_down()
   def step({:exiting, _} = phase, {:sessions_listed, _}), do: {phase, []}
   def step({:exiting, _} = phase, {:resume_result, _}), do: {phase, []}
+  def step({:exiting, _} = phase, {:user_entries_listed, _, _}), do: {phase, []}
+  def step({:exiting, _} = phase, {:branch_result, _, _}), do: {phase, []}
+  def step({:exiting, _} = phase, {:action_result, _, _}), do: {phase, []}
 
   def step({:exiting, code} = phase, {:event, {:turn_ended, outcome} = event}) do
     {phase, end_prints(outcome, event) ++ [{:halt, code}]}
@@ -112,6 +154,15 @@ defmodule Harness.Chat.Core do
   defp idle_line(:resume_list), do: {:idle, [:list_sessions]}
   defp idle_line({:resume, index}), do: {:idle, [{:resume_session, index}]}
   defp idle_line(:invalid_resume), do: {:idle, print(["usage: /resume or /resume N\n", @prompt])}
+  defp idle_line(:tree_list), do: {:idle, [{:list_user_entries, :tree}]}
+  defp idle_line(:fork_list), do: {:idle, [{:list_user_entries, :fork}]}
+  defp idle_line({:tree, index}), do: {:idle, [{:select_user_entry, :tree, index}]}
+  defp idle_line({:fork, index}), do: {:idle, [{:select_user_entry, :fork, index}]}
+  defp idle_line(:clone), do: {:idle, [:clone_session]}
+  defp idle_line({:name, name}), do: {:idle, [{:name_session, name}]}
+  defp idle_line(:invalid_tree), do: {:idle, print(["usage: /tree or /tree N\n", @prompt])}
+  defp idle_line(:invalid_fork), do: {:idle, print(["usage: /fork or /fork N\n", @prompt])}
+  defp idle_line(:invalid_name), do: {:idle, print(["usage: /name TEXT\n", @prompt])}
 
   defp idle_line({:unknown, cmd}),
     do: {:idle, print(["unknown command ", cmd, ". /help\n", @prompt])}
@@ -127,6 +178,22 @@ defmodule Harness.Chat.Core do
   defp in_turn_line(phase, _prompt, :resume_list), do: {phase, print(@refuse)}
   defp in_turn_line(phase, _prompt, {:resume, _}), do: {phase, print(@refuse)}
   defp in_turn_line(phase, _prompt, :invalid_resume), do: {phase, print(@refuse)}
+
+  defp in_turn_line(phase, _prompt, command)
+       when command in [
+              :tree_list,
+              :fork_list,
+              :clone,
+              :invalid_tree,
+              :invalid_fork,
+              :invalid_name
+            ],
+       do: {phase, print(@refuse)}
+
+  defp in_turn_line(phase, _prompt, {command, _})
+       when command in [:tree, :fork, :name],
+       do: {phase, print(@refuse)}
+
   defp in_turn_line(phase, _prompt, {:unknown, _}), do: {phase, print(@refuse)}
   defp in_turn_line(phase, _prompt, {:prompt, _}), do: {phase, print(@refuse)}
 
@@ -232,6 +299,15 @@ defmodule Harness.Chat.Core do
       Regex.match?(~r/^\/resume\s/, trimmed) ->
         parse_resume(trimmed)
 
+      Regex.match?(~r/^\/tree(?:\s|$)/, trimmed) ->
+        parse_index_command(trimmed, "/tree", :tree, :invalid_tree)
+
+      Regex.match?(~r/^\/fork(?:\s|$)/, trimmed) ->
+        parse_index_command(trimmed, "/fork", :fork, :invalid_fork)
+
+      Regex.match?(~r/^\/name(?:\s|$)/, trimmed) ->
+        parse_name(trimmed)
+
       String.starts_with?(trimmed, "/") ->
         {:unknown, trimmed}
 
@@ -253,25 +329,69 @@ defmodule Harness.Chat.Core do
     end
   end
 
+  defp parse_index_command(trimmed, command, tag, invalid) do
+    case String.split(trimmed, ~r/\s+/, trim: true) do
+      [^command, raw_index] ->
+        case Integer.parse(raw_index) do
+          {index, ""} when index > 0 -> {tag, index}
+          _ -> invalid
+        end
+
+      _ ->
+        invalid
+    end
+  end
+
+  defp parse_name(trimmed) do
+    case String.split(trimmed, ~r/\s+/, parts: 2, trim: true) do
+      ["/name", name] when name != "" -> {:name, name}
+      _ -> :invalid_name
+    end
+  end
+
   defp session_list([]), do: "no saved sessions for this directory\n"
 
   defp session_list(infos) do
     rows =
       infos
       |> Enum.with_index(1)
-      |> Enum.map(fn {%{id: id, timestamp: timestamp}, index} ->
+      |> Enum.map(fn {%{id: id, timestamp: timestamp} = info, index} ->
+        name = Map.get(info, :name)
+
         [
           Integer.to_string(index),
           "  ",
           timestamp |> DateTime.from_unix!() |> DateTime.to_iso8601(),
           "  ",
           id,
+          if(name, do: ["  ", name], else: []),
           "\n"
         ]
       end)
 
     ["saved sessions\n", rows]
   end
+
+  defp user_entry_list(_kind, []), do: "no user turns in this session\n"
+
+  defp user_entry_list(kind, entries) do
+    command = if kind == :tree, do: "/tree", else: "/fork"
+
+    rows =
+      entries
+      |> Enum.with_index(1)
+      |> Enum.map(fn {%{text: text}, index} ->
+        summary = text |> String.replace(~r/\s+/, " ") |> String.slice(0, 80)
+        [Integer.to_string(index), "  ", summary, "\n"]
+      end)
+
+    ["user turns (choose with ", command, " N)\n", rows]
+  end
+
+  defp action_error({:invalid_index, index}),
+    do: ["no user turn at index ", Integer.to_string(index), "\n"]
+
+  defp action_error(reason), do: ["session command failed: ", inspect(reason), "\n"]
 
   defp resume_error({:invalid_index, index}) do
     ["no saved session at index ", Integer.to_string(index), "\n"]

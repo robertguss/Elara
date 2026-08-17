@@ -10,11 +10,14 @@ defmodule Mix.Tasks.Harness.ChatTest do
   end
 
   test "parse_args separates --continue from seed arguments" do
-    assert {:ok, ["explain", "this"], [continue: true]} =
+    assert {:ok, ["explain", "this"], [continue: true, name: nil]} =
              Chat.parse_args(["--continue", "explain", "this"])
 
-    assert {:ok, ["explain", "this"], [continue: false]} =
+    assert {:ok, ["explain", "this"], [continue: false, name: nil]} =
              Chat.parse_args(["explain", "this"])
+
+    assert {:ok, [], [continue: false, name: "investigation"]} =
+             Chat.parse_args(["--name", "investigation"])
   end
 
   test "unknown options print an error and exit 1" do
@@ -28,6 +31,10 @@ defmodule Mix.Tasks.Harness.ChatTest do
              "No saved session for this directory."
 
     assert Harness.Chat.startup_error(:locked) == "Session is already open."
+
+    assert Harness.Chat.startup_error(:lock_unavailable) ==
+             "Session locking requires the `flock` command."
+
     assert Harness.Chat.startup_error(:no_home) == "HOME is not set."
   end
 end

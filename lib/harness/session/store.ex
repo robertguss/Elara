@@ -1,6 +1,6 @@
 defmodule Harness.Session.Store do
   @moduledoc """
-  Private JSONL persistence for a linear session log.
+  Private JSONL persistence for a session tree.
   """
 
   alias Harness.Message
@@ -9,48 +9,70 @@ defmodule Harness.Session.Store do
   @version 1
   @hash_length 12
 
+  defmodule Entry do
+    @moduledoc false
+    @type t :: %__MODULE__{
+            id: String.t(),
+            parent_id: String.t() | nil,
+            timestamp: integer(),
+            message: Message.t()
+          }
+    defstruct [:id, :parent_id, :timestamp, :message]
+  end
+
   defmodule Info do
     @moduledoc false
-
     @type t :: %__MODULE__{
             path: String.t(),
             id: String.t(),
             cwd: String.t(),
-            timestamp: integer()
+            timestamp: integer(),
+            name: String.t() | nil
           }
-
-    defstruct [:path, :id, :cwd, :timestamp]
+    defstruct [:path, :id, :cwd, :timestamp, :name]
   end
 
   @type t :: %__MODULE__{
           id: String.t(),
           cwd: String.t(),
           path: String.t() | nil,
-          messages: [Message.t()],
+          entries: [Entry.t()],
+          leaf: String.t() | nil,
+          name: String.t() | nil,
+          parent_session: String.t() | nil,
+          lock_path: String.t() | nil,
+          lock_handle: port() | nil,
           persist?: boolean()
         }
 
-  defstruct [:id, :cwd, :path, messages: [], persist?: true]
+  defstruct [
+    :id,
+    :cwd,
+    :path,
+    :leaf,
+    :name,
+    :parent_session,
+    :lock_path,
+    :lock_handle,
+    entries: [],
+    persist?: true
+  ]
 
   @spec root() :: {:ok, String.t()} | {:error, :no_home}
   def root do
     case Application.get_env(:harness, :sessions_root) do
-      root when is_binary(root) and root != "" ->
-        {:ok, Path.expand(root)}
-
-      _ ->
-        case System.user_home() do
-          home when is_binary(home) and home != "" ->
-            {:ok, Path.join([home, ".harness", "sessions"])}
-
-          _ ->
-            {:error, :no_home}
-        end
+      root when is_binary(root) and root != "" -> {:ok, Path.expand(root)}
+      _ -> user_root(System.user_home())
     end
   end
 
-  @spec new(String.t()) :: t()
-  def new(cwd) when is_binary(cwd) do
+  defp user_root(home) when is_binary(home) and home != "",
+    do: {:ok, Path.join([home, ".harness", "sessions"])}
+
+  defp user_root(_home), do: {:error, :no_home}
+
+  @spec new(String.t(), String.t() | nil) :: t()
+  def new(cwd, name \\ nil) when is_binary(cwd) do
     cwd = Path.expand(cwd)
     id = generate_id()
     {:ok, root} = root()
@@ -59,18 +81,13 @@ defmodule Harness.Session.Store do
       id: id,
       cwd: cwd,
       path: Path.join([root, cwd_key(cwd), "#{id}.jsonl"]),
-      persist?: true
+      name: name
     }
   end
 
   @spec memory(String.t()) :: t()
   def memory(cwd) when is_binary(cwd) do
-    %__MODULE__{
-      id: generate_id(),
-      cwd: Path.expand(cwd),
-      path: nil,
-      persist?: false
-    }
+    %__MODULE__{id: generate_id(), cwd: Path.expand(cwd), path: nil, persist?: false}
   end
 
   @spec open(String.t(), String.t() | nil) :: {:ok, t()} | {:error, term()}
@@ -78,14 +95,17 @@ defmodule Harness.Session.Store do
     with {:ok, raw} <- File.read(path),
          {:ok, header, entry_lines} <- decode_file_lines(raw),
          :ok <- validate_expected_cwd(header.cwd, expected_cwd),
-         {:ok, messages} <- decode_entries(entry_lines) do
+         {:ok, entries} <- decode_entries(entry_lines, header.legacy?),
+         {:ok, leaf} <- resolve_leaf(header.leaf, entries) do
       {:ok,
        %__MODULE__{
          id: header.id,
          cwd: header.cwd,
          path: path,
-         messages: messages,
-         persist?: true
+         entries: entries,
+         leaf: leaf,
+         name: header.name,
+         parent_session: header.parent_session
        }}
     end
   end
@@ -94,47 +114,91 @@ defmodule Harness.Session.Store do
   def append(%__MODULE__{} = store, message)
       when is_struct(message, User) or is_struct(message, Assistant) or
              is_struct(message, ToolResult) do
-    updated = %{store | messages: store.messages ++ [message]}
+    entry = %Entry{
+      id: generate_id(),
+      parent_id: store.leaf,
+      timestamp: System.system_time(:millisecond),
+      message: message
+    }
 
-    cond do
-      not store.persist? ->
-        {:ok, updated}
+    save(%{store | entries: store.entries ++ [entry], leaf: entry.id})
+  end
 
-      is_nil(store.path) ->
-        {:error, :no_path}
+  @spec history(t()) :: [Message.t()]
+  def history(%__MODULE__{} = store) do
+    store
+    |> path_entries(store.leaf)
+    |> Enum.map(& &1.message)
+  end
 
-      true ->
-        case persist(store, message) do
-          :ok -> {:ok, updated}
-          {:error, reason} -> {:error, reason}
+  @spec user_entries(t()) :: [Entry.t()]
+  def user_entries(%__MODULE__{entries: entries}) do
+    Enum.filter(entries, &is_struct(&1.message, User))
+  end
+
+  @spec move_before_user(t(), String.t()) :: {:ok, t(), String.t()} | {:error, term()}
+  def move_before_user(%__MODULE__{} = store, id) when is_binary(id) do
+    case Enum.find(store.entries, &(&1.id == id and is_struct(&1.message, User))) do
+      nil ->
+        {:error, :invalid_entry}
+
+      entry ->
+        case save(%{store | leaf: entry.parent_id}) do
+          {:ok, store} -> {:ok, store, entry.message.text}
+          error -> error
         end
     end
   end
 
-  @spec history(t()) :: [Message.t()]
-  def history(%__MODULE__{} = store), do: store.messages
+  @spec clone(t()) :: {:ok, t()} | {:error, term()}
+  def clone(%__MODULE__{} = source), do: clone_to(source, source.leaf)
+
+  defp clone_to(source, leaf) do
+    entries = path_entries(source, leaf)
+
+    target = %{
+      new(source.cwd, source.name)
+      | entries: entries,
+        leaf: leaf,
+        parent_session: source.path
+    }
+
+    save(target)
+  end
+
+  @spec fork_before_user(t(), String.t()) :: {:ok, t(), String.t()} | {:error, term()}
+  def fork_before_user(%__MODULE__{} = source, id) when is_binary(id) do
+    case Enum.find(source.entries, &(&1.id == id and is_struct(&1.message, User))) do
+      nil ->
+        {:error, :invalid_entry}
+
+      entry ->
+        case clone_to(source, entry.parent_id) do
+          {:ok, target} -> {:ok, target, entry.message.text}
+          error -> error
+        end
+    end
+  end
+
+  @spec rename(t(), String.t() | nil) :: {:ok, t()} | {:error, term()}
+  def rename(%__MODULE__{} = store, name) when is_binary(name) or is_nil(name) do
+    save(%{store | name: name})
+  end
 
   @spec list(String.t()) :: [Info.t()]
   def list(cwd) when is_binary(cwd) do
     cwd = Path.expand(cwd)
 
-    case root() do
-      {:error, :no_home} ->
-        []
+    with {:ok, root} <- root(),
+         {:ok, names} <- File.ls(Path.join(root, cwd_key(cwd))) do
+      dir = Path.join(root, cwd_key(cwd))
 
-      {:ok, root} ->
-        dir = Path.join(root, cwd_key(cwd))
-
-        case File.ls(dir) do
-          {:ok, names} ->
-            names
-            |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
-            |> Enum.flat_map(&info_for_path(Path.join(dir, &1), cwd))
-            |> Enum.sort_by(fn info -> {-info.timestamp, info.path} end)
-
-          {:error, _reason} ->
-            []
-        end
+      names
+      |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
+      |> Enum.flat_map(&info_for_path(Path.join(dir, &1), cwd))
+      |> Enum.sort_by(fn info -> {-info.timestamp, info.path} end)
+    else
+      _ -> []
     end
   end
 
@@ -146,22 +210,34 @@ defmodule Harness.Session.Store do
     end
   end
 
-  @spec claim(t()) :: {:ok, t()} | {:error, :locked}
+  @spec claim(t()) :: {:ok, t()} | {:error, term()}
   def claim(%__MODULE__{persist?: false} = store), do: {:ok, store}
   def claim(%__MODULE__{path: nil} = store), do: {:ok, store}
 
-  def claim(%__MODULE__{path: path} = store) when is_binary(path) do
+  def claim(%__MODULE__{path: path} = store) do
     key = Path.expand(path)
 
     case Registry.lookup(Harness.SessionLocks, key) do
-      [{pid, _}] when pid == self() ->
-        {:ok, store}
+      [{pid, {lock_path, lock_handle}}] when pid == self() ->
+        {:ok, %{store | lock_path: lock_path, lock_handle: lock_handle}}
 
       _ ->
-        case Registry.register(Harness.SessionLocks, key, nil) do
-          {:ok, _} -> {:ok, store}
-          {:error, {:already_registered, _}} -> {:error, :locked}
-        end
+        register_lock(key, store)
+    end
+  end
+
+  defp register_lock(key, store) do
+    lock_path = key <> ".lock"
+
+    with {:ok, lock_handle} <- acquire_file_lock(lock_path) do
+      case Registry.register(Harness.SessionLocks, key, {lock_path, lock_handle}) do
+        {:ok, _} ->
+          {:ok, %{store | lock_path: lock_path, lock_handle: lock_handle}}
+
+        {:error, {:already_registered, _}} ->
+          close_lock(lock_handle)
+          {:error, :locked}
+      end
     end
   end
 
@@ -169,21 +245,60 @@ defmodule Harness.Session.Store do
   def release(%__MODULE__{persist?: false}), do: :ok
   def release(%__MODULE__{path: nil}), do: :ok
 
-  def release(%__MODULE__{path: path}) when is_binary(path) do
+  def release(%__MODULE__{path: path, lock_handle: lock_handle}) do
     key = Path.expand(path)
 
     case Registry.lookup(Harness.SessionLocks, key) do
-      [{pid, _}] when pid == self() ->
+      [{pid, {_lock_path, registered_lock_handle}}] when pid == self() ->
         Registry.unregister(Harness.SessionLocks, key)
-        :ok
+        close_lock(lock_handle || registered_lock_handle)
 
       _ ->
         :ok
     end
+
+    :ok
   end
 
+  defp acquire_file_lock(lock_path) do
+    with :ok <- File.mkdir_p(Path.dirname(lock_path)),
+         flock when is_binary(flock) <- System.find_executable("flock") do
+      port =
+        Port.open(
+          {:spawn_executable, flock},
+          [
+            :binary,
+            :exit_status,
+            {:args, ["-n", lock_path, "sh", "-c", "printf ready; cat"]}
+          ]
+        )
+
+      receive do
+        {^port, {:data, "ready"}} ->
+          :ok = File.chmod(lock_path, 0o600)
+          {:ok, port}
+
+        {^port, {:exit_status, _status}} ->
+          {:error, :locked}
+      after
+        5_000 ->
+          close_lock(port)
+          {:error, :lock_timeout}
+      end
+    else
+      nil -> {:error, :lock_unavailable}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp close_lock(port) when is_port(port) do
+    if Port.info(port), do: Port.close(port)
+    :ok
+  end
+
+  defp close_lock(nil), do: :ok
+
   @doc false
-  @spec cwd_key(String.t()) :: String.t()
   def cwd_key(cwd) when is_binary(cwd) do
     cwd = Path.expand(cwd)
 
@@ -207,18 +322,10 @@ defmodule Harness.Session.Store do
   end
 
   @doc false
-  @spec encode_message(Message.t()) :: map()
-  def encode_message(%User{text: text}) do
-    %{"user" => %{"text" => text}}
-  end
+  def encode_message(%User{text: text}), do: %{"user" => %{"text" => text}}
 
   def encode_message(%Assistant{text: text, tool_calls: tool_calls}) do
-    %{
-      "assistant" => %{
-        "text" => text,
-        "toolCalls" => Enum.map(tool_calls, &encode_tool_call/1)
-      }
-    }
+    %{"assistant" => %{"text" => text, "toolCalls" => Enum.map(tool_calls, &encode_tool_call/1)}}
   end
 
   def encode_message(%ToolResult{call_id: call_id, name: name, outcome: outcome}) do
@@ -232,16 +339,9 @@ defmodule Harness.Session.Store do
   end
 
   @doc false
-  @spec decode_message(map()) :: {:ok, Message.t()} | {:error, :invalid_message}
-  def decode_message(%{"user" => payload} = encoded) when map_size(encoded) == 1 do
-    case payload do
-      %{"text" => text} = user when map_size(user) == 1 and is_binary(text) ->
-        {:ok, %User{text: text}}
-
-      _ ->
-        {:error, :invalid_message}
-    end
-  end
+  def decode_message(%{"user" => %{"text" => text} = user} = encoded)
+      when map_size(encoded) == 1 and map_size(user) == 1 and is_binary(text),
+      do: {:ok, %User{text: text}}
 
   def decode_message(%{"assistant" => payload} = encoded) when map_size(encoded) == 1 do
     with %{"text" => text, "toolCalls" => calls} = assistant
@@ -268,70 +368,82 @@ defmodule Harness.Session.Store do
 
   def decode_message(_encoded), do: {:error, :invalid_message}
 
-  defp persist(store, message) do
-    line = message |> encode_entry() |> JSON.encode!()
+  defp save(%__MODULE__{persist?: false} = store), do: {:ok, store}
+  defp save(%__MODULE__{path: nil}), do: {:error, :no_path}
 
-    if File.regular?(store.path) do
-      File.write(store.path, line <> "\n", [:append])
-    else
-      write_new(store, line)
-    end
-  end
-
-  defp write_new(store, line) do
+  defp save(store) do
+    lines = [encode_header(store) | Enum.map(store.entries, &encode_entry/1)]
+    payload = Enum.map_join(lines, "\n", &JSON.encode!/1) <> "\n"
     dir = Path.dirname(store.path)
-    header = JSON.encode!(encode_header(store))
+    tmp = store.path <> ".tmp.#{System.unique_integer([:positive])}"
 
     with :ok <- File.mkdir_p(dir),
-         :ok <- File.write(store.path, header <> "\n" <> line <> "\n"),
-         :ok <- File.chmod(store.path, 0o600) do
-      :ok
+         :ok <- File.write(tmp, payload),
+         :ok <- File.chmod(tmp, 0o600),
+         :ok <- File.rename(tmp, store.path) do
+      {:ok, store}
+    else
+      {:error, reason} ->
+        File.rm(tmp)
+        {:error, reason}
     end
   end
 
   defp encode_header(store) do
-    %{
-      "version" => @version,
-      "id" => store.id,
-      "cwd" => store.cwd
-    }
+    %{"version" => @version, "id" => store.id, "cwd" => store.cwd, "leaf" => store.leaf}
+    |> put_optional("name", store.name)
+    |> put_optional("parentSession", store.parent_session)
   end
 
-  defp encode_entry(message) do
-    message
+  defp put_optional(map, _key, nil), do: map
+  defp put_optional(map, key, value), do: Map.put(map, key, value)
+
+  defp encode_entry(%Entry{} = entry) do
+    entry.message
     |> encode_message()
     |> Map.merge(%{
-      "id" => generate_id(),
-      "timestamp" => System.system_time(:millisecond)
+      "id" => entry.id,
+      "parentId" => entry.parent_id,
+      "timestamp" => entry.timestamp
     })
+  end
+
+  defp path_entries(_store, nil), do: []
+
+  defp path_entries(store, leaf) do
+    by_id = Map.new(store.entries, &{&1.id, &1})
+    walk_entries(by_id, leaf, [])
+  end
+
+  defp walk_entries(by_id, id, acc) do
+    entry = Map.fetch!(by_id, id)
+    acc = [entry | acc]
+    if is_nil(entry.parent_id), do: acc, else: walk_entries(by_id, entry.parent_id, acc)
   end
 
   defp info_for_path(path, cwd) do
     with {:ok, %{type: :regular, mtime: timestamp}} <- File.stat(path, time: :posix),
          {:ok, store} <- open(path, cwd),
-         true <- Enum.any?(store.messages, &is_struct(&1, User)) do
-      [%Info{path: path, id: store.id, cwd: store.cwd, timestamp: timestamp}]
+         true <- Enum.any?(store.entries, &is_struct(&1.message, User)) do
+      [%Info{path: path, id: store.id, cwd: store.cwd, timestamp: timestamp, name: store.name}]
     else
       _ -> []
     end
   end
 
-  defp decode_file_lines(raw) when is_binary(raw) do
-    lines =
-      raw
-      |> String.split("\n", trim: false)
-      |> drop_terminal_empty_line()
+  defp decode_file_lines(raw) do
+    lines = raw |> String.split("\n", trim: false) |> drop_terminal_empty_line()
 
     case lines do
       [header_line | entry_lines] ->
         case JSON.decode(header_line) do
-          {:ok, encoded_header} ->
-            case decode_header(encoded_header) do
+          {:ok, encoded} ->
+            case decode_header(encoded) do
               {:ok, header} -> {:ok, header, entry_lines}
               {:error, reason} -> {:error, reason}
             end
 
-          {:error, _reason} ->
+          {:error, _} ->
             {:error, :bad_header}
         end
 
@@ -341,15 +453,16 @@ defmodule Harness.Session.Store do
   end
 
   defp drop_terminal_empty_line(lines) do
-    case List.last(lines) do
-      "" -> Enum.drop(lines, -1)
-      _ -> lines
-    end
+    if List.last(lines) == "", do: Enum.drop(lines, -1), else: lines
   end
 
-  defp decode_header(%{"version" => version, "id" => id, "cwd" => cwd} = header)
-       when map_size(header) == 3 do
+  defp decode_header(%{"version" => version, "id" => id, "cwd" => cwd} = header) do
+    allowed = MapSet.new(["version", "id", "cwd", "leaf", "name", "parentSession"])
+
     cond do
+      not Enum.all?(Map.keys(header), &MapSet.member?(allowed, &1)) ->
+        {:error, :bad_header}
+
       not is_integer(version) ->
         {:error, :bad_header}
 
@@ -362,12 +475,31 @@ defmodule Harness.Session.Store do
       not (is_binary(cwd) and cwd != "" and Path.type(cwd) == :absolute) ->
         {:error, :bad_header}
 
+      not valid_optional_string?(Map.get(header, "leaf")) ->
+        {:error, :bad_header}
+
+      not valid_optional_string?(Map.get(header, "name")) ->
+        {:error, :bad_header}
+
+      not valid_optional_string?(Map.get(header, "parentSession")) ->
+        {:error, :bad_header}
+
       true ->
-        {:ok, %{id: id, cwd: cwd}}
+        {:ok,
+         %{
+           id: id,
+           cwd: cwd,
+           leaf: Map.get(header, "leaf", :legacy),
+           legacy?: not Map.has_key?(header, "leaf"),
+           name: Map.get(header, "name"),
+           parent_session: Map.get(header, "parentSession")
+         }}
     end
   end
 
   defp decode_header(_header), do: {:error, :bad_header}
+  defp valid_optional_string?(nil), do: true
+  defp valid_optional_string?(value), do: is_binary(value) and value != ""
 
   defp validate_expected_cwd(_stored_cwd, nil), do: :ok
 
@@ -377,57 +509,80 @@ defmodule Harness.Session.Store do
 
   defp validate_expected_cwd(_stored_cwd, _expected_cwd), do: {:error, :cwd_mismatch}
 
-  defp decode_entries(lines) do
+  defp decode_entries(lines, legacy?) do
     last_index = length(lines) - 1
 
     lines
     |> Enum.with_index()
-    |> Enum.reduce_while({:ok, [], MapSet.new()}, fn
-      {line, index}, {:ok, messages, ids} ->
-        case decode_entry_line(line) do
-          {:ok, {id, message}} ->
-            if MapSet.member?(ids, id) do
-              {:halt, {:error, {:duplicate_id, id}}}
-            else
-              {:cont, {:ok, [message | messages], MapSet.put(ids, id)}}
-            end
-
-          {:error, :invalid_json} when index == last_index and line != "" ->
-            {:halt, {:ok, Enum.reverse(messages)}}
-
-          {:error, reason} ->
-            {:halt, {:error, {:malformed_line, index + 2, reason}}}
-        end
+    |> Enum.reduce_while({:ok, [], MapSet.new(), nil}, fn {line, index}, acc ->
+      decode_entry_reducer(line, index, last_index, legacy?, acc)
     end)
     |> case do
-      {:ok, messages, _ids} -> {:ok, Enum.reverse(messages)}
-      {:ok, messages} -> {:ok, messages}
-      {:error, reason} -> {:error, reason}
+      {:ok, entries, _ids, _previous} -> validate_tree(Enum.reverse(entries))
+      {:ok, entries} -> validate_tree(entries)
+      error -> error
     end
   end
 
-  defp decode_entry_line(line) do
+  defp decode_entry_reducer(line, index, last_index, legacy?, {:ok, entries, ids, previous}) do
+    case decode_entry_line(line, legacy?, previous) do
+      {:ok, entry} ->
+        cond do
+          MapSet.member?(ids, entry.id) ->
+            {:halt, {:error, {:duplicate_id, entry.id}}}
+
+          not is_nil(entry.parent_id) and not MapSet.member?(ids, entry.parent_id) ->
+            {:halt, {:error, {:malformed_line, index + 2, :invalid_parent}}}
+
+          true ->
+            {:cont, {:ok, [entry | entries], MapSet.put(ids, entry.id), entry.id}}
+        end
+
+      {:error, :invalid_json} when index == last_index and line != "" ->
+        {:halt, {:ok, Enum.reverse(entries)}}
+
+      {:error, reason} ->
+        {:halt, {:error, {:malformed_line, index + 2, reason}}}
+    end
+  end
+
+  defp validate_tree(entries), do: {:ok, entries}
+
+  defp decode_entry_line(line, legacy?, legacy_parent) do
     case JSON.decode(line) do
-      {:ok, encoded} -> decode_entry(encoded)
-      {:error, _reason} -> {:error, :invalid_json}
+      {:ok, encoded} -> decode_entry(encoded, legacy?, legacy_parent)
+      {:error, _} -> {:error, :invalid_json}
     end
   end
 
-  defp decode_entry(encoded) when is_map(encoded) do
+  defp decode_entry(encoded, legacy?, legacy_parent) when is_map(encoded) do
     payload_keys = Enum.filter(["user", "assistant", "toolResult"], &Map.has_key?(encoded, &1))
+    expected_size = if legacy?, do: 3, else: 4
+    parent = if legacy?, do: legacy_parent, else: Map.get(encoded, "parentId", :missing)
 
     with [payload_key] <- payload_keys,
-         true <- map_size(encoded) == 3,
+         true <- map_size(encoded) == expected_size,
          id when is_binary(id) and id != "" <- Map.get(encoded, "id"),
          timestamp when is_integer(timestamp) <- Map.get(encoded, "timestamp"),
+         parent when is_binary(parent) or is_nil(parent) <- parent,
          {:ok, message} <- decode_message(%{payload_key => Map.fetch!(encoded, payload_key)}) do
-      {:ok, {id, message}}
+      {:ok, %Entry{id: id, parent_id: parent, timestamp: timestamp, message: message}}
     else
       _ -> {:error, :invalid_entry}
     end
   end
 
-  defp decode_entry(_encoded), do: {:error, :invalid_entry}
+  defp decode_entry(_encoded, _legacy?, _legacy_parent), do: {:error, :invalid_entry}
+
+  defp resolve_leaf(:legacy, entries), do: {:ok, entries |> List.last() |> entry_id()}
+  defp resolve_leaf(nil, _entries), do: {:ok, nil}
+
+  defp resolve_leaf(leaf, entries) do
+    if Enum.any?(entries, &(&1.id == leaf)), do: {:ok, leaf}, else: {:error, :invalid_leaf}
+  end
+
+  defp entry_id(nil), do: nil
+  defp entry_id(entry), do: entry.id
 
   defp encode_tool_call(%ToolCall{id: id, name: name, args: args}) do
     %{"id" => id, "name" => name, "args" => encode_args(args)}
@@ -482,8 +637,6 @@ defmodule Harness.Session.Store do
   defp decode_outcome(_encoded), do: {:error, :invalid_message}
 
   defp generate_id do
-    16
-    |> :crypto.strong_rand_bytes()
-    |> Base.url_encode64(padding: false)
+    16 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
   end
 end

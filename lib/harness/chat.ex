@@ -11,10 +11,11 @@ defmodule Harness.Chat do
   def main(argv, opts \\ []) do
     seed = argv |> Enum.join(" ") |> String.trim()
     continue? = Keyword.get(opts, :continue, false)
+    name = Keyword.get(opts, :name)
 
     case Harness.Config.resolve() do
       {:ok, provider} ->
-        case Harness.start_session(provider: provider, resume: resume_opt(continue?)) do
+        case Harness.start_session(provider: provider, resume: resume_opt(continue?), name: name) do
           {:ok, session} ->
             start_reader(self())
             exit({:shutdown, run(session, :stdio, seed)})
@@ -85,6 +86,18 @@ defmodule Harness.Chat do
 
       {:resume_result, result} ->
         dispatch(session, out, phase, {:resume_result, result}, %{opts | rewrite: false})
+
+      {:user_entries_listed, kind, entries} ->
+        dispatch(session, out, phase, {:user_entries_listed, kind, entries}, %{
+          opts
+          | rewrite: false
+        })
+
+      {:branch_result, kind, result} ->
+        dispatch(session, out, phase, {:branch_result, kind, result}, %{opts | rewrite: false})
+
+      {:action_result, kind, result} ->
+        dispatch(session, out, phase, {:action_result, kind, result}, %{opts | rewrite: false})
     end
   end
 
@@ -126,6 +139,28 @@ defmodule Harness.Chat do
           send(self(), resume_result(session, index))
           {:cont, {phase, opts}}
 
+        {:list_user_entries, kind} ->
+          send(self(), {:user_entries_listed, kind, Harness.user_entries(session)})
+          {:cont, {phase, opts}}
+
+        {:select_user_entry, kind, index} ->
+          send(self(), {:branch_result, kind, branch_result(session, kind, index)})
+          {:cont, {phase, opts}}
+
+        :clone_session ->
+          result =
+            case Harness.clone_session(session) do
+              {:ok, nil, _history} -> :ok
+              {:error, reason} -> {:error, reason}
+            end
+
+          send(self(), {:action_result, :clone, result})
+          {:cont, {phase, opts}}
+
+        {:name_session, name} ->
+          send(self(), {:action_result, :name, Harness.name_session(session, name)})
+          {:cont, {phase, opts}}
+
         {:halt, code} ->
           {:halt, {:halt, code}}
       end
@@ -136,7 +171,15 @@ defmodule Harness.Chat do
     session
     |> Harness.cwd()
     |> Harness.list_sessions()
-    |> Enum.map(&%{id: &1.id, timestamp: &1.timestamp})
+    |> Enum.map(&%{id: &1.id, timestamp: &1.timestamp, name: &1.name})
+  end
+
+  defp branch_result(session, kind, index) do
+    case Enum.at(Harness.user_entries(session), index - 1) do
+      nil -> {:error, {:invalid_index, index}}
+      %{id: id} when kind == :tree -> Harness.tree(session, id)
+      %{id: id} when kind == :fork -> Harness.fork(session, id)
+    end
   end
 
   defp resume_result(session, index) do
@@ -249,6 +292,7 @@ defmodule Harness.Chat do
   @spec startup_error(term()) :: String.t()
   def startup_error(:no_session), do: "No saved session for this directory."
   def startup_error(:locked), do: "Session is already open."
+  def startup_error(:lock_unavailable), do: "Session locking requires the `flock` command."
   def startup_error(:no_home), do: "HOME is not set."
   def startup_error(reason), do: "Could not start chat: #{inspect(reason)}"
 end

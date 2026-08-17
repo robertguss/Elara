@@ -60,6 +60,18 @@ defmodule Harness.Session.CoreTest do
     assert state.next_ref == 1
   end
 
+  test "rebase_history preserves the monotonic reference" do
+    {state, _effects} = ask(new())
+    {state, _effects} = Core.step(state, :interrupt)
+    history = [Message.user("replacement")]
+
+    rebased = Core.rebase_history(state, history)
+
+    assert Core.idle?(rebased)
+    assert rebased.history == history
+    assert rebased.next_ref == 2
+  end
+
   test "new/2 materializes interrupted tool results in memory" do
     first = call("call-1", "echo")
     second = call("call-2", "echo")
@@ -234,8 +246,7 @@ defmodule Harness.Session.CoreTest do
     assert [
              {:emit, {:message_appended, %Message.ToolResult{}}},
              {:emit, {:turn_ended, :turn_limit}}
-           ] =
-             effects
+           ] = effects
   end
 
   test "output truncation before history append" do

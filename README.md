@@ -4,7 +4,7 @@ A coding agent for a local git checkout. Elixir 1.20, OTP 29, one Mix app, one d
 
 ## Requirements
 
-Install Elixir 1.20 and OTP 29. Clone this repo. From the repo root:
+Install Elixir 1.20, OTP 29, and the `flock` command. Clone this repo. From the repo root:
 
 ```bash
 mix deps.get
@@ -26,6 +26,7 @@ Then ask one question, or stay in a conversation:
 mix harness.ask "what files are in this repo?"
 mix harness.chat
 mix harness.chat --continue
+mix harness.chat --name "display name"
 ```
 
 `mix harness.ask` prints one turn and exits. A failed turn exits with status 1.
@@ -45,11 +46,17 @@ Your line becomes a `you` block. Tool calls print as dim metadata. The answer si
 | `/interrupt` or `/stop` | Ignored | Cancels the turn |
 | `/resume` | Lists saved sessions for this working directory | Refused. Use `/interrupt` |
 | `/resume N` | Resumes session N in the current chat | Refused. Use `/interrupt` |
+| `/tree` | Lists user turns in the current session | Refused. Use `/interrupt` |
+| `/tree N` | Re-submits user turn N from its parent, creating an in-file branch | Refused. Use `/interrupt` |
+| `/fork` | Lists user turns that can start a separate session | Refused. Use `/interrupt` |
+| `/fork N` | Copies the path before user turn N into a new session and re-submits it | Refused. Use `/interrupt` |
+| `/clone` | Copies the current path into a new session and switches to it | Refused. Use `/interrupt` |
+| `/name TEXT` | Names the current session for `/resume` | Refused. Use `/interrupt` |
 | `/quit`, `/exit`, `/q`, or Ctrl-D | Exits with status 0 | Interrupts, then exits. A second `/quit` exits immediately |
 | `/help`, `/h`, `/?` | Prints commands | Prints commands |
 | `//text` | Sends `/text` as a prompt | Refused |
 
-Session files live under `~/.harness/sessions/<cwd-key>/`. Continuation and in-chat resume are scoped to the current working directory.
+Session files live under `~/.harness/sessions/<cwd-key>/`. Continuation, resume, branching, and forks are scoped to the current working directory. `/tree` keeps abandoned branches in the same JSONL file; `/fork` and `/clone` create another file.
 
 Provider errors print and return you to `> `. They do not exit the chat.
 
@@ -94,7 +101,7 @@ end
 
 `Harness.interrupt/1` cancels the current turn. A second `ask` while a turn is running returns `{:error, :busy}`. Chat persists session history after every message. `mix harness.ask` does not.
 
-`start_session/1` accepts `provider:`, `cwd:`, `tools:`, `system:`, `max_iterations:`, `max_tool_output_bytes:`, `tool_timeout_ms:`, `persist:`, and `resume:`. `resume:` is `nil` (new session), `:latest` (newest usable file for `cwd`), or a session path. Omit `provider` to use `Harness.Config.resolve/0` (env key or saved login).
+`start_session/1` accepts `provider:`, `cwd:`, `tools:`, `system:`, `max_iterations:`, `max_tool_output_bytes:`, `tool_timeout_ms:`, `persist:`, `resume:`, and `name:`. `resume:` is `nil` (new session), `:latest` (newest usable file for `cwd`), or a session path. Omit `provider` to use `Harness.Config.resolve/0` (env key or saved login).
 
 ## Develop
 

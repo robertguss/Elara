@@ -167,8 +167,7 @@ defmodule Harness.SessionTest do
       }
     ]
 
-    {:ok, session} =
-      Harness.start_session(provider: provider, tools: tools, tool_timeout_ms: 50)
+    {:ok, session} = Harness.start_session(provider: provider, tools: tools, tool_timeout_ms: 50)
 
     assert {:ok, "after timeout"} = Harness.ask(session, "go")
   end
@@ -262,8 +261,7 @@ defmodule Harness.SessionTest do
     assert {:ok, target} = Store.append(target, user)
     assert {:ok, target} = Store.append(target, assistant)
 
-    assert {:ok, session} =
-             Harness.start_session(provider: script([]), tools: [], cwd: cwd)
+    assert {:ok, session} = Harness.start_session(provider: script([]), tools: [], cwd: cwd)
 
     same_pid = session
     assert {:ok, history} = Harness.resume(session, target.path)
@@ -292,6 +290,38 @@ defmodule Harness.SessionTest do
     assert_receive {:provider_blocked, worker, %Provider.Request{}}
     assert {:error, :busy} = Harness.resume(session, target.path)
     send(worker, {:reply, asst("done")})
+  end
+
+  test "a stale provider response cannot complete a turn after a tree rebase" do
+    cwd = unique_cwd()
+
+    assert {:ok, session} =
+             Harness.start_session(
+               provider: {BlockingProvider, self()},
+               tools: [],
+               cwd: cwd
+             )
+
+    :ok = Harness.subscribe(session)
+    assert :ok = Harness.ask_async(session, "question")
+    assert_receive {:provider_blocked, stale_worker, %Provider.Request{}}
+
+    Harness.interrupt(session)
+    assert_receive {:harness, ^session, {:turn_ended, :interrupted}}
+
+    [%{id: user_id}] = Harness.user_entries(session)
+    assert {:ok, "question", []} = Harness.tree(session, user_id)
+    assert :ok = Harness.ask_async(session, "question")
+    assert_receive {:provider_blocked, current_worker, %Provider.Request{}}
+
+    send(stale_worker, {:reply, asst("stale")})
+
+    refute_receive {:harness, ^session, {:message_appended, %Message.Assistant{text: "stale"}}},
+                   100
+
+    send(current_worker, {:reply, asst("current")})
+    assert_receive {:harness, ^session, {:turn_ended, {:completed, "current"}}}
+    assert Harness.transcript(session) == [Message.user("question"), asst("current")]
   end
 
   test "persist: false never writes a session file" do
@@ -371,5 +401,66 @@ defmodule Harness.SessionTest do
     GenServer.stop(session)
     {:ok, reopened} = Store.open(store.path, cwd)
     assert Store.history(reopened) == request_messages ++ [asst("after")]
+  end
+
+  test "tree moves the leaf and the provider receives only the selected path" do
+    cwd = unique_cwd()
+
+    provider =
+      recording_script([{:ok, asst("a1")}, {:ok, asst("a2")}, {:ok, asst("alternate")}], cwd)
+
+    {:ok, session} = Harness.start_session(provider: provider, tools: [], cwd: cwd)
+
+    assert {:ok, "a1"} = Harness.ask(session, "q1")
+    assert_receive {:provider_observed, %Provider.Request{}, _}
+    assert {:ok, "a2"} = Harness.ask(session, "q2")
+    assert_receive {:provider_observed, %Provider.Request{}, _}
+
+    [%{id: _first}, %{id: second}] = Harness.user_entries(session)
+    assert {:ok, "q2", prior} = Harness.tree(session, second)
+    assert prior == [Message.user("q1"), asst("a1")]
+    assert {:ok, "alternate"} = Harness.ask(session, "q2")
+
+    assert_receive {:provider_observed, %Provider.Request{messages: request_messages},
+                    persisted_messages}
+
+    assert request_messages == prior ++ [Message.user("q2")]
+    assert persisted_messages == request_messages
+
+    {:ok, info} = Store.newest(cwd)
+    {:ok, reopened} = Store.open(info.path, cwd)
+    assert length(reopened.entries) == 6
+
+    [old_second, new_second] = Enum.filter(reopened.entries, &(&1.message == Message.user("q2")))
+
+    assert old_second.parent_id == new_second.parent_id
+  end
+
+  test "fork switches to a second file without changing the source tree" do
+    cwd = unique_cwd()
+    provider = recording_script([{:ok, asst("a1")}, {:ok, asst("a2")}], cwd)
+    {:ok, session} = Harness.start_session(provider: provider, tools: [], cwd: cwd)
+
+    assert {:ok, "a1"} = Harness.ask(session, "q1")
+    assert_receive {:provider_observed, %Provider.Request{}, _}
+    assert {:ok, "a2"} = Harness.ask(session, "q2")
+    assert_receive {:provider_observed, %Provider.Request{}, _}
+
+    [source_info] = Store.list(cwd)
+    {:ok, source_before} = Store.open(source_info.path, cwd)
+    [%{id: _first}, %{id: second}] = Harness.user_entries(session)
+
+    assert {:ok, "q2", copied_history} = Harness.fork(session, second)
+    assert copied_history == [Message.user("q1"), asst("a1")]
+
+    infos = Store.list(cwd)
+    assert length(infos) == 2
+    fork_info = Enum.find(infos, &(&1.path != source_info.path))
+    {:ok, fork} = Store.open(fork_info.path, cwd)
+    {:ok, source_after} = Store.open(source_info.path, cwd)
+
+    assert fork.parent_session == source_info.path
+    assert Store.history(fork) == copied_history
+    assert source_after.entries == source_before.entries
   end
 end

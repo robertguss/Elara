@@ -71,6 +71,27 @@ defmodule Harness do
     GenServer.call(session, :cwd)
   end
 
+  @spec user_entries(pid()) :: [%{id: String.t(), text: String.t()}]
+  def user_entries(session) when is_pid(session), do: GenServer.call(session, :user_entries)
+
+  @spec tree(pid(), String.t()) :: {:ok, String.t(), [Harness.Message.t()]} | {:error, term()}
+  def tree(session, id) when is_pid(session) and is_binary(id) do
+    GenServer.call(session, {:tree, id})
+  end
+
+  @spec fork(pid(), String.t()) :: {:ok, String.t(), [Harness.Message.t()]} | {:error, term()}
+  def fork(session, id) when is_pid(session) and is_binary(id) do
+    GenServer.call(session, {:fork, id})
+  end
+
+  @spec clone_session(pid()) :: {:ok, nil, [Harness.Message.t()]} | {:error, term()}
+  def clone_session(session) when is_pid(session), do: GenServer.call(session, :clone)
+
+  @spec name_session(pid(), String.t()) :: :ok | {:error, term()}
+  def name_session(session, name) when is_pid(session) and is_binary(name) and name != "" do
+    GenServer.call(session, {:name, name})
+  end
+
   @spec list_sessions(String.t()) :: [Store.Info.t()]
   def list_sessions(cwd) when is_binary(cwd) do
     Store.list(cwd)
@@ -109,7 +130,7 @@ defmodule Harness do
       true ->
         with {:ok, _root} <- Store.root() do
           case resume do
-            nil -> {:ok, Store.new(cwd)}
+            nil -> {:ok, Store.new(cwd, Keyword.get(opts, :name))}
             :latest -> open_newest(cwd)
             path when is_binary(path) -> Store.open(path, cwd)
             _ -> {:error, :invalid_resume}

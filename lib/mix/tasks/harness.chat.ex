@@ -5,6 +5,7 @@ defmodule Mix.Tasks.Harness.Chat do
 
       mix harness.chat
       mix harness.chat --continue
+      mix harness.chat --name "display name"
       mix harness.chat "what files are in this repo?"
 
   Requires `mix harness.login` or `HARNESS_API_KEY` / `XAI_API_KEY`.
@@ -12,7 +13,7 @@ defmodule Mix.Tasks.Harness.Chat do
   @requirements ["app.start"]
   use Mix.Task
 
-  @switches [continue: :boolean]
+  @switches [continue: :boolean, name: :string]
 
   @impl true
   def run(argv) do
@@ -32,7 +33,8 @@ defmodule Mix.Tasks.Harness.Chat do
   def parse_args(argv) do
     case OptionParser.parse(argv, strict: @switches) do
       {opts, remaining, []} ->
-        {:ok, remaining, continue: Keyword.get(opts, :continue, false)}
+        {:ok, remaining,
+         continue: Keyword.get(opts, :continue, false), name: Keyword.get(opts, :name)}
 
       {_opts, _remaining, [{flag, _value} | _]} ->
         {:error, "unknown option: #{flag}"}

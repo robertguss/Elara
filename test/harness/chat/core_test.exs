@@ -34,15 +34,22 @@ defmodule Harness.Chat.CoreTest do
      [{:print, "usage: /resume or /resume N\n> "}]},
     {:idle_resume_bad_syntax, :idle, {:line, "/resume newest"}, :idle,
      [{:print, "usage: /resume or /resume N\n> "}]},
+    {:idle_tree_list, :idle, {:line, "/tree"}, :idle, [{:list_user_entries, :tree}]},
+    {:idle_tree_pick, :idle, {:line, "/tree 2"}, :idle, [{:select_user_entry, :tree, 2}]},
+    {:idle_fork_list, :idle, {:line, "/fork"}, :idle, [{:list_user_entries, :fork}]},
+    {:idle_fork_pick, :idle, {:line, "/fork 1"}, :idle, [{:select_user_entry, :fork, 1}]},
+    {:idle_clone, :idle, {:line, "/clone"}, :idle, [:clone_session]},
+    {:idle_name, :idle, {:line, "/name investigation"}, :idle,
+     [{:name_session, "investigation"}]},
     {:idle_help, :idle, {:line, "/help"}, :idle,
      [
        {:print,
-        "/help       this list\n/interrupt  cancel the current turn\n/resume     list saved sessions\n/resume N   resume saved session N\n/quit       exit\n> "}
+        "/help       this list\n/interrupt  cancel the current turn\n/resume     list saved sessions\n/resume N   resume saved session N\n/tree       list user turns; /tree N branches in this session\n/fork       list user turns; /fork N branches into a new session\n/clone      copy the current path into a new session\n/name TEXT  name the current session\n/quit       exit\n> "}
      ]},
     {:idle_h, :idle, {:line, "/h"}, :idle,
      [
        {:print,
-        "/help       this list\n/interrupt  cancel the current turn\n/resume     list saved sessions\n/resume N   resume saved session N\n/quit       exit\n> "}
+        "/help       this list\n/interrupt  cancel the current turn\n/resume     list saved sessions\n/resume N   resume saved session N\n/tree       list user turns; /tree N branches in this session\n/fork       list user turns; /fork N branches into a new session\n/clone      copy the current path into a new session\n/name TEXT  name the current session\n/quit       exit\n> "}
      ]},
     {:idle_unknown, :idle, {:line, "/foo"}, :idle, [{:print, "unknown command /foo. /help\n> "}]},
     {:idle_escape, :idle, {:line, "//quit"}, {:in_turn, "/quit"},
@@ -147,6 +154,23 @@ defmodule Harness.Chat.CoreTest do
   test "empty session list returns to the prompt" do
     assert {:idle, [{:print, "no saved sessions for this directory\n> "}]} =
              step(:idle, {:sessions_listed, []})
+  end
+
+  test "tree list and branch result re-submit the selected prompt" do
+    entries = [%{id: "one", text: "first question"}, %{id: "two", text: "second question"}]
+
+    assert {:idle,
+            [
+              {:print,
+               "user turns (choose with /tree N)\n1  first question\n2  second question\n> "}
+            ]} = step(:idle, {:user_entries_listed, :tree, entries})
+
+    assert {{:in_turn, "first question"},
+            [
+              {:print, "branched in current session\n"},
+              {:print, "  you\n  first question\n\n"},
+              {:ask, "first question"}
+            ]} = step(:idle, {:branch_result, :tree, {:ok, "first question", []}})
   end
 
   test "resume result renders domain history and prompts again" do

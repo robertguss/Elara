@@ -53,7 +53,7 @@ defmodule Harness.Session.StoreTest do
     end
   end
 
-  test "append writes a private linear log", %{root: root, cwd: cwd} do
+  test "append writes a private tree-shaped log", %{root: root, cwd: cwd} do
     store = Store.new(cwd)
     user = Message.user("hello")
     {:ok, assistant} = Message.assistant("hi", [])
@@ -76,11 +76,14 @@ defmodule Harness.Session.StoreTest do
     assert header == %{
              "version" => 1,
              "id" => store.id,
-             "cwd" => Path.expand(cwd)
+             "cwd" => Path.expand(cwd),
+             "leaf" => third["id"]
            }
 
-    refute Map.has_key?(header, "leaf")
-    assert Map.keys(first) |> Enum.sort() == ["id", "timestamp", "user"]
+    assert Map.keys(first) |> Enum.sort() == ["id", "parentId", "timestamp", "user"]
+    assert first["parentId"] == nil
+    assert second["parentId"] == first["id"]
+    assert third["parentId"] == second["id"]
     assert is_integer(first["timestamp"])
     assert second["assistant"]["text"] == "hi"
     assert third["toolResult"]["callId"] == "call-1"
@@ -105,6 +108,52 @@ defmodule Harness.Session.StoreTest do
              ^assistant,
              ^completed
            ] = Store.history(store)
+  end
+
+  test "moving the leaf creates branches and history walks only the active path", %{cwd: cwd} do
+    store = Store.new(cwd)
+    assert {:ok, store} = Store.append(store, Message.user("first"))
+    first_id = List.last(store.entries).id
+    assert {:ok, store} = Store.append(store, elem(Message.assistant("one", []), 1))
+    assert {:ok, store} = Store.append(store, Message.user("second"))
+    assert {:ok, store} = Store.append(store, elem(Message.assistant("two", []), 1))
+
+    assert {:ok, store, "first"} = Store.move_before_user(store, first_id)
+    assert Store.history(store) == []
+    assert {:ok, store} = Store.append(store, Message.user("first"))
+    assert {:ok, store} = Store.append(store, elem(Message.assistant("alternate", []), 1))
+
+    assert Store.history(store) == [
+             Message.user("first"),
+             elem(Message.assistant("alternate", []), 1)
+           ]
+
+    assert length(store.entries) == 6
+
+    {:ok, reopened} = Store.open(store.path, cwd)
+    assert Store.history(reopened) == Store.history(store)
+  end
+
+  test "fork copies one path, records its parent, and naming appears in listings", %{cwd: cwd} do
+    source = Store.new(cwd)
+    assert {:ok, source} = Store.append(source, Message.user("first"))
+    assert {:ok, source} = Store.append(source, elem(Message.assistant("one", []), 1))
+    assert {:ok, source} = Store.append(source, Message.user("second"))
+    second_id = List.last(source.entries).id
+    source_history = Store.history(source)
+
+    assert {:ok, fork, "second"} = Store.fork_before_user(source, second_id)
+    assert fork.path != source.path
+    assert fork.parent_session == source.path
+    assert Store.history(fork) == Enum.take(source_history, 2)
+    assert Store.history(source) == source_history
+
+    assert {:ok, fork} = Store.rename(fork, "alternate")
+    assert Enum.find(Store.list(cwd), &(&1.path == fork.path)).name == "alternate"
+
+    [header | _] = decode_lines(fork.path)
+    assert header["name"] == "alternate"
+    assert header["parentSession"] == source.path
   end
 
   test "open rejects unsupported versions and bad headers", %{cwd: cwd} do
@@ -147,6 +196,15 @@ defmodule Harness.Session.StoreTest do
     File.write!(store.path, raw)
 
     assert {:error, {:malformed_line, 3, :invalid_json}} = Store.open(store.path, cwd)
+  end
+
+  test "tree files require parentId on every entry", %{cwd: cwd} do
+    store = Store.new(cwd)
+    assert {:ok, store} = Store.append(store, Message.user("root"))
+    [header, first] = decode_lines(store.path)
+    write_lines(store.path, header, [Map.delete(first, "parentId")])
+
+    assert {:error, {:malformed_line, 2, :invalid_entry}} = Store.open(store.path, cwd)
   end
 
   test "open ignores only one malformed trailing non-empty line", %{cwd: cwd} do
@@ -259,6 +317,19 @@ defmodule Harness.Session.StoreTest do
       end)
 
     assert {:ok, _} = Task.await(task)
+  end
+
+  test "claim holds an operating-system lock", %{cwd: cwd} do
+    store = Store.new(cwd)
+    assert {:ok, store} = Store.append(store, Message.user("held"))
+    assert {:ok, claimed} = Store.claim(store)
+    lock_path = store.path <> ".lock"
+
+    assert File.regular?(lock_path)
+    assert {_, 1} = System.cmd("flock", ["-n", lock_path, "true"])
+
+    assert :ok = Store.release(claimed)
+    assert {_, 0} = System.cmd("flock", ["-n", lock_path, "true"])
   end
 
   defp header(store) do

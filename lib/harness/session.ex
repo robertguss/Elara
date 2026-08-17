@@ -204,25 +204,6 @@ defmodule Harness.Session do
     emit(event, shell)
   end
 
-  defp emit(event, shell) do
-    Enum.each(shell.subscribers, fn {pid, _} ->
-      send(pid, {:harness, self(), event})
-    end)
-
-    case {event, shell.pending_reply} do
-      {{:turn_ended, {:completed, text}}, from} when from != nil ->
-        GenServer.reply(from, {:ok, text})
-        %{shell | pending_reply: nil}
-
-      {{:turn_ended, outcome}, from} when from != nil ->
-        GenServer.reply(from, {:error, outcome})
-        %{shell | pending_reply: nil}
-
-      _ ->
-        shell
-    end
-  end
-
   defp run_effect({:call_provider, core_ref, request}, shell) do
     {mod, cfg} = shell.provider
     task = Task.Supervisor.async_nolink(Harness.TaskSup, mod, :chat, [cfg, request])
@@ -240,6 +221,25 @@ defmodule Harness.Session do
     shell
     |> track_task(task, :tool, core_ref)
     |> Map.update!(:timers, &Map.put(&1, core_ref, timer))
+  end
+
+  defp emit(event, shell) do
+    Enum.each(shell.subscribers, fn {pid, _} ->
+      send(pid, {:harness, self(), event})
+    end)
+
+    case {event, shell.pending_reply} do
+      {{:turn_ended, {:completed, text}}, from} when from != nil ->
+        GenServer.reply(from, {:ok, text})
+        %{shell | pending_reply: nil}
+
+      {{:turn_ended, outcome}, from} when from != nil ->
+        GenServer.reply(from, {:error, outcome})
+        %{shell | pending_reply: nil}
+
+      _ ->
+        shell
+    end
   end
 
   defp track_task(shell, %Task{ref: ref, pid: pid}, kind, core_ref) do

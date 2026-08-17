@@ -1,8 +1,6 @@
 defmodule Harness.Session.Store do
   @moduledoc """
   Private JSONL persistence for session message trees.
-
-  A store is created lazily. Its file appears only after the first append.
   """
 
   alias Harness.Message
@@ -65,14 +63,15 @@ defmodule Harness.Session.Store do
     with {:ok, raw} <- File.read(path),
          {:ok, header, entry_lines} <- decode_file_lines(raw),
          :ok <- validate_expected_cwd(header.cwd, expected_cwd),
-         {:ok, entries, order} <- decode_entries(entry_lines),
-         :ok <- validate_tree(entries, header.leaf) do
+         {:ok, entries, order, trailing_torn?} <- decode_entries(entry_lines),
+         leaf = recover_leaf(header.leaf, entries, order, trailing_torn?),
+         :ok <- validate_tree(entries, leaf) do
       {:ok,
        %__MODULE__{
          id: header.id,
          cwd: header.cwd,
          path: path,
-         leaf: header.leaf,
+         leaf: leaf,
          entries: entries,
          order: order
        }}
@@ -364,23 +363,30 @@ defmodule Harness.Session.Store do
 
     lines
     |> Enum.with_index()
-    |> Enum.reduce_while({:ok, %{}, []}, fn {line, index}, {:ok, entries, order} ->
-      case decode_entry_line(line) do
-        {:ok, %Entry{id: id} = entry} ->
-          if Map.has_key?(entries, id) do
-            {:halt, {:error, {:duplicate_id, id}}}
-          else
-            {:cont, {:ok, Map.put(entries, id, entry), order ++ [id]}}
-          end
+    |> Enum.reduce_while({:ok, %{}, [], false}, fn
+      {line, index}, {:ok, entries, order, false} ->
+        case decode_entry_line(line) do
+          {:ok, %Entry{id: id} = entry} ->
+            if Map.has_key?(entries, id) do
+              {:halt, {:error, {:duplicate_id, id}}}
+            else
+              {:cont, {:ok, Map.put(entries, id, entry), order ++ [id], false}}
+            end
 
-        {:error, :invalid_json} when index == last_index and line != "" ->
-          {:halt, {:ok, entries, order}}
+          {:error, :invalid_json} when index == last_index and line != "" ->
+            {:halt, {:ok, entries, order, true}}
 
-        {:error, reason} ->
-          {:halt, {:error, {:malformed_line, index + 2, reason}}}
-      end
+          {:error, reason} ->
+            {:halt, {:error, {:malformed_line, index + 2, reason}}}
+        end
     end)
   end
+
+  defp recover_leaf(leaf, entries, order, true) do
+    if Map.has_key?(entries, leaf), do: leaf, else: List.last(order)
+  end
+
+  defp recover_leaf(leaf, _entries, _order, false), do: leaf
 
   defp decode_entry_line(line) do
     case JSON.decode(line) do

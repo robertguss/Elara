@@ -220,6 +220,12 @@ defmodule Harness.Session.StoreTest do
     assert {:ok, reopened} = Store.open(store.path, cwd)
     assert Store.history(reopened) == [user]
 
+    write_lines(store.path, header(store, "torn-leaf"), [entry("root", nil, 1, user)], "{")
+
+    assert {:ok, recovered} = Store.open(store.path, cwd)
+    assert recovered.leaf == "root"
+    assert Store.history(recovered) == [user]
+
     File.write!(store.path, File.read!(store.path) <> "\n{")
 
     assert {:error, {:malformed_line, 3, :invalid_json}} = Store.open(store.path, cwd)

@@ -18,27 +18,23 @@ defmodule Harness do
     max_tool_output_bytes = Keyword.get(opts, :max_tool_output_bytes, 16_384)
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
 
-    provider =
-      case Keyword.fetch(opts, :provider) do
-        {:ok, provider} -> provider
-        :error -> default_provider()
-      end
+    with {:ok, provider} <- fetch_provider(opts) do
+      core_config = %Core.Config{
+        system: system,
+        tools: Tool.table(tools),
+        max_iterations: max_iterations,
+        max_tool_output_bytes: max_tool_output_bytes
+      }
 
-    core_config = %Core.Config{
-      system: system,
-      tools: Tool.table(tools),
-      max_iterations: max_iterations,
-      max_tool_output_bytes: max_tool_output_bytes
-    }
+      child_opts = [
+        core_config: core_config,
+        provider: provider,
+        cwd: cwd,
+        tool_timeout_ms: tool_timeout_ms
+      ]
 
-    child_opts = [
-      core_config: core_config,
-      provider: provider,
-      cwd: cwd,
-      tool_timeout_ms: tool_timeout_ms
-    ]
-
-    DynamicSupervisor.start_child(Harness.SessionSup, {Session, child_opts})
+      DynamicSupervisor.start_child(Harness.SessionSup, {Session, child_opts})
+    end
   end
 
   @spec ask(pid(), String.t(), timeout()) :: {:ok, String.t()} | {:error, ask_error()}
@@ -62,10 +58,10 @@ defmodule Harness do
     GenServer.cast(session, :interrupt)
   end
 
-  defp default_provider do
-    case Harness.Config.resolve() do
-      {:ok, provider} -> provider
-      {:error, reason} -> raise ArgumentError, "no provider configured: #{inspect(reason)}"
+  defp fetch_provider(opts) do
+    case Keyword.fetch(opts, :provider) do
+      {:ok, provider} -> {:ok, provider}
+      :error -> Harness.Config.resolve()
     end
   end
 end

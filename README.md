@@ -11,7 +11,7 @@ Or BYOK / tests:
 
 ```bash
 export HARNESS_API_KEY=...          # or XAI_API_KEY
-export HARNESS_MODEL=grok-4         # optional with resolve(); required for Config.from_env/1
+export HARNESS_MODEL=grok-4         # optional, defaults to grok-4
 export HARNESS_BASE_URL=https://api.x.ai/v1
 mix harness.ask "summarize mix.exs"
 ```

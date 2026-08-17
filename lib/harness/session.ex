@@ -9,6 +9,31 @@ defmodule Harness.Session do
   alias Harness.Session.Core
   alias Harness.Tool.Ctx
 
+  defmodule Shell do
+    @moduledoc false
+    @type t :: %__MODULE__{
+            core: Core.State.t(),
+            provider: {module(), term()},
+            cwd: String.t(),
+            tool_timeout_ms: pos_integer(),
+            subscribers: %{pid() => reference()},
+            pending_reply: GenServer.from() | nil,
+            tasks: %{reference() => {:provider | :tool, Core.ref(), pid()}},
+            timers: %{Core.ref() => reference()}
+          }
+
+    defstruct [
+      :core,
+      :provider,
+      :cwd,
+      :tool_timeout_ms,
+      subscribers: %{},
+      pending_reply: nil,
+      tasks: %{},
+      timers: %{}
+    ]
+  end
+
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts)
@@ -32,15 +57,11 @@ defmodule Harness.Session do
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
 
     {:ok,
-     %{
+     %Shell{
        core: Core.new(core_config),
        provider: provider,
        cwd: cwd,
-       tool_timeout_ms: tool_timeout_ms,
-       subscribers: %{},
-       pending_reply: nil,
-       tasks: %{},
-       timers: %{}
+       tool_timeout_ms: tool_timeout_ms
      }}
   end
 
@@ -176,7 +197,7 @@ defmodule Harness.Session do
     {m, f} = tool.run
     ctx = %Ctx{cwd: shell.cwd}
 
-    task = Task.Supervisor.async_nolink(Harness.TaskSup, fn -> apply(m, f, [args, ctx]) end)
+    task = Task.Supervisor.async_nolink(Harness.TaskSup, m, f, [args, ctx])
     timer = Process.send_after(self(), {:tool_deadline, core_ref}, shell.tool_timeout_ms)
 
     shell

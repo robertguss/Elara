@@ -214,6 +214,30 @@ defmodule Harness.Session.CoreTest do
     %Message.ToolResult{outcome: {:ok, text}} = List.last(state.history)
     assert text =~ "[truncated"
     assert String.starts_with?(text, "abcde")
+    assert String.valid?(text)
+  end
+
+  test "truncation does not split a UTF-8 character" do
+    {state, _} = ask(new(max_tool_output_bytes: 3))
+    {state, _} = Core.step(state, {:provider_result, 1, {:ok, asst(nil, [call("c1", "echo")])}})
+    {state, _} = Core.step(state, {:tool_result, 2, {:ok, "éééé"}})
+
+    %Message.ToolResult{outcome: {:ok, text}} = List.last(state.history)
+    assert String.valid?(text)
+    [kept | _] = String.split(text, "\n")
+    assert kept == "é"
+    assert text =~ "[truncated"
+  end
+
+  test "invalid UTF-8 tool output becomes an error-safe placeholder" do
+    {state, _} = ask(new(max_tool_output_bytes: 16_384))
+    {state, _} = Core.step(state, {:provider_result, 1, {:ok, asst(nil, [call("c1", "echo")])}})
+    {state, _} = Core.step(state, {:tool_result, 2, {:ok, <<255, 216, 1, 2, 3>>}})
+
+    %Message.ToolResult{outcome: {:ok, text}} = List.last(state.history)
+    assert String.valid?(text)
+    assert text =~ "not valid UTF-8"
+    assert is_binary(JSON.encode!(text))
   end
 
   test "repeated identical tool calls are rejected without run_tool" do

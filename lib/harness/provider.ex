@@ -14,8 +14,8 @@ defmodule Harness.Provider do
 
   defmodule Error do
     @type kind :: :http | :transport | :bad_response | :crash | :entitlement
-    @type t :: %__MODULE__{kind: kind(), message: String.t()}
-    defstruct [:kind, :message]
+    @type t :: %__MODULE__{kind: kind(), message: String.t(), status: integer() | nil}
+    defstruct [:kind, :message, status: nil]
   end
 
   @type config :: term()

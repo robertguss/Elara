@@ -32,23 +32,8 @@ defmodule Harness.Provider.OpenAI do
       )
 
     case parse_response(result) do
-      {:ok, assistant} ->
-        {:ok, assistant, config}
-
-      {:error, %Error{kind: :http, message: msg} = err} ->
-        if String.starts_with?(msg, "403") do
-          {:error,
-           %Error{
-             kind: :entitlement,
-             message:
-               "HTTP 403: this account cannot use the API. Set XAI_API_KEY (or HARNESS_API_KEY). Re-login will not help."
-           }, config}
-        else
-          {:error, err, config}
-        end
-
-      {:error, err} ->
-        {:error, err, config}
+      {:ok, assistant} -> {:ok, assistant, config}
+      {:error, err} -> {:error, err, config}
     end
   end
 
@@ -79,7 +64,7 @@ defmodule Harness.Provider.OpenAI do
 
   def parse_response({:ok, %Req.Response{status: status, body: body}}) when status != 200 do
     snippet = body_snippet(body)
-    {:error, %Error{kind: :http, message: "#{status} #{snippet}"}}
+    {:error, %Error{kind: :http, status: status, message: "#{status} #{snippet}"}}
   end
 
   def parse_response({:ok, %Req.Response{status: 200, body: body}}) do
@@ -95,7 +80,8 @@ defmodule Harness.Provider.OpenAI do
   defp encode_message(%User{text: text}), do: %{"role" => "user", "content" => text}
 
   defp encode_message(%Assistant{text: text, tool_calls: calls}) do
-    base = %{"role" => "assistant", "content" => text}
+    # xAI rejects assistant tool-call messages with content: null.
+    base = %{"role" => "assistant", "content" => text || ""}
 
     case calls do
       [] ->

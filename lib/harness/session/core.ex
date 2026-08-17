@@ -138,22 +138,6 @@ defmodule Harness.Session.Core do
     {%{state | history: history, phase: :idle}, effects}
   end
 
-  def step(%State{phase: {:calling_provider, expected, _}} = state, {:provider_result, got, _})
-      when expected != got,
-      do: {state, []}
-
-  def step(%State{phase: {:running_tool, expected, _, _, _}} = state, {:tool_result, got, _})
-      when expected != got,
-      do: {state, []}
-
-  def step(%State{phase: {:running_tool, expected, _, _, _}} = state, {:tool_crashed, got, _})
-      when expected != got,
-      do: {state, []}
-
-  def step(%State{phase: {:running_tool, expected, _, _, _}} = state, {:tool_timeout, got})
-      when expected != got,
-      do: {state, []}
-
   def step(%State{} = state, _fact), do: {state, []}
 
   defp finish_tool(state, call, rest, it, outcome) do
@@ -171,26 +155,14 @@ defmodule Harness.Session.Core do
   defp dispatch_next(state, [call | rest], iteration) do
     cond do
       repeated_call?(state.history, call) ->
-        result = Message.tool_result(call, {:error, "repeated tool call"})
-        history = state.history ++ [result]
-        state = %{state | history: history}
-        {state, more} = dispatch_next(state, rest, iteration)
-        {state, [{:emit, {:message_appended, result}} | more]}
+        reject_call(state, call, rest, iteration, "repeated tool call")
 
       match?({:malformed, _}, call.args) ->
         {:malformed, raw} = call.args
-        result = Message.tool_result(call, {:error, "malformed arguments: #{raw}"})
-        history = state.history ++ [result]
-        state = %{state | history: history}
-        {state, more} = dispatch_next(state, rest, iteration)
-        {state, [{:emit, {:message_appended, result}} | more]}
+        reject_call(state, call, rest, iteration, "malformed arguments: #{raw}")
 
       not Map.has_key?(state.config.tools, call.name) ->
-        result = Message.tool_result(call, {:error, "unknown tool: #{call.name}"})
-        history = state.history ++ [result]
-        state = %{state | history: history}
-        {state, more} = dispatch_next(state, rest, iteration)
-        {state, [{:emit, {:message_appended, result}} | more]}
+        reject_call(state, call, rest, iteration, "unknown tool: #{call.name}")
 
       true ->
         tool = Map.fetch!(state.config.tools, call.name)
@@ -203,6 +175,12 @@ defmodule Harness.Session.Core do
 
         {%{state | phase: {:running_tool, ref, call, rest, iteration}}, effects}
     end
+  end
+
+  defp reject_call(state, call, rest, iteration, reason) do
+    result = Message.tool_result(call, {:error, reason})
+    {state, more} = dispatch_next(%{state | history: state.history ++ [result]}, rest, iteration)
+    {state, [{:emit, {:message_appended, result}} | more]}
   end
 
   defp next_provider_call(state, iteration) do
@@ -233,12 +211,26 @@ defmodule Harness.Session.Core do
   defp truncate_outcome({:ok, text}, max), do: {:ok, truncate(text, max)}
   defp truncate_outcome({:error, text}, max), do: {:error, truncate(text, max)}
 
-  defp truncate(text, max) when is_binary(text) and byte_size(text) <= max, do: text
-
   defp truncate(text, max) when is_binary(text) do
+    cond do
+      not String.valid?(text) ->
+        "[binary #{byte_size(text)} bytes; not valid UTF-8]"
+
+      byte_size(text) <= max ->
+        text
+
+      true ->
+        kept = utf8_prefix(text, max)
+        overflow = byte_size(text) - byte_size(kept)
+        kept <> "\n[truncated #{overflow} bytes]"
+    end
+  end
+
+  defp utf8_prefix(_text, max) when max <= 0, do: ""
+
+  defp utf8_prefix(text, max) do
     kept = binary_part(text, 0, max)
-    overflow = byte_size(text) - max
-    kept <> "\n[truncated #{overflow} bytes]"
+    if String.valid?(kept), do: kept, else: utf8_prefix(text, max - 1)
   end
 
   defp format_reason(reason) do

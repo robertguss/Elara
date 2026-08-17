@@ -65,5 +65,37 @@ defmodule Harness.AuthTest do
     tokens = %Auth{access_token: "a", refresh_token: "r", expires_at: 1_000}
     assert Auth.expired?(tokens, 950)
     refute Auth.expired?(tokens, 900)
+    refute Auth.expired?(%Auth{access_token: "a", expires_at: "not-an-int"}, 1)
+  end
+
+  test "tokens_from_map reads official nested Grok CLI files" do
+    assert {:ok, %Auth{access_token: "sess-current", refresh_token: "do-not-lose", expires_at: exp}} =
+             Auth.tokens_from_map(%{
+               "https://auth.x.ai::#{Auth.client_id()}" => %{
+                 "key" => "sess-current",
+                 "expires_at" => "2099-01-01T00:00:00Z",
+                 "refresh_token" => "do-not-lose"
+               }
+             })
+
+    assert exp == DateTime.to_unix(~U[2099-01-01 00:00:00Z])
+  end
+
+  test "tokens_from_map prefers the harness client id over other issuers" do
+    assert {:ok, %Auth{access_token: "preferred"}} =
+             Auth.tokens_from_map(%{
+               "https://accounts.x.ai/sign-in" => %{"key" => "legacy"},
+               "https://auth.x.ai::#{Auth.client_id()}" => %{"key" => "preferred"}
+             })
+  end
+
+  test "tokens_from_map still accepts flat harness files" do
+    assert {:ok, %Auth{access_token: "flat", expires_at: 12}} =
+             Auth.tokens_from_map(%{"access_token" => "flat", "expires_at" => 12})
+  end
+
+  test "tokens_from_map rejects files with no bearer" do
+    assert {:error, :invalid_auth_file} = Auth.tokens_from_map(%{"foo" => "bar"})
   end
 end
+

@@ -38,6 +38,7 @@ defmodule Harness.Provider.OpenAITest do
 
     asst_msg = Enum.at(body["messages"], 2)
     assert asst_msg["role"] == "assistant"
+    assert asst_msg["content"] == "thinking"
     assert [c1, c2] = asst_msg["tool_calls"]
     assert c1["function"]["arguments"] == ~s({"path":"a"})
     assert c2["function"]["arguments"] == "{nope"
@@ -84,11 +85,31 @@ defmodule Harness.Provider.OpenAITest do
     assert c2.args == {:malformed, "not-json"}
   end
 
+  test "build_body sends empty string not null for tool-only assistant" do
+    {:ok, asst} =
+      Message.assistant(nil, [%ToolCall{id: "1", name: "read", args: {:ok, %{"path" => "a"}}}])
+
+    body =
+      OpenAI.build_body(config(), %Provider.Request{
+        system: "sys",
+        messages: [asst],
+        tools: []
+      })
+
+    asst_msg = Enum.at(body["messages"], 1)
+    assert asst_msg["content"] == ""
+    refute asst_msg["content"] == nil
+    assert length(asst_msg["tool_calls"]) == 1
+  end
+
   test "parse_response classifies http, transport, bad_response" do
-    assert {:error, %Error{kind: :http, message: msg}} =
+    assert {:error, %Error{kind: :http, status: 500, message: msg}} =
              OpenAI.parse_response({:ok, %Req.Response{status: 500, body: "oops"}})
 
     assert msg =~ "500"
+
+    assert {:error, %Error{kind: :http, status: 403}} =
+             OpenAI.parse_response({:ok, %Req.Response{status: 403, body: "nope"}})
 
     assert {:error, %Error{kind: :transport}} =
              OpenAI.parse_response({:error, %Req.TransportError{reason: :timeout}})

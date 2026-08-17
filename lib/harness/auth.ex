@@ -8,6 +8,7 @@ defmodule Harness.Auth do
   @auth_dir_name ".harness"
   @auth_file_name "auth.json"
   @grok_auth_rel ".grok/auth.json"
+  @form_headers [{"content-type", "application/x-www-form-urlencoded"}]
 
   @derive {Inspect, except: [:access_token, :refresh_token]}
   defstruct [
@@ -85,22 +86,11 @@ defmodule Harness.Auth do
       "scope" => @scope
     }
 
-    case http.(@device_code_url,
-           form: body,
-           decode_body: false,
-           headers: [{"content-type", "application/x-www-form-urlencoded"}]
-         ) do
-      {:ok, %Req.Response{status: 200, body: raw}} ->
-        case JSON.decode(raw) do
-          {:ok, map} when is_map(map) -> {:ok, map}
-          other -> {:error, {:bad_device_code, other}}
-        end
-
-      {:ok, %Req.Response{status: status, body: raw}} ->
-        {:error, {:device_code_http, status, raw}}
-
-      {:error, err} ->
-        {:error, err}
+    case post_form(http, @device_code_url, body) do
+      {:ok, map} -> {:ok, map}
+      {:error, {:bad_json, other}} -> {:error, {:bad_device_code, other}}
+      {:error, {:http, status, raw}} -> {:error, {:device_code_http, status, raw}}
+      {:error, err} -> {:error, err}
     end
   end
 
@@ -131,14 +121,9 @@ defmodule Harness.Auth do
       "refresh_token" => refresh_token
     }
 
-    case http.(@token_url,
-           form: body,
-           decode_body: false,
-           headers: [{"content-type", "application/x-www-form-urlencoded"}]
-         ) do
-      {:ok, %Req.Response{status: 200, body: raw}} ->
-        with {:ok, map} <- JSON.decode(raw),
-             {:ok, tokens} <- tokens_from_response(map, now_s.()) do
+    case post_form(http, @token_url, body) do
+      {:ok, map} ->
+        with {:ok, tokens} <- tokens_from_response(map, now_s.()) do
           # xAI rotates refresh tokens; persist the new pair or login dies.
           case save_tokens(tokens) do
             :ok -> {:ok, tokens}
@@ -146,7 +131,7 @@ defmodule Harness.Auth do
           end
         end
 
-      {:ok, %Req.Response{status: status, body: raw}} ->
+      {:error, {:http, status, raw}} ->
         {:error, {:refresh_http, status, raw}}
 
       {:error, err} ->
@@ -157,8 +142,38 @@ defmodule Harness.Auth do
   @spec expired?(t(), integer()) :: boolean()
   def expired?(%__MODULE__{expires_at: nil}, _now), do: false
 
-  def expired?(%__MODULE__{expires_at: expires_at}, now) when is_integer(now),
-    do: now >= expires_at - 60
+  def expired?(%__MODULE__{expires_at: expires_at}, now)
+      when is_integer(expires_at) and is_integer(now),
+      do: now >= expires_at - 60
+
+  def expired?(%__MODULE__{}, _now), do: false
+
+  @doc "Parse harness-flat or official Grok CLI auth.json objects."
+  @spec tokens_from_map(map()) :: {:ok, t()} | {:error, :invalid_auth_file}
+  def tokens_from_map(map) when is_map(map) do
+    case pick_entry(map) do
+      nil ->
+        {:error, :invalid_auth_file}
+
+      entry ->
+        access = field(entry, ["access_token", "accessToken", "key"])
+        refresh = field(entry, ["refresh_token", "refreshToken"])
+        expires_at = parse_expires_at(field(entry, ["expires_at", "expiresAt"]))
+        token_type = field(entry, ["token_type", "tokenType"])
+
+        if is_binary(access) and access != "" do
+          {:ok,
+           %__MODULE__{
+             access_token: access,
+             refresh_token: refresh,
+             expires_at: expires_at,
+             token_type: token_type
+           }}
+        else
+          {:error, :invalid_auth_file}
+        end
+    end
+  end
 
   defp do_poll(device_code, http, sleep, interval_ms, now_ms, expires_at) do
     if now_ms.(:millisecond) >= expires_at do
@@ -170,18 +185,11 @@ defmodule Harness.Auth do
         "client_id" => @client_id
       }
 
-      case http.(@token_url,
-             form: body,
-             decode_body: false,
-             headers: [{"content-type", "application/x-www-form-urlencoded"}]
-           ) do
-        {:ok, %Req.Response{status: 200, body: raw}} ->
-          with {:ok, map} <- JSON.decode(raw),
-               {:ok, tokens} <- tokens_from_response(map, System.system_time(:second)) do
-            {:ok, tokens}
-          end
+      case post_form(http, @token_url, body) do
+        {:ok, map} ->
+          tokens_from_response(map, System.system_time(:second))
 
-        {:ok, %Req.Response{status: status, body: raw}} when status in [400, 401, 403] ->
+        {:error, {:http, status, raw}} when status in [400, 401, 403] ->
           case JSON.decode(raw) do
             {:ok, %{"error" => "authorization_pending"}} ->
               sleep.(interval_ms)
@@ -204,12 +212,28 @@ defmodule Harness.Auth do
               {:error, {:token_http, status, raw}}
           end
 
-        {:ok, %Req.Response{status: status, body: raw}} ->
+        {:error, {:http, status, raw}} ->
           {:error, {:token_http, status, raw}}
 
         {:error, err} ->
           {:error, err}
       end
+    end
+  end
+
+  defp post_form(http, url, body) do
+    case http.(url, form: body, decode_body: false, headers: @form_headers) do
+      {:ok, %Req.Response{status: 200, body: raw}} ->
+        case JSON.decode(raw) do
+          {:ok, map} when is_map(map) -> {:ok, map}
+          other -> {:error, {:bad_json, other}}
+        end
+
+      {:ok, %Req.Response{status: status, body: raw}} ->
+        {:error, {:http, status, raw}}
+
+      {:error, err} ->
+        {:error, err}
     end
   end
 
@@ -261,26 +285,8 @@ defmodule Harness.Auth do
     case File.read(path) do
       {:ok, raw} ->
         case JSON.decode(raw) do
-          {:ok, map} when is_map(map) ->
-            access = Map.get(map, "access_token") || Map.get(map, "accessToken")
-            refresh = Map.get(map, "refresh_token") || Map.get(map, "refreshToken")
-            expires_at = Map.get(map, "expires_at") || Map.get(map, "expiresAt")
-            token_type = Map.get(map, "token_type") || Map.get(map, "tokenType")
-
-            if is_binary(access) do
-              {:ok,
-               %__MODULE__{
-                 access_token: access,
-                 refresh_token: refresh,
-                 expires_at: expires_at,
-                 token_type: token_type
-               }}
-            else
-              {:error, :invalid_auth_file}
-            end
-
-          _ ->
-            {:error, :invalid_auth_file}
+          {:ok, map} when is_map(map) -> tokens_from_map(map)
+          _ -> {:error, :invalid_auth_file}
         end
 
       {:error, :enoent} ->
@@ -288,6 +294,88 @@ defmodule Harness.Auth do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp pick_entry(map) do
+    preferred = "https://auth.x.ai::#{@client_id}"
+
+    cond do
+      entry = nested_entry(map, preferred) ->
+        entry
+
+      entry = first_nested_prefix(map, "https://auth.x.ai::") ->
+        entry
+
+      entry = nested_entry(map, "https://auth.x.ai") ->
+        entry
+
+      entry = nested_entry(map, "https://accounts.x.ai/sign-in") ->
+        entry
+
+      entry = first_key_bearing(map) ->
+        entry
+
+      is_binary(field(map, ["access_token", "accessToken"])) ->
+        map
+
+      true ->
+        nil
+    end
+  end
+
+  defp nested_entry(map, key) do
+    case Map.get(map, key) do
+      inner when is_map(inner) -> inner
+      _ -> nil
+    end
+  end
+
+  defp first_nested_prefix(map, prefix) do
+    Enum.find_value(map, fn
+      {key, inner} when is_binary(key) and is_map(inner) ->
+        if String.starts_with?(key, prefix), do: inner
+
+      _ ->
+        nil
+    end)
+  end
+
+  defp first_key_bearing(map) do
+    Enum.find_value(map, fn
+      {_key, inner} when is_map(inner) ->
+        case field(inner, ["key"]) do
+          key when is_binary(key) and key != "" -> inner
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end)
+  end
+
+  defp field(map, names) do
+    Enum.find_value(names, fn name ->
+      case Map.get(map, name) do
+        value when is_binary(value) or is_integer(value) -> value
+        _ -> nil
+      end
+    end)
+  end
+
+  defp parse_expires_at(nil), do: nil
+  defp parse_expires_at(n) when is_integer(n), do: n
+
+  defp parse_expires_at(s) when is_binary(s) do
+    case Integer.parse(s) do
+      {n, ""} ->
+        n
+
+      _ ->
+        case DateTime.from_iso8601(s) do
+          {:ok, dt, _} -> DateTime.to_unix(dt)
+          _ -> nil
+        end
     end
   end
 end

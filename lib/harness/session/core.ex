@@ -51,7 +51,12 @@ defmodule Harness.Session.Core do
 
   @spec new(Config.t()) :: State.t()
   def new(%Config{} = config) do
-    %State{config: config, history: [], phase: :idle, next_ref: 1}
+    new(config, [])
+  end
+
+  @spec new(Config.t(), [Message.t()]) :: State.t()
+  def new(%Config{} = config, history) when is_list(history) do
+    %State{config: config, history: history, phase: :idle, next_ref: 1}
   end
 
   @spec idle?(State.t()) :: boolean()

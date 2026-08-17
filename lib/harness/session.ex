@@ -6,13 +6,14 @@ defmodule Harness.Session do
   use GenServer
 
   alias Harness.Provider
-  alias Harness.Session.Core
+  alias Harness.Session.{Core, Store}
   alias Harness.Tool.Ctx
 
   defmodule Shell do
     @moduledoc false
     @type t :: %__MODULE__{
             core: Core.State.t(),
+            store: Store.t(),
             provider: {module(), term()},
             cwd: String.t(),
             tool_timeout_ms: pos_integer(),
@@ -24,6 +25,7 @@ defmodule Harness.Session do
 
     defstruct [
       :core,
+      :store,
       :provider,
       :cwd,
       :tool_timeout_ms,
@@ -54,11 +56,13 @@ defmodule Harness.Session do
     core_config = Keyword.fetch!(opts, :core_config)
     provider = Keyword.fetch!(opts, :provider)
     cwd = Keyword.fetch!(opts, :cwd)
+    store = Keyword.fetch!(opts, :store)
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
 
     {:ok,
      %Shell{
-       core: Core.new(core_config),
+       core: Core.new(core_config, Store.history(store)),
+       store: store,
        provider: provider,
        cwd: cwd,
        tool_timeout_ms: tool_timeout_ms
@@ -77,6 +81,25 @@ defmodule Harness.Session do
   def handle_call({:ask_async, prompt}, _from, shell) do
     if Core.idle?(shell.core) do
       {:reply, :ok, feed({:ask, prompt}, shell)}
+    else
+      {:reply, {:error, :busy}, shell}
+    end
+  end
+
+  def handle_call(:transcript, _from, shell) do
+    {:reply, shell.core.history, shell}
+  end
+
+  def handle_call({:resume, path}, _from, shell) do
+    if Core.idle?(shell.core) do
+      case Store.open(path, shell.cwd) do
+        {:ok, store} ->
+          core = Core.new(shell.core.config, Store.history(store))
+          {:reply, :ok, %{shell | store: store, core: core}}
+
+        {:error, reason} ->
+          {:reply, {:error, reason}, shell}
+      end
     else
       {:reply, {:error, :busy}, shell}
     end
@@ -167,7 +190,21 @@ defmodule Harness.Session do
     Enum.reduce(effects, %{shell | core: core}, &run_effect/2)
   end
 
+  defp run_effect({:emit, {:message_appended, message} = event}, shell) do
+    case Store.append(shell.store, message) do
+      {:ok, store} ->
+        emit(event, %{shell | store: store})
+
+      {:error, reason} ->
+        raise "session persistence failed: #{inspect(reason)}"
+    end
+  end
+
   defp run_effect({:emit, event}, shell) do
+    emit(event, shell)
+  end
+
+  defp emit(event, shell) do
     Enum.each(shell.subscribers, fn {pid, _} ->
       send(pid, {:harness, self(), event})
     end)

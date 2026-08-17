@@ -24,6 +24,19 @@ defmodule Harness.Session.Store do
     defstruct [:id, :parent_id, :timestamp, :message]
   end
 
+  defmodule Info do
+    @moduledoc false
+
+    @type t :: %__MODULE__{
+            path: String.t(),
+            id: String.t(),
+            cwd: String.t(),
+            timestamp: integer()
+          }
+
+    defstruct [:path, :id, :cwd, :timestamp]
+  end
+
   @type t :: %__MODULE__{
           id: String.t(),
           cwd: String.t(),
@@ -95,6 +108,31 @@ defmodule Harness.Session.Store do
     store.leaf
     |> walk_to_root(store.entries, [])
     |> derive_interrupted_results()
+  end
+
+  @spec list(String.t()) :: [Info.t()]
+  def list(cwd) when is_binary(cwd) do
+    cwd = Path.expand(cwd)
+    dir = Path.join(sessions_root(), cwd_key(cwd))
+
+    case File.ls(dir) do
+      {:ok, names} ->
+        names
+        |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
+        |> Enum.flat_map(&info_for_path(Path.join(dir, &1), cwd))
+        |> Enum.sort_by(fn info -> {-info.timestamp, info.path} end)
+
+      {:error, _reason} ->
+        []
+    end
+  end
+
+  @spec newest(String.t()) :: {:ok, Info.t()} | {:error, :no_session}
+  def newest(cwd) when is_binary(cwd) do
+    case list(cwd) do
+      [info | _] -> {:ok, info}
+      [] -> {:error, :no_session}
+    end
   end
 
   @doc false
@@ -190,6 +228,16 @@ defmodule Harness.Session.Store do
 
       _ ->
         Path.join([System.user_home!(), ".harness", "sessions"])
+    end
+  end
+
+  defp info_for_path(path, cwd) do
+    with {:ok, %{type: :regular, mtime: timestamp}} <- File.stat(path, time: :posix),
+         {:ok, store} <- open(path, cwd),
+         true <- Enum.any?(history(store), &is_struct(&1, User)) do
+      [%Info{path: path, id: store.id, cwd: store.cwd, timestamp: timestamp}]
+    else
+      _ -> []
     end
   end
 

@@ -240,10 +240,53 @@ defmodule Harness.Session.StoreTest do
     assert {:error, {:malformed_line, 3, :invalid_entry}} = Store.open(store.path, cwd)
   end
 
+  test "list returns usable sessions by mtime and skips unusable files", %{cwd: cwd} do
+    older = Store.new(cwd)
+    assert {:ok, older} = Store.append(older, Message.user("older"))
+
+    newer = Store.new(cwd)
+    assert {:ok, newer} = Store.append(newer, Message.user("newer"))
+
+    incomplete = Store.new(cwd)
+    call = %ToolCall{id: "pending", name: "read", args: {:ok, %{"path" => "x"}}}
+    {:ok, pending} = Message.assistant(nil, [call])
+    assert {:ok, incomplete} = Store.append(incomplete, Message.user("incomplete"))
+    assert {:ok, incomplete} = Store.append(incomplete, pending)
+
+    no_user = Store.new(cwd)
+    {:ok, assistant} = Message.assistant("assistant root", [])
+    assert {:ok, no_user} = Store.append(no_user, assistant)
+
+    empty = Store.new(cwd)
+    write_lines(empty.path, header(empty, nil), [])
+
+    dir = Path.dirname(older.path)
+    older_path = Path.join(dir, "zzzz.jsonl")
+    newer_path = Path.join(dir, "aaaa.jsonl")
+    File.rename!(older.path, older_path)
+    File.rename!(newer.path, newer_path)
+    File.write!(Path.join(dir, "corrupt.jsonl"), "not json")
+
+    File.touch!(older_path, 1_700_000_100)
+    File.touch!(incomplete.path, 1_700_000_200)
+    File.touch!(newer_path, 1_700_000_300)
+    File.touch!(no_user.path, 1_700_000_400)
+    File.touch!(empty.path, 1_700_000_500)
+
+    infos = Store.list(cwd)
+
+    assert Enum.map(infos, & &1.path) == [newer_path, incomplete.path, older_path]
+    assert Enum.map(infos, & &1.timestamp) == [1_700_000_300, 1_700_000_200, 1_700_000_100]
+    assert Enum.all?(infos, &(&1.cwd == Path.expand(cwd)))
+    assert {:ok, %{path: ^newer_path}} = Store.newest(cwd)
+  end
+
   test "new stores remain unborn until first append", %{root: root, cwd: cwd} do
     store = Store.new(cwd)
 
     refute File.exists?(store.path)
+    refute File.exists?(Path.join(root, Store.cwd_key(cwd)))
+    assert Store.list(cwd) == []
     refute File.exists?(Path.join(root, Store.cwd_key(cwd)))
 
     assert {:ok, store} = Store.append(store, Message.user("materialize"))

@@ -49,6 +49,17 @@ defmodule Harness.Session.CoreTest do
     %ToolCall{id: id, name: name, args: args}
   end
 
+  test "new/2 hydrates exact history while remaining idle" do
+    {:ok, assistant} = Message.assistant("prior answer", [])
+    history = [Message.user("prior question"), assistant]
+
+    state = Core.new(config([]), history)
+
+    assert Core.idle?(state)
+    assert state.history == history
+    assert state.next_ref == 1
+  end
+
   test "row 1: ask from idle appends user and calls provider" do
     {state, effects} = ask(new())
 

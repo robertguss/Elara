@@ -4,6 +4,7 @@ defmodule Harness do
   alias Harness.Prompt
   alias Harness.Session
   alias Harness.Session.Core
+  alias Harness.Session.Store
   alias Harness.Tool
 
   @type ask_error ::
@@ -18,7 +19,8 @@ defmodule Harness do
     max_tool_output_bytes = Keyword.get(opts, :max_tool_output_bytes, 16_384)
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
 
-    with {:ok, provider} <- fetch_provider(opts) do
+    with {:ok, provider} <- fetch_provider(opts),
+         {:ok, store} <- prepare_store(opts, cwd) do
       core_config = %Core.Config{
         system: system,
         tools: Tool.table(tools),
@@ -30,6 +32,7 @@ defmodule Harness do
         core_config: core_config,
         provider: provider,
         cwd: cwd,
+        store: store,
         tool_timeout_ms: tool_timeout_ms
       ]
 
@@ -58,10 +61,54 @@ defmodule Harness do
     GenServer.cast(session, :interrupt)
   end
 
+  @spec transcript(pid()) :: [Harness.Message.t()]
+  def transcript(session) when is_pid(session) do
+    GenServer.call(session, :transcript)
+  end
+
+  @spec resume(pid(), String.t()) :: :ok | {:error, term()}
+  def resume(session, path) when is_pid(session) and is_binary(path) do
+    GenServer.call(session, {:resume, path})
+  end
+
   defp fetch_provider(opts) do
     case Keyword.fetch(opts, :provider) do
       {:ok, provider} -> {:ok, provider}
       :error -> Harness.Config.resolve()
+    end
+  end
+
+  defp prepare_store(opts, cwd) do
+    resume = Keyword.get(opts, :resume)
+    continue? = Keyword.get(opts, :continue, false)
+
+    cond do
+      not is_nil(resume) and continue? == true ->
+        {:error, :ambiguous}
+
+      resume == :latest ->
+        open_newest(cwd)
+
+      is_binary(resume) ->
+        Store.open(resume, cwd)
+
+      not is_nil(resume) ->
+        {:error, :invalid_resume}
+
+      continue? == true ->
+        open_newest(cwd)
+
+      continue? == false ->
+        {:ok, Store.new(cwd)}
+
+      true ->
+        {:error, :invalid_continue}
+    end
+  end
+
+  defp open_newest(cwd) do
+    with {:ok, info} <- Store.newest(cwd) do
+      Store.open(info.path, cwd)
     end
   end
 end

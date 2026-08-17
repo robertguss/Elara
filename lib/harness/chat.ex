@@ -33,7 +33,6 @@ defmodule Harness.Chat do
     end
   end
 
-  @doc "Test seam. Drive Core from the mailbox. Returns the halt code."
   @spec run(pid(), IO.device(), String.t()) :: 0 | 1
   def run(session, out, seed \\ "") do
     Process.monitor(session)

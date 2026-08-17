@@ -1,0 +1,51 @@
+defmodule Harness.Message do
+  @moduledoc """
+  History is a list of these three structs, oldest first. Nothing else.
+  """
+
+  defmodule ToolCall do
+    @type args :: {:ok, map()} | {:malformed, String.t()}
+    @type t :: %__MODULE__{id: String.t(), name: String.t(), args: args()}
+    defstruct [:id, :name, :args]
+  end
+
+  defmodule User do
+    @type t :: %__MODULE__{text: String.t()}
+    defstruct [:text]
+  end
+
+  defmodule Assistant do
+    @typedoc "Invariant: text and tool_calls are never both empty. Enforced by assistant/2."
+    @type t :: %__MODULE__{text: String.t() | nil, tool_calls: [ToolCall.t()]}
+    defstruct text: nil, tool_calls: []
+  end
+
+  defmodule ToolResult do
+    @type t :: %__MODULE__{call_id: String.t(), name: String.t(), outcome: Harness.Tool.outcome()}
+    defstruct [:call_id, :name, :outcome]
+  end
+
+  @type t :: User.t() | Assistant.t() | ToolResult.t()
+
+  @doc "The only way to build an Assistant message. Rejects the empty message."
+  @spec assistant(String.t() | nil, [ToolCall.t()]) :: {:ok, Assistant.t()} | {:error, :empty_assistant}
+  def assistant(text, tool_calls)
+      when (is_binary(text) or is_nil(text)) and is_list(tool_calls) do
+    text_empty? = text == nil or text == ""
+    calls_empty? = tool_calls == []
+
+    if text_empty? and calls_empty? do
+      {:error, :empty_assistant}
+    else
+      {:ok, %Assistant{text: text, tool_calls: tool_calls}}
+    end
+  end
+
+  @spec user(String.t()) :: User.t()
+  def user(text) when is_binary(text), do: %User{text: text}
+
+  @spec tool_result(ToolCall.t(), Harness.Tool.outcome()) :: ToolResult.t()
+  def tool_result(%ToolCall{} = call, outcome) do
+    %ToolResult{call_id: call.id, name: call.name, outcome: outcome}
+  end
+end

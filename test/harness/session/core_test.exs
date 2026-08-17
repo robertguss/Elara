@@ -49,6 +49,38 @@ defmodule Harness.Session.CoreTest do
     %ToolCall{id: id, name: name, args: args}
   end
 
+  test "new/2 hydrates exact history while remaining idle" do
+    {:ok, assistant} = Message.assistant("prior answer", [])
+    history = [Message.user("prior question"), assistant]
+
+    state = Core.new(config([]), history)
+
+    assert Core.idle?(state)
+    assert state.history == history
+    assert state.next_ref == 1
+  end
+
+  test "new/2 materializes interrupted tool results in memory" do
+    first = call("call-1", "echo")
+    second = call("call-2", "echo")
+    {:ok, assistant} = Message.assistant(nil, [first, second])
+    completed = Message.tool_result(first, {:ok, "a"})
+    history = [Message.user("read both"), assistant, completed]
+
+    state = Core.new(config([]), history)
+
+    assert [
+             %Message.User{},
+             ^assistant,
+             ^completed,
+             %Message.ToolResult{
+               call_id: "call-2",
+               name: "echo",
+               outcome: {:error, "interrupted"}
+             }
+           ] = state.history
+  end
+
   test "row 1: ask from idle appends user and calls provider" do
     {state, effects} = ask(new())
 

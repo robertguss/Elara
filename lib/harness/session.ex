@@ -6,13 +6,14 @@ defmodule Harness.Session do
   use GenServer
 
   alias Harness.Provider
-  alias Harness.Session.Core
+  alias Harness.Session.{Core, Store}
   alias Harness.Tool.Ctx
 
   defmodule Shell do
     @moduledoc false
     @type t :: %__MODULE__{
             core: Core.State.t(),
+            store: Store.t(),
             provider: {module(), term()},
             cwd: String.t(),
             tool_timeout_ms: pos_integer(),
@@ -24,6 +25,7 @@ defmodule Harness.Session do
 
     defstruct [
       :core,
+      :store,
       :provider,
       :cwd,
       :tool_timeout_ms,
@@ -54,15 +56,29 @@ defmodule Harness.Session do
     core_config = Keyword.fetch!(opts, :core_config)
     provider = Keyword.fetch!(opts, :provider)
     cwd = Keyword.fetch!(opts, :cwd)
+    store = Keyword.fetch!(opts, :store)
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
 
-    {:ok,
-     %Shell{
-       core: Core.new(core_config),
-       provider: provider,
-       cwd: cwd,
-       tool_timeout_ms: tool_timeout_ms
-     }}
+    case hydrate(store, core_config) do
+      {:ok, store, core} ->
+        {:ok,
+         %Shell{
+           core: core,
+           store: store,
+           provider: provider,
+           cwd: cwd,
+           tool_timeout_ms: tool_timeout_ms
+         }}
+
+      {:error, reason} ->
+        {:stop, reason}
+    end
+  end
+
+  @impl true
+  def terminate(_reason, shell) do
+    Store.release(shell.store)
+    :ok
   end
 
   @impl true
@@ -77,6 +93,32 @@ defmodule Harness.Session do
   def handle_call({:ask_async, prompt}, _from, shell) do
     if Core.idle?(shell.core) do
       {:reply, :ok, feed({:ask, prompt}, shell)}
+    else
+      {:reply, {:error, :busy}, shell}
+    end
+  end
+
+  def handle_call(:transcript, _from, shell) do
+    {:reply, shell.core.history, shell}
+  end
+
+  def handle_call(:cwd, _from, shell) do
+    {:reply, shell.cwd, shell}
+  end
+
+  def handle_call({:hydrate, store}, _from, shell) do
+    if Core.idle?(shell.core) do
+      case hydrate(store, shell.core.config) do
+        {:ok, store, core} ->
+          if store.path != shell.store.path do
+            Store.release(shell.store)
+          end
+
+          {:reply, {:ok, core.history}, %{shell | store: store, core: core}}
+
+        {:error, reason} ->
+          {:reply, {:error, reason}, shell}
+      end
     else
       {:reply, {:error, :busy}, shell}
     end
@@ -162,28 +204,49 @@ defmodule Harness.Session do
 
   def handle_info(_msg, shell), do: {:noreply, shell}
 
+  defp hydrate(store, config) do
+    with {:ok, store} <- Store.claim(store) do
+      persist_repairs(store, Core.new(config, Store.history(store)))
+    end
+  end
+
+  defp persist_repairs(store, core) do
+    extras = Enum.drop(core.history, length(Store.history(store)))
+
+    extras
+    |> Enum.reduce_while({:ok, store}, fn message, {:ok, store} ->
+      case Store.append(store, message) do
+        {:ok, store} -> {:cont, {:ok, store}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, store} ->
+        {:ok, store, core}
+
+      {:error, reason} ->
+        Store.release(store)
+        {:error, reason}
+    end
+  end
+
   defp feed(fact, shell) do
     {core, effects} = Core.step(shell.core, fact)
     Enum.reduce(effects, %{shell | core: core}, &run_effect/2)
   end
 
-  defp run_effect({:emit, event}, shell) do
-    Enum.each(shell.subscribers, fn {pid, _} ->
-      send(pid, {:harness, self(), event})
-    end)
+  defp run_effect({:emit, {:message_appended, message} = event}, shell) do
+    case Store.append(shell.store, message) do
+      {:ok, store} ->
+        emit(event, %{shell | store: store})
 
-    case {event, shell.pending_reply} do
-      {{:turn_ended, {:completed, text}}, from} when from != nil ->
-        GenServer.reply(from, {:ok, text})
-        %{shell | pending_reply: nil}
-
-      {{:turn_ended, outcome}, from} when from != nil ->
-        GenServer.reply(from, {:error, outcome})
-        %{shell | pending_reply: nil}
-
-      _ ->
-        shell
+      {:error, reason} ->
+        raise "session persistence failed: #{inspect(reason)}"
     end
+  end
+
+  defp run_effect({:emit, event}, shell) do
+    emit(event, shell)
   end
 
   defp run_effect({:call_provider, core_ref, request}, shell) do
@@ -203,6 +266,25 @@ defmodule Harness.Session do
     shell
     |> track_task(task, :tool, core_ref)
     |> Map.update!(:timers, &Map.put(&1, core_ref, timer))
+  end
+
+  defp emit(event, shell) do
+    Enum.each(shell.subscribers, fn {pid, _} ->
+      send(pid, {:harness, self(), event})
+    end)
+
+    case {event, shell.pending_reply} do
+      {{:turn_ended, {:completed, text}}, from} when from != nil ->
+        GenServer.reply(from, {:ok, text})
+        %{shell | pending_reply: nil}
+
+      {{:turn_ended, outcome}, from} when from != nil ->
+        GenServer.reply(from, {:error, outcome})
+        %{shell | pending_reply: nil}
+
+      _ ->
+        shell
+    end
   end
 
   defp track_task(shell, %Task{ref: ref, pid: pid}, kind, core_ref) do

@@ -69,7 +69,8 @@ defmodule Harness.AuthTest do
   end
 
   test "tokens_from_map reads official nested Grok CLI files" do
-    assert {:ok, %Auth{access_token: "sess-current", refresh_token: "do-not-lose", expires_at: exp}} =
+    assert {:ok,
+            %Auth{access_token: "sess-current", refresh_token: "do-not-lose", expires_at: exp}} =
              Auth.tokens_from_map(%{
                "https://auth.x.ai::#{Auth.client_id()}" => %{
                  "key" => "sess-current",
@@ -98,4 +99,3 @@ defmodule Harness.AuthTest do
     assert {:error, :invalid_auth_file} = Auth.tokens_from_map(%{"foo" => "bar"})
   end
 end
-

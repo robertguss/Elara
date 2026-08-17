@@ -25,25 +25,31 @@ Then ask one question, or stay in a conversation:
 ```bash
 mix harness.ask "what files are in this repo?"
 mix harness.chat
+mix harness.chat --continue
 ```
 
 `mix harness.ask` prints one turn and exits. A failed turn exits with status 1.
 
-`mix harness.chat` keeps one session. Optional first prompt:
+`mix harness.chat` starts a new session. `mix harness.chat --continue` resumes the newest usable session for the current working directory. Both forms accept an optional first prompt:
 
 ```bash
 mix harness.chat "what starts the application?"
+mix harness.chat --continue "what did we establish?"
 ```
 
 Your line becomes a `you` block. Tool calls print as dim metadata. The answer sits on the page. Type the next prompt at `> `.
 
 | Input | Idle | Mid-turn |
 | --- | --- | --- |
-| text | starts a turn | refused. use `/interrupt` |
-| `/interrupt` or `/stop` | ignored | cancel the turn |
-| `/quit`, `/exit`, `/q`, or Ctrl-D | exit 0 | interrupt, then exit. a second `/quit` exits immediately |
-| `/help`, `/h`, `/?` | print commands | print commands |
-| `//text` | send `/text` as a prompt | refused |
+| text | Starts a turn | Refused. Use `/interrupt` |
+| `/interrupt` or `/stop` | Ignored | Cancels the turn |
+| `/resume` | Lists saved sessions for this working directory | Refused. Use `/interrupt` |
+| `/resume N` | Resumes session N in the current chat | Refused. Use `/interrupt` |
+| `/quit`, `/exit`, `/q`, or Ctrl-D | Exits with status 0 | Interrupts, then exits. A second `/quit` exits immediately |
+| `/help`, `/h`, `/?` | Prints commands | Prints commands |
+| `//text` | Sends `/text` as a prompt | Refused |
+
+Session files live under `~/.harness/sessions/<cwd-key>/`. Continuation and in-chat resume are scoped to the current working directory.
 
 Provider errors print and return you to `> `. They do not exit the chat.
 
@@ -86,9 +92,9 @@ receive do
 end
 ```
 
-`Harness.interrupt/1` cancels the current turn. A second `ask` while a turn is running returns `{:error, :busy}`. History lives in the session process. It is gone when that process dies.
+`Harness.interrupt/1` cancels the current turn. A second `ask` while a turn is running returns `{:error, :busy}`. Chat persists session history after every message. `mix harness.ask` does not.
 
-`start_session/1` accepts `provider:`, `cwd:`, `tools:`, `system:`, `max_iterations:`, `max_tool_output_bytes:`, and `tool_timeout_ms:`. Omit `provider` to use `Harness.Config.resolve/0` (env key or saved login).
+`start_session/1` accepts `provider:`, `cwd:`, `tools:`, `system:`, `max_iterations:`, `max_tool_output_bytes:`, `tool_timeout_ms:`, `persist:`, and `resume:`. `resume:` is `nil` (new session), `:latest` (newest usable file for `cwd`), or a session path. Omit `provider` to use `Harness.Config.resolve/0` (env key or saved login).
 
 ## Develop
 

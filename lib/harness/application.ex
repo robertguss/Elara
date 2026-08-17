@@ -6,6 +6,7 @@ defmodule Harness.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      {Registry, keys: :unique, name: Harness.SessionLocks},
       {Task.Supervisor, name: Harness.TaskSup},
       {DynamicSupervisor, name: Harness.SessionSup, strategy: :one_for_one}
     ]

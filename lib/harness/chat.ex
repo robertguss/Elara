@@ -3,18 +3,26 @@ defmodule Harness.Chat do
 
   alias Harness.Chat.Core
 
-  @banner "harness  ·  /help  /interrupt  /quit\n\n"
+  @banner "harness  ·  /help  /interrupt  /resume  /quit\n\n"
   @prompt "> "
 
   @spec main([String.t()]) :: no_return()
-  def main(argv) do
+  @spec main([String.t()], keyword()) :: no_return()
+  def main(argv, opts \\ []) do
     seed = argv |> Enum.join(" ") |> String.trim()
+    continue? = Keyword.get(opts, :continue, false)
 
     case Harness.Config.resolve() do
       {:ok, provider} ->
-        {:ok, session} = Harness.start_session(provider: provider)
-        start_reader(self())
-        exit({:shutdown, run(session, :stdio, seed)})
+        case Harness.start_session(provider: provider, resume: resume_opt(continue?)) do
+          {:ok, session} ->
+            start_reader(self())
+            exit({:shutdown, run(session, :stdio, seed)})
+
+          {:error, reason} ->
+            Mix.shell().error(startup_error(reason))
+            exit({:shutdown, 1})
+        end
 
       {:error, :not_logged_in} ->
         Mix.shell().error(
@@ -38,6 +46,7 @@ defmodule Harness.Chat do
     Process.monitor(session)
     :ok = Harness.subscribe(session)
     write_out(out, @banner)
+    write_out(out, Core.render_transcript(Harness.transcript(session)))
 
     case String.trim(seed) do
       "" ->
@@ -70,6 +79,12 @@ defmodule Harness.Chat do
 
       :ask_rejected ->
         dispatch(session, out, phase, :ask_rejected, %{opts | rewrite: false})
+
+      {:sessions_listed, rows} ->
+        dispatch(session, out, phase, {:sessions_listed, rows}, %{opts | rewrite: false})
+
+      {:resume_result, result} ->
+        dispatch(session, out, phase, {:resume_result, result}, %{opts | rewrite: false})
     end
   end
 
@@ -103,11 +118,44 @@ defmodule Harness.Chat do
           Harness.interrupt(session)
           {:cont, {phase, opts}}
 
+        :list_sessions ->
+          send(self(), {:sessions_listed, session_rows(session)})
+          {:cont, {phase, opts}}
+
+        {:resume_session, index} ->
+          send(self(), resume_result(session, index))
+          {:cont, {phase, opts}}
+
         {:halt, code} ->
           {:halt, {:halt, code}}
       end
     end)
   end
+
+  defp session_rows(session) do
+    session
+    |> Harness.cwd()
+    |> Harness.list_sessions()
+    |> Enum.map(&%{id: &1.id, timestamp: &1.timestamp})
+  end
+
+  defp resume_result(session, index) do
+    infos = Harness.list_sessions(Harness.cwd(session))
+
+    case Enum.at(infos, index - 1) do
+      nil ->
+        {:resume_result, {:error, {:invalid_index, index}}}
+
+      info ->
+        case Harness.resume(session, info.path) do
+          {:ok, history} -> {:resume_result, {:ok, history}}
+          {:error, reason} -> {:resume_result, {:error, reason}}
+        end
+    end
+  end
+
+  defp resume_opt(true), do: :latest
+  defp resume_opt(false), do: nil
 
   defp start_reader(parent) do
     spawn_link(fn -> reader_loop(parent) end)
@@ -181,7 +229,7 @@ defmodule Harness.Chat do
   defp paint_line(""), do: ""
   defp paint_line(@prompt), do: [IO.ANSI.cyan(), @prompt, IO.ANSI.reset()]
 
-  defp paint_line("harness  ·  /help  /interrupt  /quit" = line) do
+  defp paint_line("harness  ·  /help  /interrupt  /resume  /quit" = line) do
     faint(line)
   end
 
@@ -196,4 +244,11 @@ defmodule Harness.Chat do
   end
 
   defp faint(text), do: [IO.ANSI.faint(), text, IO.ANSI.reset()]
+
+  @doc false
+  @spec startup_error(term()) :: String.t()
+  def startup_error(:no_session), do: "No saved session for this directory."
+  def startup_error(:locked), do: "Session is already open."
+  def startup_error(:no_home), do: "HOME is not set."
+  def startup_error(reason), do: "Could not start chat: #{inspect(reason)}"
 end

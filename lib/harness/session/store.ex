@@ -1,6 +1,6 @@
 defmodule Harness.Session.Store do
   @moduledoc """
-  Private JSONL persistence for session message trees.
+  Private JSONL persistence for a linear session log.
   """
 
   alias Harness.Message
@@ -8,19 +8,6 @@ defmodule Harness.Session.Store do
 
   @version 1
   @hash_length 12
-
-  defmodule Entry do
-    @moduledoc false
-
-    @type t :: %__MODULE__{
-            id: String.t(),
-            parent_id: String.t() | nil,
-            timestamp: integer(),
-            message: Message.t()
-          }
-
-    defstruct [:id, :parent_id, :timestamp, :message]
-  end
 
   defmodule Info do
     @moduledoc false
@@ -38,23 +25,51 @@ defmodule Harness.Session.Store do
   @type t :: %__MODULE__{
           id: String.t(),
           cwd: String.t(),
-          path: String.t(),
-          leaf: String.t() | nil,
-          entries: %{String.t() => Entry.t()},
-          order: [String.t()]
+          path: String.t() | nil,
+          messages: [Message.t()],
+          persist?: boolean()
         }
 
-  defstruct [:id, :cwd, :path, :leaf, entries: %{}, order: []]
+  defstruct [:id, :cwd, :path, messages: [], persist?: true]
+
+  @spec root() :: {:ok, String.t()} | {:error, :no_home}
+  def root do
+    case Application.get_env(:harness, :sessions_root) do
+      root when is_binary(root) and root != "" ->
+        {:ok, Path.expand(root)}
+
+      _ ->
+        case System.user_home() do
+          home when is_binary(home) and home != "" ->
+            {:ok, Path.join([home, ".harness", "sessions"])}
+
+          _ ->
+            {:error, :no_home}
+        end
+    end
+  end
 
   @spec new(String.t()) :: t()
   def new(cwd) when is_binary(cwd) do
     cwd = Path.expand(cwd)
     id = generate_id()
+    {:ok, root} = root()
 
     %__MODULE__{
       id: id,
       cwd: cwd,
-      path: Path.join([sessions_root(), cwd_key(cwd), "#{id}.jsonl"])
+      path: Path.join([root, cwd_key(cwd), "#{id}.jsonl"]),
+      persist?: true
+    }
+  end
+
+  @spec memory(String.t()) :: t()
+  def memory(cwd) when is_binary(cwd) do
+    %__MODULE__{
+      id: generate_id(),
+      cwd: Path.expand(cwd),
+      path: nil,
+      persist?: false
     }
   end
 
@@ -63,17 +78,14 @@ defmodule Harness.Session.Store do
     with {:ok, raw} <- File.read(path),
          {:ok, header, entry_lines} <- decode_file_lines(raw),
          :ok <- validate_expected_cwd(header.cwd, expected_cwd),
-         {:ok, entries, order, trailing_torn?} <- decode_entries(entry_lines),
-         leaf = recover_leaf(header.leaf, entries, order, trailing_torn?),
-         :ok <- validate_tree(entries, leaf) do
+         {:ok, messages} <- decode_entries(entry_lines) do
       {:ok,
        %__MODULE__{
          id: header.id,
          cwd: header.cwd,
          path: path,
-         leaf: leaf,
-         entries: entries,
-         order: order
+         messages: messages,
+         persist?: true
        }}
     end
   end
@@ -82,47 +94,47 @@ defmodule Harness.Session.Store do
   def append(%__MODULE__{} = store, message)
       when is_struct(message, User) or is_struct(message, Assistant) or
              is_struct(message, ToolResult) do
-    entry = %Entry{
-      id: generate_id(),
-      parent_id: store.leaf,
-      timestamp: System.system_time(:millisecond),
-      message: message
-    }
+    updated = %{store | messages: store.messages ++ [message]}
 
-    updated = %{
-      store
-      | leaf: entry.id,
-        entries: Map.put(store.entries, entry.id, entry),
-        order: store.order ++ [entry.id]
-    }
+    cond do
+      not store.persist? ->
+        {:ok, updated}
 
-    case rewrite(updated) do
-      :ok -> {:ok, updated}
-      {:error, reason} -> {:error, reason}
+      is_nil(store.path) ->
+        {:error, :no_path}
+
+      true ->
+        case persist(store, message) do
+          :ok -> {:ok, updated}
+          {:error, reason} -> {:error, reason}
+        end
     end
   end
 
   @spec history(t()) :: [Message.t()]
-  def history(%__MODULE__{} = store) do
-    store.leaf
-    |> walk_to_root(store.entries, [])
-    |> derive_interrupted_results()
-  end
+  def history(%__MODULE__{} = store), do: store.messages
 
   @spec list(String.t()) :: [Info.t()]
   def list(cwd) when is_binary(cwd) do
     cwd = Path.expand(cwd)
-    dir = Path.join(sessions_root(), cwd_key(cwd))
 
-    case File.ls(dir) do
-      {:ok, names} ->
-        names
-        |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
-        |> Enum.flat_map(&info_for_path(Path.join(dir, &1), cwd))
-        |> Enum.sort_by(fn info -> {-info.timestamp, info.path} end)
-
-      {:error, _reason} ->
+    case root() do
+      {:error, :no_home} ->
         []
+
+      {:ok, root} ->
+        dir = Path.join(root, cwd_key(cwd))
+
+        case File.ls(dir) do
+          {:ok, names} ->
+            names
+            |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
+            |> Enum.flat_map(&info_for_path(Path.join(dir, &1), cwd))
+            |> Enum.sort_by(fn info -> {-info.timestamp, info.path} end)
+
+          {:error, _reason} ->
+            []
+        end
     end
   end
 
@@ -131,6 +143,42 @@ defmodule Harness.Session.Store do
     case list(cwd) do
       [info | _] -> {:ok, info}
       [] -> {:error, :no_session}
+    end
+  end
+
+  @spec claim(t()) :: {:ok, t()} | {:error, :locked}
+  def claim(%__MODULE__{persist?: false} = store), do: {:ok, store}
+  def claim(%__MODULE__{path: nil} = store), do: {:ok, store}
+
+  def claim(%__MODULE__{path: path} = store) when is_binary(path) do
+    key = Path.expand(path)
+
+    case Registry.lookup(Harness.SessionLocks, key) do
+      [{pid, _}] when pid == self() ->
+        {:ok, store}
+
+      _ ->
+        case Registry.register(Harness.SessionLocks, key, nil) do
+          {:ok, _} -> {:ok, store}
+          {:error, {:already_registered, _}} -> {:error, :locked}
+        end
+    end
+  end
+
+  @spec release(t()) :: :ok
+  def release(%__MODULE__{persist?: false}), do: :ok
+  def release(%__MODULE__{path: nil}), do: :ok
+
+  def release(%__MODULE__{path: path}) when is_binary(path) do
+    key = Path.expand(path)
+
+    case Registry.lookup(Harness.SessionLocks, key) do
+      [{pid, _}] when pid == self() ->
+        Registry.unregister(Harness.SessionLocks, key)
+        :ok
+
+      _ ->
+        :ok
     end
   end
 
@@ -220,71 +268,52 @@ defmodule Harness.Session.Store do
 
   def decode_message(_encoded), do: {:error, :invalid_message}
 
-  defp sessions_root do
-    case Application.get_env(:harness, :sessions_root) do
-      root when is_binary(root) and root != "" ->
-        Path.expand(root)
+  defp persist(store, message) do
+    line = message |> encode_entry() |> JSON.encode!()
 
-      _ ->
-        Path.join([System.user_home!(), ".harness", "sessions"])
+    if File.regular?(store.path) do
+      File.write(store.path, line <> "\n", [:append])
+    else
+      write_new(store, line)
     end
+  end
+
+  defp write_new(store, line) do
+    dir = Path.dirname(store.path)
+    header = JSON.encode!(encode_header(store))
+
+    with :ok <- File.mkdir_p(dir),
+         :ok <- File.write(store.path, header <> "\n" <> line <> "\n"),
+         :ok <- File.chmod(store.path, 0o600) do
+      :ok
+    end
+  end
+
+  defp encode_header(store) do
+    %{
+      "version" => @version,
+      "id" => store.id,
+      "cwd" => store.cwd
+    }
+  end
+
+  defp encode_entry(message) do
+    message
+    |> encode_message()
+    |> Map.merge(%{
+      "id" => generate_id(),
+      "timestamp" => System.system_time(:millisecond)
+    })
   end
 
   defp info_for_path(path, cwd) do
     with {:ok, %{type: :regular, mtime: timestamp}} <- File.stat(path, time: :posix),
          {:ok, store} <- open(path, cwd),
-         true <- Enum.any?(history(store), &is_struct(&1, User)) do
+         true <- Enum.any?(store.messages, &is_struct(&1, User)) do
       [%Info{path: path, id: store.id, cwd: store.cwd, timestamp: timestamp}]
     else
       _ -> []
     end
-  end
-
-  defp rewrite(store) do
-    dir = Path.dirname(store.path)
-    tmp = store.path <> ".tmp.#{:erlang.unique_integer([:positive])}"
-
-    with :ok <- File.mkdir_p(dir),
-         :ok <- File.write(tmp, encode_store(store)),
-         :ok <- File.chmod(tmp, 0o600),
-         :ok <- File.rename(tmp, store.path) do
-      :ok
-    else
-      {:error, reason} ->
-        _ = File.rm(tmp)
-        {:error, reason}
-    end
-  end
-
-  defp encode_store(store) do
-    header = %{
-      "version" => @version,
-      "id" => store.id,
-      "cwd" => store.cwd,
-      "leaf" => store.leaf
-    }
-
-    lines = [
-      JSON.encode!(header)
-      | Enum.map(store.order, fn id ->
-          store.entries
-          |> Map.fetch!(id)
-          |> encode_entry()
-          |> JSON.encode!()
-        end)
-    ]
-
-    Enum.join(lines, "\n") <> "\n"
-  end
-
-  defp encode_entry(%Entry{} = entry) do
-    entry.message
-    |> encode_message()
-    |> Map.merge(%{
-      "id" => entry.id,
-      "parentId" => entry.parent_id,
-      "timestamp" => entry.timestamp
-    })
   end
 
   defp decode_file_lines(raw) when is_binary(raw) do
@@ -318,15 +347,8 @@ defmodule Harness.Session.Store do
     end
   end
 
-  defp decode_header(
-         %{
-           "version" => version,
-           "id" => id,
-           "cwd" => cwd,
-           "leaf" => leaf
-         } = header
-       )
-       when map_size(header) == 4 do
+  defp decode_header(%{"version" => version, "id" => id, "cwd" => cwd} = header)
+       when map_size(header) == 3 do
     cond do
       not is_integer(version) ->
         {:error, :bad_header}
@@ -340,11 +362,8 @@ defmodule Harness.Session.Store do
       not (is_binary(cwd) and cwd != "" and Path.type(cwd) == :absolute) ->
         {:error, :bad_header}
 
-      not (is_nil(leaf) or (is_binary(leaf) and leaf != "")) ->
-        {:error, :bad_header}
-
       true ->
-        {:ok, %{id: id, cwd: cwd, leaf: leaf}}
+        {:ok, %{id: id, cwd: cwd}}
     end
   end
 
@@ -363,30 +382,29 @@ defmodule Harness.Session.Store do
 
     lines
     |> Enum.with_index()
-    |> Enum.reduce_while({:ok, %{}, [], false}, fn
-      {line, index}, {:ok, entries, order, false} ->
+    |> Enum.reduce_while({:ok, [], MapSet.new()}, fn
+      {line, index}, {:ok, messages, ids} ->
         case decode_entry_line(line) do
-          {:ok, %Entry{id: id} = entry} ->
-            if Map.has_key?(entries, id) do
+          {:ok, {id, message}} ->
+            if MapSet.member?(ids, id) do
               {:halt, {:error, {:duplicate_id, id}}}
             else
-              {:cont, {:ok, Map.put(entries, id, entry), order ++ [id], false}}
+              {:cont, {:ok, [message | messages], MapSet.put(ids, id)}}
             end
 
           {:error, :invalid_json} when index == last_index and line != "" ->
-            {:halt, {:ok, entries, order, true}}
+            {:halt, {:ok, Enum.reverse(messages)}}
 
           {:error, reason} ->
             {:halt, {:error, {:malformed_line, index + 2, reason}}}
         end
     end)
+    |> case do
+      {:ok, messages, _ids} -> {:ok, Enum.reverse(messages)}
+      {:ok, messages} -> {:ok, messages}
+      {:error, reason} -> {:error, reason}
+    end
   end
-
-  defp recover_leaf(leaf, entries, order, true) do
-    if Map.has_key?(entries, leaf), do: leaf, else: List.last(order)
-  end
-
-  defp recover_leaf(leaf, _entries, _order, false), do: leaf
 
   defp decode_entry_line(line) do
     case JSON.decode(line) do
@@ -399,115 +417,17 @@ defmodule Harness.Session.Store do
     payload_keys = Enum.filter(["user", "assistant", "toolResult"], &Map.has_key?(encoded, &1))
 
     with [payload_key] <- payload_keys,
-         true <- map_size(encoded) == 4,
+         true <- map_size(encoded) == 3,
          id when is_binary(id) and id != "" <- Map.get(encoded, "id"),
-         true <- Map.has_key?(encoded, "parentId"),
-         parent_id when is_nil(parent_id) or (is_binary(parent_id) and parent_id != "") <-
-           Map.get(encoded, "parentId"),
          timestamp when is_integer(timestamp) <- Map.get(encoded, "timestamp"),
          {:ok, message} <- decode_message(%{payload_key => Map.fetch!(encoded, payload_key)}) do
-      {:ok, %Entry{id: id, parent_id: parent_id, timestamp: timestamp, message: message}}
+      {:ok, {id, message}}
     else
       _ -> {:error, :invalid_entry}
     end
   end
 
   defp decode_entry(_encoded), do: {:error, :invalid_entry}
-
-  defp validate_tree(entries, leaf) when map_size(entries) == 0 do
-    if is_nil(leaf), do: :ok, else: {:error, :missing_leaf}
-  end
-
-  defp validate_tree(entries, leaf) do
-    cond do
-      is_nil(leaf) or not Map.has_key?(entries, leaf) ->
-        {:error, :missing_leaf}
-
-      missing_parent = missing_parent(entries) ->
-        {:error, {:missing_parent, missing_parent}}
-
-      cycle = cycle(entries) ->
-        {:error, {:cycle, cycle}}
-
-      disconnected = disconnected_entry(entries, leaf) ->
-        {:error, {:disconnected_tree, disconnected}}
-
-      Enum.any?(entries, fn {_id, entry} -> entry.parent_id == leaf end) ->
-        {:error, :leaf_not_tip}
-
-      true ->
-        :ok
-    end
-  end
-
-  defp missing_parent(entries) do
-    Enum.find_value(entries, fn
-      {_id, %Entry{parent_id: nil}} ->
-        nil
-
-      {_id, %Entry{parent_id: parent_id}} ->
-        if Map.has_key?(entries, parent_id), do: nil, else: parent_id
-    end)
-  end
-
-  defp cycle(entries) do
-    Enum.find(Map.keys(entries), &cycle_from?(&1, entries, MapSet.new()))
-  end
-
-  defp cycle_from?(nil, _entries, _seen), do: false
-
-  defp cycle_from?(id, entries, seen) do
-    if MapSet.member?(seen, id) do
-      true
-    else
-      parent_id = Map.fetch!(entries, id).parent_id
-      cycle_from?(parent_id, entries, MapSet.put(seen, id))
-    end
-  end
-
-  defp disconnected_entry(entries, leaf) do
-    selected_root = root_id(leaf, entries)
-    Enum.find(Map.keys(entries), &(root_id(&1, entries) != selected_root))
-  end
-
-  defp root_id(id, entries) do
-    case Map.fetch!(entries, id).parent_id do
-      nil -> id
-      parent_id -> root_id(parent_id, entries)
-    end
-  end
-
-  defp walk_to_root(nil, _entries, messages), do: messages
-
-  defp walk_to_root(id, entries, messages) do
-    entry = Map.fetch!(entries, id)
-    walk_to_root(entry.parent_id, entries, [entry.message | messages])
-  end
-
-  defp derive_interrupted_results(history) do
-    {trailing_results, rest} =
-      history
-      |> Enum.reverse()
-      |> Enum.split_while(&is_struct(&1, ToolResult))
-
-    case rest do
-      [%Assistant{tool_calls: calls} | _] when calls != [] ->
-        completed =
-          trailing_results
-          |> Enum.map(& &1.call_id)
-          |> MapSet.new()
-
-        interrupted =
-          calls
-          |> Enum.reject(&MapSet.member?(completed, &1.id))
-          |> Enum.map(&Message.tool_result(&1, {:error, "interrupted"}))
-
-        history ++ interrupted
-
-      _ ->
-        history
-    end
-  end
 
   defp encode_tool_call(%ToolCall{id: id, name: name, args: args}) do
     %{"id" => id, "name" => name, "args" => encode_args(args)}

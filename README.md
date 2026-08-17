@@ -92,9 +92,9 @@ receive do
 end
 ```
 
-`Harness.interrupt/1` cancels the current turn. A second `ask` while a turn is running returns `{:error, :busy}`. Harness persists session history after every message.
+`Harness.interrupt/1` cancels the current turn. A second `ask` while a turn is running returns `{:error, :busy}`. Chat persists session history after every message. `mix harness.ask` does not.
 
-`start_session/1` accepts `provider:`, `cwd:`, `tools:`, `system:`, `max_iterations:`, `max_tool_output_bytes:`, `tool_timeout_ms:`, `continue:`, and `resume:`. Omit `provider` to use `Harness.Config.resolve/0` (env key or saved login).
+`start_session/1` accepts `provider:`, `cwd:`, `tools:`, `system:`, `max_iterations:`, `max_tool_output_bytes:`, `tool_timeout_ms:`, `persist:`, and `resume:`. `resume:` is `nil` (new session), `:latest` (newest usable file for `cwd`), or a session path. Omit `provider` to use `Harness.Config.resolve/0` (env key or saved login).
 
 ## Develop
 

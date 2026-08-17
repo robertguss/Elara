@@ -4,16 +4,16 @@ defmodule Harness.Chat.Core do
   alias Harness.CLI
   alias Harness.Message
   alias Harness.Message.{Assistant, ToolCall, ToolResult, User}
-  alias Harness.Session.Store.Info
 
   @type phase :: :idle | {:in_turn, String.t()} | {:exiting, 0 | 1}
+  @type session_row :: %{id: String.t(), timestamp: integer()}
 
   @type input ::
           {:line, String.t()}
           | :eof
           | {:event, Harness.Event.t()}
           | {:session_down, term()}
-          | {:sessions_listed, [Info.t()]}
+          | {:sessions_listed, [session_row()]}
           | {:resume_result, {:ok, [Message.t()]} | {:error, term()}}
           | :ask_rejected
 
@@ -77,6 +77,8 @@ defmodule Harness.Chat.Core do
   def step({:in_turn, _}, :eof), do: {{:exiting, 0}, [:interrupt]}
   def step({:in_turn, _}, :ask_rejected), do: {:idle, print([@rejected, @prompt])}
   def step({:in_turn, _}, {:session_down, _}), do: halt_down()
+  def step({:in_turn, _} = phase, {:sessions_listed, _}), do: {phase, []}
+  def step({:in_turn, _} = phase, {:resume_result, _}), do: {phase, []}
 
   def step({:in_turn, prompt}, {:event, event}) do
     in_turn_event(prompt, event)
@@ -92,6 +94,8 @@ defmodule Harness.Chat.Core do
   def step({:exiting, code} = phase, :eof), do: {phase, [{:halt, code}]}
   def step({:exiting, _code} = phase, :ask_rejected), do: {phase, []}
   def step({:exiting, _}, {:session_down, _}), do: halt_down()
+  def step({:exiting, _} = phase, {:sessions_listed, _}), do: {phase, []}
+  def step({:exiting, _} = phase, {:resume_result, _}), do: {phase, []}
 
   def step({:exiting, code} = phase, {:event, {:turn_ended, outcome} = event}) do
     {phase, end_prints(outcome, event) ++ [{:halt, code}]}
@@ -255,7 +259,7 @@ defmodule Harness.Chat.Core do
     rows =
       infos
       |> Enum.with_index(1)
-      |> Enum.map(fn {%Info{id: id, timestamp: timestamp}, index} ->
+      |> Enum.map(fn {%{id: id, timestamp: timestamp}, index} ->
         [
           Integer.to_string(index),
           "  ",

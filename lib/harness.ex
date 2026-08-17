@@ -66,15 +66,23 @@ defmodule Harness do
     GenServer.call(session, :transcript)
   end
 
-  @doc false
-  @spec sessions(pid()) :: [Store.Info.t()]
-  def sessions(session) when is_pid(session) do
-    GenServer.call(session, :sessions)
+  @spec cwd(pid()) :: String.t()
+  def cwd(session) when is_pid(session) do
+    GenServer.call(session, :cwd)
   end
 
-  @spec resume(pid(), String.t()) :: :ok | {:error, term()}
+  @spec list_sessions(String.t()) :: [Store.Info.t()]
+  def list_sessions(cwd) when is_binary(cwd) do
+    Store.list(cwd)
+  end
+
+  @spec resume(pid(), String.t()) :: {:ok, [Harness.Message.t()]} | {:error, term()}
   def resume(session, path) when is_pid(session) and is_binary(path) do
-    GenServer.call(session, {:resume, path})
+    cwd = cwd(session)
+
+    with {:ok, store} <- Store.open(path, cwd) do
+      GenServer.call(session, {:hydrate, store})
+    end
   end
 
   defp fetch_provider(opts) do
@@ -85,30 +93,28 @@ defmodule Harness do
   end
 
   defp prepare_store(opts, cwd) do
+    persist? = Keyword.get(opts, :persist, true)
     resume = Keyword.get(opts, :resume)
-    continue? = Keyword.get(opts, :continue, false)
 
     cond do
-      not is_nil(resume) and continue? == true ->
-        {:error, :ambiguous}
+      persist? == false and not is_nil(resume) ->
+        {:error, :invalid_persist}
 
-      resume == :latest ->
-        open_newest(cwd)
+      persist? == false ->
+        {:ok, Store.memory(cwd)}
 
-      is_binary(resume) ->
-        Store.open(resume, cwd)
-
-      not is_nil(resume) ->
-        {:error, :invalid_resume}
-
-      continue? == true ->
-        open_newest(cwd)
-
-      continue? == false ->
-        {:ok, Store.new(cwd)}
+      persist? != true ->
+        {:error, :invalid_persist}
 
       true ->
-        {:error, :invalid_continue}
+        with {:ok, _root} <- Store.root() do
+          case resume do
+            nil -> {:ok, Store.new(cwd)}
+            :latest -> open_newest(cwd)
+            path when is_binary(path) -> Store.open(path, cwd)
+            _ -> {:error, :invalid_resume}
+          end
+        end
     end
   end
 

@@ -67,15 +67,16 @@ defmodule Harness.CLI do
   end
 
   defp run_ask(prompt, provider) do
-    {:ok, session} = Harness.start_session(provider: provider)
+    {:ok, session} = Harness.start_session(provider: provider, persist: false)
+    ref = Process.monitor(session)
     :ok = Harness.subscribe(session)
     :ok = Harness.ask_async(session, prompt)
-    loop()
+    loop(session, ref)
   end
 
-  defp loop do
+  defp loop(session, ref) do
     receive do
-      {:harness, _session, event} ->
+      {:harness, ^session, event} ->
         IO.write(render(event))
 
         case event do
@@ -86,8 +87,12 @@ defmodule Harness.CLI do
             exit({:shutdown, 1})
 
           _ ->
-            loop()
+            loop(session, ref)
         end
+
+      {:DOWN, ^ref, :process, ^session, _reason} ->
+        Mix.shell().error("session ended")
+        exit({:shutdown, 1})
     after
       600_000 ->
         Mix.shell().error("timed out waiting for turn")

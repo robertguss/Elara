@@ -4,7 +4,6 @@ defmodule Harness.Chat.CoreTest do
   alias Harness.Chat.Core
   alias Harness.Message.{Assistant, ToolCall, ToolResult, User}
   alias Harness.Provider.Error
-  alias Harness.Session.Store.Info
 
   defp norm({phase, effects}) do
     {phase,
@@ -134,8 +133,8 @@ defmodule Harness.Chat.CoreTest do
 
   test "session list uses absolute UTC timestamps and stable ids" do
     infos = [
-      %Info{path: "/tmp/a", id: "session-a", cwd: "/repo", timestamp: 0},
-      %Info{path: "/tmp/b", id: "session-b", cwd: "/repo", timestamp: 1}
+      %{id: "session-a", timestamp: 0},
+      %{id: "session-b", timestamp: 1}
     ]
 
     assert {:idle,

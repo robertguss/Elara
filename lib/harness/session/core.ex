@@ -56,7 +56,33 @@ defmodule Harness.Session.Core do
 
   @spec new(Config.t(), [Message.t()]) :: State.t()
   def new(%Config{} = config, history) when is_list(history) do
-    %State{config: config, history: history, phase: :idle, next_ref: 1}
+    %State{config: config, history: repair_history(history), phase: :idle, next_ref: 1}
+  end
+
+  @spec repair_history([Message.t()]) :: [Message.t()]
+  def repair_history(history) when is_list(history) do
+    {trailing_results, rest} =
+      history
+      |> Enum.reverse()
+      |> Enum.split_while(&is_struct(&1, ToolResult))
+
+    case rest do
+      [%Assistant{tool_calls: calls} | _] when calls != [] ->
+        completed =
+          trailing_results
+          |> Enum.map(& &1.call_id)
+          |> MapSet.new()
+
+        interrupted =
+          calls
+          |> Enum.reject(&MapSet.member?(completed, &1.id))
+          |> Enum.map(&Message.tool_result(&1, {:error, "interrupted"}))
+
+        history ++ interrupted
+
+      _ ->
+        history
+    end
   end
 
   @spec idle?(State.t()) :: boolean()

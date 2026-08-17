@@ -4,7 +4,7 @@ defmodule Harness.Session.StoreTest do
   import Bitwise, only: [band: 2]
 
   alias Harness.Message
-  alias Harness.Message.{ToolCall, ToolResult}
+  alias Harness.Message.ToolCall
   alias Harness.Session.Store
 
   setup do
@@ -53,7 +53,7 @@ defmodule Harness.Session.StoreTest do
     end
   end
 
-  test "append atomically writes a private linked spine", %{root: root, cwd: cwd} do
+  test "append writes a private linear log", %{root: root, cwd: cwd} do
     store = Store.new(cwd)
     user = Message.user("hello")
     {:ok, assistant} = Message.assistant("hi", [])
@@ -76,46 +76,20 @@ defmodule Harness.Session.StoreTest do
     assert header == %{
              "version" => 1,
              "id" => store.id,
-             "cwd" => Path.expand(cwd),
-             "leaf" => store.leaf
+             "cwd" => Path.expand(cwd)
            }
 
-    assert first["parentId"] == nil
-    assert second["parentId"] == first["id"]
-    assert third["parentId"] == second["id"]
-    assert third["id"] == store.leaf
+    refute Map.has_key?(header, "leaf")
+    assert Map.keys(first) |> Enum.sort() == ["id", "timestamp", "user"]
     assert is_integer(first["timestamp"])
-    assert Map.keys(first) |> Enum.sort() == ["id", "parentId", "timestamp", "user"]
+    assert second["assistant"]["text"] == "hi"
+    assert third["toolResult"]["callId"] == "call-1"
 
     assert {:ok, reopened} = Store.open(store.path, cwd)
     assert Store.history(reopened) == [user, assistant, result]
   end
 
-  test "history walks only the selected leaf spine in model order", %{cwd: cwd} do
-    store = Store.new(cwd)
-    user = Message.user("root")
-    {:ok, branch_a} = Message.assistant("branch a", [])
-
-    call = %ToolCall{id: "branch-call", name: "read", args: {:ok, %{"path" => "b.txt"}}}
-    {:ok, branch_b} = Message.assistant(nil, [call])
-    branch_b_result = Message.tool_result(call, {:ok, "branch b"})
-
-    header = header(store, "branch-b-result")
-
-    entries = [
-      entry("root", nil, 1, user),
-      entry("branch-a", "root", 2, branch_a),
-      entry("branch-b", "root", 3, branch_b),
-      entry("branch-b-result", "branch-b", 4, branch_b_result)
-    ]
-
-    write_lines(store.path, header, entries)
-
-    assert {:ok, reopened} = Store.open(store.path, cwd)
-    assert Store.history(reopened) == [user, branch_b, branch_b_result]
-  end
-
-  test "history derives interrupted results without rewriting the file", %{cwd: cwd} do
+  test "history is the file order and does not invent results", %{cwd: cwd} do
     first = %ToolCall{id: "call-1", name: "read", args: {:ok, %{"path" => "a"}}}
     second = %ToolCall{id: "call-2", name: "read", args: {:ok, %{"path" => "b"}}}
     {:ok, assistant} = Message.assistant(nil, [first, second])
@@ -125,71 +99,35 @@ defmodule Harness.Session.StoreTest do
     assert {:ok, store} = Store.append(store, Message.user("read both"))
     assert {:ok, store} = Store.append(store, assistant)
     assert {:ok, store} = Store.append(store, completed)
-    before = File.read!(store.path)
 
     assert [
              %Message.User{},
              ^assistant,
-             ^completed,
-             %ToolResult{call_id: "call-2", name: "read", outcome: {:error, "interrupted"}}
+             ^completed
            ] = Store.history(store)
-
-    assert File.read!(store.path) == before
   end
 
   test "open rejects unsupported versions and bad headers", %{cwd: cwd} do
     store = Store.new(cwd)
 
-    write_lines(store.path, %{header(store, nil) | "version" => 2}, [])
+    write_lines(store.path, %{header(store) | "version" => 2}, [])
     assert {:error, {:unsupported_version, 2}} = Store.open(store.path, cwd)
 
-    write_lines(store.path, %{"version" => 1, "id" => store.id, "leaf" => nil}, [])
+    write_lines(store.path, %{"version" => 1, "id" => store.id}, [])
     assert {:error, :bad_header} = Store.open(store.path, cwd)
   end
 
-  test "open rejects duplicate IDs, missing parents, and cycles", %{cwd: cwd} do
+  test "open rejects duplicate IDs", %{cwd: cwd} do
     store = Store.new(cwd)
     message = Message.user("x")
 
     write_lines(
       store.path,
-      header(store, "same"),
-      [entry("same", nil, 1, message), entry("same", nil, 2, message)]
+      header(store),
+      [entry("same", 1, message), entry("same", 2, message)]
     )
 
     assert {:error, {:duplicate_id, "same"}} = Store.open(store.path, cwd)
-
-    write_lines(
-      store.path,
-      header(store, "orphan"),
-      [entry("orphan", "absent", 1, message)]
-    )
-
-    assert {:error, {:missing_parent, "absent"}} = Store.open(store.path, cwd)
-
-    write_lines(
-      store.path,
-      header(store, "a"),
-      [entry("a", "b", 1, message), entry("b", "a", 2, message)]
-    )
-
-    assert {:error, {:cycle, _id}} = Store.open(store.path, cwd)
-  end
-
-  test "open rejects disconnected roots", %{cwd: cwd} do
-    store = Store.new(cwd)
-    message = Message.user("x")
-
-    write_lines(
-      store.path,
-      header(store, "selected-root"),
-      [
-        entry("selected-root", nil, 1, message),
-        entry("disconnected-root", nil, 2, message)
-      ]
-    )
-
-    assert {:error, {:disconnected_tree, "disconnected-root"}} = Store.open(store.path, cwd)
   end
 
   test "open rejects an interior malformed line", %{cwd: cwd} do
@@ -197,10 +135,10 @@ defmodule Harness.Session.StoreTest do
 
     raw =
       [
-        JSON.encode!(header(store, "leaf")),
-        JSON.encode!(entry("root", nil, 1, Message.user("root"))),
+        JSON.encode!(header(store)),
+        JSON.encode!(entry("root", 1, Message.user("root"))),
         "{",
-        JSON.encode!(entry("leaf", "root", 2, Message.user("leaf")))
+        JSON.encode!(entry("leaf", 2, Message.user("leaf")))
       ]
       |> Enum.join("\n")
       |> Kernel.<>("\n")
@@ -215,16 +153,10 @@ defmodule Harness.Session.StoreTest do
     store = Store.new(cwd)
     user = Message.user("complete")
 
-    write_lines(store.path, header(store, "root"), [entry("root", nil, 1, user)], "{")
+    write_lines(store.path, header(store), [entry("root", 1, user)], "{")
 
     assert {:ok, reopened} = Store.open(store.path, cwd)
     assert Store.history(reopened) == [user]
-
-    write_lines(store.path, header(store, "torn-leaf"), [entry("root", nil, 1, user)], "{")
-
-    assert {:ok, recovered} = Store.open(store.path, cwd)
-    assert recovered.leaf == "root"
-    assert Store.history(recovered) == [user]
 
     File.write!(store.path, File.read!(store.path) <> "\n{")
 
@@ -233,13 +165,13 @@ defmodule Harness.Session.StoreTest do
     invalid_entry =
       user
       |> Store.encode_message()
-      |> Map.merge(%{"id" => "schema-error", "timestamp" => 2})
+      |> Map.merge(%{"id" => "schema-error"})
       |> JSON.encode!()
 
     write_lines(
       store.path,
-      header(store, "root"),
-      [entry("root", nil, 1, user)],
+      header(store),
+      [entry("root", 1, user)],
       invalid_entry
     )
 
@@ -264,7 +196,7 @@ defmodule Harness.Session.StoreTest do
     assert {:ok, no_user} = Store.append(no_user, assistant)
 
     empty = Store.new(cwd)
-    write_lines(empty.path, header(empty, nil), [])
+    write_lines(empty.path, header(empty), [])
 
     dir = Path.dirname(older.path)
     older_path = Path.join(dir, "zzzz.jsonl")
@@ -299,21 +231,49 @@ defmodule Harness.Session.StoreTest do
     assert File.regular?(store.path)
   end
 
-  defp header(store, leaf) do
+  test "memory stores never touch disk", %{root: root, cwd: cwd} do
+    store = Store.memory(cwd)
+    assert {:ok, store} = Store.append(store, Message.user("ephemeral"))
+    assert Store.history(store) == [Message.user("ephemeral")]
+    refute File.exists?(root)
+  end
+
+  test "claim is exclusive per path", %{cwd: cwd} do
+    store = Store.new(cwd)
+    assert {:ok, store} = Store.append(store, Message.user("held"))
+    assert {:ok, _} = Store.claim(store)
+
+    task =
+      Task.async(fn ->
+        {:ok, opened} = Store.open(store.path, cwd)
+        Store.claim(opened)
+      end)
+
+    assert {:error, :locked} = Task.await(task)
+    assert :ok = Store.release(store)
+
+    task =
+      Task.async(fn ->
+        {:ok, opened} = Store.open(store.path, cwd)
+        Store.claim(opened)
+      end)
+
+    assert {:ok, _} = Task.await(task)
+  end
+
+  defp header(store) do
     %{
       "version" => 1,
       "id" => store.id,
-      "cwd" => store.cwd,
-      "leaf" => leaf
+      "cwd" => store.cwd
     }
   end
 
-  defp entry(id, parent_id, timestamp, message) do
+  defp entry(id, timestamp, message) do
     message
     |> Store.encode_message()
     |> Map.merge(%{
       "id" => id,
-      "parentId" => parent_id,
       "timestamp" => timestamp
     })
   end

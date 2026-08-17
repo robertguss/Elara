@@ -228,27 +228,18 @@ defmodule Harness.SessionTest do
     assert persisted_messages == request_messages
   end
 
-  test "start_session rejects ambiguous and missing continuation targets" do
+  test "start_session rejects missing and invalid resume targets" do
     cwd = unique_cwd()
     provider = script([])
 
-    assert {:error, :ambiguous} =
-             Harness.start_session(
-               provider: provider,
-               tools: [],
-               cwd: cwd,
-               resume: "session.jsonl",
-               continue: true
-             )
-
-    assert {:error, :no_session} =
-             Harness.start_session(provider: provider, tools: [], cwd: cwd, continue: true)
-
     assert {:error, :no_session} =
              Harness.start_session(provider: provider, tools: [], cwd: cwd, resume: :latest)
+
+    assert {:error, :invalid_resume} =
+             Harness.start_session(provider: provider, tools: [], cwd: cwd, resume: 1)
   end
 
-  test "continue opens the newest usable store by mtime" do
+  test "resume: :latest opens the newest usable store by mtime" do
     cwd = unique_cwd()
     older = Store.new(cwd)
     newer = Store.new(cwd)
@@ -258,15 +249,9 @@ defmodule Harness.SessionTest do
     File.touch!(newer.path, 1_700_000_200)
 
     assert {:ok, session} =
-             Harness.start_session(provider: script([]), tools: [], cwd: cwd, continue: true)
-
-    assert Harness.transcript(session) == [Message.user("newer")]
-    GenServer.stop(session)
-
-    assert {:ok, latest} =
              Harness.start_session(provider: script([]), tools: [], cwd: cwd, resume: :latest)
 
-    assert Harness.transcript(latest) == [Message.user("newer")]
+    assert Harness.transcript(session) == [Message.user("newer")]
   end
 
   test "in-place resume keeps the pid and failed resume leaves history unchanged" do
@@ -281,8 +266,9 @@ defmodule Harness.SessionTest do
              Harness.start_session(provider: script([]), tools: [], cwd: cwd)
 
     same_pid = session
-    assert :ok = Harness.resume(session, target.path)
+    assert {:ok, history} = Harness.resume(session, target.path)
     assert session == same_pid
+    assert history == [user, assistant]
     assert Harness.transcript(session) == [user, assistant]
 
     missing = Path.join(Path.dirname(target.path), "missing.jsonl")
@@ -306,5 +292,84 @@ defmodule Harness.SessionTest do
     assert_receive {:provider_blocked, worker, %Provider.Request{}}
     assert {:error, :busy} = Harness.resume(session, target.path)
     send(worker, {:reply, asst("done")})
+  end
+
+  test "persist: false never writes a session file" do
+    cwd = unique_cwd()
+
+    assert {:ok, session} =
+             Harness.start_session(
+               provider: script([{:ok, asst("answer")}]),
+               tools: [],
+               cwd: cwd,
+               persist: false
+             )
+
+    assert {:ok, "answer"} = Harness.ask(session, "question")
+    assert Store.list(cwd) == []
+  end
+
+  test "a second writer cannot open the same session file" do
+    cwd = unique_cwd()
+    store = Store.new(cwd)
+    assert {:ok, store} = Store.append(store, Message.user("held"))
+
+    assert {:ok, _session} =
+             Harness.start_session(
+               provider: script([]),
+               tools: [],
+               cwd: cwd,
+               resume: store.path
+             )
+
+    assert {:error, :locked} =
+             Harness.start_session(
+               provider: script([]),
+               tools: [],
+               cwd: cwd,
+               resume: store.path
+             )
+  end
+
+  test "resume persists interrupted tool results before the next turn" do
+    cwd = unique_cwd()
+    first = %ToolCall{id: "call-1", name: "read", args: {:ok, %{"path" => "a"}}}
+    second = %ToolCall{id: "call-2", name: "read", args: {:ok, %{"path" => "b"}}}
+    {:ok, assistant} = Message.assistant(nil, [first, second])
+    completed = Message.tool_result(first, {:ok, "a"})
+
+    store = Store.new(cwd)
+    assert {:ok, store} = Store.append(store, Message.user("read both"))
+    assert {:ok, store} = Store.append(store, assistant)
+    assert {:ok, store} = Store.append(store, completed)
+
+    next_provider = recording_script([{:ok, asst("after")}], cwd)
+
+    assert {:ok, session} =
+             Harness.start_session(
+               provider: next_provider,
+               tools: [],
+               cwd: cwd,
+               resume: store.path
+             )
+
+    repaired = Message.tool_result(second, {:error, "interrupted"})
+    prior = [Message.user("read both"), assistant, completed, repaired]
+    assert Harness.transcript(session) == prior
+
+    {:ok, on_disk} = Store.open(store.path, cwd)
+    assert Store.history(on_disk) == prior
+
+    assert {:ok, "after"} = Harness.ask(session, "next")
+
+    assert_receive {:provider_observed, %Provider.Request{messages: request_messages},
+                    persisted_messages}
+
+    assert request_messages == prior ++ [Message.user("next")]
+    assert persisted_messages == request_messages
+
+    GenServer.stop(session)
+    {:ok, reopened} = Store.open(store.path, cwd)
+    assert Store.history(reopened) == request_messages ++ [asst("after")]
   end
 end

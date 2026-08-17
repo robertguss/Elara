@@ -26,5 +26,8 @@ defmodule Mix.Tasks.Harness.ChatTest do
   test "missing continuation has a clear startup error" do
     assert Harness.Chat.startup_error(:no_session) ==
              "No saved session for this directory."
+
+    assert Harness.Chat.startup_error(:locked) == "Session is already open."
+    assert Harness.Chat.startup_error(:no_home) == "HOME is not set."
   end
 end

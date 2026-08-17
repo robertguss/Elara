@@ -59,14 +59,26 @@ defmodule Harness.Session do
     store = Keyword.fetch!(opts, :store)
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
 
-    {:ok,
-     %Shell{
-       core: Core.new(core_config, Store.history(store)),
-       store: store,
-       provider: provider,
-       cwd: cwd,
-       tool_timeout_ms: tool_timeout_ms
-     }}
+    case hydrate(store, core_config) do
+      {:ok, store, core} ->
+        {:ok,
+         %Shell{
+           core: core,
+           store: store,
+           provider: provider,
+           cwd: cwd,
+           tool_timeout_ms: tool_timeout_ms
+         }}
+
+      {:error, reason} ->
+        {:stop, reason}
+    end
+  end
+
+  @impl true
+  def terminate(_reason, shell) do
+    Store.release(shell.store)
+    :ok
   end
 
   @impl true
@@ -90,16 +102,19 @@ defmodule Harness.Session do
     {:reply, shell.core.history, shell}
   end
 
-  def handle_call(:sessions, _from, shell) do
-    {:reply, Store.list(shell.cwd), shell}
+  def handle_call(:cwd, _from, shell) do
+    {:reply, shell.cwd, shell}
   end
 
-  def handle_call({:resume, path}, _from, shell) do
+  def handle_call({:hydrate, store}, _from, shell) do
     if Core.idle?(shell.core) do
-      case Store.open(path, shell.cwd) do
-        {:ok, store} ->
-          core = Core.new(shell.core.config, Store.history(store))
-          {:reply, :ok, %{shell | store: store, core: core}}
+      case hydrate(store, shell.core.config) do
+        {:ok, store, core} ->
+          if store.path != shell.store.path do
+            Store.release(shell.store)
+          end
+
+          {:reply, {:ok, core.history}, %{shell | store: store, core: core}}
 
         {:error, reason} ->
           {:reply, {:error, reason}, shell}
@@ -188,6 +203,32 @@ defmodule Harness.Session do
   end
 
   def handle_info(_msg, shell), do: {:noreply, shell}
+
+  defp hydrate(store, config) do
+    with {:ok, store} <- Store.claim(store) do
+      persist_repairs(store, Core.new(config, Store.history(store)))
+    end
+  end
+
+  defp persist_repairs(store, core) do
+    extras = Enum.drop(core.history, length(Store.history(store)))
+
+    extras
+    |> Enum.reduce_while({:ok, store}, fn message, {:ok, store} ->
+      case Store.append(store, message) do
+        {:ok, store} -> {:cont, {:ok, store}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, store} ->
+        {:ok, store, core}
+
+      {:error, reason} ->
+        Store.release(store)
+        {:error, reason}
+    end
+  end
 
   defp feed(fact, shell) do
     {core, effects} = Core.step(shell.core, fact)

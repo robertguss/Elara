@@ -4,6 +4,7 @@ defmodule Harness.Chat.CoreTest do
   alias Harness.Chat.Core
   alias Harness.Message.{Assistant, ToolCall, ToolResult, User}
   alias Harness.Provider.Error
+  alias Harness.Session.Store.Info
 
   defp norm({phase, effects}) do
     {phase,
@@ -28,15 +29,21 @@ defmodule Harness.Chat.CoreTest do
     {:idle_q, :idle, {:line, "/q"}, :idle, [{:halt, 0}]},
     {:idle_eof, :idle, :eof, :idle, [{:halt, 0}]},
     {:idle_interrupt, :idle, {:line, "/interrupt"}, :idle, [{:print, "> "}]},
+    {:idle_resume_list, :idle, {:line, "/resume"}, :idle, [:list_sessions]},
+    {:idle_resume_pick, :idle, {:line, "/resume 2"}, :idle, [{:resume_session, 2}]},
+    {:idle_resume_bad_index, :idle, {:line, "/resume 0"}, :idle,
+     [{:print, "usage: /resume or /resume N\n> "}]},
+    {:idle_resume_bad_syntax, :idle, {:line, "/resume newest"}, :idle,
+     [{:print, "usage: /resume or /resume N\n> "}]},
     {:idle_help, :idle, {:line, "/help"}, :idle,
      [
        {:print,
-        "/help       this list\n/interrupt  cancel the current turn\n/quit       exit\n> "}
+        "/help       this list\n/interrupt  cancel the current turn\n/resume     list saved sessions\n/resume N   resume saved session N\n/quit       exit\n> "}
      ]},
     {:idle_h, :idle, {:line, "/h"}, :idle,
      [
        {:print,
-        "/help       this list\n/interrupt  cancel the current turn\n/quit       exit\n> "}
+        "/help       this list\n/interrupt  cancel the current turn\n/resume     list saved sessions\n/resume N   resume saved session N\n/quit       exit\n> "}
      ]},
     {:idle_unknown, :idle, {:line, "/foo"}, :idle, [{:print, "unknown command /foo. /help\n> "}]},
     {:idle_escape, :idle, {:line, "//quit"}, {:in_turn, "/quit"},
@@ -48,6 +55,10 @@ defmodule Harness.Chat.CoreTest do
     {:mid_refuse, {:in_turn, "hi"}, {:line, "more"}, {:in_turn, "hi"},
      [{:print, "in a turn. /interrupt to cancel.\n"}]},
     {:mid_unknown, {:in_turn, "hi"}, {:line, "/foo"}, {:in_turn, "hi"},
+     [{:print, "in a turn. /interrupt to cancel.\n"}]},
+    {:mid_resume_list, {:in_turn, "hi"}, {:line, "/resume"}, {:in_turn, "hi"},
+     [{:print, "in a turn. /interrupt to cancel.\n"}]},
+    {:mid_resume_pick, {:in_turn, "hi"}, {:line, "/resume 1"}, {:in_turn, "hi"},
      [{:print, "in a turn. /interrupt to cancel.\n"}]},
     {:mid_blank, {:in_turn, "hi"}, {:line, ""}, {:in_turn, "hi"}, []},
     {:interrupt_stays, {:in_turn, "hi"}, {:line, "/interrupt"}, {:in_turn, "hi"}, [:interrupt]},
@@ -119,5 +130,43 @@ defmodule Harness.Chat.CoreTest do
 
     assert {:idle, [{:print, "    error · nope\n"}, {:print, "\n> "}]} =
              step({:in_turn, "hi"}, {:event, {:turn_ended, {:provider_error, err}}})
+  end
+
+  test "session list uses absolute UTC timestamps and stable ids" do
+    infos = [
+      %Info{path: "/tmp/a", id: "session-a", cwd: "/repo", timestamp: 0},
+      %Info{path: "/tmp/b", id: "session-b", cwd: "/repo", timestamp: 1}
+    ]
+
+    assert {:idle,
+            [
+              {:print,
+               "saved sessions\n1  1970-01-01T00:00:00Z  session-a\n2  1970-01-01T00:00:01Z  session-b\n> "}
+            ]} = step(:idle, {:sessions_listed, infos})
+  end
+
+  test "empty session list returns to the prompt" do
+    assert {:idle, [{:print, "no saved sessions for this directory\n> "}]} =
+             step(:idle, {:sessions_listed, []})
+  end
+
+  test "resume result renders domain history and prompts again" do
+    user = %User{text: "question"}
+    assistant = %Assistant{text: "answer", tool_calls: []}
+    result = %ToolResult{call_id: "1", name: "read", outcome: {:error, "interrupted"}}
+
+    assert {:idle,
+            [
+              {:print,
+               "  you\n  question\n\nanswer\n    error · interrupted\n\n> "}
+            ]} = step(:idle, {:resume_result, {:ok, [user, assistant, result]}})
+  end
+
+  test "resume failures are clear and return to the prompt" do
+    assert {:idle, [{:print, "no saved session at index 4\n> "}]} =
+             step(:idle, {:resume_result, {:error, {:invalid_index, 4}}})
+
+    assert {:idle, [{:print, "session file no longer exists\n> "}]} =
+             step(:idle, {:resume_result, {:error, :enoent}})
   end
 end

@@ -90,6 +90,10 @@ defmodule Harness.Session do
     {:reply, shell.core.history, shell}
   end
 
+  def handle_call(:sessions, _from, shell) do
+    {:reply, Store.list(shell.cwd), shell}
+  end
+
   def handle_call({:resume, path}, _from, shell) do
     if Core.idle?(shell.core) do
       case Store.open(path, shell.cwd) do

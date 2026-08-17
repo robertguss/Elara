@@ -2,7 +2,9 @@ defmodule Harness.Chat.Core do
   @moduledoc false
 
   alias Harness.CLI
-  alias Harness.Message.{ToolCall, ToolResult, User}
+  alias Harness.Message
+  alias Harness.Message.{Assistant, ToolCall, ToolResult, User}
+  alias Harness.Session.Store.Info
 
   @type phase :: :idle | {:in_turn, String.t()} | {:exiting, 0 | 1}
 
@@ -11,11 +13,15 @@ defmodule Harness.Chat.Core do
           | :eof
           | {:event, Harness.Event.t()}
           | {:session_down, term()}
+          | {:sessions_listed, [Info.t()]}
+          | {:resume_result, {:ok, [Message.t()]} | {:error, term()}}
           | :ask_rejected
 
   @type effect ::
           {:print, iodata()}
           | {:ask, String.t()}
+          | :list_sessions
+          | {:resume_session, pos_integer()}
           | :interrupt
           | {:halt, 0 | 1}
 
@@ -25,6 +31,7 @@ defmodule Harness.Chat.Core do
     "/q" => :quit,
     "/interrupt" => :interrupt,
     "/stop" => :interrupt,
+    "/resume" => :resume_list,
     "/help" => :help,
     "/h" => :help,
     "/?" => :help
@@ -33,6 +40,8 @@ defmodule Harness.Chat.Core do
   @help """
   /help       this list
   /interrupt  cancel the current turn
+  /resume     list saved sessions
+  /resume N   resume saved session N
   /quit       exit
   """
 
@@ -49,6 +58,16 @@ defmodule Harness.Chat.Core do
   def step(:idle, :eof), do: {:idle, [{:halt, 0}]}
   def step(:idle, :ask_rejected), do: {:idle, print([@rejected, @prompt])}
   def step(:idle, {:session_down, _}), do: halt_down()
+  def step(:idle, {:sessions_listed, infos}), do: {:idle, print([session_list(infos), @prompt])}
+
+  def step(:idle, {:resume_result, {:ok, history}}) do
+    {:idle, print([render_transcript(history), @prompt])}
+  end
+
+  def step(:idle, {:resume_result, {:error, reason}}) do
+    {:idle, print([resume_error(reason), @prompt])}
+  end
+
   def step(:idle, {:event, _}), do: {:idle, []}
 
   def step({:in_turn, prompt} = phase, {:line, line}) do
@@ -86,6 +105,9 @@ defmodule Harness.Chat.Core do
   defp idle_line(:quit), do: {:idle, [{:halt, 0}]}
   defp idle_line(:interrupt), do: {:idle, print(@prompt)}
   defp idle_line(:help), do: {:idle, print([@help, @prompt])}
+  defp idle_line(:resume_list), do: {:idle, [:list_sessions]}
+  defp idle_line({:resume, index}), do: {:idle, [{:resume_session, index}]}
+  defp idle_line(:invalid_resume), do: {:idle, print(["usage: /resume or /resume N\n", @prompt])}
 
   defp idle_line({:unknown, cmd}),
     do: {:idle, print(["unknown command ", cmd, ". /help\n", @prompt])}
@@ -98,6 +120,9 @@ defmodule Harness.Chat.Core do
   defp in_turn_line(_phase, _prompt, :quit), do: {{:exiting, 0}, [:interrupt]}
   defp in_turn_line(phase, _prompt, :interrupt), do: {phase, [:interrupt]}
   defp in_turn_line(phase, _prompt, :help), do: {phase, print(@help)}
+  defp in_turn_line(phase, _prompt, :resume_list), do: {phase, print(@refuse)}
+  defp in_turn_line(phase, _prompt, {:resume, _}), do: {phase, print(@refuse)}
+  defp in_turn_line(phase, _prompt, :invalid_resume), do: {phase, print(@refuse)}
   defp in_turn_line(phase, _prompt, {:unknown, _}), do: {phase, print(@refuse)}
   defp in_turn_line(phase, _prompt, {:prompt, _}), do: {phase, print(@refuse)}
 
@@ -177,6 +202,16 @@ defmodule Harness.Chat.Core do
 
   defp tool_detail({:malformed, raw}), do: String.slice(raw, 0, 40)
 
+  @doc false
+  @spec render_transcript([Message.t()]) :: iodata()
+  def render_transcript(history) when is_list(history) do
+    Enum.map(history, fn
+      %User{text: text} -> user_block(text)
+      %Assistant{} = assistant -> CLI.render({:message_appended, assistant})
+      %ToolResult{outcome: outcome} -> tool_result_line(outcome)
+    end)
+  end
+
   defp parse(line) do
     trimmed = String.trim(line)
 
@@ -190,6 +225,9 @@ defmodule Harness.Chat.Core do
       String.starts_with?(trimmed, "//") ->
         {:prompt, String.replace_prefix(trimmed, "/", "")}
 
+      Regex.match?(~r/^\/resume\s/, trimmed) ->
+        parse_resume(trimmed)
+
       String.starts_with?(trimmed, "/") ->
         {:unknown, trimmed}
 
@@ -197,6 +235,46 @@ defmodule Harness.Chat.Core do
         {:prompt, trimmed}
     end
   end
+
+  defp parse_resume(trimmed) do
+    case String.split(trimmed, ~r/\s+/, trim: true) do
+      ["/resume", raw_index] ->
+        case Integer.parse(raw_index) do
+          {index, ""} when index > 0 -> {:resume, index}
+          _ -> :invalid_resume
+        end
+
+      _ ->
+        :invalid_resume
+    end
+  end
+
+  defp session_list([]), do: "no saved sessions for this directory\n"
+
+  defp session_list(infos) do
+    rows =
+      infos
+      |> Enum.with_index(1)
+      |> Enum.map(fn {%Info{id: id, timestamp: timestamp}, index} ->
+        [
+          Integer.to_string(index),
+          "  ",
+          timestamp |> DateTime.from_unix!() |> DateTime.to_iso8601(),
+          "  ",
+          id,
+          "\n"
+        ]
+      end)
+
+    ["saved sessions\n", rows]
+  end
+
+  defp resume_error({:invalid_index, index}) do
+    ["no saved session at index ", Integer.to_string(index), "\n"]
+  end
+
+  defp resume_error(:enoent), do: "session file no longer exists\n"
+  defp resume_error(reason), do: ["could not resume session: ", inspect(reason), "\n"]
 
   defp print(iodata) do
     case IO.iodata_to_binary(iodata) do

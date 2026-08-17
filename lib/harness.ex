@@ -66,6 +66,12 @@ defmodule Harness do
     GenServer.call(session, :transcript)
   end
 
+  @doc false
+  @spec sessions(pid()) :: [Store.Info.t()]
+  def sessions(session) when is_pid(session) do
+    GenServer.call(session, :sessions)
+  end
+
   @spec resume(pid(), String.t()) :: :ok | {:error, term()}
   def resume(session, path) when is_pid(session) and is_binary(path) do
     GenServer.call(session, {:resume, path})

@@ -157,8 +157,7 @@ defmodule Harness.Chat.CoreTest do
 
     assert {:idle,
             [
-              {:print,
-               "  you\n  question\n\nanswer\n    error · interrupted\n\n> "}
+              {:print, "  you\n  question\n\nanswer\n    error · interrupted\n\n> "}
             ]} = step(:idle, {:resume_result, {:ok, [user, assistant, result]}})
   end
 

@@ -198,7 +198,7 @@ defmodule Harness.Session.Store do
 
   def decode_message(%{"assistant" => payload} = encoded) when map_size(encoded) == 1 do
     with %{"text" => text, "toolCalls" => calls} = assistant
-           when map_size(assistant) == 2 and (is_binary(text) or is_nil(text)) and is_list(calls) <-
+         when map_size(assistant) == 2 and (is_binary(text) or is_nil(text)) and is_list(calls) <-
            payload,
          {:ok, tool_calls} <- decode_tool_calls(calls),
          {:ok, message} <- Message.assistant(text, tool_calls) do
@@ -210,8 +210,8 @@ defmodule Harness.Session.Store do
 
   def decode_message(%{"toolResult" => payload} = encoded) when map_size(encoded) == 1 do
     with %{"callId" => call_id, "name" => name, "outcome" => encoded_outcome} = result
-           when map_size(result) == 3 and is_binary(call_id) and call_id != "" and
-                  is_binary(name) and name != "" <- payload,
+         when map_size(result) == 3 and is_binary(call_id) and call_id != "" and
+                is_binary(name) and name != "" <- payload,
          {:ok, outcome} <- decode_outcome(encoded_outcome) do
       {:ok, %ToolResult{call_id: call_id, name: name, outcome: outcome}}
     else
@@ -319,12 +319,14 @@ defmodule Harness.Session.Store do
     end
   end
 
-  defp decode_header(%{
-         "version" => version,
-         "id" => id,
-         "cwd" => cwd,
-         "leaf" => leaf
-       } = header)
+  defp decode_header(
+         %{
+           "version" => version,
+           "id" => id,
+           "cwd" => cwd,
+           "leaf" => leaf
+         } = header
+       )
        when map_size(header) == 4 do
     cond do
       not is_integer(version) ->
@@ -398,8 +400,7 @@ defmodule Harness.Session.Store do
            Map.get(encoded, "parentId"),
          timestamp when is_integer(timestamp) <- Map.get(encoded, "timestamp"),
          {:ok, message} <- decode_message(%{payload_key => Map.fetch!(encoded, payload_key)}) do
-      {:ok,
-       %Entry{id: id, parent_id: parent_id, timestamp: timestamp, message: message}}
+      {:ok, %Entry{id: id, parent_id: parent_id, timestamp: timestamp, message: message}}
     else
       _ -> {:error, :invalid_entry}
     end
@@ -435,7 +436,9 @@ defmodule Harness.Session.Store do
 
   defp missing_parent(entries) do
     Enum.find_value(entries, fn
-      {_id, %Entry{parent_id: nil}} -> nil
+      {_id, %Entry{parent_id: nil}} ->
+        nil
+
       {_id, %Entry{parent_id: parent_id}} ->
         if Map.has_key?(entries, parent_id), do: nil, else: parent_id
     end)

@@ -8,6 +8,7 @@ defmodule Harness.Application do
     children = [
       {Registry, keys: :unique, name: Harness.SessionLocks},
       {Task.Supervisor, name: Harness.TaskSup},
+      {DynamicSupervisor, name: Harness.PluginSup, strategy: :one_for_one},
       {DynamicSupervisor, name: Harness.SessionSup, strategy: :one_for_one}
     ]
 

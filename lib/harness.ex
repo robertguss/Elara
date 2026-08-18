@@ -2,6 +2,7 @@ defmodule Harness do
   @moduledoc "Public API. Callers never see GenServer message shapes or wire types."
 
   alias Harness.Prompt
+  alias Harness.Plugin
   alias Harness.Session
   alias Harness.Session.Core
   alias Harness.Session.Store
@@ -18,6 +19,7 @@ defmodule Harness do
     max_iterations = Keyword.get(opts, :max_iterations, 12)
     max_tool_output_bytes = Keyword.get(opts, :max_tool_output_bytes, 16_384)
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
+    plugin_paths = Keyword.get_lazy(opts, :plugins, fn -> Plugin.discover(cwd) end)
 
     with {:ok, provider} <- fetch_provider(opts),
          {:ok, store} <- prepare_store(opts, cwd) do
@@ -33,7 +35,8 @@ defmodule Harness do
         provider: provider,
         cwd: cwd,
         store: store,
-        tool_timeout_ms: tool_timeout_ms
+        tool_timeout_ms: tool_timeout_ms,
+        plugin_paths: plugin_paths
       ]
 
       DynamicSupervisor.start_child(Harness.SessionSup, {Session, child_opts})
@@ -54,6 +57,17 @@ defmodule Harness do
   @spec subscribe(pid()) :: :ok
   def subscribe(session) when is_pid(session) do
     GenServer.call(session, :subscribe)
+  end
+
+  @spec plugins(pid()) :: [Plugin.Info.t()]
+  def plugins(session) when is_pid(session) do
+    GenServer.call(session, :plugins)
+  end
+
+  @spec reload_plugins(pid()) ::
+          {:ok, [Plugin.Info.t()]} | {:error, :busy | {:plugin_reload_failed, String.t(), term()}}
+  def reload_plugins(session) when is_pid(session) do
+    GenServer.call(session, :reload_plugins, :infinity)
   end
 
   @spec interrupt(pid()) :: :ok

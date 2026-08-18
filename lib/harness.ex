@@ -22,6 +22,9 @@ defmodule Harness do
     max_tool_output_bytes = Keyword.get(opts, :max_tool_output_bytes, 16_384)
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
     plugin_paths = Keyword.get_lazy(opts, :plugins, fn -> Plugin.discover(cwd) end)
+    router = Keyword.get(opts, :router, Harness.Executor.Router)
+    workspace_id = Keyword.get_lazy(opts, :workspace_id, fn -> workspace_id(cwd) end)
+    allowed_capabilities = Keyword.get(opts, :allowed_capabilities, :all)
 
     with {:ok, provider} <- fetch_provider(opts),
          {:ok, store} <- prepare_store(opts, cwd) do
@@ -38,7 +41,10 @@ defmodule Harness do
         cwd: cwd,
         store: store,
         tool_timeout_ms: tool_timeout_ms,
-        plugin_paths: plugin_paths
+        plugin_paths: plugin_paths,
+        router: router,
+        workspace_id: workspace_id,
+        allowed_capabilities: allowed_capabilities
       ]
 
       case DynamicSupervisor.start_child(Harness.SessionSup, {Session, child_opts}) do
@@ -82,6 +88,12 @@ defmodule Harness do
 
   @spec status(session_ref()) :: map() | {:error, :session_not_found}
   def status(session) when is_pid(session) or is_binary(session), do: call(session, :status)
+
+  @spec register_worker(keyword()) :: :ok
+  def register_worker(opts), do: Harness.Executor.Router.register(opts)
+
+  @spec workers() :: [map()]
+  def workers, do: Harness.Executor.Router.workers()
 
   @spec plugins(session_ref()) :: [Plugin.Info.t()]
   def plugins(session) when is_pid(session) or is_binary(session) do
@@ -212,5 +224,11 @@ defmodule Harness do
     with {:ok, info} <- Store.newest(cwd) do
       Store.open(info.path, cwd)
     end
+  end
+
+  defp workspace_id(cwd) do
+    :sha256
+    |> :crypto.hash(Path.expand(cwd))
+    |> Base.url_encode64(padding: false)
   end
 end

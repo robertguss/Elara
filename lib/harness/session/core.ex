@@ -251,6 +251,7 @@ defmodule Harness.Session.Core do
 
   defp truncate_outcome({:ok, text}, max), do: {:ok, truncate(text, max)}
   defp truncate_outcome({:error, text}, max), do: {:error, truncate(text, max)}
+  defp truncate_outcome({:indeterminate, text}, max), do: {:indeterminate, truncate(text, max)}
 
   defp truncate(text, max) when is_binary(text) do
     cond do

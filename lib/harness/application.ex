@@ -9,6 +9,7 @@ defmodule Harness.Application do
       {Registry, keys: :unique, name: Harness.SessionLocks},
       {Registry, keys: :unique, name: Harness.Sessions},
       {Task.Supervisor, name: Harness.TaskSup},
+      {Harness.Executor.Router, name: Harness.Executor.Router},
       {DynamicSupervisor, name: Harness.PluginSup, strategy: :one_for_one},
       {DynamicSupervisor, name: Harness.SessionSup, strategy: :one_for_one}
     ]

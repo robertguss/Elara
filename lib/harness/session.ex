@@ -5,9 +5,9 @@ defmodule Harness.Session do
 
   use GenServer
 
-  alias Harness.Plugin
   alias Harness.Plugin.Server, as: PluginServer
   alias Harness.Provider
+  alias Harness.Executor.{Request, Router}
   alias Harness.Session.{Core, Store}
   alias Harness.Tool
   alias Harness.Tool.{Ctx, PluginRef}
@@ -38,6 +38,9 @@ defmodule Harness.Session do
       :tool_timeout_ms,
       :id,
       :incarnation,
+      :router,
+      :workspace_id,
+      :allowed_capabilities,
       base_tools: %{},
       plugins: [],
       subscribers: %{},
@@ -76,6 +79,9 @@ defmodule Harness.Session do
     store = Keyword.fetch!(opts, :store)
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
     plugin_paths = Keyword.get(opts, :plugin_paths, [])
+    router = Keyword.fetch!(opts, :router)
+    workspace_id = Keyword.fetch!(opts, :workspace_id)
+    allowed_capabilities = Keyword.fetch!(opts, :allowed_capabilities)
 
     case hydrate(store, core_config) do
       {:ok, store, core} ->
@@ -87,6 +93,9 @@ defmodule Harness.Session do
              store: store,
              id: store.id,
              incarnation: new_incarnation(),
+             router: router,
+             workspace_id: workspace_id,
+             allowed_capabilities: allowed_capabilities,
              provider: provider,
              cwd: cwd,
              tool_timeout_ms: tool_timeout_ms,
@@ -133,7 +142,8 @@ defmodule Harness.Session do
       task_count: map_size(shell.tasks),
       subscriber_count: map_size(shell.subscribers) + map_size(shell.attachments),
       event_head: shell.next_event_seq - 1,
-      event_retained: shell.event_log_size
+      event_retained: shell.event_log_size,
+      worker_health: Router.workers(shell.router)
     }
 
     {:reply, status, shell}
@@ -438,7 +448,7 @@ defmodule Harness.Session do
   end
 
   defp run_effect(
-         {:run_tool, core_ref, call, %Tool{plugin: %PluginRef{} = plugin}},
+         {:run_tool, core_ref, call, %Tool{plugin: %PluginRef{} = plugin} = tool},
          shell
        ) do
     {:ok, args} = call.args
@@ -446,13 +456,15 @@ defmodule Harness.Session do
     case PluginServer.checkout(plugin.server, plugin.generation) do
       {:ok, lease, module, plugin_state} ->
         ctx = %Ctx{cwd: shell.cwd}
+        request = tool_request(shell, call, tool, args)
+        config = %{module: module, plugin_state: plugin_state, ctx: ctx}
 
         task =
           Task.Supervisor.async_nolink(
             Harness.TaskSup,
-            Plugin,
-            :invoke,
-            [module, call.name, args, ctx, plugin_state]
+            Harness.Executor.PluginLocal,
+            :execute,
+            [config, request, tool]
           )
 
         track_tool_task(shell, task, core_ref, {plugin.server, lease})
@@ -467,11 +479,25 @@ defmodule Harness.Session do
 
   defp run_effect({:run_tool, core_ref, call, tool}, shell) do
     {:ok, args} = call.args
-    {m, f} = tool.run
-    ctx = %Ctx{cwd: shell.cwd, plugin: tool.plugin, tool_name: call.name}
 
-    task = Task.Supervisor.async_nolink(Harness.TaskSup, m, f, [args, ctx])
-    track_tool_task(shell, task, core_ref, nil)
+    if capabilities_allowed?(tool.capabilities, shell.allowed_capabilities) do
+      request = tool_request(shell, call, tool, args)
+
+      task =
+        Task.Supervisor.async_nolink(
+          Harness.TaskSup,
+          Router,
+          :execute,
+          [shell.router, request, tool, shell.cwd]
+        )
+
+      track_tool_task(shell, task, core_ref, nil)
+    else
+      feed(
+        {:tool_result, core_ref, {:error, "permission denied: required capability not granted"}},
+        shell
+      )
+    end
   end
 
   defp emit(event, shell) do
@@ -732,5 +758,32 @@ defmodule Harness.Session do
 
   defp new_incarnation do
     12 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
+  end
+
+  defp new_cancellation_id do
+    12 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
+  end
+
+  defp tool_request(shell, call, tool, args) do
+    %Request{
+      tool_call_id: call.id,
+      session_id: shell.id,
+      tool_name: call.name,
+      tool_version: tool.version,
+      arguments: args,
+      workspace_id: shell.workspace_id,
+      deadline_ms: System.system_time(:millisecond) + shell.tool_timeout_ms,
+      cancellation_id: new_cancellation_id(),
+      required_capabilities: tool.capabilities,
+      placement: tool.placement,
+      mutating: tool.mutating
+    }
+  end
+
+  defp capabilities_allowed?(_required, :all), do: true
+
+  defp capabilities_allowed?(required, allowed) when is_list(allowed) do
+    allowed = MapSet.new(allowed)
+    Enum.all?(required, &MapSet.member?(allowed, &1))
   end
 end

@@ -111,11 +111,15 @@ defmodule Harness.Protocol do
   defp decode_args(%{"malformed" => raw}) when is_binary(raw), do: {:ok, {:malformed, raw}}
   defp decode_args(_args), do: {:error, :invalid_event}
 
-  defp encode_tool_outcome({kind, text}) when kind in [:ok, :error],
+  defp encode_tool_outcome({kind, text}) when kind in [:ok, :error, :indeterminate],
     do: %{Atom.to_string(kind) => text}
 
   defp decode_tool_outcome(%{"ok" => text}) when is_binary(text), do: {:ok, {:ok, text}}
   defp decode_tool_outcome(%{"error" => text}) when is_binary(text), do: {:ok, {:error, text}}
+
+  defp decode_tool_outcome(%{"indeterminate" => text}) when is_binary(text),
+    do: {:ok, {:indeterminate, text}}
+
   defp decode_tool_outcome(_outcome), do: {:error, :invalid_event}
 
   defp encode_turn_outcome({:completed, text}), do: %{"kind" => "completed", "text" => text}

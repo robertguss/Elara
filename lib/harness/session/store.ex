@@ -642,6 +642,7 @@ defmodule Harness.Session.Store do
 
   defp encode_outcome({:ok, text}), do: %{"ok" => text}
   defp encode_outcome({:error, text}), do: %{"error" => text}
+  defp encode_outcome({:indeterminate, text}), do: %{"indeterminate" => text}
 
   defp decode_outcome(%{"ok" => text} = encoded)
        when map_size(encoded) == 1 and is_binary(text),
@@ -650,6 +651,10 @@ defmodule Harness.Session.Store do
   defp decode_outcome(%{"error" => text} = encoded)
        when map_size(encoded) == 1 and is_binary(text),
        do: {:ok, {:error, text}}
+
+  defp decode_outcome(%{"indeterminate" => text} = encoded)
+       when map_size(encoded) == 1 and is_binary(text),
+       do: {:ok, {:indeterminate, text}}
 
   defp decode_outcome(_encoded), do: {:error, :invalid_message}
 

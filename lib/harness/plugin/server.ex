@@ -263,10 +263,12 @@ defmodule Harness.Plugin.Server do
     Enum.map(candidate.tools, fn spec ->
       %Tool{
         name: spec.name,
+        version: candidate.metadata.version,
         description: spec.description,
         parameters: spec.parameters,
         run: {Harness.Plugin, :run},
-        plugin: plugin
+        plugin: plugin,
+        placement: :local
       }
     end)
   end

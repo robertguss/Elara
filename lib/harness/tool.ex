@@ -21,7 +21,7 @@ defmodule Harness.Tool do
     defstruct [:cwd, :plugin, :tool_name]
   end
 
-  @type outcome :: {:ok, String.t()} | {:error, String.t()}
+  @type outcome :: {:ok, String.t()} | {:error, String.t()} | {:indeterminate, String.t()}
 
   @typedoc """
   parameters is a raw JSON Schema map, passed to the provider as is.
@@ -29,12 +29,26 @@ defmodule Harness.Tool do
   """
   @type t :: %__MODULE__{
           name: String.t(),
+          version: String.t(),
           description: String.t(),
           parameters: map(),
           run: {module(), atom()},
-          plugin: PluginRef.t() | nil
+          plugin: PluginRef.t() | nil,
+          capabilities: [String.t()],
+          placement: :local | :remote | :any,
+          mutating: boolean()
         }
-  defstruct [:name, :description, :parameters, :run, :plugin]
+  defstruct [
+    :name,
+    :description,
+    :parameters,
+    :run,
+    :plugin,
+    version: "1",
+    capabilities: [],
+    placement: :any,
+    mutating: false
+  ]
 
   @spec builtins() :: [t()]
   def builtins do
@@ -69,6 +83,7 @@ defmodule Harness.Tool do
         },
         "required" => ["path"]
       },
+      capabilities: ["filesystem:read"],
       run: {Harness.Tools, :read}
     }
   end
@@ -85,6 +100,8 @@ defmodule Harness.Tool do
         },
         "required" => ["path", "content"]
       },
+      capabilities: ["filesystem:write"],
+      mutating: true,
       run: {Harness.Tools, :write}
     }
   end
@@ -102,6 +119,8 @@ defmodule Harness.Tool do
         },
         "required" => ["path", "old_text", "new_text"]
       },
+      capabilities: ["filesystem:read", "filesystem:write"],
+      mutating: true,
       run: {Harness.Tools, :edit}
     }
   end
@@ -117,6 +136,8 @@ defmodule Harness.Tool do
         },
         "required" => ["command"]
       },
+      capabilities: ["shell"],
+      mutating: true,
       run: {Harness.Tools, :bash}
     }
   end

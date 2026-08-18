@@ -61,7 +61,8 @@ defmodule Harness.Plugin do
   def invoke(module, tool_name, args, %Ctx{} = ctx, plugin_state)
       when is_atom(module) and is_binary(tool_name) and is_map(args) do
     case apply(module, :handle_tool, [tool_name, args, ctx, plugin_state]) do
-      {{kind, text} = outcome, new_state} when kind in [:ok, :error] and is_binary(text) ->
+      {{kind, text} = outcome, new_state}
+      when kind in [:ok, :error, :indeterminate] and is_binary(text) ->
         {:commit, outcome, new_state}
 
       _other ->

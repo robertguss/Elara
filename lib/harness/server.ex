@@ -207,7 +207,16 @@ defmodule Harness.Server do
       "task_count" => status.task_count,
       "subscriber_count" => status.subscriber_count,
       "event_head" => status.event_head,
-      "event_retained" => status.event_retained
+      "event_retained" => status.event_retained,
+      "worker_health" =>
+        Enum.map(status.worker_health, fn worker ->
+          %{
+            "id" => worker.id,
+            "healthy" => worker.healthy?,
+            "load" => worker.load,
+            "placement" => Atom.to_string(worker.placement)
+          }
+        end)
     }
   end
 end

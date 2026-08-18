@@ -116,6 +116,40 @@ Built-in tools are `read`, `write`, `edit`, and `bash`. `edit` replaces one
 exact `old_text` with `new_text`. A turn stops after 12 model iterations, 30
 seconds per tool, or 16 KiB of tool output.
 
+Tool execution goes through `Harness.Executor.Router`. Tools declare required
+capabilities, placement (`:local`, `:remote`, or `:any`), a version, and whether
+they may mutate state. Sessions can restrict permissions with
+`allowed_capabilities:` and identify remote workspaces with `workspace_id:`.
+
+Run a capability-limited worker with a shared authentication token:
+
+```bash
+HARNESS_WORKER_TOKEN=secret mix harness.worker WORKSPACE_ID --cwd /workspace
+```
+
+Workers bind to loopback by default; `--public` binds all interfaces and should
+only be used on a protected network. Register the endpoint on the brain node,
+then mark selected tools for remote placement:
+
+```elixir
+:ok = Harness.register_worker(
+  id: "sandbox-1",
+  executor: {Harness.Executor.Remote, %{host: {127, 0, 0, 1}, port: 4049, token: "secret"}},
+  capabilities: ["filesystem:read", "filesystem:write", "shell"],
+  workspaces: ["WORKSPACE_ID"]
+)
+
+remote_tools = Enum.map(Harness.Tool.builtins(), &%{&1 | placement: :remote})
+{:ok, session} = Harness.start_session(workspace_id: "WORKSPACE_ID", tools: remote_tools)
+```
+
+The wire request contains session/tool-call IDs, tool name/version and arguments,
+workspace identity, deadline/cancellation identity, capabilities, and placement;
+it never assumes the brain node's filesystem path. Reads can be retried on
+another matching worker. Mutating calls are never blindly retried after a
+transport loss: they produce an explicit `:indeterminate` tool result. Worker
+disconnects cancel the worker-side job, while the session actor survives.
+
 ## Live plugins
 
 Harness loads trusted local source plugins from `.harness/plugins/*.{ex,exs}`

@@ -51,6 +51,11 @@ defmodule Harness.CLI do
     ["  <- error: ", first, "\n"]
   end
 
+  def render({:message_appended, %ToolResult{outcome: {:indeterminate, text}}}) do
+    first = text |> String.split("\n") |> hd()
+    ["  <- indeterminate: ", first, "\n"]
+  end
+
   def render({:message_appended, %Assistant{text: text}}) when is_binary(text) and text != "" do
     [text, "\n"]
   end

@@ -270,6 +270,11 @@ defmodule Harness.Chat.Core do
     ["    error · ", first, "\n\n"]
   end
 
+  defp tool_result_line({:indeterminate, text}) do
+    first = text |> String.split("\n") |> hd()
+    ["    indeterminate · ", first, "\n\n"]
+  end
+
   defp tool_detail({:ok, map}) when map_size(map) == 0, do: nil
 
   defp tool_detail({:ok, map}) do

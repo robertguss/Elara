@@ -49,7 +49,7 @@ defmodule Harness.Executor.Router do
       placement: :local
     }
 
-    {:ok, %{workers: %{local.id => local}, affinity: %{}}}
+    {:ok, %{workers: %{local.id => local}, affinity: %{}, checkouts: %{}}}
   end
 
   @impl true
@@ -74,28 +74,31 @@ defmodule Harness.Executor.Router do
     {:reply, rows, state}
   end
 
-  def handle_call({:checkout, request, excluded}, _from, state) do
+  def handle_call({:checkout, request, excluded}, {pid, _}, state) do
     case select_worker(state, request, excluded) do
       nil ->
         {:reply, {:error, :no_executor}, state}
 
       worker ->
+        state = release_checkout(state, pid)
+        mon = Process.monitor(pid)
         workers = Map.update!(state.workers, worker.id, &%{&1 | load: &1.load + 1})
         affinity = Map.put(state.affinity, request.workspace_id, worker.id)
-        {:reply, {:ok, worker}, %{state | workers: workers, affinity: affinity}}
+        checkouts = Map.put(state.checkouts, pid, {mon, worker.id})
+
+        {:reply, {:ok, worker},
+         %{state | workers: workers, affinity: affinity, checkouts: checkouts}}
     end
   end
 
   @impl true
-  def handle_cast({:complete, id, healthy?}, state) do
-    workers =
-      Map.update(state.workers, id, nil, fn worker ->
-        %{worker | load: max(worker.load - 1, 0), healthy?: worker.healthy? and healthy?}
-      end)
-      |> Enum.reject(fn {_id, worker} -> is_nil(worker) end)
-      |> Map.new()
+  def handle_cast({:complete, id, healthy?, pid}, state) do
+    {:noreply, settle_checkout(state, pid, id, healthy?)}
+  end
 
-    {:noreply, %{state | workers: workers}}
+  @impl true
+  def handle_info({:DOWN, ref, :process, pid, _reason}, state) do
+    {:noreply, settle_checkout(state, pid, nil, true, ref)}
   end
 
   defp attempt(router, request, tool, cwd, excluded) do
@@ -104,7 +107,7 @@ defmodule Harness.Executor.Router do
         try do
           result = invoke(worker, request, tool, cwd)
           healthy? = not match?({:executor_error, :transport, _}, result)
-          GenServer.cast(router, {:complete, worker.id, healthy?})
+          GenServer.cast(router, {:complete, worker.id, healthy?, self()})
 
           case result do
             {kind, text} when kind in [:ok, :error, :indeterminate] ->
@@ -121,7 +124,7 @@ defmodule Harness.Executor.Router do
           end
         catch
           kind, reason ->
-            GenServer.cast(router, {:complete, worker.id, true})
+            GenServer.cast(router, {:complete, worker.id, true, self()})
             :erlang.raise(kind, reason, __STACKTRACE__)
         end
 
@@ -171,6 +174,34 @@ defmodule Harness.Executor.Router do
 
   defp workspace_matches?(:all, _workspace), do: true
   defp workspace_matches?(available, workspace), do: MapSet.member?(available, workspace)
+
+  defp release_checkout(state, pid) do
+    settle_checkout(state, pid, nil, true)
+  end
+
+  defp settle_checkout(state, pid, expected_id, healthy?, expected_ref \\ nil) do
+    case Map.pop(state.checkouts, pid) do
+      {nil, _checkouts} ->
+        state
+
+      {{ref, id}, checkouts} ->
+        if is_nil(expected_ref) or expected_ref == ref do
+          if is_nil(expected_ref), do: Process.demonitor(ref, [:flush])
+          id = expected_id || id
+
+          workers =
+            Map.update(state.workers, id, nil, fn worker ->
+              %{worker | load: max(worker.load - 1, 0), healthy?: worker.healthy? and healthy?}
+            end)
+            |> Enum.reject(fn {_id, worker} -> is_nil(worker) end)
+            |> Map.new()
+
+          %{state | workers: workers, checkouts: checkouts}
+        else
+          %{state | checkouts: Map.put(checkouts, pid, {ref, id})}
+        end
+    end
+  end
 
   defp request_matches_tool?(request, tool) do
     request.tool_name == tool.name and request.tool_version == tool.version and

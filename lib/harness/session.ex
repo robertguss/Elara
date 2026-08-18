@@ -317,7 +317,7 @@ defmodule Harness.Session do
 
   @impl true
   def handle_cast(:interrupt, shell) do
-    {:noreply, feed(:interrupt, shell)}
+    {:noreply, feed(:interrupt, abort_running_tasks(shell))}
   end
 
   @impl true
@@ -627,6 +627,30 @@ defmodule Harness.Session do
     end)
   end
 
+  defp abort_running_tasks(shell) do
+    Enum.reduce(Map.keys(shell.tasks), shell, fn task_ref, shell ->
+      {kind, core_ref, pid, plugin_lease} = Map.fetch!(shell.tasks, task_ref)
+      _ = kind
+
+      # Plugin checkouts stay with the in-flight invocation so reload remains
+      # :busy until that call ends. Builtin/provider tasks are killed now.
+      if plugin_lease do
+        shell
+      else
+        Process.demonitor(task_ref, [:flush])
+        Process.exit(pid, :kill)
+
+        receive do
+          {^task_ref, _result} -> :ok
+        after
+          0 -> :ok
+        end
+
+        untrack_task(shell, task_ref, core_ref)
+      end
+    end)
+  end
+
   defp settle_tool_result(nil, outcome), do: outcome
 
   defp settle_tool_result({server, lease}, {:commit, outcome, plugin_state}) do
@@ -769,7 +793,7 @@ defmodule Harness.Session do
   end
 
   defp handle_attached_command(:interrupt, shell) do
-    {:reply, :ok, feed(:interrupt, shell)}
+    {:reply, :ok, feed(:interrupt, abort_running_tasks(shell))}
   end
 
   defp handle_attached_command(_command, shell), do: {:reply, {:error, :invalid_command}, shell}

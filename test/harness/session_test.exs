@@ -135,6 +135,41 @@ defmodule Harness.SessionTest do
     assert {:error, :busy} = Harness.ask_async(session, "again")
   end
 
+  test "interrupt kills the running tool task immediately" do
+    provider =
+      script([
+        {:ok, asst(nil, [%ToolCall{id: "1", name: "slow", args: {:ok, %{}}}])}
+      ])
+
+    tools = [
+      %Tool{
+        name: "slow",
+        description: "slow",
+        parameters: %{"type" => "object", "properties" => %{}},
+        run: {SlowTool, :run}
+      }
+    ]
+
+    {:ok, session} =
+      Harness.start_session(provider: provider, tools: tools, persist: false)
+
+    :ok = Harness.subscribe(session)
+    assert :ok = Harness.ask_async(session, "go")
+    assert_receive {:harness, ^session, {:tool_started, %ToolCall{id: "1"}}}, 1_000
+
+    Harness.interrupt(session)
+    assert_receive {:harness, ^session, {:turn_ended, :interrupted}}, 1_000
+
+    status = Harness.status(session)
+    assert status.phase == :idle
+    assert status.current_effect == nil
+    assert status.task_count == 0
+
+    refute_receive {:harness, ^session,
+                    {:message_appended, %Message.ToolResult{outcome: {:ok, "late"}}}},
+                   100
+  end
+
   test "tool crash isolates and continues" do
     provider =
       script([

@@ -36,7 +36,7 @@ defmodule Mix.Tasks.Harness.Worker do
           "for workspace #{workspace_id} with #{Enum.join(capabilities, ", ")}"
       )
 
-      Process.sleep(:infinity)
+      Harness.CLI.Signal.await_shutdown()
     else
       _ ->
         Mix.raise(

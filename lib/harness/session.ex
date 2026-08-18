@@ -5,8 +5,10 @@ defmodule Harness.Session do
 
   use GenServer
 
+  alias Harness.Plugin.Server, as: PluginServer
   alias Harness.Provider
   alias Harness.Session.{Core, Store}
+  alias Harness.Tool
   alias Harness.Tool.Ctx
 
   defmodule Shell do
@@ -17,6 +19,8 @@ defmodule Harness.Session do
             provider: {module(), term()},
             cwd: String.t(),
             tool_timeout_ms: pos_integer(),
+            base_tools: %{String.t() => Tool.t()},
+            plugins: [%{pid: pid(), path: String.t()}],
             subscribers: %{pid() => reference()},
             pending_reply: GenServer.from() | nil,
             tasks: %{reference() => {:provider | :tool, Core.ref(), pid()}},
@@ -29,6 +33,8 @@ defmodule Harness.Session do
       :provider,
       :cwd,
       :tool_timeout_ms,
+      base_tools: %{},
+      plugins: [],
       subscribers: %{},
       pending_reply: nil,
       tasks: %{},
@@ -58,17 +64,27 @@ defmodule Harness.Session do
     cwd = Keyword.fetch!(opts, :cwd)
     store = Keyword.fetch!(opts, :store)
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
+    plugin_paths = Keyword.get(opts, :plugin_paths, [])
 
     case hydrate(store, core_config) do
       {:ok, store, core} ->
-        {:ok,
-         %Shell{
-           core: core,
-           store: store,
-           provider: provider,
-           cwd: cwd,
-           tool_timeout_ms: tool_timeout_ms
-         }}
+        case start_plugins(plugin_paths, cwd, core.config.tools) do
+          {:ok, plugins, tools} ->
+            {:ok,
+             %Shell{
+               core: Core.replace_tools(core, tools),
+               store: store,
+               provider: provider,
+               cwd: cwd,
+               tool_timeout_ms: tool_timeout_ms,
+               base_tools: core.config.tools,
+               plugins: plugins
+             }}
+
+          {:error, reason} ->
+            Store.release(store)
+            {:stop, reason}
+        end
 
       {:error, reason} ->
         {:stop, reason}
@@ -104,6 +120,21 @@ defmodule Harness.Session do
 
   def handle_call(:cwd, _from, shell) do
     {:reply, shell.cwd, shell}
+  end
+
+  def handle_call(:plugins, _from, shell) do
+    {:reply, Enum.map(shell.plugins, &PluginServer.info(&1.pid)), shell}
+  end
+
+  def handle_call(:reload_plugins, _from, shell) do
+    if Core.idle?(shell.core) do
+      case reload_plugins(shell) do
+        {:ok, shell, infos} -> {:reply, {:ok, infos}, shell}
+        {:error, shell, reason} -> {:reply, {:error, reason}, shell}
+      end
+    else
+      {:reply, {:error, :busy}, shell}
+    end
   end
 
   def handle_call(:user_entries, _from, shell) do
@@ -324,7 +355,7 @@ defmodule Harness.Session do
   defp run_effect({:run_tool, core_ref, call, tool}, shell) do
     {:ok, args} = call.args
     {m, f} = tool.run
-    ctx = %Ctx{cwd: shell.cwd}
+    ctx = %Ctx{cwd: shell.cwd, plugin: tool.plugin, tool_name: call.name}
 
     task = Task.Supervisor.async_nolink(Harness.TaskSup, m, f, [args, ctx])
     timer = Process.send_after(self(), {:tool_deadline, core_ref}, shell.tool_timeout_ms)
@@ -382,5 +413,94 @@ defmodule Harness.Session do
       {task_ref, {^kind, ^core_ref, pid}} -> {task_ref, pid}
       _ -> nil
     end)
+  end
+
+  defp start_plugins(paths, cwd, base_tools) when is_list(paths) do
+    paths
+    |> Enum.reduce_while({:ok, [], MapSet.new(), []}, fn
+      path, {:ok, plugins, ids, tools} when is_binary(path) ->
+        expanded = Path.expand(path, cwd)
+        opts = [owner: self(), cwd: cwd, path: expanded]
+
+        case DynamicSupervisor.start_child(Harness.PluginSup, {PluginServer, opts}) do
+          {:ok, pid} ->
+            info = PluginServer.info(pid)
+
+            if MapSet.member?(ids, info.id) do
+              {:halt, {:error, {:plugin_load_failed, expanded, {:duplicate_plugin_id, info.id}}}}
+            else
+              plugin = %{pid: pid, path: expanded}
+
+              {:cont,
+               {:ok, [plugin | plugins], MapSet.put(ids, info.id),
+                PluginServer.tools(pid) ++ tools}}
+            end
+
+          {:error, reason} ->
+            {:halt, {:error, {:plugin_load_failed, expanded, reason}}}
+        end
+
+      _path, _acc ->
+        {:halt, {:error, {:plugin_load_failed, "<plugins>", :invalid_plugin_path}}}
+    end)
+    |> case do
+      {:ok, plugins, _ids, plugin_tools} ->
+        case tool_table(Map.values(base_tools) ++ plugin_tools) do
+          {:ok, tools} -> {:ok, Enum.reverse(plugins), tools}
+          {:error, reason} -> {:error, {:plugin_load_failed, "<registry>", reason}}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp start_plugins(_paths, _cwd, _base_tools) do
+    {:error, {:plugin_load_failed, "<plugins>", :invalid_plugins}}
+  end
+
+  defp reload_plugins(shell) do
+    Enum.reduce_while(shell.plugins, {:ok, shell, []}, fn plugin, {:ok, shell, infos} ->
+      case PluginServer.prepare_reload(plugin.pid) do
+        {:ok, candidate_tools} ->
+          case candidate_tool_table(shell, plugin.pid, candidate_tools) do
+            {:ok, tools} ->
+              :ok = PluginServer.commit_reload(plugin.pid)
+              core = Core.replace_tools(shell.core, tools)
+              {:cont, {:ok, %{shell | core: core}, [PluginServer.info(plugin.pid) | infos]}}
+
+            {:error, reason} ->
+              :ok = PluginServer.abort_reload(plugin.pid)
+              error = {:plugin_reload_failed, plugin.path, reason}
+              {:halt, {:error, shell, error}}
+          end
+
+        {:error, reason} ->
+          error = {:plugin_reload_failed, plugin.path, reason}
+          {:halt, {:error, shell, error}}
+      end
+    end)
+    |> case do
+      {:ok, shell, infos} -> {:ok, shell, Enum.reverse(infos)}
+      {:error, shell, reason} -> {:error, shell, reason}
+    end
+  end
+
+  defp candidate_tool_table(shell, candidate_pid, candidate_tools) do
+    plugin_tools =
+      Enum.flat_map(shell.plugins, fn
+        %{pid: ^candidate_pid} -> candidate_tools
+        %{pid: pid} -> PluginServer.tools(pid)
+      end)
+
+    tool_table(Map.values(shell.base_tools) ++ plugin_tools)
+  end
+
+  defp tool_table(tools) do
+    try do
+      {:ok, Tool.table(tools)}
+    rescue
+      error in ArgumentError -> {:error, Exception.message(error)}
+    end
   end
 end

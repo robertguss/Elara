@@ -64,6 +64,11 @@ defmodule Harness.Session.Core do
     %{state | history: repair_history(history)}
   end
 
+  @spec replace_tools(State.t(), %{String.t() => Tool.t()}) :: State.t()
+  def replace_tools(%State{phase: :idle} = state, tools) when is_map(tools) do
+    %{state | config: %{state.config | tools: tools}}
+  end
+
   @spec repair_history([Message.t()]) :: [Message.t()]
   def repair_history(history) when is_list(history) do
     {trailing_results, rest} =

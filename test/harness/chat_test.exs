@@ -82,6 +82,21 @@ defmodule Harness.ChatTest do
     refute body =~ "\e["
   end
 
+  test "/reload reports when no plugins are loaded" do
+    {:ok, session} = Harness.start_session(provider: script([]), tools: [], plugins: [])
+    {:ok, out} = StringIO.open("")
+    task = Task.async(fn -> Harness.Chat.run(session, out) end)
+    chat = task.pid
+
+    banner = await_output(out, "> ")
+    assert banner =~ "/reload"
+    send(chat, {:stdin, "/reload\n"})
+    assert await_idle_after(out, "no plugins loaded")
+    send(chat, {:stdin, "/quit\n"})
+
+    assert 0 = Task.await(task, 5_000)
+  end
+
   test "killed session returns status 1" do
     provider = script([{:ok, asst("hello")}])
     {:ok, session} = Harness.start_session(provider: provider, tools: [])

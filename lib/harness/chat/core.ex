@@ -18,6 +18,7 @@ defmodule Harness.Chat.Core do
           | {:user_entries_listed, :tree | :fork, [map()]}
           | {:branch_result, :tree | :fork, {:ok, String.t(), [Message.t()]} | {:error, term()}}
           | {:action_result, :clone | :name, :ok | {:error, term()}}
+          | {:reload_result, {:ok, [Harness.Plugin.Info.t()]} | {:error, term()}}
           | :ask_rejected
 
   @type effect ::
@@ -29,6 +30,7 @@ defmodule Harness.Chat.Core do
           | {:select_user_entry, :tree | :fork, pos_integer()}
           | :clone_session
           | {:name_session, String.t()}
+          | :reload_plugins
           | :interrupt
           | {:halt, 0 | 1}
 
@@ -38,6 +40,7 @@ defmodule Harness.Chat.Core do
     "/q" => :quit,
     "/interrupt" => :interrupt,
     "/stop" => :interrupt,
+    "/reload" => :reload,
     "/resume" => :resume_list,
     "/tree" => :tree_list,
     "/fork" => :fork_list,
@@ -50,6 +53,7 @@ defmodule Harness.Chat.Core do
   @help """
   /help       this list
   /interrupt  cancel the current turn
+  /reload     reload local plugins
   /resume     list saved sessions
   /resume N   resume saved session N
   /tree       list user turns; /tree N branches in this session
@@ -96,6 +100,10 @@ defmodule Harness.Chat.Core do
     {:idle, print([action_error(reason), @prompt])}
   end
 
+  def step(:idle, {:reload_result, result}) do
+    {:idle, print([reload_result(result), @prompt])}
+  end
+
   def step(:idle, {:resume_result, {:ok, history}}) do
     {:idle, print([render_transcript(history), @prompt])}
   end
@@ -118,6 +126,7 @@ defmodule Harness.Chat.Core do
   def step({:in_turn, _} = phase, {:user_entries_listed, _, _}), do: {phase, []}
   def step({:in_turn, _} = phase, {:branch_result, _, _}), do: {phase, []}
   def step({:in_turn, _} = phase, {:action_result, _, _}), do: {phase, []}
+  def step({:in_turn, _} = phase, {:reload_result, _}), do: {phase, []}
 
   def step({:in_turn, prompt}, {:event, event}) do
     in_turn_event(prompt, event)
@@ -138,6 +147,7 @@ defmodule Harness.Chat.Core do
   def step({:exiting, _} = phase, {:user_entries_listed, _, _}), do: {phase, []}
   def step({:exiting, _} = phase, {:branch_result, _, _}), do: {phase, []}
   def step({:exiting, _} = phase, {:action_result, _, _}), do: {phase, []}
+  def step({:exiting, _} = phase, {:reload_result, _}), do: {phase, []}
 
   def step({:exiting, code} = phase, {:event, {:turn_ended, outcome} = event}) do
     {phase, end_prints(outcome, event) ++ [{:halt, code}]}
@@ -151,6 +161,7 @@ defmodule Harness.Chat.Core do
   defp idle_line(:quit), do: {:idle, [{:halt, 0}]}
   defp idle_line(:interrupt), do: {:idle, print(@prompt)}
   defp idle_line(:help), do: {:idle, print([@help, @prompt])}
+  defp idle_line(:reload), do: {:idle, [:reload_plugins]}
   defp idle_line(:resume_list), do: {:idle, [:list_sessions]}
   defp idle_line({:resume, index}), do: {:idle, [{:resume_session, index}]}
   defp idle_line(:invalid_resume), do: {:idle, print(["usage: /resume or /resume N\n", @prompt])}
@@ -184,6 +195,7 @@ defmodule Harness.Chat.Core do
               :tree_list,
               :fork_list,
               :clone,
+              :reload,
               :invalid_tree,
               :invalid_fork,
               :invalid_name
@@ -348,6 +360,26 @@ defmodule Harness.Chat.Core do
       _ -> :invalid_name
     end
   end
+
+  defp reload_result({:ok, []}), do: "no plugins loaded\n"
+
+  defp reload_result({:ok, infos}) do
+    Enum.map(infos, fn info ->
+      "reloaded #{info.id} #{info.version} (generation #{info.generation})\n"
+    end)
+  end
+
+  defp reload_result({:error, :busy}), do: "plugins are busy\n"
+
+  defp reload_result({:error, {:plugin_reload_failed, _path, :busy}}) do
+    "plugins are busy\n"
+  end
+
+  defp reload_result({:error, {:plugin_reload_failed, path, reason}}) do
+    "reload failed for #{path}: #{inspect(reason)}\n"
+  end
+
+  defp reload_result({:error, reason}), do: "reload failed: #{inspect(reason)}\n"
 
   defp session_list([]), do: "no saved sessions for this directory\n"
 

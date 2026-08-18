@@ -1,9 +1,24 @@
 defmodule Harness.Tool do
   @moduledoc "Tool values. run is MFA data, never a closure."
 
+  defmodule PluginRef do
+    @moduledoc false
+    @type t :: %__MODULE__{
+            id: String.t(),
+            version: String.t(),
+            generation: pos_integer(),
+            server: pid()
+          }
+    defstruct [:id, :version, :generation, :server]
+  end
+
   defmodule Ctx do
-    @type t :: %__MODULE__{cwd: String.t()}
-    defstruct [:cwd]
+    @type t :: %__MODULE__{
+            cwd: String.t(),
+            plugin: PluginRef.t() | nil,
+            tool_name: String.t() | nil
+          }
+    defstruct [:cwd, :plugin, :tool_name]
   end
 
   @type outcome :: {:ok, String.t()} | {:error, String.t()}
@@ -16,9 +31,10 @@ defmodule Harness.Tool do
           name: String.t(),
           description: String.t(),
           parameters: map(),
-          run: {module(), atom()}
+          run: {module(), atom()},
+          plugin: PluginRef.t() | nil
         }
-  defstruct [:name, :description, :parameters, :run]
+  defstruct [:name, :description, :parameters, :run, :plugin]
 
   @spec builtins() :: [t()]
   def builtins do

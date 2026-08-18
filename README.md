@@ -53,6 +53,7 @@ sits on the page. Type the next prompt at `> `.
 | --------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------- |
 | text                              | Starts a turn                                                           | Refused. Use `/interrupt`                                  |
 | `/interrupt` or `/stop`           | Ignored                                                                 | Cancels the turn                                           |
+| `/reload`                         | Reloads local plugins                                                   | Refused. Use `/interrupt`                                  |
 | `/resume`                         | Lists saved sessions for this working directory                         | Refused. Use `/interrupt`                                  |
 | `/resume N`                       | Resumes session N in the current chat                                   | Refused. Use `/interrupt`                                  |
 | `/tree`                           | Lists user turns in the current session                                 | Refused. Use `/interrupt`                                  |
@@ -98,6 +99,63 @@ Built-in tools are `read`, `write`, `edit`, and `bash`. `edit` replaces one
 exact `old_text` with `new_text`. A turn stops after 12 model iterations, 30
 seconds per tool, or 16 KiB of tool output.
 
+## Live plugins
+
+Harness loads trusted local source plugins from `.harness/plugins/*.{ex,exs}`
+when a session starts. Each file defines exactly one module implementing
+`Harness.Plugin`:
+
+```elixir
+defmodule CounterPlugin do
+  @behaviour Harness.Plugin
+
+  alias Harness.Plugin.ToolSpec
+
+  @impl true
+  def metadata, do: %{id: "counter", version: "1"}
+
+  @impl true
+  def tools do
+    [
+      %ToolSpec{
+        name: "counter",
+        description: "Increment a session-local counter.",
+        parameters: %{"type" => "object", "properties" => %{}}
+      }
+    ]
+  end
+
+  @impl true
+  def init(_ctx), do: {:ok, 0}
+
+  @impl true
+  def handle_tool("counter", _args, _ctx, count) do
+    next = count + 1
+    {{:ok, "count=#{next}"}, next}
+  end
+end
+```
+
+Edit the file and run `/reload`. A successful reload installs a new immutable,
+content-addressed code revision while the existing plugin process keeps its
+state. Reload is refused during a turn or while an interrupted plugin call is
+still running. Syntax, contract, tool-name collision, or migration failures
+leave the previous generation active.
+
+When the state shape changes, the new revision can implement
+`migrate(old_state, old_metadata)` and return `{:ok, new_state}`. Without that
+callback, the state term is preserved as-is. Plugin state should not contain
+functions or structs defined by the reloadable module, and migration should not
+mutate external state.
+
+Plugin files may not define nested modules. Within a plugin, use `__MODULE__`
+rather than its source module's literal name for self-references. All plugins
+are trusted code and have the same operating-system access as Harness.
+
+`Harness.start_session/1` accepts `plugins: [path, ...]` to select explicit
+files, or `plugins: []` to disable discovery. The equivalent runtime APIs are
+`Harness.plugins(session)` and `Harness.reload_plugins(session)`.
+
 ## Call it from Elixir
 
 ```elixir
@@ -122,7 +180,7 @@ end
 running returns `{:error, :busy}`. Chat persists session history after every
 message. `mix harness.ask` does not.
 
-`start_session/1` accepts `provider:`, `cwd:`, `tools:`, `system:`,
+`start_session/1` accepts `provider:`, `cwd:`, `tools:`, `plugins:`, `system:`,
 `max_iterations:`, `max_tool_output_bytes:`, `tool_timeout_ms:`, `persist:`,
 `resume:`, and `name:`. `resume:` is `nil` (new session), `:latest` (newest
 usable file for `cwd`), or a session path. Omit `provider` to use

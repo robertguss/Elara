@@ -3,7 +3,7 @@ defmodule Harness.Chat do
 
   alias Harness.Chat.Core
 
-  @banner "harness  ·  /help  /interrupt  /resume  /quit\n\n"
+  @banner "harness  ·  /help  /interrupt  /reload  /resume  /quit\n\n"
   @prompt "> "
 
   @spec main([String.t()]) :: no_return()
@@ -98,6 +98,9 @@ defmodule Harness.Chat do
 
       {:action_result, kind, result} ->
         dispatch(session, out, phase, {:action_result, kind, result}, %{opts | rewrite: false})
+
+      {:reload_result, result} ->
+        dispatch(session, out, phase, {:reload_result, result}, %{opts | rewrite: false})
     end
   end
 
@@ -159,6 +162,10 @@ defmodule Harness.Chat do
 
         {:name_session, name} ->
           send(self(), {:action_result, :name, Harness.name_session(session, name)})
+          {:cont, {phase, opts}}
+
+        :reload_plugins ->
+          send(self(), {:reload_result, Harness.reload_plugins(session)})
           {:cont, {phase, opts}}
 
         {:halt, code} ->
@@ -272,7 +279,7 @@ defmodule Harness.Chat do
   defp paint_line(""), do: ""
   defp paint_line(@prompt), do: [IO.ANSI.cyan(), @prompt, IO.ANSI.reset()]
 
-  defp paint_line("harness  ·  /help  /interrupt  /resume  /quit" = line) do
+  defp paint_line("harness  ·  /help  /interrupt  /reload  /resume  /quit" = line) do
     faint(line)
   end
 

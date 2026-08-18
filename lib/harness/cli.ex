@@ -68,13 +68,14 @@ defmodule Harness.CLI do
 
   defp run_ask(prompt, provider) do
     {:ok, session} = Harness.start_session(provider: provider, persist: false)
-    ref = Process.monitor(session)
+    {:ok, session_pid} = Harness.session_pid(session)
+    ref = Process.monitor(session_pid)
     :ok = Harness.subscribe(session)
     :ok = Harness.ask_async(session, prompt)
-    loop(session, ref)
+    loop(session, session_pid, ref)
   end
 
-  defp loop(session, ref) do
+  defp loop(session, session_pid, ref) do
     receive do
       {:harness, ^session, event} ->
         IO.write(render(event))
@@ -87,10 +88,10 @@ defmodule Harness.CLI do
             exit({:shutdown, 1})
 
           _ ->
-            loop(session, ref)
+            loop(session, session_pid, ref)
         end
 
-      {:DOWN, ^ref, :process, ^session, _reason} ->
+      {:DOWN, ^ref, :process, ^session_pid, _reason} ->
         Mix.shell().error("session ended")
         exit({:shutdown, 1})
     after

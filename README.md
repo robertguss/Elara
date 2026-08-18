@@ -35,6 +35,23 @@ mix harness.chat --continue
 mix harness.chat --name "display name"
 ```
 
+To keep sessions running independently of a terminal, start the local server in
+one process and attach from another:
+
+```bash
+mix harness.server
+mix harness.attach new
+# later, or from another terminal:
+mix harness.attach SESSION_ID
+mix harness.attach SESSION_ID --observe
+```
+
+The server listens only on `127.0.0.1:4048` and uses a versioned JSON protocol.
+Set `HARNESS_SERVER_PORT` or pass `--port`. The first controlling attachment may
+ask and interrupt; additional observers are read-only. Event cursors are saved
+under `~/.harness/attach/`, so reconnecting clients replay only missed events.
+Disconnecting a client does not interrupt its session or current tool call.
+
 `mix harness.ask` prints one turn and exits. A failed turn exits with status 1.
 
 `mix harness.chat` starts a new session. `mix harness.chat --continue` resumes
@@ -162,22 +179,27 @@ for an end-to-end test with a live xAI session.
 ## Call it from Elixir
 
 ```elixir
-{:ok, session} = Harness.start_session()
-{:ok, answer} = Harness.ask(session, "what files are in this repo?")
+{:ok, session_id} = Harness.start_session()
+{:ok, answer} = Harness.ask(session_id, "what files are in this repo?")
 ```
 
 `Harness.ask/2` blocks until the turn ends. For live events, subscribe and ask
 asynchronously:
 
 ```elixir
-{:ok, session} = Harness.start_session()
-:ok = Harness.subscribe(session)
-:ok = Harness.ask_async(session, "list the public functions")
+{:ok, session_id} = Harness.start_session()
+:ok = Harness.subscribe(session_id)
+:ok = Harness.ask_async(session_id, "list the public functions")
 
 receive do
-  {:harness, ^session, {:turn_ended, outcome}} -> outcome
+  {:harness, ^session_id, {:turn_ended, outcome}} -> outcome
 end
 ```
+
+Session IDs are stable strings. Public APIs temporarily also accept a live PID
+for compatibility; `Harness.session_pid/1` resolves an ID for code that must
+monitor the underlying process. `Harness.status/1` exposes phase, current
+effect, mailbox length, task/subscriber counts, and event replay depth.
 
 `Harness.interrupt/1` cancels the current turn. A second `ask` while a turn is
 running returns `{:error, :busy}`. Chat persists session history after every

@@ -36,9 +36,17 @@ defmodule Harness.Session do
       :provider,
       :cwd,
       :tool_timeout_ms,
+      :id,
+      :incarnation,
       base_tools: %{},
       plugins: [],
       subscribers: %{},
+      attachments: %{},
+      controller: nil,
+      next_event_seq: 1,
+      event_log: :queue.new(),
+      event_log_size: 0,
+      event_log_limit: 1_000,
       pending_reply: nil,
       tasks: %{},
       timers: %{}
@@ -71,19 +79,21 @@ defmodule Harness.Session do
 
     case hydrate(store, core_config) do
       {:ok, store, core} ->
-        case start_plugins(plugin_paths, cwd, core.config.tools) do
-          {:ok, plugins, tools} ->
-            {:ok,
-             %Shell{
-               core: Core.replace_tools(core, tools),
-               store: store,
-               provider: provider,
-               cwd: cwd,
-               tool_timeout_ms: tool_timeout_ms,
-               base_tools: core.config.tools,
-               plugins: plugins
-             }}
-
+        with {:ok, _} <- Registry.register(Harness.Sessions, store.id, nil),
+             {:ok, plugins, tools} <- start_plugins(plugin_paths, cwd, core.config.tools) do
+          {:ok,
+           %Shell{
+             core: Core.replace_tools(core, tools),
+             store: store,
+             id: store.id,
+             incarnation: new_incarnation(),
+             provider: provider,
+             cwd: cwd,
+             tool_timeout_ms: tool_timeout_ms,
+             base_tools: core.config.tools,
+             plugins: plugins
+           }}
+        else
           {:error, reason} ->
             Store.release(store)
             {:stop, reason}
@@ -107,6 +117,26 @@ defmodule Harness.Session do
     else
       {:reply, {:error, :busy}, shell}
     end
+  end
+
+  def handle_call(:session_id, _from, shell), do: {:reply, shell.id, shell}
+
+  def handle_call(:status, _from, shell) do
+    {:message_queue_len, mailbox_length} = Process.info(self(), :message_queue_len)
+
+    status = %{
+      id: shell.id,
+      incarnation: shell.incarnation,
+      phase: shell.core.phase,
+      current_effect: current_effect(shell.core.phase),
+      mailbox_length: mailbox_length,
+      task_count: map_size(shell.tasks),
+      subscriber_count: map_size(shell.subscribers) + map_size(shell.attachments),
+      event_head: shell.next_event_seq - 1,
+      event_retained: shell.event_log_size
+    }
+
+    {:reply, status, shell}
   end
 
   def handle_call({:ask_async, prompt}, _from, shell) do
@@ -200,6 +230,42 @@ defmodule Harness.Session do
     {:reply, :ok, %{shell | subscribers: Map.put(shell.subscribers, pid, ref)}}
   end
 
+  def handle_call({:attach, mode, cursor, incarnation}, {pid, _}, shell)
+      when mode in [:control, :observe] and is_integer(cursor) and cursor >= 0 do
+    with :ok <- validate_incarnation(incarnation, shell),
+         :ok <- validate_cursor(cursor, shell),
+         :ok <- grant_control(mode, pid, shell) do
+      ref = Process.monitor(pid)
+      replay = Enum.filter(:queue.to_list(shell.event_log), fn {seq, _} -> seq > cursor end)
+      attachment = %{monitor: ref, mode: mode}
+
+      shell = %{
+        shell
+        | attachments: Map.put(shell.attachments, pid, attachment),
+          controller: if(mode == :control, do: pid, else: shell.controller)
+      }
+
+      reply = %{
+        id: shell.id,
+        incarnation: shell.incarnation,
+        head: shell.next_event_seq - 1,
+        replay: replay
+      }
+
+      {:reply, {:ok, reply}, shell}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, shell}
+    end
+  end
+
+  def handle_call({:attached_command, command}, {pid, _}, shell) do
+    if shell.controller == pid do
+      handle_attached_command(command, shell)
+    else
+      {:reply, {:error, :not_controller}, shell}
+    end
+  end
+
   @impl true
   def handle_cast(:interrupt, shell) do
     {:noreply, feed(:interrupt, shell)}
@@ -259,7 +325,20 @@ defmodule Harness.Session do
         _ -> shell.subscribers
       end
 
-    {:noreply, %{shell | subscribers: subscribers}}
+    {attachment, attachments} =
+      case Map.get(shell.attachments, pid) do
+        %{monitor: ^mon_ref} = attachment -> {attachment, Map.delete(shell.attachments, pid)}
+        _ -> {nil, shell.attachments}
+      end
+
+    controller =
+      case attachment do
+        %{monitor: ^mon_ref, mode: :control} -> nil
+        _ -> shell.controller
+      end
+
+    {:noreply,
+     %{shell | subscribers: subscribers, attachments: attachments, controller: controller}}
   end
 
   def handle_info({:tool_deadline, core_ref}, shell) do
@@ -396,8 +475,24 @@ defmodule Harness.Session do
   end
 
   defp emit(event, shell) do
+    seq = shell.next_event_seq
+    event_log = :queue.in({seq, event}, shell.event_log)
+    event_log_size = shell.event_log_size + 1
+    {event_log, event_log_size} = trim_event_log(event_log, event_log_size, shell.event_log_limit)
+
+    shell = %{
+      shell
+      | next_event_seq: seq + 1,
+        event_log: event_log,
+        event_log_size: event_log_size
+    }
+
     Enum.each(shell.subscribers, fn {pid, _} ->
-      send(pid, {:harness, self(), event})
+      send(pid, {:harness, shell.id, event})
+    end)
+
+    Enum.each(shell.attachments, fn {pid, _} ->
+      send(pid, {:harness_event, shell.id, shell.incarnation, seq, event})
     end)
 
     case {event, shell.pending_reply} do
@@ -583,5 +678,59 @@ defmodule Harness.Session do
     rescue
       error in ArgumentError -> {:error, Exception.message(error)}
     end
+  end
+
+  defp handle_attached_command({:ask, prompt}, shell) when is_binary(prompt) do
+    if Core.idle?(shell.core) do
+      {:reply, :ok, feed({:ask, prompt}, shell)}
+    else
+      {:reply, {:error, :busy}, shell}
+    end
+  end
+
+  defp handle_attached_command(:interrupt, shell) do
+    {:reply, :ok, feed(:interrupt, shell)}
+  end
+
+  defp handle_attached_command(_command, shell), do: {:reply, {:error, :invalid_command}, shell}
+
+  defp validate_incarnation(nil, _shell), do: :ok
+  defp validate_incarnation(incarnation, %{incarnation: incarnation}), do: :ok
+  defp validate_incarnation(_incarnation, _shell), do: {:error, :stale_incarnation}
+
+  defp validate_cursor(cursor, shell) when cursor > shell.next_event_seq - 1,
+    do: {:error, :invalid_cursor}
+
+  defp validate_cursor(0, _shell), do: :ok
+
+  defp validate_cursor(cursor, shell) do
+    case :queue.peek(shell.event_log) do
+      {:value, {first, _}} when cursor < first - 1 -> {:error, :cursor_expired}
+      _ -> :ok
+    end
+  end
+
+  defp grant_control(:observe, _pid, _shell), do: :ok
+
+  defp grant_control(:control, pid, %{controller: controller}) when controller in [nil, pid],
+    do: :ok
+
+  defp grant_control(:control, _pid, _shell), do: {:error, :control_taken}
+
+  defp trim_event_log(queue, size, limit) when size > limit do
+    {{:value, _}, queue} = :queue.out(queue)
+    trim_event_log(queue, size - 1, limit)
+  end
+
+  defp trim_event_log(queue, size, _limit), do: {queue, size}
+
+  defp current_effect(:idle), do: nil
+  defp current_effect({:calling_provider, ref, _}), do: %{kind: :provider, ref: ref}
+
+  defp current_effect({:running_tool, ref, call, _rest, _}),
+    do: %{kind: :tool, ref: ref, name: call.name}
+
+  defp new_incarnation do
+    12 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
   end
 end

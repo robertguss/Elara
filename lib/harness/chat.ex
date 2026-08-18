@@ -42,9 +42,10 @@ defmodule Harness.Chat do
     end
   end
 
-  @spec run(pid(), IO.device(), String.t()) :: 0 | 1
+  @spec run(Harness.session_ref(), IO.device(), String.t()) :: 0 | 1
   def run(session, out, seed \\ "") do
-    Process.monitor(session)
+    {:ok, session_pid} = Harness.session_pid(session)
+    Process.monitor(session_pid)
     :ok = Harness.subscribe(session)
     write_out(out, @banner)
     write_out(out, Core.render_transcript(Harness.transcript(session)))
@@ -52,64 +53,82 @@ defmodule Harness.Chat do
     case String.trim(seed) do
       "" ->
         write_out(out, @prompt)
-        loop(session, out, :idle, %{rewrite: false})
+        loop(session, session_pid, out, :idle, %{rewrite: false})
 
       prompt ->
         {phase, effects} = Core.step(:idle, {:line, prompt})
 
         case apply_effects(session, out, phase, effects, %{rewrite: false}) do
           {:halt, code} -> code
-          {phase, opts} -> loop(session, out, phase, opts)
+          {phase, opts} -> loop(session, session_pid, out, phase, opts)
         end
     end
   end
 
-  defp loop(session, out, phase, opts) do
+  defp loop(session, session_pid, out, phase, opts) do
     receive do
       {:stdin, :eof} ->
-        dispatch(session, out, phase, :eof, %{opts | rewrite: false})
+        dispatch(session, session_pid, out, phase, :eof, %{opts | rewrite: false})
 
       {:stdin, line} ->
-        dispatch(session, out, phase, {:line, line}, %{opts | rewrite: tty?(out)})
+        dispatch(session, session_pid, out, phase, {:line, line}, %{opts | rewrite: tty?(out)})
 
       {:harness, ^session, event} ->
-        dispatch(session, out, phase, {:event, event}, %{opts | rewrite: false})
+        dispatch(session, session_pid, out, phase, {:event, event}, %{opts | rewrite: false})
 
-      {:DOWN, _ref, :process, ^session, reason} ->
-        dispatch(session, out, phase, {:session_down, reason}, %{opts | rewrite: false})
+      {:DOWN, _ref, :process, ^session_pid, reason} ->
+        dispatch(session, session_pid, out, phase, {:session_down, reason}, %{
+          opts
+          | rewrite: false
+        })
 
       :ask_rejected ->
-        dispatch(session, out, phase, :ask_rejected, %{opts | rewrite: false})
+        dispatch(session, session_pid, out, phase, :ask_rejected, %{opts | rewrite: false})
 
       {:sessions_listed, rows} ->
-        dispatch(session, out, phase, {:sessions_listed, rows}, %{opts | rewrite: false})
+        dispatch(session, session_pid, out, phase, {:sessions_listed, rows}, %{
+          opts
+          | rewrite: false
+        })
 
       {:resume_result, result} ->
-        dispatch(session, out, phase, {:resume_result, result}, %{opts | rewrite: false})
+        dispatch(session, session_pid, out, phase, {:resume_result, result}, %{
+          opts
+          | rewrite: false
+        })
 
       {:user_entries_listed, kind, entries} ->
-        dispatch(session, out, phase, {:user_entries_listed, kind, entries}, %{
+        dispatch(session, session_pid, out, phase, {:user_entries_listed, kind, entries}, %{
           opts
           | rewrite: false
         })
 
       {:branch_result, kind, result} ->
-        dispatch(session, out, phase, {:branch_result, kind, result}, %{opts | rewrite: false})
+        dispatch(session, session_pid, out, phase, {:branch_result, kind, result}, %{
+          opts
+          | rewrite: false
+        })
 
       {:action_result, kind, result} ->
-        dispatch(session, out, phase, {:action_result, kind, result}, %{opts | rewrite: false})
+        dispatch(session, session_pid, out, phase, {:action_result, kind, result}, %{
+          opts
+          | rewrite: false
+        })
 
       {:reload_result, result} ->
-        dispatch(session, out, phase, {:reload_result, result}, %{opts | rewrite: false})
+        dispatch(session, session_pid, out, phase, {:reload_result, result}, %{
+          opts
+          | rewrite: false
+        })
     end
   end
 
-  defp dispatch(session, out, phase, input, opts) do
+  defp dispatch(session, session_pid, out, phase, input, opts) do
     {phase, effects} = Core.step(phase, input)
 
     case apply_effects(session, out, phase, effects, opts) do
       {:halt, code} -> code
-      {phase, opts} -> loop(session, out, phase, opts)
+      {phase, opts} -> loop(session, session_pid, out, phase, opts)
     end
   end
 

@@ -90,6 +90,11 @@ defmodule Harness.SessionTest do
     )
   end
 
+  defp session_pid(session) do
+    {:ok, pid} = Harness.session_pid(session)
+    pid
+  end
+
   test "sync ask returns final text and fans events" do
     provider = script([{:ok, asst("hello")}])
     {:ok, session} = Harness.start_session(provider: provider, tools: [])
@@ -148,7 +153,7 @@ defmodule Harness.SessionTest do
 
     {:ok, session} = Harness.start_session(provider: provider, tools: tools)
     assert {:ok, "recovered"} = Harness.ask(session, "go")
-    assert Process.alive?(session)
+    assert Process.alive?(session_pid(session))
   end
 
   test "tool timeout becomes error and continues" do
@@ -205,7 +210,7 @@ defmodule Harness.SessionTest do
 
     prior = Harness.transcript(first_session)
     assert {:ok, info} = Store.newest(cwd)
-    GenServer.stop(first_session)
+    GenServer.stop(session_pid(first_session))
 
     next_provider = recording_script([{:ok, asst("a3")}], cwd)
 
@@ -408,7 +413,7 @@ defmodule Harness.SessionTest do
     assert request_messages == prior ++ [Message.user("next")]
     assert persisted_messages == request_messages
 
-    GenServer.stop(session)
+    GenServer.stop(session_pid(session))
     {:ok, reopened} = Store.open(store.path, cwd)
     assert Store.history(reopened) == request_messages ++ [asst("after")]
   end

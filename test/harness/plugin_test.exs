@@ -30,8 +30,14 @@ defmodule Harness.PluginTest do
 
   defp start_session(opts) do
     {:ok, session} = Harness.start_session(Keyword.merge([persist: false, tools: []], opts))
-    on_exit(fn -> if Process.alive?(session), do: GenServer.stop(session) end)
+    {:ok, pid} = Harness.session_pid(session)
+    on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
     session
+  end
+
+  defp session_pid(session) do
+    {:ok, pid} = Harness.session_pid(session)
+    pid
   end
 
   defp module_name do
@@ -156,7 +162,7 @@ defmodule Harness.PluginTest do
     [before] = Harness.plugins(session)
 
     assert %PluginRef{version: "1", generation: 1, server: server} =
-             :sys.get_state(session).core.config.tools["counter"].plugin
+             :sys.get_state(session_pid(session)).core.config.tools["counter"].plugin
 
     assert server == before.pid
 
@@ -167,7 +173,7 @@ defmodule Harness.PluginTest do
     write_counter(path, module, "2")
 
     assert {:ok, [after_reload]} = Harness.reload_plugins(session)
-    assert Process.alive?(session)
+    assert Process.alive?(session_pid(session))
     assert after_reload.pid == before.pid
     assert after_reload.module != before.module
     assert after_reload.version == "2"
@@ -175,7 +181,7 @@ defmodule Harness.PluginTest do
     assert Harness.transcript(session) == prior_history
 
     assert %PluginRef{version: "2", generation: 2, server: server} =
-             :sys.get_state(session).core.config.tools["counter"].plugin
+             :sys.get_state(session_pid(session)).core.config.tools["counter"].plugin
 
     assert server == before.pid
 
@@ -234,7 +240,7 @@ defmodule Harness.PluginTest do
     assert {:ok, "first done"} = Harness.ask(session, "first")
 
     before_infos = Harness.plugins(session)
-    before_tools = :sys.get_state(session).core.config.tools
+    before_tools = :sys.get_state(session_pid(session)).core.config.tools
 
     before_states =
       Map.new(before_infos, fn info ->
@@ -248,7 +254,7 @@ defmodule Harness.PluginTest do
              Harness.reload_plugins(session)
 
     assert Harness.plugins(session) == before_infos
-    assert :sys.get_state(session).core.config.tools == before_tools
+    assert :sys.get_state(session_pid(session)).core.config.tools == before_tools
 
     assert Map.new(before_infos, fn info ->
              {info.id, :sys.get_state(info.pid).plugin_state}
@@ -455,18 +461,21 @@ defmodule Harness.PluginTest do
     assert_receive {:callback_started, task_pid}
 
     [plugin] = Harness.plugins(session)
-    {:running_tool, core_ref, _call, _rest, _iteration} = :sys.get_state(session).core.phase
+
+    {:running_tool, core_ref, _call, _rest, _iteration} =
+      :sys.get_state(session_pid(session)).core.phase
+
     task_monitor = Process.monitor(task_pid)
 
-    :ok = :sys.suspend(session)
+    :ok = :sys.suspend(session_pid(session))
 
     try do
-      send(session, {:tool_deadline, core_ref})
+      send(session_pid(session), {:tool_deadline, core_ref})
       send(coordinator, :release)
       assert_receive {:DOWN, ^task_monitor, :process, ^task_pid, :normal}
       assert :sys.get_state(plugin.pid).plugin_state == 0
     after
-      :ok = :sys.resume(session)
+      :ok = :sys.resume(session_pid(session))
     end
 
     assert_receive {:harness, ^session,
@@ -555,7 +564,7 @@ defmodule Harness.PluginTest do
     [%{path: ^path, pid: plugin_pid}] = Harness.plugins(session)
     monitor = Process.monitor(plugin_pid)
 
-    GenServer.stop(session)
+    GenServer.stop(session_pid(session))
 
     assert_receive {:DOWN, ^monitor, :process, ^plugin_pid, :normal}
   end

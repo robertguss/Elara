@@ -156,6 +156,9 @@ are trusted code and have the same operating-system access as Harness.
 files, or `plugins: []` to disable discovery. The equivalent runtime APIs are
 `Harness.plugins(session)` and `Harness.reload_plugins(session)`.
 
+See the [manual live-reload checklist](design/plugins/manual-live-reload-checklist.md)
+for an end-to-end test with a live xAI session.
+
 ## Call it from Elixir
 
 ```elixir

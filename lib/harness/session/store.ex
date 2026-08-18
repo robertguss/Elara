@@ -77,12 +77,23 @@ defmodule Harness.Session.Store do
     id = generate_id()
     {:ok, root} = root()
 
-    %__MODULE__{
+    store = %__MODULE__{
       id: id,
       cwd: cwd,
       path: Path.join([root, cwd_key(cwd), "#{id}.jsonl"]),
       name: name
     }
+
+    case name do
+      name when is_binary(name) and name != "" ->
+        case save(store) do
+          {:ok, store} -> store
+          {:error, _reason} -> store
+        end
+
+      _ ->
+        store
+    end
   end
 
   @spec memory(String.t()) :: t()
@@ -424,11 +435,17 @@ defmodule Harness.Session.Store do
   defp info_for_path(path, cwd) do
     with {:ok, %{type: :regular, mtime: timestamp}} <- File.stat(path, time: :posix),
          {:ok, store} <- open(path, cwd),
-         true <- Enum.any?(store.entries, &is_struct(&1.message, User)) do
+         true <- listable?(store) do
       [%Info{path: path, id: store.id, cwd: store.cwd, timestamp: timestamp, name: store.name}]
     else
       _ -> []
     end
+  end
+
+  defp listable?(%__MODULE__{name: name}) when is_binary(name) and name != "", do: true
+
+  defp listable?(%__MODULE__{entries: entries}) do
+    Enum.any?(entries, &is_struct(&1.message, User))
   end
 
   defp decode_file_lines(raw) do

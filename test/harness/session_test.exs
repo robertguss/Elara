@@ -339,6 +339,16 @@ defmodule Harness.SessionTest do
     assert Store.list(cwd) == []
   end
 
+  test "a named session is listable before any user turn" do
+    cwd = unique_cwd()
+
+    assert {:ok, _session} =
+             Harness.start_session(provider: script([]), tools: [], cwd: cwd, name: "startup")
+
+    [info] = Harness.list_sessions(cwd)
+    assert info.name == "startup"
+  end
+
   test "a second writer cannot open the same session file" do
     cwd = unique_cwd()
     store = Store.new(cwd)

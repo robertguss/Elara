@@ -147,6 +147,18 @@ defmodule Harness.Session.Store do
     Enum.filter(entries, &is_struct(&1.message, User))
   end
 
+  @spec history_before_user(t(), String.t()) :: {:ok, [Message.t()]} | {:error, :invalid_entry}
+  def history_before_user(%__MODULE__{} = store, id) when is_binary(id) do
+    case Enum.find(store.entries, &(&1.id == id and is_struct(&1.message, User))) do
+      nil ->
+        {:error, :invalid_entry}
+
+      entry ->
+        history = store |> path_entries(entry.parent_id) |> Enum.map(& &1.message)
+        {:ok, history}
+    end
+  end
+
   @spec move_before_user(t(), String.t()) :: {:ok, t(), String.t()} | {:error, term()}
   def move_before_user(%__MODULE__{} = store, id) when is_binary(id) do
     case Enum.find(store.entries, &(&1.id == id and is_struct(&1.message, User))) do

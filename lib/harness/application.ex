@@ -11,7 +11,8 @@ defmodule Harness.Application do
       {Task.Supervisor, name: Harness.TaskSup},
       {Harness.Executor.Router, name: Harness.Executor.Router},
       {DynamicSupervisor, name: Harness.PluginSup, strategy: :one_for_one},
-      {DynamicSupervisor, name: Harness.SessionSup, strategy: :one_for_one}
+      {DynamicSupervisor, name: Harness.SessionSup, strategy: :one_for_one},
+      {DynamicSupervisor, name: Harness.CoordinatorSup, strategy: :one_for_one}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Harness.Supervisor)

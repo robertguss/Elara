@@ -150,6 +150,42 @@ another matching worker. Mutating calls are never blindly retried after a
 transport loss: they produce an explicit `:indeterminate` tool result. Worker
 disconnects cancel the worker-side job, while the session actor survives.
 
+## Multi-agent coordination
+
+`Harness.Coordinator` supervises child sessions outside the parent session loop.
+Children clone the parent's current history by default, or can fork from before
+a selected user turn. Coding roles receive detached git worktrees. Runs enforce
+shared concurrency, estimated-token, and wall-clock budgets and return compact
+`Harness.Coordinator.Result` values rather than child transcripts.
+
+```elixir
+{:ok, coordinator} =
+  Harness.start_coordinator(parent_session,
+    max_concurrency: 3,
+    token_budget: 20_000,
+    time_budget_ms: 120_000
+  )
+
+{:ok, run} =
+  Harness.Coordinator.run(
+    coordinator,
+    :candidates,
+    [
+      %{id: "a", role: :coding, prompt: "Implement candidate A"},
+      %{id: "b", role: :coding, prompt: "Implement candidate B"},
+      %{id: "c", role: :coding, prompt: "Implement candidate C"}
+    ],
+    judge: %{id: "judge", role: :judge, prompt: "Return the winning candidate ID."}
+  )
+```
+
+Supported patterns are `:parallel`, `:specialists`, `:candidates` (followed by a
+judge), and `:map_reduce` (followed by a reducer). A `select:` callback can pick
+an early answer and cancel outstanding children. `Coordinator.status/1` exposes
+child/session relationships and worker health; `kill_child/2` demonstrates that
+one child can fail without losing its parent or siblings. Stop the coordinator
+when finished to terminate children and remove its temporary worktrees.
+
 ## Live plugins
 
 Harness loads trusted local source plugins from `.harness/plugins/*.{ex,exs}`

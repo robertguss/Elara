@@ -15,6 +15,13 @@ defmodule Harness do
 
   @spec start_session(keyword()) :: {:ok, String.t()} | {:error, term()}
   def start_session(opts \\ []) do
+    start_session_under(Harness.SessionSup, opts)
+  end
+
+  @doc false
+  @spec start_session_under(Supervisor.supervisor(), keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def start_session_under(supervisor, opts) do
     cwd = Keyword.get_lazy(opts, :cwd, &File.cwd!/0)
     tools = Keyword.get_lazy(opts, :tools, &Tool.builtins/0)
     system = Keyword.get_lazy(opts, :system, fn -> Prompt.system(cwd) end)
@@ -27,7 +34,8 @@ defmodule Harness do
     allowed_capabilities = Keyword.get(opts, :allowed_capabilities, :all)
 
     with {:ok, provider} <- fetch_provider(opts),
-         {:ok, store} <- prepare_store(opts, cwd) do
+         {:ok, store} <- prepare_store(opts, cwd),
+         {:ok, store} <- seed_store(store, Keyword.get(opts, :seed_history, [])) do
       core_config = %Core.Config{
         system: system,
         tools: Tool.table(tools),
@@ -47,7 +55,7 @@ defmodule Harness do
         allowed_capabilities: allowed_capabilities
       ]
 
-      case DynamicSupervisor.start_child(Harness.SessionSup, {Session, child_opts}) do
+      case DynamicSupervisor.start_child(supervisor, {Session, child_opts}) do
         {:ok, pid} -> {:ok, GenServer.call(pid, :session_id)}
         error -> error
       end
@@ -95,6 +103,16 @@ defmodule Harness do
   @spec workers() :: [map()]
   def workers, do: Harness.Executor.Router.workers()
 
+  @spec start_coordinator(session_ref(), keyword()) :: {:ok, pid()} | {:error, term()}
+  def start_coordinator(parent, opts) when is_pid(parent) or is_binary(parent) do
+    with {:ok, _pid} <- session_pid(parent) do
+      DynamicSupervisor.start_child(
+        Harness.CoordinatorSup,
+        {Harness.Coordinator, Keyword.put(opts, :parent, parent)}
+      )
+    end
+  end
+
   @spec plugins(session_ref()) :: [Plugin.Info.t()]
   def plugins(session) when is_pid(session) or is_binary(session) do
     call(session, :plugins)
@@ -121,9 +139,22 @@ defmodule Harness do
     call(session, :cwd)
   end
 
+  @doc false
+  @spec child_config(session_ref()) :: map() | {:error, :session_not_found}
+  def child_config(session) when is_pid(session) or is_binary(session),
+    do: call(session, :child_config)
+
   @spec user_entries(session_ref()) :: [%{id: String.t(), text: String.t()}]
   def user_entries(session) when is_pid(session) or is_binary(session),
     do: call(session, :user_entries)
+
+  @doc false
+  @spec history_before(session_ref(), String.t()) ::
+          {:ok, [Harness.Message.t()]} | {:error, term()}
+  def history_before(session, id)
+      when (is_pid(session) or is_binary(session)) and is_binary(id) do
+    call(session, {:history_before, id})
+  end
 
   @spec tree(session_ref(), String.t()) ::
           {:ok, String.t(), [Harness.Message.t()]} | {:error, term()}
@@ -224,6 +255,17 @@ defmodule Harness do
     with {:ok, info} <- Store.newest(cwd) do
       Store.open(info.path, cwd)
     end
+  end
+
+  defp seed_store(store, []), do: {:ok, store}
+
+  defp seed_store(store, history) when is_list(history) do
+    Enum.reduce_while(history, {:ok, store}, fn message, {:ok, current} ->
+      case Store.append(current, message) do
+        {:ok, next} -> {:cont, {:ok, next}}
+        error -> {:halt, error}
+      end
+    end)
   end
 
   defp workspace_id(cwd) do

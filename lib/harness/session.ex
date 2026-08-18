@@ -165,6 +165,23 @@ defmodule Harness.Session do
     {:reply, shell.cwd, shell}
   end
 
+  def handle_call(:child_config, _from, shell) do
+    config = %{
+      provider: shell.provider,
+      cwd: shell.cwd,
+      tools: Map.values(shell.base_tools),
+      system: shell.core.config.system,
+      max_iterations: shell.core.config.max_iterations,
+      max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
+      tool_timeout_ms: shell.tool_timeout_ms,
+      router: shell.router,
+      workspace_id: shell.workspace_id,
+      allowed_capabilities: shell.allowed_capabilities
+    }
+
+    {:reply, config, shell}
+  end
+
   def handle_call(:plugins, _from, shell) do
     {:reply, Enum.map(shell.plugins, &PluginServer.info(&1.pid)), shell}
   end
@@ -187,6 +204,10 @@ defmodule Harness.Session do
       |> Enum.map(&%{id: &1.id, text: &1.message.text})
 
     {:reply, entries, shell}
+  end
+
+  def handle_call({:history_before, id}, _from, shell) do
+    {:reply, Store.history_before_user(shell.store, id), shell}
   end
 
   def handle_call({:tree, id}, _from, shell) do

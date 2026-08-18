@@ -6,7 +6,12 @@ The whole agent is one pure function.
 @spec step(State.t(), fact()) :: {State.t(), [effect()]}
 ```
 
-A fact is something that happened (user asked, provider replied, tool finished, tool crashed, timeout fired, interrupt). An effect is something to do (call the provider, run a tool, emit an event). The ReAct loop is not written as a loop. It is the fixpoint of feeding effect results back in as facts. The GenServer shell owns no decisions. It turns mailbox messages into facts, calls `step`, and executes effects in order.
+A fact is something that happened (user asked, provider replied, tool finished,
+tool crashed, timeout fired, interrupt). An effect is something to do (call the
+provider, run a tool, emit an event). The ReAct loop is not written as a loop.
+It is the fixpoint of feeding effect results back in as facts. The GenServer
+shell owns no decisions. It turns mailbox messages into facts, calls `step`, and
+executes effects in order.
 
 ```
 mix harness.ask ──argv──▶ Mix.Tasks.Harness.Ask ──▶ Harness.CLI
@@ -20,7 +25,9 @@ mix harness.ask ──argv──▶ Mix.Tasks.Harness.Ask ──▶ Harness.CLI
                                               └── {:emit, ...} ───────────▶ send to subscribers (CLI prints)
 ```
 
-Call chain from CLI to provider is three hops. CLI to Session to the provider adapter task. The core is a sideways consult inside the session, not a hop toward the provider.
+Call chain from CLI to provider is three hops. CLI to Session to the provider
+adapter task. The core is a sideways consult inside the session, not a hop
+toward the provider.
 
 ## App skeleton
 
@@ -61,21 +68,21 @@ end
 
 ## Module map
 
-| Module | File | Owns |
-|---|---|---|
-| `Harness` | `lib/harness.ex` | Public API. Hides the GenServer protocol |
-| `Harness.Application` | `lib/harness/application.ex` | Supervision tree |
-| `Harness.Message` | `lib/harness/message.ex` | Message sum type, `ToolCall`, constructors |
-| `Harness.Event` | `lib/harness/event.ex` | Event sum type, turn outcome type |
-| `Harness.Tool` | `lib/harness/tool.ex` | Tool struct, `Ctx`, builtin table |
-| `Harness.Tools` | `lib/harness/tools.ex` | read, write, bash implementations |
-| `Harness.Session.Core` | `lib/harness/session/core.ex` | The state machine. Facts in, effects out. Single writer of history |
-| `Harness.Session` | `lib/harness/session.ex` | GenServer shell. Task and timer bookkeeping, event fanout |
-| `Harness.Provider` | `lib/harness/provider.ex` | Provider behaviour, `Request`, `Error` |
-| `Harness.Provider.OpenAI` | `lib/harness/provider/open_ai.ex` | Wire mapping and the one Req call |
-| `Harness.Config` | `lib/harness/config.ex` | Env boundary for `HARNESS_*` |
-| `Harness.CLI` | `lib/harness/cli.ex` | Subscribe, print, render. Exit status |
-| `Mix.Tasks.Harness.Ask` | `lib/mix/tasks/harness.ask.ex` | argv boundary |
+| Module                    | File                              | Owns                                                               |
+| ------------------------- | --------------------------------- | ------------------------------------------------------------------ |
+| `Harness`                 | `lib/harness.ex`                  | Public API. Hides the GenServer protocol                           |
+| `Harness.Application`     | `lib/harness/application.ex`      | Supervision tree                                                   |
+| `Harness.Message`         | `lib/harness/message.ex`          | Message sum type, `ToolCall`, constructors                         |
+| `Harness.Event`           | `lib/harness/event.ex`            | Event sum type, turn outcome type                                  |
+| `Harness.Tool`            | `lib/harness/tool.ex`             | Tool struct, `Ctx`, builtin table                                  |
+| `Harness.Tools`           | `lib/harness/tools.ex`            | read, write, bash implementations                                  |
+| `Harness.Session.Core`    | `lib/harness/session/core.ex`     | The state machine. Facts in, effects out. Single writer of history |
+| `Harness.Session`         | `lib/harness/session.ex`          | GenServer shell. Task and timer bookkeeping, event fanout          |
+| `Harness.Provider`        | `lib/harness/provider.ex`         | Provider behaviour, `Request`, `Error`                             |
+| `Harness.Provider.OpenAI` | `lib/harness/provider/open_ai.ex` | Wire mapping and the one Req call                                  |
+| `Harness.Config`          | `lib/harness/config.ex`           | Env boundary for `HARNESS_*`                                       |
+| `Harness.CLI`             | `lib/harness/cli.ex`              | Subscribe, print, render. Exit status                              |
+| `Mix.Tasks.Harness.Ask`   | `lib/mix/tasks/harness.ask.ex`    | argv boundary                                                      |
 
 ## Domain types
 
@@ -129,7 +136,12 @@ end
 
 ### Tools
 
-A tool is data. The `run` field is a `{module, function}` pair, never a closure. External calls resolve to the current module version at call time, so a reloaded plugin module takes effect on the next call without touching session state. A closure captured from an old module version dies when that version is purged. The type makes the safe choice the only choice, and it keeps the whole tool table serializable, which is what lets a future hands node receive it.
+A tool is data. The `run` field is a `{module, function}` pair, never a closure.
+External calls resolve to the current module version at call time, so a reloaded
+plugin module takes effect on the next call without touching session state. A
+closure captured from an old module version dies when that version is purged.
+The type makes the safe choice the only choice, and it keeps the whole tool
+table serializable, which is what lets a future hands node receive it.
 
 ```elixir
 defmodule Harness.Tool do
@@ -201,7 +213,8 @@ defmodule Harness.Event do
 end
 ```
 
-Tool completion is observed as `{:message_appended, %ToolResult{}}`. One source of truth, no separate tool_finished variant to keep in sync.
+Tool completion is observed as `{:message_appended, %ToolResult{}}`. One source
+of truth, no separate tool_finished variant to keep in sync.
 
 ## The core
 
@@ -307,25 +320,28 @@ end
 
 ### Transition table
 
-The table is the design. Each row is one `step/2` clause. `emit` rows omit the tuple noise.
+The table is the design. Each row is one `step/2` clause. `emit` rows omit the
+tuple noise.
 
-| # | Phase | Fact | New phase | Effects and appends |
-|---|---|---|---|---|
-| 1 | `:idle` | `{:ask, prompt}` | `{:calling_provider, r1, 1}` | append User; emit turn_started, message_appended; call_provider |
-| 2 | `:idle` | any task fact or `:interrupt` | `:idle` | none (stale or no-op) |
-| 3 | `{:calling_provider, r, it}` | `{:provider_result, r, {:ok, asst}}`, no tool calls | `:idle` | append Assistant; emit message_appended, turn_ended `{:completed, asst.text}` |
-| 4 | `{:calling_provider, r, it}` | `{:provider_result, r, {:ok, asst}}`, with tool calls | via `dispatch_next` | append Assistant; emit message_appended; then row 4a or 4b |
-| 4a |  | first valid call `c` | `{:running_tool, r2, c, rest, it}` | emit tool_started; run_tool |
-| 4b |  | all calls invalid | `{:calling_provider, r2, it + 1}` or `:idle` | append error ToolResults; emit each; then call_provider or turn_ended `:turn_limit` |
-| 5 | `{:calling_provider, r, _}` | `{:provider_result, r, {:error, e}}` | `:idle` | emit turn_ended `{:provider_error, e}` |
-| 6 | `{:running_tool, r, c, rest, it}` | `{:tool_result, r, outcome}` | via `dispatch_next(rest)` | append ToolResult (truncated); emit message_appended; then next tool, next provider call, or turn_limit |
-| 7 | `{:running_tool, r, c, rest, it}` | `{:tool_crashed, r, reason}` | as row 6 | outcome is `{:error, "tool crashed: ..."}` |
-| 8 | `{:running_tool, r, c, rest, it}` | `{:tool_timeout, r}` | as row 6 | outcome is `{:error, "timed out after Nms"}` |
-| 9 | `{:running_tool, r, c, rest, _}` | `:interrupt` | `:idle` | append `{:error, "interrupted"}` ToolResults for `c` and all of `rest` (keeps I2); emit each, then turn_ended `:interrupted` |
-| 10 | `{:calling_provider, _, _}` | `:interrupt` | `:idle` | emit turn_ended `:interrupted` |
-| 11 | any | fact with mismatched ref | unchanged | none (I4) |
+| #   | Phase                             | Fact                                                  | New phase                                    | Effects and appends                                                                                                          |
+| --- | --------------------------------- | ----------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `:idle`                           | `{:ask, prompt}`                                      | `{:calling_provider, r1, 1}`                 | append User; emit turn_started, message_appended; call_provider                                                              |
+| 2   | `:idle`                           | any task fact or `:interrupt`                         | `:idle`                                      | none (stale or no-op)                                                                                                        |
+| 3   | `{:calling_provider, r, it}`      | `{:provider_result, r, {:ok, asst}}`, no tool calls   | `:idle`                                      | append Assistant; emit message_appended, turn_ended `{:completed, asst.text}`                                                |
+| 4   | `{:calling_provider, r, it}`      | `{:provider_result, r, {:ok, asst}}`, with tool calls | via `dispatch_next`                          | append Assistant; emit message_appended; then row 4a or 4b                                                                   |
+| 4a  |                                   | first valid call `c`                                  | `{:running_tool, r2, c, rest, it}`           | emit tool_started; run_tool                                                                                                  |
+| 4b  |                                   | all calls invalid                                     | `{:calling_provider, r2, it + 1}` or `:idle` | append error ToolResults; emit each; then call_provider or turn_ended `:turn_limit`                                          |
+| 5   | `{:calling_provider, r, _}`       | `{:provider_result, r, {:error, e}}`                  | `:idle`                                      | emit turn_ended `{:provider_error, e}`                                                                                       |
+| 6   | `{:running_tool, r, c, rest, it}` | `{:tool_result, r, outcome}`                          | via `dispatch_next(rest)`                    | append ToolResult (truncated); emit message_appended; then next tool, next provider call, or turn_limit                      |
+| 7   | `{:running_tool, r, c, rest, it}` | `{:tool_crashed, r, reason}`                          | as row 6                                     | outcome is `{:error, "tool crashed: ..."}`                                                                                   |
+| 8   | `{:running_tool, r, c, rest, it}` | `{:tool_timeout, r}`                                  | as row 6                                     | outcome is `{:error, "timed out after Nms"}`                                                                                 |
+| 9   | `{:running_tool, r, c, rest, _}`  | `:interrupt`                                          | `:idle`                                      | append `{:error, "interrupted"}` ToolResults for `c` and all of `rest` (keeps I2); emit each, then turn_ended `:interrupted` |
+| 10  | `{:calling_provider, _, _}`       | `:interrupt`                                          | `:idle`                                      | emit turn_ended `:interrupted`                                                                                               |
+| 11  | any                               | fact with mismatched ref                              | unchanged                                    | none (I4)                                                                                                                    |
 
-Doom-loop detection is one future row before `next_provider_call` that compares recent tool calls. Token streaming is one future fact variant `{:provider_delta, ref, chunk}` mapped to one future event. Neither ships in v1.
+Doom-loop detection is one future row before `next_provider_call` that compares
+recent tool calls. Token streaming is one future fact variant
+`{:provider_delta, ref, chunk}` mapped to one future event. Neither ships in v1.
 
 ## The shell
 
@@ -473,7 +489,8 @@ defmodule Harness.Provider.OpenAI do
 end
 ```
 
-The test fake implements the same behaviour with a scripted reply queue held in its config.
+The test fake implements the same behaviour with a scripted reply queue held in
+its config.
 
 ```elixir
 defmodule Harness.Provider.Scripted do
@@ -532,23 +549,32 @@ defmodule Mix.Tasks.Harness.Ask do
 end
 ```
 
-The Mix task is the argv boundary and carries the Mix behaviour and docs. Logic lives in `Harness.CLI` so ExUnit can drive it without Mix.
+The Mix task is the argv boundary and carries the Mix behaviour and docs. Logic
+lives in `Harness.CLI` so ExUnit can drive it without Mix.
 
 ## Test plan
 
 No live network anywhere. The core tests need no processes at all.
 
-| File | Drives | Covers |
-|---|---|---|
-| `test/harness/session/core_test.exs` | `Core.step/2` directly | every transition table row: happy text-only turn, multi-tool turn, turn limit, unknown tool, malformed args, provider error, interrupt mid-tool with synthetic results (I2), stale ref dropped (I4), output truncation |
-| `test/harness/message_test.exs` | constructors | `assistant/2` rejects the empty message; serialization round-trip |
-| `test/harness/session_test.exs` | GenServer with `Provider.Scripted` and an MFA fake tool | sync ask returns final text; event order; busy rejection; tool crash isolates (session survives, error result appended); timeout fires |
-| `test/harness/provider/open_ai_test.exs` | `build_body/2`, `parse_response/1` | wire mapping both directions against fixture JSON, malformed args path, error classification |
-| `test/harness/config_test.exs` | `from_env/1` | required, defaulted, both-missing reported together |
-| `test/harness/cli_test.exs` | `render/1` | one assertion per event shape |
+| File                                     | Drives                                                  | Covers                                                                                                                                                                                                                 |
+| ---------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test/harness/session/core_test.exs`     | `Core.step/2` directly                                  | every transition table row: happy text-only turn, multi-tool turn, turn limit, unknown tool, malformed args, provider error, interrupt mid-tool with synthetic results (I2), stale ref dropped (I4), output truncation |
+| `test/harness/message_test.exs`          | constructors                                            | `assistant/2` rejects the empty message; serialization round-trip                                                                                                                                                      |
+| `test/harness/session_test.exs`          | GenServer with `Provider.Scripted` and an MFA fake tool | sync ask returns final text; event order; busy rejection; tool crash isolates (session survives, error result appended); timeout fires                                                                                 |
+| `test/harness/provider/open_ai_test.exs` | `build_body/2`, `parse_response/1`                      | wire mapping both directions against fixture JSON, malformed args path, error classification                                                                                                                           |
+| `test/harness/config_test.exs`           | `from_env/1`                                            | required, defaulted, both-missing reported together                                                                                                                                                                    |
+| `test/harness/cli_test.exs`              | `render/1`                                              | one assertion per event shape                                                                                                                                                                                          |
 
 ## Doors left open, in the types
 
-- Hot swap (Pi). Tools are `{module, function}` data in core state. Reloading a module changes behavior on the next call. A future `/reload` is a cast that replaces entries in `config.tools` between turns. No loader ships in v1.
-- Client-server (OpenCode). A client is a subscriber pid plus the four public calls. A future HTTP layer is one more subscriber process translating events to SSE. Nothing in the session changes.
-- Distribution (Livebook). `run_effect({:run_tool, ...})` is the one line that picks where hands run. Core state and the tool table are plain serializable data, so pointing that line at a `Task.Supervisor` on another node moves execution without touching the core. Persistence is one more effect consumer writing history after each `message_appended`.
+- Hot swap (Pi). Tools are `{module, function}` data in core state. Reloading a
+  module changes behavior on the next call. A future `/reload` is a cast that
+  replaces entries in `config.tools` between turns. No loader ships in v1.
+- Client-server (OpenCode). A client is a subscriber pid plus the four public
+  calls. A future HTTP layer is one more subscriber process translating events
+  to SSE. Nothing in the session changes.
+- Distribution (Livebook). `run_effect({:run_tool, ...})` is the one line that
+  picks where hands run. Core state and the tool table are plain serializable
+  data, so pointing that line at a `Task.Supervisor` on another node moves
+  execution without touching the core. Persistence is one more effect consumer
+  writing history after each `message_appended`.

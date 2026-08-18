@@ -187,6 +187,10 @@ defmodule Harness.PluginTest do
 
     assert {:ok, "second done"} = Harness.ask(session, "second")
     assert tool_outcomes(session) == [{:ok, "1 count=1"}, {:ok, "2 count=2"}]
+
+    recording = Harness.recording(session)
+    assert Enum.map(recording.segments, & &1.reason) == [:init, :plugins_reloaded]
+    assert {:ok, %Harness.FlightRecorder.Report{status: :match}} = Harness.replay(recording)
   end
 
   test "a broken replacement leaves the previous code, generation, and state active", %{

@@ -97,6 +97,18 @@ defmodule Harness do
   @spec status(session_ref()) :: map() | {:error, :session_not_found}
   def status(session) when is_pid(session) or is_binary(session), do: call(session, :status)
 
+  @spec recording(session_ref()) :: Harness.FlightRecorder.Recording.t()
+  def recording(session) when is_pid(session) or is_binary(session), do: call(session, :recording)
+
+  @spec why(session_ref(), :latest | pos_integer() | {:transition, pos_integer()}) ::
+          {:ok, map()} | {:error, :not_found | :session_not_found}
+  def why(session, selector \\ :latest) when is_pid(session) or is_binary(session),
+    do: call(session, {:why, selector})
+
+  @spec replay(Harness.FlightRecorder.Recording.t() | String.t(), keyword()) ::
+          {:ok, Harness.FlightRecorder.Report.t()} | {:error, term()}
+  def replay(recording, opts \\ []), do: Harness.FlightRecorder.replay(recording, opts)
+
   @spec register_worker(keyword()) :: :ok
   def register_worker(opts), do: Harness.Executor.Router.register(opts)
 

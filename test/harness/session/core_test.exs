@@ -181,7 +181,7 @@ defmodule Harness.Session.CoreTest do
   test "row 7: tool crash becomes error result" do
     {state, _} = ask(new())
     {state, _} = Core.step(state, {:provider_result, 1, {:ok, asst(nil, [call("c1", "echo")])}})
-    {state, effects} = Core.step(state, {:tool_crashed, 2, :boom})
+    {state, effects} = Core.step(state, {:tool_crashed, 2, "boom"})
 
     assert [%Message.User{}, %Message.Assistant{}, %Message.ToolResult{outcome: {:error, msg}}] =
              state.history
@@ -233,7 +233,7 @@ defmodule Harness.Session.CoreTest do
     frozen = state
     assert {^frozen, []} = Core.step(state, {:tool_result, 99, {:ok, "x"}})
     assert {^frozen, []} = Core.step(state, {:tool_timeout, 99})
-    assert {^frozen, []} = Core.step(state, {:tool_crashed, 99, :x})
+    assert {^frozen, []} = Core.step(state, {:tool_crashed, 99, "x"})
   end
 
   test "I5: iteration never exceeds max_iterations" do

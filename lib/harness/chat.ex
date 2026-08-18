@@ -120,6 +120,12 @@ defmodule Harness.Chat do
           opts
           | rewrite: false
         })
+
+      {:why_result, result} ->
+        dispatch(session, session_pid, out, phase, {:why_result, result}, %{
+          opts
+          | rewrite: false
+        })
     end
   end
 
@@ -185,6 +191,10 @@ defmodule Harness.Chat do
 
         :reload_plugins ->
           send(self(), {:reload_result, Harness.reload_plugins(session)})
+          {:cont, {phase, opts}}
+
+        {:why, selector} ->
+          send(self(), {:why_result, Harness.why(session, selector)})
           {:cont, {phase, opts}}
 
         {:halt, code} ->

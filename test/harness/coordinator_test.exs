@@ -112,6 +112,15 @@ defmodule Harness.CoordinatorTest do
       |> Map.new()
 
     children = await_children(coordinator, 3)
+    status = Coordinator.status(coordinator)
+    assert is_binary(status.run.id)
+    assert status.parent_session_id == parent
+    assert status.child_supervisor |> Process.alive?()
+    assert status.run.budgets.concurrency == %{active: 3, limit: 3}
+    assert status.run.budgets.queued == 0
+    assert status.run.budgets.token_estimate.used > 0
+    assert Enum.all?(children, &(&1.parent_session_id == parent and &1.run_id == status.run.id))
+    assert Enum.all?(children, &(is_pid(&1.pid) and is_pid(&1.task_pid)))
     worktrees = Enum.map(children, & &1.worktree)
     assert Enum.all?(worktrees, &is_binary/1)
     assert length(Enum.uniq(worktrees)) == 3

@@ -40,7 +40,7 @@ defmodule Harness.Session.Core do
           {:ask, String.t()}
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
           | {:tool_result, ref(), Tool.outcome()}
-          | {:tool_crashed, ref(), reason :: term()}
+          | {:tool_crashed, ref(), reason :: String.t()}
           | {:tool_timeout, ref()}
           | :interrupt
 
@@ -158,7 +158,7 @@ defmodule Harness.Session.Core do
   end
 
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_crashed, r, reason}) do
-    outcome = {:error, "tool crashed: #{format_reason(reason)}"}
+    outcome = {:error, "tool crashed: #{reason}"}
     finish_tool(state, call, rest, it, outcome)
   end
 
@@ -273,16 +273,6 @@ defmodule Harness.Session.Core do
   defp utf8_prefix(text, max) do
     kept = binary_part(text, 0, max)
     if String.valid?(kept), do: kept, else: utf8_prefix(text, max - 1)
-  end
-
-  defp format_reason(reason) do
-    case reason do
-      {mod, err, stack} when is_atom(mod) and is_list(stack) ->
-        Exception.format_banner(mod, err, stack)
-
-      other ->
-        inspect(other)
-    end
   end
 
   # Same name+args as a tool call that already has a result in this turn.

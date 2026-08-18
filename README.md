@@ -186,6 +186,36 @@ child/session relationships and worker health; `kill_child/2` demonstrates that
 one child can fail without losing its parent or siblings. Stop the coordinator
 when finished to terminate children and remove its temporary worktrees.
 
+Coordinator status reports the stable run and parent session IDs, supervised
+child/session/task relationships, worker health, and live concurrency,
+estimated-token, wall-clock, queued, and completed budget counters.
+
+## Deterministic flight recorder
+
+Every fact passed to the pure session core and its resulting state projection
+and ordered effects are recorded before effects execute. Persistent sessions
+write a mode-`0600`, versioned framed recording beside the session JSONL;
+in-memory sessions retain the same normalized recording in memory. Plugin PIDs
+and executable tool references are normalized into inert descriptors.
+
+```elixir
+recording = Harness.recording(session)
+{:ok, %{status: :match}} = Harness.replay(recording)
+
+# Compare another core implementation, or inject a fact at transition 3.
+Harness.replay(recording, step: &MyUpgradedCore.step/2)
+Harness.replay(recording, inject: %{3 => {:replace, :interrupt}})
+
+# Explain the transition that emitted the latest event (or a selected event).
+{:ok, explanation} = Harness.why(session)
+{:ok, explanation} = Harness.why(session, 7)
+```
+
+`Harness.FlightRecorder.load/1` loads recordings for offline replay without
+calling a provider or tool. Replay reports the first pre-state, post-state, or
+effect divergence, and accepts inserted, replaced, or dropped facts for fault
+injection. Interactive chat provides `/why` and `/why EVENT`.
+
 ## Live plugins
 
 Harness loads trusted local source plugins from `.harness/plugins/*.{ex,exs}`

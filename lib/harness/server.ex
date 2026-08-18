@@ -208,6 +208,8 @@ defmodule Harness.Server do
       "subscriber_count" => status.subscriber_count,
       "event_head" => status.event_head,
       "event_retained" => status.event_retained,
+      "recording_path" => status.recording_path,
+      "recorded_transitions" => status.recorded_transitions,
       "worker_health" =>
         Enum.map(status.worker_health, fn worker ->
           %{

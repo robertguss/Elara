@@ -135,7 +135,7 @@ defmodule Harness.Coordinator.Engine do
       selected: nil
     }
 
-    state |> fill_slots() |> await_phase()
+    state |> fill_slots() |> report_progress() |> await_phase()
   end
 
   defp fill_slots(state)
@@ -202,8 +202,11 @@ defmodule Harness.Coordinator.Engine do
 
       child = %{
         id: spec.id,
+        run_id: state.run_id,
+        parent_session_id: state.config.parent_session_id,
         role: spec.role,
         pid: session_pid,
+        task_pid: task.pid,
         session_id: session,
         worktree: worktree,
         status: :running
@@ -230,11 +233,12 @@ defmodule Harness.Coordinator.Engine do
 
   defp await_phase(%{active: active, queued: [], selected: nil} = state)
        when map_size(active) == 0 do
+    report_progress(state)
     {:ok, state}
   end
 
   defp await_phase(%{selected: selected} = state) when not is_nil(selected) do
-    state = cancel_remaining(state, :not_selected)
+    state = state |> cancel_remaining(:not_selected) |> report_progress()
     {:ok, state}
   end
 
@@ -270,6 +274,7 @@ defmodule Harness.Coordinator.Engine do
             selected: selected
         }
         |> fill_slots()
+        |> report_progress()
         |> await_phase()
 
       {:DOWN, ref, :process, _pid, reason} when is_map_key(state.active, ref) ->
@@ -284,6 +289,7 @@ defmodule Harness.Coordinator.Engine do
             failures: state.failures ++ [result]
         }
         |> fill_slots()
+        |> report_progress()
         |> await_phase()
 
       {:DOWN, monitor, :process, pid, reason} ->
@@ -310,11 +316,12 @@ defmodule Harness.Coordinator.Engine do
                 failures: state.failures ++ [result]
             }
             |> fill_slots()
+            |> report_progress()
             |> await_phase()
         end
     after
       timeout ->
-        state = cancel_remaining(state, :time_budget_exceeded)
+        state = state |> cancel_remaining(:time_budget_exceeded) |> report_progress()
         {:ok, state}
     end
   end
@@ -487,6 +494,18 @@ defmodule Harness.Coordinator.Engine do
 
   defp safe_name(value) do
     value |> to_string() |> String.replace(~r/[^a-zA-Z0-9_.-]+/, "-") |> String.trim("-")
+  end
+
+  defp report_progress(state) do
+    progress = %{
+      token_estimate: state.token_estimate,
+      active: map_size(state.active),
+      queued: length(state.queued),
+      completed: length(state.results)
+    }
+
+    send(state.owner, {:coordinator_progress, state.run_id, progress})
+    state
   end
 
   defp now_ms, do: System.monotonic_time(:millisecond)

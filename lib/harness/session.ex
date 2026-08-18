@@ -5,6 +5,7 @@ defmodule Harness.Session do
 
   use GenServer
 
+  alias Harness.FlightRecorder
   alias Harness.Plugin.Server, as: PluginServer
   alias Harness.Provider
   alias Harness.Executor.{Request, Router}
@@ -41,6 +42,7 @@ defmodule Harness.Session do
       :router,
       :workspace_id,
       :allowed_capabilities,
+      :recorder,
       base_tools: %{},
       plugins: [],
       subscribers: %{},
@@ -87,21 +89,25 @@ defmodule Harness.Session do
       {:ok, store, core} ->
         with {:ok, _} <- Registry.register(Harness.Sessions, store.id, nil),
              {:ok, plugins, tools} <- start_plugins(plugin_paths, cwd, core.config.tools) do
-          {:ok,
-           %Shell{
-             core: Core.replace_tools(core, tools),
-             store: store,
-             id: store.id,
-             incarnation: new_incarnation(),
-             router: router,
-             workspace_id: workspace_id,
-             allowed_capabilities: allowed_capabilities,
-             provider: provider,
-             cwd: cwd,
-             tool_timeout_ms: tool_timeout_ms,
-             base_tools: core.config.tools,
-             plugins: plugins
-           }}
+          incarnation = new_incarnation()
+
+          shell = %Shell{
+            core: Core.replace_tools(core, tools),
+            store: store,
+            id: store.id,
+            incarnation: incarnation,
+            router: router,
+            workspace_id: workspace_id,
+            allowed_capabilities: allowed_capabilities,
+            provider: provider,
+            cwd: cwd,
+            tool_timeout_ms: tool_timeout_ms,
+            base_tools: core.config.tools,
+            plugins: plugins
+          }
+
+          recorder = FlightRecorder.new(shell.core, shell.id, incarnation, store.path)
+          {:ok, %{shell | recorder: recorder}}
         else
           {:error, reason} ->
             Store.release(store)
@@ -115,6 +121,7 @@ defmodule Harness.Session do
 
   @impl true
   def terminate(_reason, shell) do
+    FlightRecorder.close(shell.recorder)
     Store.release(shell.store)
     :ok
   end
@@ -143,6 +150,8 @@ defmodule Harness.Session do
       subscriber_count: map_size(shell.subscribers) + map_size(shell.attachments),
       event_head: shell.next_event_seq - 1,
       event_retained: shell.event_log_size,
+      recording_path: FlightRecorder.path(shell.recorder),
+      recorded_transitions: shell.recorder.sequence,
       worker_health: Router.workers(shell.router)
     }
 
@@ -159,6 +168,14 @@ defmodule Harness.Session do
 
   def handle_call(:transcript, _from, shell) do
     {:reply, shell.core.history, shell}
+  end
+
+  def handle_call(:recording, _from, shell) do
+    {:reply, FlightRecorder.snapshot(shell.recorder), shell}
+  end
+
+  def handle_call({:why, selector}, _from, shell) do
+    {:reply, FlightRecorder.why(shell.recorder, selector), shell}
   end
 
   def handle_call(:cwd, _from, shell) do
@@ -246,7 +263,8 @@ defmodule Harness.Session do
           end
 
           core = Core.rebase_history(shell.core, core.history)
-          {:reply, {:ok, core.history}, %{shell | store: store, core: core}}
+          recorder = FlightRecorder.segment(shell.recorder, core, :history_rebased)
+          {:reply, {:ok, core.history}, %{shell | store: store, core: core, recorder: recorder}}
 
         {:error, reason} ->
           {:reply, {:error, reason}, shell}
@@ -335,7 +353,7 @@ defmodule Harness.Session do
     shell =
       case kind do
         :tool ->
-          feed({:tool_crashed, core_ref, reason}, shell)
+          feed({:tool_crashed, core_ref, Exception.format_exit(reason)}, shell)
 
         :provider ->
           err = %Provider.Error{
@@ -409,7 +427,10 @@ defmodule Harness.Session do
             {:ok, store} ->
               if store.path != shell.store.path, do: Store.release(shell.store)
               core = Core.rebase_history(shell.core, Store.history(store))
-              {:reply, {:ok, prompt, core.history}, %{shell | store: store, core: core}}
+              recorder = FlightRecorder.segment(shell.recorder, core, :history_rebased)
+
+              {:reply, {:ok, prompt, core.history},
+               %{shell | store: store, core: core, recorder: recorder}}
 
             {:error, reason} ->
               {:reply, {:error, reason}, shell}
@@ -444,25 +465,34 @@ defmodule Harness.Session do
   end
 
   defp feed(fact, shell) do
+    {recorder, begin} = FlightRecorder.begin_transition(shell.recorder, shell.core, fact)
     {core, effects} = Core.step(shell.core, fact)
-    Enum.reduce(effects, %{shell | core: core}, &run_effect/2)
+    {recorder, transition} = FlightRecorder.complete_transition(recorder, begin, core, effects)
+    shell = %{shell | core: core, recorder: recorder}
+
+    effects
+    |> Enum.with_index()
+    |> Enum.reduce(shell, fn {effect, index}, shell ->
+      effect_id = Map.merge(transition.id, %{effect_index: index})
+      run_effect(effect, effect_id, shell)
+    end)
   end
 
-  defp run_effect({:emit, {:message_appended, message} = event}, shell) do
+  defp run_effect({:emit, {:message_appended, message} = event}, effect_id, shell) do
     case Store.append(shell.store, message) do
       {:ok, store} ->
-        emit(event, %{shell | store: store})
+        emit(event, effect_id, %{shell | store: store})
 
       {:error, reason} ->
         raise "session persistence failed: #{inspect(reason)}"
     end
   end
 
-  defp run_effect({:emit, event}, shell) do
-    emit(event, shell)
+  defp run_effect({:emit, event}, effect_id, shell) do
+    emit(event, effect_id, shell)
   end
 
-  defp run_effect({:call_provider, core_ref, request}, shell) do
+  defp run_effect({:call_provider, core_ref, request}, _effect_id, shell) do
     {mod, cfg} = shell.provider
     task = Task.Supervisor.async_nolink(Harness.TaskSup, mod, :chat, [cfg, request])
     track_task(shell, task, :provider, core_ref)
@@ -470,6 +500,7 @@ defmodule Harness.Session do
 
   defp run_effect(
          {:run_tool, core_ref, call, %Tool{plugin: %PluginRef{} = plugin} = tool},
+         _effect_id,
          shell
        ) do
     {:ok, args} = call.args
@@ -498,7 +529,7 @@ defmodule Harness.Session do
     end
   end
 
-  defp run_effect({:run_tool, core_ref, call, tool}, shell) do
+  defp run_effect({:run_tool, core_ref, call, tool}, _effect_id, shell) do
     {:ok, args} = call.args
 
     if capabilities_allowed?(tool.capabilities, shell.allowed_capabilities) do
@@ -521,7 +552,7 @@ defmodule Harness.Session do
     end
   end
 
-  defp emit(event, shell) do
+  defp emit(event, effect_id, shell) do
     seq = shell.next_event_seq
     event_log = :queue.in({seq, event}, shell.event_log)
     event_log_size = shell.event_log_size + 1
@@ -531,7 +562,8 @@ defmodule Harness.Session do
       shell
       | next_event_seq: seq + 1,
         event_log: event_log,
-        event_log_size: event_log_size
+        event_log_size: event_log_size,
+        recorder: FlightRecorder.link_event(shell.recorder, seq, effect_id)
     }
 
     Enum.each(shell.subscribers, fn {pid, _} ->
@@ -674,8 +706,9 @@ defmodule Harness.Session do
             end)
 
             core = Core.replace_tools(shell.core, tools)
+            recorder = FlightRecorder.segment(shell.recorder, core, :plugins_reloaded)
             infos = Enum.map(shell.plugins, &PluginServer.info(&1.pid))
-            {:ok, %{shell | core: core}, infos}
+            {:ok, %{shell | core: core, recorder: recorder}, infos}
 
           {:error, path, reason} ->
             abort_prepared(prepared)

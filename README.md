@@ -150,6 +150,16 @@ another matching worker. Mutating calls are never blindly retried after a
 transport loss: they produce an explicit `:indeterminate` tool result. Worker
 disconnects cancel the worker-side job, while the session actor survives.
 
+The router and worker both verify capability and mutation metadata against the
+canonical built-in tool. Remote `read`, `write`, and `edit` reject absolute,
+traversing, and symlinked paths outside the mapped workspace. These application
+checks are defense in depth, not an atomic OS security boundary: concurrent
+path replacement and pre-existing hard links can bypass path-only validation.
+Run every worker that handles untrusted or concurrently mutable workspace
+contents inside a container or sandbox whose mounted filesystem and network
+match the intended trust boundary. This is always required for `shell`, which
+intentionally grants commands the worker process's full OS access.
+
 ## Multi-agent coordination
 
 `Harness.Coordinator` supervises child sessions outside the parent session loop.

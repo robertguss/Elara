@@ -153,6 +153,7 @@ defmodule Harness.CoordinatorTest do
 
     GenServer.stop(coordinator)
     refute Enum.any?(worktrees, &File.exists?/1)
+    refute File.exists?(Path.dirname(List.first(worktrees)))
   end
 
   test "concurrency, token, time, and early-selection budgets are enforced" do
@@ -241,5 +242,137 @@ defmodule Harness.CoordinatorTest do
 
     assert_receive {:static_request, "map-a", map_request}
     assert map_request.messages == [Message.user("map A")]
+  end
+
+  test "coding isolation options cannot be overridden and startup failures clean worktrees" do
+    parent = parent_session()
+    test_pid = self()
+    factory = fn spec -> {BlockingProvider, {test_pid, spec.id}} end
+    override = Path.join(System.tmp_dir!(), "coordinator-cwd-override")
+
+    {:ok, coordinator} =
+      Harness.start_coordinator(parent,
+        provider_factory: factory,
+        child_opts: [cwd: override, persist: true]
+      )
+
+    task =
+      Task.async(fn ->
+        Coordinator.run(coordinator, :parallel, [
+          %{id: "isolated", role: :coding, prompt: "isolation"}
+        ])
+      end)
+
+    assert_receive {:child_provider_started, "isolated", provider_pid, _}, 3_000
+    [child] = await_children(coordinator, 1)
+    assert Harness.cwd(child.session_id) == child.worktree
+    assert Harness.status(child.session_id).recording_path == nil
+    refute child.worktree == override
+    send(provider_pid, {:reply, "isolated", "done"})
+    assert {:ok, %Run{results: [%Result{status: :completed}]}} = Task.await(task)
+
+    GenServer.stop(coordinator)
+    refute File.exists?(child.worktree)
+    refute File.exists?(Path.dirname(child.worktree))
+
+    {:ok, failing} =
+      Harness.start_coordinator(parent,
+        provider_factory: factory,
+        child_opts: [resume: :latest]
+      )
+
+    assert {:ok, %Run{results: [%Result{status: :failed, worktree: failed_path}]}} =
+             Coordinator.run(failing, :parallel, [
+               %{id: "startup-failure", role: :coding, prompt: "fail before session start"}
+             ])
+
+    refute File.exists?(failed_path)
+    {worktree_list, 0} = System.cmd("git", ["worktree", "list", "--porcelain"])
+    refute worktree_list =~ failed_path
+
+    {:ok, raising} =
+      Harness.start_coordinator(parent,
+        provider_factory: fn _spec -> raise "provider factory failed" end
+      )
+
+    assert {:ok, %Run{results: [%Result{status: :failed, worktree: raised_path}]}} =
+             Coordinator.run(raising, :parallel, [
+               %{id: "provider-failure", role: :coding, prompt: "never starts"}
+             ])
+
+    refute File.exists?(raised_path)
+    {worktree_list, 0} = System.cmd("git", ["worktree", "list", "--porcelain"])
+    refute worktree_list =~ raised_path
+
+    assert {:error, :duplicate_child_ids} =
+             Coordinator.run(raising, :parallel, [
+               %{id: "duplicate", prompt: "first"},
+               %{id: "duplicate", prompt: "second"}
+             ])
+
+    blocking_factory = fn _spec ->
+      send(test_pid, :factory_entered_after_worktree)
+
+      receive do
+        :unblock -> script([{:ok, asst("unused")}])
+      end
+    end
+
+    {:ok, interrupted} =
+      Harness.start_coordinator(parent, provider_factory: blocking_factory)
+
+    spawn(fn ->
+      result =
+        try do
+          Coordinator.run(interrupted, :parallel, [
+            %{id: "interrupted", role: :coding, prompt: "stop during startup"}
+          ])
+        catch
+          :exit, reason -> {:exit, reason}
+        end
+
+      send(test_pid, {:interrupted_run_result, result})
+    end)
+
+    assert_receive :factory_entered_after_worktree, 3_000
+    interrupted_root = interrupted |> Coordinator.status() |> get_in([:run, :id])
+    interrupted_root = Coordinator.Engine.run_root(interrupted_root)
+    assert File.dir?(interrupted_root)
+    assert [_worktree] = File.ls!(interrupted_root)
+
+    GenServer.stop(interrupted)
+    assert_receive {:interrupted_run_result, {:exit, _reason}}, 1_000
+    refute File.exists?(interrupted_root)
+    {worktree_list, 0} = System.cmd("git", ["worktree", "list", "--porcelain"])
+    refute worktree_list =~ interrupted_root
+
+    safe_factory = fn spec -> {StaticProvider, {test_pid, spec.id, "safe"}} end
+    {:ok, hostile_id} = Harness.start_coordinator(parent, provider_factory: safe_factory)
+
+    assert {:ok, %Run{results: [%Result{worktree: hostile_path}]}} =
+             Coordinator.run(hostile_id, :parallel, [
+               %{id: "..", role: :coding, prompt: "opaque worktree name"}
+             ])
+
+    assert_receive {:static_request, "..", _request}
+    refute Path.basename(hostile_path) in [".", ".."]
+    assert File.dir?(hostile_path)
+
+    outside = Path.join(System.tmp_dir!(), "coordinator-cleanup-sentinel")
+    File.write!(outside, "keep")
+
+    assert {:error, :worktree_outside_run_root} =
+             Coordinator.Engine.cleanup_worktree(
+               File.cwd!(),
+               Path.dirname(hostile_path),
+               outside
+             )
+
+    assert File.read!(outside) == "keep"
+    File.rm!(outside)
+
+    GenServer.stop(hostile_id)
+    refute File.exists?(hostile_path)
+    refute File.exists?(Path.dirname(hostile_path))
   end
 end

@@ -32,7 +32,11 @@ defmodule Harness.Executor.Router do
   @spec execute(GenServer.server(), Request.t(), Harness.Tool.t(), String.t()) ::
           Harness.Tool.outcome()
   def execute(router, %Request{} = request, tool, cwd) do
-    attempt(router, request, tool, cwd, MapSet.new())
+    if request_matches_tool?(request, tool) do
+      attempt(router, request, tool, cwd, MapSet.new())
+    else
+      {:error, "executor request metadata does not match tool"}
+    end
   end
 
   @impl true
@@ -167,4 +171,10 @@ defmodule Harness.Executor.Router do
 
   defp workspace_matches?(:all, _workspace), do: true
   defp workspace_matches?(available, workspace), do: MapSet.member?(available, workspace)
+
+  defp request_matches_tool?(request, tool) do
+    request.tool_name == tool.name and request.tool_version == tool.version and
+      MapSet.new(request.required_capabilities) == MapSet.new(tool.capabilities) and
+      request.placement == tool.placement and request.mutating == tool.mutating
+  end
 end

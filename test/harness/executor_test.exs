@@ -14,7 +14,7 @@ defmodule Harness.ExecutorTest do
     File.mkdir_p!(brain)
     File.mkdir_p!(worker)
     on_exit(fn -> File.rm_rf!(root) end)
-    %{brain: brain, worker: worker, workspace_id: "test-workspace"}
+    %{root: root, brain: brain, worker: worker, workspace_id: "test-workspace"}
   end
 
   defp asst(text, calls \\ []) do
@@ -278,5 +278,101 @@ defmodule Harness.ExecutorTest do
            end)
 
     refute File.exists?(Path.join(context.brain, "x"))
+  end
+
+  test "router and worker reject forged canonical tool metadata", context do
+    token = "worker-secret"
+    worker = start_worker(context.worker, context.workspace_id, token, ["filesystem:read"])
+    write = tool("write")
+
+    forged = %Request{
+      tool_call_id: "forged-write",
+      session_id: "session",
+      tool_name: "write",
+      tool_version: "1",
+      arguments: %{"path" => "forged.txt", "content" => "forged"},
+      workspace_id: context.workspace_id,
+      deadline_ms: System.system_time(:millisecond) + 2_000,
+      cancellation_id: "cancel",
+      required_capabilities: [],
+      placement: :remote,
+      mutating: false
+    }
+
+    {:ok, router} = Router.start_link()
+
+    assert {:error, "executor request metadata does not match tool"} =
+             Router.execute(router, forged, write, context.brain)
+
+    assert {:executor_error, :rejected, "tool_metadata_mismatch"} =
+             Remote.execute(%{port: WorkerServer.port(worker), token: token}, forged, write)
+
+    refute File.exists?(Path.join(context.worker, "forged.txt"))
+
+    canonical = %{
+      forged
+      | required_capabilities: ["filesystem:write"],
+        mutating: true,
+        deadline_ms: System.system_time(:millisecond) + 2_000
+    }
+
+    assert {:executor_error, :rejected, "capability_denied"} =
+             Remote.execute(%{port: WorkerServer.port(worker), token: token}, canonical, write)
+
+    refute File.exists?(Path.join(context.worker, "forged.txt"))
+  end
+
+  test "remote filesystem tools reject absolute traversal and symlink escapes", context do
+    token = "worker-secret"
+    worker = start_worker(context.worker, context.workspace_id, token)
+    write = tool("write")
+    read = tool("read")
+    outside = Path.join(context.root, "outside")
+    File.mkdir_p!(outside)
+    File.write!(Path.join(outside, "secret.txt"), "secret")
+    File.ln_s!(outside, Path.join(context.worker, "escape"))
+    config = %{port: WorkerServer.port(worker), token: token}
+
+    write_request = fn path ->
+      %Request{
+        tool_call_id: "confined-write",
+        session_id: "session",
+        tool_name: "write",
+        tool_version: "1",
+        arguments: %{"path" => path, "content" => "escaped"},
+        workspace_id: context.workspace_id,
+        deadline_ms: System.system_time(:millisecond) + 2_000,
+        cancellation_id: "cancel",
+        required_capabilities: ["filesystem:write"],
+        placement: :remote,
+        mutating: true
+      }
+    end
+
+    for path <- [Path.join(outside, "absolute.txt"), "../traversal.txt", "escape/new.txt"] do
+      assert {:executor_error, :rejected, "path_outside_workspace"} =
+               Remote.execute(config, write_request.(path), write)
+    end
+
+    read_request = %Request{
+      tool_call_id: "confined-read",
+      session_id: "session",
+      tool_name: "read",
+      tool_version: "1",
+      arguments: %{"path" => "escape/secret.txt"},
+      workspace_id: context.workspace_id,
+      deadline_ms: System.system_time(:millisecond) + 2_000,
+      cancellation_id: "cancel",
+      required_capabilities: ["filesystem:read"],
+      placement: :remote,
+      mutating: false
+    }
+
+    assert {:executor_error, :rejected, "path_outside_workspace"} =
+             Remote.execute(config, read_request, read)
+
+    refute File.exists?(Path.join(outside, "absolute.txt"))
+    refute File.exists?(Path.join(context.root, "traversal.txt"))
+    refute File.exists?(Path.join(outside, "new.txt"))
   end
 end

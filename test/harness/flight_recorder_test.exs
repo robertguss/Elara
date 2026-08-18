@@ -102,7 +102,7 @@ defmodule Harness.FlightRecorderTest do
     assert length(observations) == 2
   end
 
-  test "persistent framed recordings load and tolerate a truncated final frame" do
+  test "persistent recordings retain event causes and distinguish incomplete transitions" do
     cwd = Path.join(System.tmp_dir!(), "harness-flight-#{System.unique_integer([:positive])}")
 
     {:ok, session} =
@@ -123,11 +123,31 @@ defmodule Harness.FlightRecorderTest do
     assert {:ok, %{transition_id: %{sequence: 2}}} =
              FlightRecorder.why(recording, {:transition, 2})
 
+    head = Harness.status(session).event_head
+
+    assert {:ok, %{transition_id: %{sequence: 2}}} = FlightRecorder.why(recording, head)
+    assert {:ok, %{transition_id: %{sequence: 2}}} = FlightRecorder.why(recording, :latest)
+
     truncated = path <> ".truncated"
     binary = File.read!(path)
     File.write!(truncated, binary <> <<0, 0, 0, 20, 1, 2, 3>>)
 
     assert {:ok, %FlightRecorder.Recording{transitions: [_, _]}} =
              FlightRecorder.load(truncated)
+
+    incomplete_path = path <> ".incomplete"
+
+    begin = %{
+      type: :transition_begin,
+      id: %{recording_id: recording.header.recording_id, sequence: 3}
+    }
+
+    frame = :erlang.term_to_binary(begin, [:deterministic])
+    File.write!(incomplete_path, binary <> <<byte_size(frame)::unsigned-big-32>> <> frame)
+
+    assert {:ok, %FlightRecorder.Recording{incomplete: [^begin]} = incomplete} =
+             FlightRecorder.load(incomplete_path)
+
+    assert {:error, {:incomplete_recording, [%{sequence: 3}]}} = Harness.replay(incomplete)
   end
 end

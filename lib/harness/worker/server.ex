@@ -88,7 +88,7 @@ defmodule Harness.Worker.Server do
     case :gen_tcp.recv(socket, 0, 30_000) do
       {:ok, line} ->
         case decode_request(line, config) do
-          {:ok, request, cwd} -> run_request(socket, request, cwd)
+          {:ok, request, cwd, tool} -> run_request(socket, request, cwd, tool)
           {:error, reason} -> :gen_tcp.send(socket, encode_error(reason))
         end
 
@@ -99,9 +99,9 @@ defmodule Harness.Worker.Server do
     :gen_tcp.close(socket)
   end
 
-  defp run_request(socket, request, cwd) do
+  defp run_request(socket, request, cwd, tool) do
     parent = self()
-    job = spawn_link(fn -> send(parent, {:job_result, self(), invoke(request, cwd)}) end)
+    job = spawn_link(fn -> send(parent, {:job_result, self(), invoke(request, cwd, tool)}) end)
     :ok = :inet.setopts(socket, active: :once)
 
     receive do
@@ -126,10 +126,12 @@ defmodule Harness.Worker.Server do
          true <- secure_equal?(token, config.token),
          {:ok, request} <- Request.from_map(encoded),
          :ok <- validate_deadline(request),
-         :ok <- validate_capabilities(request, config.capabilities),
+         {:ok, tool} <- canonical_tool(request),
+         :ok <- validate_metadata(request, tool),
+         :ok <- validate_capabilities(tool.capabilities, config.capabilities),
          {:ok, cwd} <- Map.fetch(config.workspaces, request.workspace_id),
-         :ok <- validate_tool(request) do
-      {:ok, request, cwd}
+         :ok <- validate_workspace_path(request, cwd) do
+      {:ok, request, cwd, tool}
     else
       false -> {:error, :unauthorized}
       :error -> {:error, :unknown_workspace}
@@ -144,20 +146,77 @@ defmodule Harness.Worker.Server do
       else: {:error, :deadline_exceeded}
   end
 
-  defp validate_capabilities(request, available) do
-    if Enum.all?(request.required_capabilities, &MapSet.member?(available, &1)),
+  defp validate_capabilities(required, available) do
+    if Enum.all?(required, &MapSet.member?(available, &1)),
       do: :ok,
       else: {:error, :capability_denied}
   end
 
-  defp validate_tool(%Request{tool_name: name, tool_version: "1"})
-       when name in ["read", "write", "edit", "bash"],
-       do: :ok
+  defp canonical_tool(%Request{tool_name: name, tool_version: version}) do
+    case Enum.find(Harness.Tool.builtins(), &(&1.name == name and &1.version == version)) do
+      nil -> {:error, :unknown_tool_version}
+      tool -> {:ok, tool}
+    end
+  end
 
-  defp validate_tool(_request), do: {:error, :unknown_tool_version}
+  defp validate_metadata(request, tool) do
+    if MapSet.new(request.required_capabilities) == MapSet.new(tool.capabilities) and
+         request.mutating == tool.mutating do
+      :ok
+    else
+      {:error, :tool_metadata_mismatch}
+    end
+  end
 
-  defp invoke(request, cwd) do
-    tool = Map.fetch!(Harness.Tool.table(Harness.Tool.builtins()), request.tool_name)
+  defp validate_workspace_path(%Request{tool_name: name, arguments: %{"path" => path}}, cwd)
+       when name in ["read", "write", "edit"] and is_binary(path) do
+    with :ok <- relative_path(path, cwd),
+         :ok <- reject_symlink_components(path, cwd) do
+      :ok
+    end
+  end
+
+  defp validate_workspace_path(%Request{tool_name: name}, _cwd)
+       when name in ["read", "write", "edit"],
+       do: {:error, :invalid_path}
+
+  defp validate_workspace_path(_request, _cwd), do: :ok
+
+  defp relative_path(path, cwd) do
+    expanded_root = Path.expand(cwd)
+    expanded_path = Path.expand(path, expanded_root)
+    relative = Path.relative_to(expanded_path, expanded_root)
+
+    if Path.type(path) == :relative and Path.type(relative) == :relative and relative != ".." and
+         not String.starts_with?(relative, "../") do
+      :ok
+    else
+      {:error, :path_outside_workspace}
+    end
+  end
+
+  defp reject_symlink_components(path, cwd) do
+    path
+    |> Path.expand(cwd)
+    |> Path.relative_to(Path.expand(cwd))
+    |> Path.split()
+    |> Enum.reduce_while(Path.expand(cwd), fn component, parent ->
+      current = Path.join(parent, component)
+
+      case File.lstat(current) do
+        {:ok, %File.Stat{type: :symlink}} -> {:halt, {:error, :path_outside_workspace}}
+        {:ok, _stat} -> {:cont, current}
+        {:error, :enoent} -> {:cont, current}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:error, reason} -> {:error, reason}
+      _path -> :ok
+    end
+  end
+
+  defp invoke(request, cwd, tool) do
     {module, function} = tool.run
     apply(module, function, [request.arguments, %Ctx{cwd: cwd, tool_name: request.tool_name}])
   rescue

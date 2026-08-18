@@ -76,7 +76,7 @@ known deterministic proofs pass before manual testing.
     test/harness/flight_recorder_test.exs
   ```
 
-  **Pass criteria:** 14 tests pass with no failures.
+  **Pass criteria:** 17 tests pass with no failures.
 
 - [ ] Run all verification gates.
 
@@ -347,6 +347,13 @@ The direct router checks below avoid model nondeterminism. Use three terminals:
   explicit opt-in for `0.0.0.0` and should only be tested on a protected
   network.
 
+  **Security boundary:** filesystem path checks reject static absolute,
+  traversal, and symlink escapes, but they are defense in depth rather than an
+  atomic OS boundary. Run every worker that handles untrusted or concurrently
+  mutable workspace contents in a container or sandbox with only the intended
+  files and network exposed. This is always required for `shell`, whose
+  commands inherit the worker process's full OS access.
+
 ### 2.2 Register the worker and inspect advertised state
 
 - [ ] In terminal I start the brain VM:
@@ -568,6 +575,23 @@ advice.
   denial tool result and no file is created. This uses a scripted provider so
   the exact prohibited call is deterministic.
 
+### 2.8.1 Forged metadata and filesystem escape rejection
+
+**Feature:** both router and worker compare request capability/mutation fields
+with canonical built-in metadata. Remote filesystem tools reject absolute,
+`..`, and symlink escape paths.
+
+- [ ] Run the deterministic boundary proofs:
+
+  ```bash
+  mix test test/harness/executor_test.exs:283
+  mix test test/harness/executor_test.exs:325
+  ```
+
+  **Pass criteria:** forged write metadata is rejected by both router and worker;
+  a correctly described write is denied by a read-only worker; absolute,
+  traversal, and symlink paths create no outside files.
+
 ### 2.9 Read-only transport retry and health tracking
 
 **Feature:** a read-only request retries another eligible worker after a
@@ -682,6 +706,10 @@ replacement worker.
   deadline, cancellation, capability, workspace, and placement fields.
 - [ ] Authentication, workspace, and capability boundaries reject invalid
   requests.
+- [ ] Capability and mutation flags cannot be weakened by forged wire metadata.
+- [ ] Filesystem tools reject static absolute, traversal, and symlink paths;
+  workers handling untrusted or concurrently mutable files, and all
+  shell-capable workers, use an external OS sandbox for host confinement.
 - [ ] Remote reads/writes happen in the worker-mapped workspace.
 - [ ] Selection considers placement, capabilities, workspace, health, load,
   and workspace affinity.
@@ -969,6 +997,16 @@ parent survive.
   **Expected:** all values are `false`. Child sessions/tasks terminate and
   temporary worktrees are removed; the parent remains alive.
 
+- [ ] Run the deterministic isolation/startup-failure proof:
+
+  ```bash
+  mix test test/harness/coordinator_test.exs:245
+  ```
+
+  **Pass criteria:** global child options cannot override coding-child `cwd` or
+  `persist: false`; failed session startup and a raising provider factory leave
+  neither a directory nor a registered git worktree.
+
 ### Multi-agent acceptance criteria
 
 - [ ] Coordinator state is outside the parent session loop and has its own
@@ -1229,6 +1267,17 @@ written, while rejecting invalid magic/version/oversized frames.
   **Pass criteria:** loading succeeds and all previously completed transitions
   remain available. Only the incomplete final frame is ignored.
 
+- [ ] Run the deterministic completed-begin-without-end proof:
+
+  ```bash
+  mix test test/harness/flight_recorder_test.exs:104
+  ```
+
+  **Pass criteria:** a partial trailing frame is tolerated, but a fully written
+  `transition_begin` without its matching end appears in `incomplete` and replay
+  returns `{:error, {:incomplete_recording, ...}}`. Loaded recordings retain
+  event links, so integer and `:latest` offline `/why` selectors succeed.
+
 ### 4.10 Unified session observability
 
 - [ ] During an active long-running tool, call `Harness.status(session)` from
@@ -1260,6 +1309,8 @@ written, while rejecting invalid magic/version/oversized frames.
 - [ ] Every core fact and resulting effect/state projection is recorded with a
   stable causal transition ID.
 - [ ] Persistent recordings are versioned, framed, mode 0600, and load offline.
+- [ ] Replay refuses an explicitly incomplete transition rather than reporting
+  a matching prefix as a complete match.
 - [ ] Replay invokes no providers or tools and matches the current core.
 - [ ] An intentionally changed core reports the first meaningful divergence.
 - [ ] Insert/replace/drop fault injection produces a replay branch without side

@@ -14,7 +14,7 @@ defmodule Harness.FlightRecorder do
   defmodule Recording do
     @moduledoc "Portable recording loaded from a live session or a flight file."
     @type t :: %__MODULE__{}
-    defstruct [:header, segments: [], transitions: [], incomplete: []]
+    defstruct [:header, segments: [], transitions: [], incomplete: [], event_causes: %{}]
   end
 
   defmodule Report do
@@ -157,7 +157,8 @@ defmodule Harness.FlightRecorder do
     %Recording{
       header: recorder.header,
       segments: recorder.segments,
-      transitions: recorder.transitions
+      transitions: recorder.transitions,
+      event_causes: recorder.event_causes
     }
   end
 
@@ -224,6 +225,19 @@ defmodule Harness.FlightRecorder do
 
   def why(%Recording{header: header} = recording, {:transition, sequence}) do
     explain(recording, %{recording_id: header.recording_id, sequence: sequence})
+  end
+
+  def why(%Recording{} = recording, selector) do
+    effect_id =
+      case selector do
+        :latest ->
+          recording.event_causes |> Enum.max_by(&elem(&1, 0), fn -> nil end) |> value()
+
+        sequence when is_integer(sequence) ->
+          Map.get(recording.event_causes, sequence)
+      end
+
+    explain(recording, effect_id)
   end
 
   defp explain(_recorder, nil), do: {:error, :not_found}
@@ -395,7 +409,12 @@ defmodule Harness.FlightRecorder do
     end
   end
 
-  defp validate_recording(%Recording{header: %{format_version: @version}}), do: :ok
+  defp validate_recording(%Recording{header: %{format_version: @version}, incomplete: []}),
+    do: :ok
+
+  defp validate_recording(%Recording{header: %{format_version: @version}, incomplete: entries}) do
+    {:error, {:incomplete_recording, Enum.map(entries, & &1.id)}}
+  end
 
   defp validate_recording(%Recording{header: %{format_version: version}}),
     do: {:error, {:unsupported_format, version}}
@@ -735,23 +754,29 @@ defmodule Harness.FlightRecorder do
   defp decode_frames(_binary, _frames), do: {:error, :frame_too_large}
 
   defp assemble([%{type: :header} = header | frames]) do
-    {segments, begins, transitions, incomplete} =
-      Enum.reduce(frames, {[], %{}, [], []}, fn
-        %{type: :segment} = segment, {segments, begins, transitions, incomplete} ->
-          {segments ++ [segment], begins, transitions, incomplete}
+    {segments, begins, transitions, incomplete, event_causes} =
+      Enum.reduce(frames, {[], %{}, [], [], %{}}, fn
+        %{type: :segment} = segment, {segments, begins, transitions, incomplete, events} ->
+          {segments ++ [segment], begins, transitions, incomplete, events}
 
-        %{type: :transition_begin, id: id} = begin, {segments, begins, transitions, incomplete} ->
-          {segments, Map.put(begins, id, begin), transitions, incomplete}
+        %{type: :transition_begin, id: id} = begin,
+        {segments, begins, transitions, incomplete, events} ->
+          {segments, Map.put(begins, id, begin), transitions, incomplete, events}
 
-        %{type: :transition_end, id: id} = ending, {segments, begins, transitions, incomplete} ->
+        %{type: :transition_end, id: id} = ending,
+        {segments, begins, transitions, incomplete, events} ->
           case Map.pop(begins, id) do
             {nil, begins} ->
-              {segments, begins, transitions, [ending | incomplete]}
+              {segments, begins, transitions, [ending | incomplete], events}
 
             {begin, begins} ->
               transition = begin |> Map.drop([:type]) |> Map.merge(Map.drop(ending, [:type, :id]))
-              {segments, begins, transitions ++ [transition], incomplete}
+              {segments, begins, transitions ++ [transition], incomplete, events}
           end
+
+        %{type: :event_link, event_sequence: sequence, effect: effect},
+        {segments, begins, transitions, incomplete, events} ->
+          {segments, begins, transitions, incomplete, Map.put(events, sequence, effect)}
 
         _frame, acc ->
           acc
@@ -762,7 +787,8 @@ defmodule Harness.FlightRecorder do
        header: header,
        segments: segments,
        transitions: transitions,
-       incomplete: incomplete ++ Map.values(begins)
+       incomplete: incomplete ++ Map.values(begins),
+       event_causes: event_causes
      }}
   end
 

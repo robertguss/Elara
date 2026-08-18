@@ -3,15 +3,18 @@ defmodule Harness.Coordinator.Engine do
 
   alias Harness.Coordinator.{Result, Run}
 
-  def run(owner, run_id, child_sup, config, pattern, specs, opts) do
+  def run(owner, run_id, run_root, child_sup, config, pattern, specs, opts) do
     started_at = now_ms()
     opts = Keyword.put(opts, :run_deadline, started_at + config.time_budget_ms)
 
-    with {:ok, history} <- seed_history(config.parent, Keyword.get(opts, :history, :clone)),
-         {:ok, phase} <- run_phase(owner, run_id, child_sup, config, specs, history, opts, 0) do
+    with :ok <- validate_unique_ids(pattern, specs, opts),
+         {:ok, history} <- seed_history(config.parent, Keyword.get(opts, :history, :clone)),
+         {:ok, phase} <-
+           run_phase(owner, run_id, run_root, child_sup, config, specs, history, opts, 0) do
       finish_pattern(
         owner,
         run_id,
+        run_root,
         child_sup,
         config,
         pattern,
@@ -26,6 +29,7 @@ defmodule Harness.Coordinator.Engine do
   defp finish_pattern(
          _owner,
          _run_id,
+         _run_root,
          _child_sup,
          _config,
          pattern,
@@ -41,6 +45,7 @@ defmodule Harness.Coordinator.Engine do
   defp finish_pattern(
          owner,
          run_id,
+         run_root,
          child_sup,
          config,
          :candidates,
@@ -56,6 +61,7 @@ defmodule Harness.Coordinator.Engine do
            run_phase(
              owner,
              run_id,
+             run_root,
              child_sup,
              config,
              [judge],
@@ -76,6 +82,7 @@ defmodule Harness.Coordinator.Engine do
   defp finish_pattern(
          owner,
          run_id,
+         run_root,
          child_sup,
          config,
          :map_reduce,
@@ -91,6 +98,7 @@ defmodule Harness.Coordinator.Engine do
            run_phase(
              owner,
              run_id,
+             run_root,
              child_sup,
              config,
              [reducer],
@@ -115,13 +123,24 @@ defmodule Harness.Coordinator.Engine do
     end
   end
 
-  defp run_phase(owner, run_id, child_sup, config, specs, history, opts, initial_tokens) do
+  defp run_phase(
+         owner,
+         run_id,
+         run_root,
+         child_sup,
+         config,
+         specs,
+         history,
+         opts,
+         initial_tokens
+       ) do
     deadline = Keyword.fetch!(opts, :run_deadline)
     select = Keyword.get(opts, :select)
 
     state = %{
       owner: owner,
       run_id: run_id,
+      run_root: run_root,
       child_sup: child_sup,
       config: config,
       history: history,
@@ -187,48 +206,82 @@ defmodule Harness.Coordinator.Engine do
   end
 
   defp start_child(state, spec) do
-    with {:ok, cwd, worktree} <- child_cwd(state, spec),
-         provider <- state.config.provider_factory.(spec),
-         child_opts <- child_options(state, spec, cwd, provider),
-         {:ok, session} <- Harness.start_session_under(state.child_sup, child_opts),
+    case child_cwd(state, spec) do
+      {:ok, cwd, worktree} ->
+        case start_child_session(state, spec, cwd) do
+          {:ok, session, session_pid} ->
+            case activate_child(state, spec, session, session_pid, worktree) do
+              {:ok, active} ->
+                {:ok, active}
+
+              {:error, reason} ->
+                stop_child_session(session_pid)
+                cleanup_worktree(state.config.parent_config.cwd, state.run_root, worktree)
+                {:error, reason, worktree}
+            end
+
+          {:error, reason} ->
+            cleanup_worktree(state.config.parent_config.cwd, state.run_root, worktree)
+            {:error, reason, worktree}
+        end
+
+      {:error, reason, worktree} ->
+        cleanup_worktree(state.config.parent_config.cwd, state.run_root, worktree)
+        {:error, reason, worktree}
+    end
+  end
+
+  defp start_child_session(state, spec, cwd) do
+    provider = state.config.provider_factory.(spec)
+    child_opts = child_options(state, spec, cwd, provider)
+
+    with {:ok, session} <- Harness.start_session_under(state.child_sup, child_opts),
          {:ok, session_pid} <- Harness.session_pid(session) do
-      monitor = Process.monitor(session_pid)
-      started_at = now_ms()
-
-      task =
-        Task.Supervisor.async_nolink(Harness.TaskSup, fn ->
-          {Harness.ask(session, spec.prompt), now_ms() - started_at}
-        end)
-
-      child = %{
-        id: spec.id,
-        run_id: state.run_id,
-        parent_session_id: state.config.parent_session_id,
-        role: spec.role,
-        pid: session_pid,
-        task_pid: task.pid,
-        session_id: session,
-        worktree: worktree,
-        status: :running
-      }
-
-      send(state.owner, {:coordinator_child_started, state.run_id, child})
-
-      {:ok,
-       %{
-         spec: spec,
-         task: task,
-         session: session,
-         session_pid: session_pid,
-         monitor: monitor,
-         worktree: worktree
-       }}
-    else
-      {:error, reason, worktree} -> {:error, reason, worktree}
-      {:error, reason} -> {:error, reason, nil}
+      {:ok, session, session_pid}
     end
   rescue
-    error -> {:error, error, nil}
+    error -> {:error, error}
+  catch
+    kind, reason -> {:error, {kind, reason}}
+  end
+
+  defp activate_child(state, spec, session, session_pid, worktree) do
+    monitor = Process.monitor(session_pid)
+    started_at = now_ms()
+
+    task =
+      Task.Supervisor.async_nolink(Harness.TaskSup, fn ->
+        {Harness.ask(session, spec.prompt), now_ms() - started_at}
+      end)
+
+    child = %{
+      id: spec.id,
+      run_id: state.run_id,
+      parent_session_id: state.config.parent_session_id,
+      role: spec.role,
+      pid: session_pid,
+      task_pid: task.pid,
+      session_id: session,
+      worktree: worktree,
+      worktree_root: if(worktree, do: state.run_root),
+      status: :running
+    }
+
+    send(state.owner, {:coordinator_child_started, state.run_id, child})
+
+    {:ok,
+     %{
+       spec: spec,
+       task: task,
+       session: session,
+       session_pid: session_pid,
+       monitor: monitor,
+       worktree: worktree
+     }}
+  rescue
+    error -> {:error, error}
+  catch
+    kind, reason -> {:error, {kind, reason}}
   end
 
   defp await_phase(%{active: active, queued: [], selected: nil} = state)
@@ -360,7 +413,11 @@ defmodule Harness.Coordinator.Engine do
   defp child_options(state, spec, cwd, provider) do
     base = state.config.parent_config
 
-    [
+    custom =
+      state.config.child_opts
+      |> Keyword.merge(Map.get(spec, :session_opts, []))
+
+    forced = [
       provider: provider,
       cwd: cwd,
       tools: base.tools,
@@ -375,27 +432,107 @@ defmodule Harness.Coordinator.Engine do
       seed_history: state.history,
       system: Map.get(spec, :system, Harness.Prompt.system(cwd))
     ]
-    |> Keyword.merge(state.config.child_opts)
-    |> Keyword.merge(Map.get(spec, :session_opts, []))
+
+    Keyword.merge(custom, forced)
   end
 
-  defp child_cwd(state, %{coding: true} = spec) do
-    root =
-      Path.join(System.tmp_dir!(), "harness-coordinator-#{inspect(state.run_id) |> safe_name()}")
+  defp child_cwd(state, %{coding: true}) do
+    root = state.run_root
+    path = Path.join(root, random_id())
 
-    path = Path.join(root, safe_name(spec.id))
-    File.mkdir_p!(root)
+    with :ok <- File.mkdir_p(root),
+         {:ok, _output, 0} <-
+           run_command("git", ["worktree", "add", "--detach", path, "HEAD"],
+             cd: state.config.parent_config.cwd,
+             stderr_to_stdout: true
+           ) do
+      {:ok, path, path}
+    else
+      {:ok, output, status} ->
+        {:error, {:worktree_failed, status, String.trim(output)}, path}
 
-    case System.cmd("git", ["worktree", "add", "--detach", path, "HEAD"],
-           cd: state.config.parent_config.cwd,
-           stderr_to_stdout: true
-         ) do
-      {_output, 0} -> {:ok, path, path}
-      {output, status} -> {:error, {:worktree_failed, status, String.trim(output)}, path}
+      {:error, reason} ->
+        {:error, {:worktree_failed, reason}, path}
     end
   end
 
   defp child_cwd(state, _spec), do: {:ok, state.config.parent_config.cwd, nil}
+
+  @doc false
+  def run_root(run_id) do
+    Path.join(System.tmp_dir!(), "harness-coordinator-#{safe_name(run_id)}")
+  end
+
+  @doc false
+  def cleanup_worktree(_parent_cwd, _root, nil), do: :ok
+
+  def cleanup_worktree(parent_cwd, root, path) do
+    root = Path.expand(root)
+    path = Path.expand(path)
+
+    if Path.dirname(path) == root do
+      run_command("git", ["worktree", "remove", "--force", path],
+        cd: parent_cwd,
+        stderr_to_stdout: true
+      )
+
+      remove_tree(path)
+
+      run_command("git", ["worktree", "prune"],
+        cd: parent_cwd,
+        stderr_to_stdout: true
+      )
+
+      remove_directory(root)
+      :ok
+    else
+      {:error, :worktree_outside_run_root}
+    end
+  end
+
+  @doc false
+  def cleanup_root(parent_cwd, root) do
+    remove_tree(Path.expand(root))
+
+    run_command("git", ["worktree", "prune"],
+      cd: parent_cwd,
+      stderr_to_stdout: true
+    )
+
+    :ok
+  end
+
+  defp run_command(command, arguments, options) do
+    case System.cmd(command, arguments, options) do
+      {output, status} -> {:ok, output, status}
+    end
+  rescue
+    error -> {:error, error}
+  catch
+    kind, reason -> {:error, {kind, reason}}
+  end
+
+  defp remove_tree(path) do
+    File.rm_rf(path)
+  rescue
+    _error -> :error
+  catch
+    _kind, _reason -> :error
+  end
+
+  defp remove_directory(path) do
+    File.rmdir(path)
+  rescue
+    _error -> :error
+  catch
+    _kind, _reason -> :error
+  end
+
+  defp stop_child_session(session_pid) do
+    GenServer.stop(session_pid, :shutdown)
+  catch
+    :exit, _reason -> :ok
+  end
 
   defp compact_result(active, {:ok, answer}, duration, max_bytes) do
     %Result{
@@ -440,6 +577,22 @@ defmodule Harness.Coordinator.Engine do
     spec
     |> Map.put_new(:role, :general)
     |> Map.put_new(:coding, Map.get(spec, :role) == :coding)
+  end
+
+  defp validate_unique_ids(pattern, specs, opts) do
+    extra =
+      case pattern do
+        :candidates -> [Keyword.get(opts, :judge)]
+        :map_reduce -> [Keyword.get(opts, :reducer)]
+        _ -> []
+      end
+
+    ids =
+      specs
+      |> Kernel.++(Enum.reject(extra, &is_nil/1))
+      |> Enum.map(&Map.get(&1, :id))
+
+    if length(ids) == length(Enum.uniq(ids)), do: :ok, else: {:error, :duplicate_child_ids}
   end
 
   defp choose(nil, _results), do: nil
@@ -494,6 +647,10 @@ defmodule Harness.Coordinator.Engine do
 
   defp safe_name(value) do
     value |> to_string() |> String.replace(~r/[^a-zA-Z0-9_.-]+/, "-") |> String.trim("-")
+  end
+
+  defp random_id do
+    12 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
   end
 
   defp report_progress(state) do

@@ -76,7 +76,8 @@ defmodule Harness.Coordinator do
        config: config,
        run: nil,
        children: %{},
-       worktrees: MapSet.new()
+       worktrees: %{},
+       worktree_roots: MapSet.new()
      }}
   end
 
@@ -90,10 +91,11 @@ defmodule Harness.Coordinator do
       when pattern in [:parallel, :specialists, :candidates, :map_reduce] and is_list(specs) do
     owner = self()
     run_id = new_run_id()
+    run_root = Engine.run_root(run_id)
 
     task =
       Task.Supervisor.async_nolink(Harness.TaskSup, fn ->
-        Engine.run(owner, run_id, state.child_sup, state.config, pattern, specs, opts)
+        Engine.run(owner, run_id, run_root, state.child_sup, state.config, pattern, specs, opts)
       end)
 
     run = %{
@@ -105,7 +107,13 @@ defmodule Harness.Coordinator do
       progress: %{token_estimate: 0, active: 0, queued: length(specs), completed: 0}
     }
 
-    {:noreply, %{state | run: run, children: %{}}}
+    {:noreply,
+     %{
+       state
+       | run: run,
+         children: %{},
+         worktree_roots: MapSet.put(state.worktree_roots, run_root)
+     }}
   end
 
   def handle_call({:run, _pattern, _specs, _opts}, _from, state),
@@ -139,7 +147,9 @@ defmodule Harness.Coordinator do
   @impl true
   def handle_info({:coordinator_child_started, run_id, child}, %{run: %{id: run_id}} = state) do
     worktrees =
-      if child.worktree, do: MapSet.put(state.worktrees, child.worktree), else: state.worktrees
+      if child.worktree,
+        do: Map.put(state.worktrees, child.worktree, child.worktree_root),
+        else: state.worktrees
 
     {:noreply,
      %{state | children: Map.put(state.children, child.id, child), worktrees: worktrees}}
@@ -175,15 +185,20 @@ defmodule Harness.Coordinator do
 
   @impl true
   def terminate(_reason, state) do
-    if state.run, do: Process.exit(state.run.task.pid, :kill)
+    if state.run, do: Task.shutdown(state.run.task, :brutal_kill)
     Process.unlink(state.child_sup)
     Supervisor.stop(state.child_sup, :shutdown)
 
-    Enum.each(state.worktrees, fn path ->
-      System.cmd("git", ["worktree", "remove", "--force", path],
-        cd: state.config.parent_config.cwd,
-        stderr_to_stdout: true
+    Enum.each(state.worktrees, fn {path, root} ->
+      Engine.cleanup_worktree(
+        state.config.parent_config.cwd,
+        root,
+        path
       )
+    end)
+
+    Enum.each(state.worktree_roots, fn root ->
+      Engine.cleanup_root(state.config.parent_config.cwd, root)
     end)
 
     :ok

@@ -111,6 +111,9 @@ mix format --check-formatted
 Plus the runtime check named in the slice you are building. Unit tests do not
 count as resume proof.
 
+After all three slices, run the
+[manual CLI feature checklist](manual-cli-checklist.md).
+
 ## Implementation guidance
 
 Start a Feature. Do not restart an arena on the file format. That choice is

@@ -6,9 +6,7 @@ defmodule Harness.Plugin do
   Mutable state belongs to a `Harness.Plugin.Server` that survives reloads.
   """
 
-  alias Harness.Plugin.Server
   alias Harness.Tool.Ctx
-  alias Harness.Tool.PluginRef
 
   defmodule ToolSpec do
     @moduledoc "A tool exposed by a plugin."
@@ -58,12 +56,20 @@ defmodule Harness.Plugin do
   end
 
   @doc false
-  @spec run(map(), Ctx.t()) :: Harness.Tool.outcome()
-  def run(args, %Ctx{plugin: %PluginRef{} = plugin, tool_name: tool_name} = ctx)
-      when is_map(args) and is_binary(tool_name) do
-    clean_ctx = %{ctx | plugin: nil, tool_name: nil}
-    Server.run(plugin.server, plugin.generation, tool_name, args, clean_ctx)
+  @spec invoke(module(), String.t(), map(), Ctx.t(), term()) ::
+          {:commit, Harness.Tool.outcome(), term()} | {:abort, Harness.Tool.outcome()}
+  def invoke(module, tool_name, args, %Ctx{} = ctx, plugin_state)
+      when is_atom(module) and is_binary(tool_name) and is_map(args) do
+    case apply(module, :handle_tool, [tool_name, args, ctx, plugin_state]) do
+      {{kind, text} = outcome, new_state} when kind in [:ok, :error] and is_binary(text) ->
+        {:commit, outcome, new_state}
+
+      _other ->
+        {:abort, {:error, "plugin returned an invalid tool result"}}
+    end
   end
 
-  def run(_args, _ctx), do: {:error, "invalid plugin tool context"}
+  @doc false
+  @spec run(map(), Ctx.t()) :: Harness.Tool.outcome()
+  def run(_args, %Ctx{}), do: {:error, "plugin tool requires a session lease"}
 end

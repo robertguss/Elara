@@ -105,11 +105,15 @@ defmodule Harness.Plugin.Loader do
       quoted = {:defmodule, meta, [module, [do: body]]}
 
       try do
-        modules = quoted |> Code.compile_quoted(path) |> Enum.map(&elem(&1, 0))
+        compiled = Code.compile_quoted(quoted, path)
 
-        case modules do
-          [^module] -> {:ok, module}
-          _ -> {:error, :plugin_must_compile_to_exactly_one_module}
+        case compiled do
+          [{^module, _bytecode}] ->
+            {:ok, module}
+
+          modules ->
+            purge_modules(modules)
+            {:error, :plugin_must_compile_to_exactly_one_module}
         end
       rescue
         error -> {:error, {:compile_error, Exception.message(error)}}
@@ -117,6 +121,13 @@ defmodule Harness.Plugin.Loader do
         kind, reason -> {:error, {:compile_error, {kind, reason}}}
       end
     end
+  end
+
+  defp purge_modules(modules) do
+    Enum.each(modules, fn {module, _bytecode} ->
+      :code.purge(module)
+      :code.delete(module)
+    end)
   end
 
   defp validate_contract(module) do

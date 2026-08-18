@@ -5,11 +5,12 @@ defmodule Harness.Session do
 
   use GenServer
 
+  alias Harness.Plugin
   alias Harness.Plugin.Server, as: PluginServer
   alias Harness.Provider
   alias Harness.Session.{Core, Store}
   alias Harness.Tool
-  alias Harness.Tool.Ctx
+  alias Harness.Tool.{Ctx, PluginRef}
 
   defmodule Shell do
     @moduledoc false
@@ -23,7 +24,9 @@ defmodule Harness.Session do
             plugins: [%{pid: pid(), path: String.t()}],
             subscribers: %{pid() => reference()},
             pending_reply: GenServer.from() | nil,
-            tasks: %{reference() => {:provider | :tool, Core.ref(), pid()}},
+            tasks: %{
+              reference() => {:provider | :tool, Core.ref(), pid(), {pid(), reference()} | nil}
+            },
             timers: %{Core.ref() => reference()}
           }
 
@@ -205,7 +208,7 @@ defmodule Harness.Session do
   @impl true
   def handle_info({task_ref, result}, shell) when is_map_key(shell.tasks, task_ref) do
     Process.demonitor(task_ref, [:flush])
-    {kind, core_ref, _pid} = Map.fetch!(shell.tasks, task_ref)
+    {kind, core_ref, _pid, plugin_lease} = Map.fetch!(shell.tasks, task_ref)
     shell = untrack_task(shell, task_ref, core_ref)
 
     shell =
@@ -218,7 +221,8 @@ defmodule Harness.Session do
           shell = %{shell | provider: {elem(shell.provider, 0), new_cfg}}
           feed({:provider_result, core_ref, {:error, error}}, shell)
 
-        {:tool, outcome} ->
+        {:tool, result} ->
+          outcome = settle_tool_result(plugin_lease, result)
           feed({:tool_result, core_ref, outcome}, shell)
       end
 
@@ -227,8 +231,9 @@ defmodule Harness.Session do
 
   def handle_info({:DOWN, task_ref, :process, _pid, reason}, shell)
       when is_map_key(shell.tasks, task_ref) do
-    {kind, core_ref, _pid} = Map.fetch!(shell.tasks, task_ref)
+    {kind, core_ref, _pid, plugin_lease} = Map.fetch!(shell.tasks, task_ref)
     shell = untrack_task(shell, task_ref, core_ref)
+    abort_plugin_invocation(plugin_lease)
 
     shell =
       case kind do
@@ -262,10 +267,11 @@ defmodule Harness.Session do
       nil ->
         {:noreply, shell}
 
-      {task_ref, pid} ->
+      {task_ref, pid, plugin_lease} ->
         Process.demonitor(task_ref, [:flush])
         Process.exit(pid, :kill)
         shell = untrack_task(shell, task_ref, core_ref)
+        abort_plugin_invocation(plugin_lease)
         {:noreply, feed({:tool_timeout, core_ref}, shell)}
     end
   end
@@ -352,17 +358,41 @@ defmodule Harness.Session do
     track_task(shell, task, :provider, core_ref)
   end
 
+  defp run_effect(
+         {:run_tool, core_ref, call, %Tool{plugin: %PluginRef{} = plugin}},
+         shell
+       ) do
+    {:ok, args} = call.args
+
+    case PluginServer.checkout(plugin.server, plugin.generation) do
+      {:ok, lease, module, plugin_state} ->
+        ctx = %Ctx{cwd: shell.cwd}
+
+        task =
+          Task.Supervisor.async_nolink(
+            Harness.TaskSup,
+            Plugin,
+            :invoke,
+            [module, call.name, args, ctx, plugin_state]
+          )
+
+        track_tool_task(shell, task, core_ref, {plugin.server, lease})
+
+      {:error, :busy} ->
+        feed({:tool_result, core_ref, {:error, "plugin is busy"}}, shell)
+
+      {:error, :stale_generation} ->
+        feed({:tool_result, core_ref, {:error, "plugin generation is stale"}}, shell)
+    end
+  end
+
   defp run_effect({:run_tool, core_ref, call, tool}, shell) do
     {:ok, args} = call.args
     {m, f} = tool.run
     ctx = %Ctx{cwd: shell.cwd, plugin: tool.plugin, tool_name: call.name}
 
     task = Task.Supervisor.async_nolink(Harness.TaskSup, m, f, [args, ctx])
-    timer = Process.send_after(self(), {:tool_deadline, core_ref}, shell.tool_timeout_ms)
-
-    shell
-    |> track_task(task, :tool, core_ref)
-    |> Map.update!(:timers, &Map.put(&1, core_ref, timer))
+    track_tool_task(shell, task, core_ref, nil)
   end
 
   defp emit(event, shell) do
@@ -384,8 +414,16 @@ defmodule Harness.Session do
     end
   end
 
-  defp track_task(shell, %Task{ref: ref, pid: pid}, kind, core_ref) do
-    %{shell | tasks: Map.put(shell.tasks, ref, {kind, core_ref, pid})}
+  defp track_task(shell, %Task{ref: ref, pid: pid}, kind, core_ref, plugin_lease \\ nil) do
+    %{shell | tasks: Map.put(shell.tasks, ref, {kind, core_ref, pid, plugin_lease})}
+  end
+
+  defp track_tool_task(shell, task, core_ref, plugin_lease) do
+    timer = Process.send_after(self(), {:tool_deadline, core_ref}, shell.tool_timeout_ms)
+
+    shell
+    |> track_task(task, :tool, core_ref, plugin_lease)
+    |> Map.update!(:timers, &Map.put(&1, core_ref, timer))
   end
 
   defp untrack_task(shell, task_ref, core_ref) do
@@ -410,9 +448,34 @@ defmodule Harness.Session do
 
   defp find_task_by_core_ref(shell, core_ref, kind) do
     Enum.find_value(shell.tasks, fn
-      {task_ref, {^kind, ^core_ref, pid}} -> {task_ref, pid}
+      {task_ref, {^kind, ^core_ref, pid, plugin_lease}} -> {task_ref, pid, plugin_lease}
       _ -> nil
     end)
+  end
+
+  defp settle_tool_result(nil, outcome), do: outcome
+
+  defp settle_tool_result({server, lease}, {:commit, outcome, plugin_state}) do
+    case PluginServer.commit_invocation(server, lease, plugin_state) do
+      :ok -> outcome
+      {:error, :stale_lease} -> {:error, "plugin invocation expired"}
+    end
+  end
+
+  defp settle_tool_result({server, lease}, {:abort, outcome}) do
+    :ok = PluginServer.abort_invocation(server, lease)
+    outcome
+  end
+
+  defp settle_tool_result(plugin_lease, _result) do
+    abort_plugin_invocation(plugin_lease)
+    {:error, "plugin returned an invalid invocation result"}
+  end
+
+  defp abort_plugin_invocation(nil), do: :ok
+
+  defp abort_plugin_invocation({server, lease}) do
+    PluginServer.abort_invocation(server, lease)
   end
 
   defp start_plugins(paths, cwd, base_tools) when is_list(paths) do
@@ -460,40 +523,58 @@ defmodule Harness.Session do
   end
 
   defp reload_plugins(shell) do
-    Enum.reduce_while(shell.plugins, {:ok, shell, []}, fn plugin, {:ok, shell, infos} ->
-      case PluginServer.prepare_reload(plugin.pid) do
-        {:ok, candidate_tools} ->
-          case candidate_tool_table(shell, plugin.pid, candidate_tools) do
-            {:ok, tools} ->
+    case prepare_plugins(shell.plugins) do
+      {:ok, prepared} ->
+        case prepared_tool_table(shell.base_tools, prepared) do
+          {:ok, tools} ->
+            Enum.each(prepared, fn %{plugin: plugin} ->
               :ok = PluginServer.commit_reload(plugin.pid)
-              core = Core.replace_tools(shell.core, tools)
-              {:cont, {:ok, %{shell | core: core}, [PluginServer.info(plugin.pid) | infos]}}
+            end)
 
-            {:error, reason} ->
-              :ok = PluginServer.abort_reload(plugin.pid)
-              error = {:plugin_reload_failed, plugin.path, reason}
-              {:halt, {:error, shell, error}}
-          end
+            core = Core.replace_tools(shell.core, tools)
+            infos = Enum.map(shell.plugins, &PluginServer.info(&1.pid))
+            {:ok, %{shell | core: core}, infos}
 
-        {:error, reason} ->
-          error = {:plugin_reload_failed, plugin.path, reason}
-          {:halt, {:error, shell, error}}
-      end
-    end)
-    |> case do
-      {:ok, shell, infos} -> {:ok, shell, Enum.reverse(infos)}
-      {:error, shell, reason} -> {:error, shell, reason}
+          {:error, path, reason} ->
+            abort_prepared(prepared)
+            {:error, shell, {:plugin_reload_failed, path, reason}}
+        end
+
+      {:error, prepared, path, reason} ->
+        abort_prepared(prepared)
+        {:error, shell, {:plugin_reload_failed, path, reason}}
     end
   end
 
-  defp candidate_tool_table(shell, candidate_pid, candidate_tools) do
-    plugin_tools =
-      Enum.flat_map(shell.plugins, fn
-        %{pid: ^candidate_pid} -> candidate_tools
-        %{pid: pid} -> PluginServer.tools(pid)
-      end)
+  defp prepare_plugins(plugins) do
+    Enum.reduce_while(plugins, {:ok, []}, fn plugin, {:ok, prepared} ->
+      case PluginServer.prepare_reload(plugin.pid) do
+        {:ok, tools} ->
+          {:cont, {:ok, [%{plugin: plugin, tools: tools} | prepared]}}
 
-    tool_table(Map.values(shell.base_tools) ++ plugin_tools)
+        {:error, reason} ->
+          {:halt, {:error, Enum.reverse(prepared), plugin.path, reason}}
+      end
+    end)
+    |> case do
+      {:ok, prepared} -> {:ok, Enum.reverse(prepared)}
+      error -> error
+    end
+  end
+
+  defp prepared_tool_table(base_tools, prepared) do
+    Enum.reduce_while(prepared, {:ok, base_tools}, fn entry, {:ok, tools} ->
+      case tool_table(Map.values(tools) ++ entry.tools) do
+        {:ok, tools} -> {:cont, {:ok, tools}}
+        {:error, reason} -> {:halt, {:error, entry.plugin.path, reason}}
+      end
+    end)
+  end
+
+  defp abort_prepared(prepared) do
+    Enum.each(prepared, fn %{plugin: plugin} ->
+      :ok = PluginServer.abort_reload(plugin.pid)
+    end)
   end
 
   defp tool_table(tools) do

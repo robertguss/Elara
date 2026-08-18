@@ -3,6 +3,7 @@ defmodule Harness.PluginTest do
 
   alias Harness.Message
   alias Harness.Message.{ToolCall, ToolResult}
+  alias Harness.Plugin.Loader
   alias Harness.Tool
   alias Harness.Tool.PluginRef
 
@@ -23,8 +24,8 @@ defmodule Harness.PluginTest do
     assistant
   end
 
-  defp call(id) do
-    %ToolCall{id: id, name: "counter", args: {:ok, %{}}}
+  defp call(id, args \\ %{}) do
+    %ToolCall{id: id, name: "counter", args: {:ok, args}}
   end
 
   defp start_session(opts) do
@@ -38,6 +39,9 @@ defmodule Harness.PluginTest do
   end
 
   defp write_counter(path, module, version, opts \\ []) do
+    id = Keyword.get(opts, :id, "counter")
+    tool_name = Keyword.get(opts, :tool_name, "counter")
+
     sleep =
       case Keyword.get(opts, :sleep_ms) do
         nil -> ""
@@ -83,13 +87,13 @@ defmodule Harness.PluginTest do
         alias Harness.Plugin.ToolSpec
 
         @impl true
-        def metadata, do: %{id: "counter", version: "#{version}"}
+        def metadata, do: %{id: "#{id}", version: "#{version}"}
 
         @impl true
         def tools do
           [
             %ToolSpec{
-              name: "counter",
+              name: "#{tool_name}",
               description: "Increment a counter.",
               parameters: %{"type" => "object", "properties" => %{}}
             }
@@ -100,7 +104,7 @@ defmodule Harness.PluginTest do
         def init(_ctx), do: #{init}
 
         @impl true
-        def handle_tool("counter", _args, _ctx, #{state_pattern}) do
+        def handle_tool("#{tool_name}", _args, _ctx, #{state_pattern}) do
           #{sleep}
           #{body}
         end
@@ -210,6 +214,54 @@ defmodule Harness.PluginTest do
     assert tool_outcomes(session) == [{:ok, "1 count=1"}, {:ok, "1 count=2"}]
   end
 
+  test "a failed multi-plugin reload aborts every prepared candidate", %{
+    path: path,
+    dir: dir
+  } do
+    other_path = Path.join(dir, "other.exs")
+    write_counter(path, module_name(), "1")
+    write_counter(other_path, module_name(), "1", id: "other", tool_name: "other")
+
+    provider =
+      script([
+        {:ok, asst(nil, [call("one")])},
+        {:ok, asst("first done")},
+        {:ok, asst(nil, [call("two")])},
+        {:ok, asst("second done")}
+      ])
+
+    session = start_session(provider: provider, plugins: [path, other_path], cwd: dir)
+    assert {:ok, "first done"} = Harness.ask(session, "first")
+
+    before_infos = Harness.plugins(session)
+    before_tools = :sys.get_state(session).core.config.tools
+
+    before_states =
+      Map.new(before_infos, fn info ->
+        {info.id, :sys.get_state(info.pid).plugin_state}
+      end)
+
+    write_counter(path, module_name(), "2")
+    File.write!(other_path, "defmodule Broken do")
+
+    assert {:error, {:plugin_reload_failed, ^other_path, {:parse_error, _reason}}} =
+             Harness.reload_plugins(session)
+
+    assert Harness.plugins(session) == before_infos
+    assert :sys.get_state(session).core.config.tools == before_tools
+
+    assert Map.new(before_infos, fn info ->
+             {info.id, :sys.get_state(info.pid).plugin_state}
+           end) == before_states
+
+    assert Enum.all?(before_infos, fn info ->
+             :sys.get_state(info.pid).pending == nil
+           end)
+
+    assert {:ok, "second done"} = Harness.ask(session, "second")
+    assert tool_outcomes(session) == [{:ok, "1 count=1"}, {:ok, "1 count=2"}]
+  end
+
   test "state migration activates atomically and a failed migration does not", %{
     path: path,
     dir: dir
@@ -310,9 +362,120 @@ defmodule Harness.PluginTest do
     assert tool_outcomes(session) == [{:error, "timed out"}]
 
     write_counter(path, module, "2")
-    assert {:ok, [%{version: "2", generation: 2}]} = await_reload(session)
+    assert {:ok, [%{version: "2", generation: 2}]} = Harness.reload_plugins(session)
     assert {:ok, "after reload"} = Harness.ask(session, "second")
     assert List.last(tool_outcomes(session)) == {:ok, "2 count=1"}
+  end
+
+  test "a queued deadline wins without committing a completed invocation", %{
+    path: path,
+    dir: dir
+  } do
+    module = module_name()
+    coordinator_name = String.to_atom("plugin-timeout-#{System.unique_integer([:positive])}")
+    test_pid = self()
+
+    coordinator =
+      spawn_link(fn ->
+        Process.register(self(), coordinator_name)
+        send(test_pid, :coordinator_ready)
+
+        receive do
+          {:callback_started, callback} ->
+            send(test_pid, {:callback_started, callback})
+
+            receive do
+              :release -> send(callback, :finish)
+            end
+        end
+      end)
+
+    assert_receive :coordinator_ready
+
+    File.write!(
+      path,
+      """
+      defmodule #{module} do
+        @behaviour Harness.Plugin
+
+        alias Harness.Plugin.ToolSpec
+
+        @impl true
+        def metadata, do: %{id: "counter", version: "1"}
+
+        @impl true
+        def tools do
+          [
+            %ToolSpec{
+              name: "counter",
+              description: "Increment a counter.",
+              parameters: %{"type" => "object", "properties" => %{}}
+            }
+          ]
+        end
+
+        @impl true
+        def init(_ctx), do: {:ok, 0}
+
+        @impl true
+        def handle_tool("counter", args, _ctx, count) do
+          if Map.get(args, "block", false) do
+            send(Process.whereis(#{inspect(coordinator_name)}), {:callback_started, self()})
+
+            receive do
+              :finish -> :ok
+            end
+          end
+
+          next = count + 1
+          {{:ok, "1 count=\#{next}"}, next}
+        end
+      end
+      """
+    )
+
+    provider =
+      script([
+        {:ok, asst(nil, [call("one", %{"block" => true})])},
+        {:ok, asst("timed out")},
+        {:ok, asst(nil, [call("two")])},
+        {:ok, asst("after timeout")}
+      ])
+
+    session =
+      start_session(
+        provider: provider,
+        plugins: [path],
+        cwd: dir,
+        tool_timeout_ms: 60_000
+      )
+
+    :ok = Harness.subscribe(session)
+    assert :ok = Harness.ask_async(session, "first")
+    assert_receive {:callback_started, task_pid}
+
+    [plugin] = Harness.plugins(session)
+    {:running_tool, core_ref, _call, _rest, _iteration} = :sys.get_state(session).core.phase
+    task_monitor = Process.monitor(task_pid)
+
+    :ok = :sys.suspend(session)
+
+    try do
+      send(session, {:tool_deadline, core_ref})
+      send(coordinator, :release)
+      assert_receive {:DOWN, ^task_monitor, :process, ^task_pid, :normal}
+      assert :sys.get_state(plugin.pid).plugin_state == 0
+    after
+      :ok = :sys.resume(session)
+    end
+
+    assert_receive {:harness, ^session,
+                    {:message_appended, %ToolResult{outcome: {:error, "timed out"}}}}
+
+    assert_receive {:harness, ^session, {:turn_ended, {:completed, "timed out"}}}
+
+    assert {:ok, "after timeout"} = Harness.ask(session, "second")
+    assert tool_outcomes(session) == [{:error, "timed out"}, {:ok, "1 count=1"}]
   end
 
   test "two sessions keep independent code revisions and state", %{path: path, dir: dir} do
@@ -395,5 +558,47 @@ defmodule Harness.PluginTest do
     GenServer.stop(session)
 
     assert_receive {:DOWN, ^monitor, :process, ^plugin_pid, :normal}
+  end
+
+  test "a rejected multi-module plugin remains rejected on subsequent loads", %{path: path} do
+    File.write!(
+      path,
+      """
+      defmodule #{module_name()} do
+        @behaviour Harness.Plugin
+
+        alias Harness.Plugin.ToolSpec
+
+        defprotocol NestedProtocol do
+          def value(term)
+        end
+
+        @impl true
+        def metadata, do: %{id: "counter", version: "1"}
+
+        @impl true
+        def tools do
+          [
+            %ToolSpec{
+              name: "counter",
+              description: "Increment a counter.",
+              parameters: %{"type" => "object", "properties" => %{}}
+            }
+          ]
+        end
+
+        @impl true
+        def init(_ctx), do: {:ok, 0}
+
+        @impl true
+        def handle_tool("counter", _args, _ctx, count) do
+          {{:ok, "count=\#{count + 1}"}, count + 1}
+        end
+      end
+      """
+    )
+
+    assert {:error, :plugin_must_compile_to_exactly_one_module} = Loader.load(path)
+    assert {:error, :plugin_must_compile_to_exactly_one_module} = Loader.load(path)
   end
 end

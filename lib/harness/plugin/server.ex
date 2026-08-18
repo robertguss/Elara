@@ -52,18 +52,18 @@ defmodule Harness.Plugin.Server do
   @spec abort_reload(pid()) :: :ok
   def abort_reload(server), do: GenServer.call(server, :abort_reload)
 
-  @spec run(pid(), pos_integer(), String.t(), map(), Ctx.t()) :: Tool.outcome()
-  def run(server, generation, tool_name, args, ctx) do
-    case GenServer.call(server, {:checkout, generation}) do
-      {:ok, lease, module, plugin_state} ->
-        run_checked_out(server, lease, module, tool_name, args, ctx, plugin_state)
+  @spec checkout(pid(), pos_integer()) ::
+          {:ok, reference(), module(), term()} | {:error, :busy | :stale_generation}
+  def checkout(server, generation), do: GenServer.call(server, {:checkout, generation})
 
-      {:error, :busy} ->
-        {:error, "plugin is busy"}
+  @spec commit_invocation(pid(), reference(), term()) :: :ok | {:error, :stale_lease}
+  def commit_invocation(server, lease, plugin_state) do
+    GenServer.call(server, {:commit_invocation, lease, plugin_state})
+  end
 
-      {:error, :stale_generation} ->
-        {:error, "plugin generation is stale"}
-    end
+  @spec abort_invocation(pid(), reference()) :: :ok
+  def abort_invocation(server, lease) do
+    GenServer.call(server, {:abort_invocation, lease})
   end
 
   @impl true
@@ -169,7 +169,7 @@ defmodule Harness.Plugin.Server do
     {:reply, reply, %{state | active: active}}
   end
 
-  def handle_call({:commit, lease, plugin_state}, {caller, _}, state) do
+  def handle_call({:commit_invocation, lease, plugin_state}, {caller, _}, state) do
     case state.active do
       %{lease: ^lease, caller: ^caller, monitor: monitor} ->
         Process.demonitor(monitor, [:flush])
@@ -180,7 +180,7 @@ defmodule Harness.Plugin.Server do
     end
   end
 
-  def handle_call({:abort, lease}, {caller, _}, state) do
+  def handle_call({:abort_invocation, lease}, {caller, _}, state) do
     case state.active do
       %{lease: ^lease, caller: ^caller, monitor: monitor} ->
         Process.demonitor(monitor, [:flush])
@@ -236,30 +236,6 @@ defmodule Harness.Plugin.Server do
       :ok
     else
       {:error, {:plugin_id_changed, state.metadata.id, candidate.metadata.id}}
-    end
-  end
-
-  defp run_checked_out(server, lease, module, tool_name, args, ctx, plugin_state) do
-    try do
-      case apply(module, :handle_tool, [tool_name, args, ctx, plugin_state]) do
-        {{kind, text} = outcome, new_state} when kind in [:ok, :error] and is_binary(text) ->
-          case GenServer.call(server, {:commit, lease, new_state}) do
-            :ok -> outcome
-            {:error, :stale_lease} -> {:error, "plugin invocation expired"}
-          end
-
-        _other ->
-          GenServer.call(server, {:abort, lease})
-          {:error, "plugin returned an invalid tool result"}
-      end
-    rescue
-      error ->
-        GenServer.call(server, {:abort, lease})
-        reraise error, __STACKTRACE__
-    catch
-      kind, reason ->
-        GenServer.call(server, {:abort, lease})
-        :erlang.raise(kind, reason, __STACKTRACE__)
     end
   end
 

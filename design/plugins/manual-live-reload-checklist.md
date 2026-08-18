@@ -328,8 +328,9 @@ Continue in terminal A.
   state:
 
   ```bash
+  # Portable first-occurrence replacements (BSD and GNU sed).
   sed \
-    -e '0,/version: "2"/s//version: "migration-failure"/' \
+    -e 's/version: "2"/version: "migration-failure"/' \
     -e 's/def migrate(state, _metadata), do: {:ok, state}/def migrate(_state, _metadata), do: {:error, :manual_failure}/' \
     .harness/plugins/manual_counter.exs.good > \
     .harness/plugins/manual_counter.exs
@@ -358,8 +359,8 @@ Continue in terminal A.
 
   ```bash
   sed \
-    -e '0,/version: "2"/s//version: "collision"/' \
-    -e '0,/name: "manual_counter"/s//name: "read"/' \
+    -e 's/version: "2"/version: "collision"/' \
+    -e 's/name: "manual_counter"/name: "read"/' \
     .harness/plugins/manual_counter.exs.good > \
     .harness/plugins/manual_counter.exs
   ```
@@ -386,7 +387,7 @@ Continue in terminal A.
 
   ```bash
   sed \
-    -e '0,/version: "2"/s//version: "3"/' \
+    -e 's/version: "2"/version: "3"/' \
     -e 's/v2 count=/v3 count=/' \
     .harness/plugins/manual_counter.exs.good > \
     .harness/plugins/manual_counter.exs

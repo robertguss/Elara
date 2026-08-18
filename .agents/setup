@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly OTP_VERSION="29.0.5"
+readonly ELIXIR_VERSION="1.20.3"
+readonly OTP_SHA256="da6f05c7b292f7726cdee6794e7a48542cc47384c3fdaeeb737df8aa5de24acf"
+readonly ELIXIR_SHA256="51f799b78374d569a5df659bdedeb0dd9ef8251230bcdaef00c533019086e625"
+readonly INSTALL_ROOT="$HOME/.elixir-install"
+readonly OTP_DIR="$INSTALL_ROOT/installs/otp/$OTP_VERSION"
+readonly ELIXIR_DIR="$INSTALL_ROOT/installs/elixir/$ELIXIR_VERSION-otp-29"
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+echo "==> Checking system packages"
+packages=(ca-certificates curl libncurses6 libssl3 unzip)
+missing_packages=()
+for package in "${packages[@]}"; do
+  dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null | grep -qx installed || missing_packages+=("$package")
+done
+if ((${#missing_packages[@]})); then
+  sudo apt-get update
+  sudo apt-get install -y "${missing_packages[@]}"
+fi
+
+tmp_dir="$(mktemp -d "$INSTALL_ROOT.XXXXXX")"
+trap 'rm -rf "$tmp_dir"' EXIT
+
+if [[ ! -x "$OTP_DIR/bin/erl" ]] ||
+  [[ ! -f "$OTP_DIR/releases/29/OTP_VERSION" ]] ||
+  [[ "$(<"$OTP_DIR/releases/29/OTP_VERSION")" != "$OTP_VERSION" ]]; then
+  echo "==> Installing Erlang/OTP $OTP_VERSION"
+  otp_archive="$tmp_dir/otp.tar.gz"
+  curl --retry 3 -fsSLo "$otp_archive" \
+    "https://builds.hex.pm/builds/otp/amd64/ubuntu-22.04/OTP-$OTP_VERSION.tar.gz"
+  echo "$OTP_SHA256  $otp_archive" | sha256sum --check --status
+  rm -rf "$OTP_DIR"
+  mkdir -p "$OTP_DIR"
+  tar -xzf "$otp_archive" --strip-components=1 -C "$OTP_DIR"
+  (cd "$OTP_DIR" && ./Install -sasl "$OTP_DIR")
+fi
+
+export PATH="$OTP_DIR/bin:$PATH"
+
+if [[ ! -x "$ELIXIR_DIR/bin/elixir" ]] ||
+  [[ "$($ELIXIR_DIR/bin/elixir --short-version 2>/dev/null || true)" != "$ELIXIR_VERSION" ]]; then
+  echo "==> Installing Elixir $ELIXIR_VERSION"
+  elixir_archive="$tmp_dir/elixir.zip"
+  curl --retry 3 -fsSLo "$elixir_archive" \
+    "https://github.com/elixir-lang/elixir/releases/download/v$ELIXIR_VERSION/elixir-otp-29.zip"
+  echo "$ELIXIR_SHA256  $elixir_archive" | sha256sum --check --status
+  rm -rf "$ELIXIR_DIR"
+  mkdir -p "$ELIXIR_DIR"
+  unzip -q "$elixir_archive" -d "$ELIXIR_DIR"
+fi
+
+export PATH="$ELIXIR_DIR/bin:$PATH"
+
+profile_marker="# elixir-harness toolchain"
+if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile" 2>/dev/null; then
+  cat >>"$HOME/.bash_profile" <<EOF
+
+$profile_marker
+if [[ -f "$repo_root/.agents/env" ]]; then
+  source "$repo_root/.agents/env"
+fi
+EOF
+fi
+
+echo "==> Installing Mix tooling and dependencies"
+mix help hex >/dev/null 2>&1 || mix local.hex --force
+if ! find "$HOME/.mix" -type f -name rebar3 -perm /111 -print -quit 2>/dev/null | grep -q .; then
+  mix local.rebar --force
+fi
+mix deps.get
+
+echo "==> Verifying toolchain"
+[[ "$(elixir --short-version)" == "$ELIXIR_VERSION" ]]
+[[ "$(<"$OTP_DIR/releases/29/OTP_VERSION")" == "$OTP_VERSION" ]]
+[[ "$(erl -noshell -eval 'io:put_chars(erlang:system_info(otp_release)), halt().')" == "29" ]]
+command -v flock >/dev/null
+printf 'Elixir %s and Erlang/OTP %s are ready.\n' "$ELIXIR_VERSION" "$OTP_VERSION"

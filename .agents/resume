@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This project has no long-lived services to reconnect. Confirm that the
+# snapshotted toolchain is still available without doing installation work.
+source "$(dirname "${BASH_SOURCE[0]}")/env"
+command -v elixir >/dev/null
+command -v erl >/dev/null
+command -v flock >/dev/null

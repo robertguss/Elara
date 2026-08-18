@@ -1,0 +1,2 @@
+# Elixir and Erlang/OTP installed by .agents/setup.
+export PATH="$HOME/.elixir-install/installs/elixir/1.20.3-otp-29/bin:$HOME/.elixir-install/installs/otp/29.0.5/bin:$PATH"

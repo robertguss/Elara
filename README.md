@@ -134,6 +134,10 @@ timeout, and tool output is truncated to 16 KiB before it enters model history.
 - [Harness vision](docs/harness-vision.md)
   ([HTML companion](docs/harness-vision.html)): explore a BEAM-native fabric for
   durable missions, workspace cells, evidence, causality, and SDLC automation.
+- [Software production frontiers](docs/software-production-frontiers.md)
+  ([HTML companion](docs/software-production-frontiers.html)): a compact
+  research map for rethinking intent, code, review, CI, local development,
+  production, and the wider agentic SDLC.
 
 ## Develop
 

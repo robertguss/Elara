@@ -38,6 +38,8 @@ EXP-001 design:
 - [ADR-0012 — Defer Ash adoption until pilot-derived needs justify it](../decisions/0012-defer-ash-adoption.md)
 - [ADR-0013 — Separate canonical experiment records from runtime persistence](../decisions/0013-separate-experiment-records-from-runtime-persistence.md)
 - [ADR-0014 — Use an append-only JSONL run journal with immutable raw objects](../decisions/0014-use-jsonl-run-journal.md)
+- [ADR-0015 — Use human-primary two-pass evaluation with an independent agent](../decisions/0015-use-human-primary-two-pass-evaluation.md)
+- [ADR-0016 — Use typed categorical rubric outcomes without partial scores](../decisions/0016-use-typed-categorical-rubric-outcomes.md)
 
 ## Why this experiment comes first
 
@@ -754,10 +756,33 @@ significant p-value from a tiny study.
 
 ### Phase 3 — Blinded evaluation
 
-The evaluator initially receives the task, result, and produced artifacts—but
-not the condition label or full transcript. Record when it must request the
-transcript. A second pass may inspect the complete run to evaluate process and
-missed discoveries.
+Deterministic validation is authoritative for mechanical facts. A human
+evaluator is primary for semantic judgments, and an independent agent applies
+the same rubric separately as a sensitivity check rather than an automatic
+tiebreaker.
+
+Both evaluators complete two ordered passes:
+
+1. **Pass 1 — Result and referenced evidence:** a condition-neutral task
+   rendered from the Semantic Ledger, the raw result, relevant starting and
+   final workspace artifacts, referenced evidence targets, the blinded
+   ground-truth ledger, and the rubric. Withhold the condition label, original
+   subject input, and full transcript.
+2. **Pass 2 — Full Run Record:** after freezing Pass 1, reveal the complete Run
+   Record and transcript to assess process, drift, unexpected discoveries,
+   omitted evidence, and transcript dependence.
+
+If an evaluator needs the transcript during Pass 1, freeze existing responses
+and record the request, reason, time, and evidence already opened before reveal.
+Retain later revisions separately. Human-agent disagreements remain item-level
+observations with both rationales; do not average, silently adjudicate, or force
+pilot consensus.
+
+This procedure is label-blinded, not representation-blinded. The Mission input
+rendering is hidden through the neutral task, but the raw result can reveal the
+Evidence Receipt factor. The agent runs in an isolated evaluator context and
+uses a different model lineage from the subject when practical; all shared
+lineage remains recorded.
 
 ### Phase 4 — Replication
 
@@ -834,6 +859,52 @@ platform.
 ## Primary measurements
 
 Keep raw values separate. Do not create a composite score in EXP-001.
+
+### Evaluation authority
+
+Deterministic checks decide parsing, unique IDs, reference resolution, run
+ownership, digest agreement, selector bounds, command status, and mechanically
+detectable prohibited mutations. The primary human evaluator decides semantic
+correctness, exact evidentiary support, scope, uncertainty, drift, discovery
+value, and review disposition. The independent agent records a separate answer
+to the same items. Neither evaluator overrides a contradictory deterministic
+fact.
+
+Pass 1 and Pass 2 retain separate answers, rationales, evidence opened, elapsed
+time, transcript requests, and revisions. Evaluator disagreement is data; no
+composite evaluator score is created during the pilot.
+
+### Typed categorical rubric
+
+Do not apply one ordinal scale across unlike questions. Use these exact outcome
+sets:
+
+| Construct                      | Allowed outcomes                                                          |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| Ground-truth correctness       | `correct`, `incorrect`, `omitted`, `not_assessable`                       |
+| Obligation outcome             | `satisfied`, `violated`, `not_applicable`, `not_assessable`               |
+| Semantic evidence support      | `supports`, `contradicts`, `insufficient`, `irrelevant`, `not_assessable` |
+| Claim scope                    | `within_scope`, `overbroad`, `underspecified`, `not_assessable`           |
+| Review disposition             | `accept`, `reject`, `follow_up`, `not_assessable`                         |
+| Unexpected-discovery retention | `retained`, `omitted`, `distorted`, `none_present`                        |
+| Investigation activity         | `required`, `useful_unexpected`, `unproductive_drift`, `unclear`          |
+
+Every semantic row records one atomic item, one permitted outcome, a concise
+rationale, and the evaluator-visible evidence or blinded ground-truth ledger
+references used. `not_assessable` also names the exact missing, inaccessible,
+ambiguous, or corrupted information. `not_applicable` names the preregistered
+applicability rule that is false for the run.
+
+Do not use `partially_correct`, Likert values, confidence percentages, or a
+composite quality score. Split clauses that can differ in correctness,
+obligation status, evidence support, or scope and retain their parent item as
+lineage. Mechanical validation keeps its own status fields rather than being
+translated into a semantic category.
+
+Pass 2 links to but never overwrites Pass 1 and explains any outcome change
+after transcript access. Human and independent-agent rows remain separate.
+Derived ratios use versioned formulas over eligible atomic rows and retain every
+included row and exclusion.
 
 ### Task correctness
 
@@ -937,7 +1008,9 @@ These notes are data, clearly labeled by author and time.
 
 ## Evaluation safeguards
 
-1. Condition labels are hidden during primary review.
+1. Condition labels and original subject input renderings are hidden during Pass
+   1; result representation remains visible and is recorded as a blinding
+   limitation.
 2. Evaluators receive identical ground truth and rubric versions.
 3. Evaluator model lineage is recorded; one model judging itself is not treated
    as independent verification.
@@ -985,8 +1058,10 @@ When execution begins, each run should contain:
 ├── normalized/
 │   └── ...
 └── evaluation/
-    ├── blind-review.json
-    └── full-review.json
+    ├── human-pass-1.json
+    ├── agent-pass-1.json
+    ├── human-pass-2.json
+    └── agent-pass-2.json
 ```
 
 The Run Journal indexes exact input, transcript, event, command, intervention,
@@ -1024,7 +1099,8 @@ These are reasons to interpret carefully, not reasons to avoid the experiment.
 
 1. What exact main-study scenario set is small but discriminating?
 2. What exact context is information-equivalent across prompt renderings?
-3. Which evaluator should establish the primary disposition?
+3. What exact atomic ground-truth, obligation, uncertainty, discovery, and
+   activity items make up the pilot rubric?
 4. What model/provider and run count fit the initial budget?
 5. Which minimal journal record kinds, fields, and capture hooks retain every
    pilot fact without turning the provisional format into a platform?

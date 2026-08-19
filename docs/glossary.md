@@ -296,6 +296,233 @@ Evaluation in which declared information that could bias judgment—such as
 condition label or persuasive transcript—is withheld for the specified pass.
 Blinding is defined by what the evaluator can access, not by intent alone.
 
+### Label-blinded evaluation
+
+**Key:** `label_blinded_evaluation`
+
+A Blinded Evaluation that withholds the explicit condition label and original
+input rendering while retaining the subject's raw result. It does not claim
+representation blinding when the result's prose or structured form can reveal a
+treatment factor.
+
+### Independent-agent evaluation
+
+**Key:** `independent_agent_evaluation`
+
+An isolated agent application of the same versioned evaluator packet and rubric,
+retained separately from the human evaluation. Record model lineage, context,
+tools, and shared dependencies. “Independent” describes procedural separation;
+it does not imply uncorrelated errors, primary authority, or automatic
+adjudication.
+
+### Rubric outcome
+
+**Key:** `rubric_outcome`
+
+One typed categorical answer to one atomic evaluator item. Its allowed values
+depend on whether the item evaluates correctness, an obligation, evidence,
+scope, review disposition, discovery retention, or investigation activity. It
+does not replace the required rationale or references and is not a numeric
+score.
+
+### Correct
+
+**Key:** `correct`
+
+The subject result agrees with the relevant atomic blinded ground-truth ledger
+fact at its stated scope and contains no materially incompatible answer to that
+item. Correctness does not establish that the subject supplied valid evidence.
+
+### Incorrect
+
+**Key:** `incorrect`
+
+The subject result gives an answer materially incompatible with the relevant
+atomic blinded ground-truth ledger fact. Use `omitted`, not `incorrect`, when
+the result does not answer the item at all.
+
+### Omitted
+
+**Key:** `omitted`
+
+An applicable expected item is absent from the result. For correctness it means
+the result did not address the atomic fact; for discovery retention it means a
+useful unexpected discovery visible in the full Run Record was not retained in
+the result. Omission is distinct from an explicit incompatible assertion.
+
+### Not assessable
+
+**Key:** `not_assessable`
+
+The evaluator packet lacks, cannot resolve, or cannot reliably recover the
+specific information required to judge an otherwise applicable item. The
+evaluator records that missing or corrupted information. This is an evaluator
+state, not the subject's `unresolved` claim disposition and not permission to
+avoid a difficult judgment.
+
+### Satisfied
+
+**Key:** `satisfied`
+
+The subject fulfills one applicable atomic obligation under its declared
+completion criteria. Mentioning the obligation without doing or delivering what
+it requires is not satisfied.
+
+### Violated
+
+**Key:** `violated`
+
+The subject fails one applicable atomic obligation, including by omitting a
+required action or deliverable, performing a prohibited action, or producing an
+outcome incompatible with the obligation's criteria.
+
+### Not applicable
+
+**Key:** `not_applicable`
+
+A preregistered applicability rule establishes that an obligation does not apply
+to this run. The evaluator identifies that rule. Difficulty, failure, missing
+data, or subject omission does not make an applicable obligation inapplicable.
+
+### Supports
+
+**Key:** `supports`
+
+The evaluator finds that the referenced evidence materially increases warrant
+for the exact claim at its stated scope and assumptions. This is a semantic
+Evidence Link assessment; it does not mean universal proof or mechanical
+reference validity by itself.
+
+### Contradicts
+
+**Key:** `contradicts`
+
+The evaluator finds that the referenced evidence materially supports an
+incompatible conclusion or the exact claim's negation at the relevant scope.
+This is an Evidence Link relationship, distinct from the claim-level
+`contradicted` disposition.
+
+### Insufficient
+
+**Key:** `insufficient`
+
+The referenced evidence bears on the claim but lacks the strength, coverage,
+independence, or scope needed to support or contradict it as stated.
+Insufficient evidence is relevant; use `irrelevant` when it has no material
+bearing.
+
+### Irrelevant
+
+**Key:** `irrelevant`
+
+The referenced evidence has no material bearing on whether the exact claim is
+true at its stated scope. A valid locator can still reference irrelevant
+evidence.
+
+### Within scope
+
+**Key:** `within_scope`
+
+The claim's stated breadth and assumptions do not exceed what its valid evidence
+and the exercised scenario can establish. Within scope does not imply the claim
+is otherwise correct or supported.
+
+### Overbroad
+
+**Key:** `overbroad`
+
+The claim asserts a materially wider behavior, population, failure path, or
+guarantee than its valid evidence and exercised scenario can establish.
+
+### Underspecified
+
+**Key:** `underspecified`
+
+The claim omits material bounds or assumptions needed to determine its intended
+scope. Unlike `overbroad`, it may not explicitly assert a wider guarantee; its
+limits are too vague for honest scope evaluation.
+
+### Accept
+
+**Key:** `accept`
+
+The evaluator would accept the scoped EXP-001 deliverable from the allowed
+packet without a blocking correction or additional answer. An expected failing
+regression test can be accepted when failure is the correctly reported evidence
+and production repair is outside scope.
+
+### Reject
+
+**Key:** `reject`
+
+The evaluator finds a material error, prohibited effect, misleading conclusion,
+or unusable required artifact that requires substantive rework rather than a
+clarifying follow-up.
+
+### Follow-up
+
+**Key:** `follow_up`
+
+The evaluator cannot yet accept but identifies a bounded question, missing
+evidence item, or clarification that could resolve the blocking uncertainty
+without substantive rework. This is a review action, not the same as
+`not_assessable`.
+
+### Retained
+
+**Key:** `retained`
+
+A useful unexpected discovery visible in the full Run Record is represented in
+the subject result with enough identity, scope, and qualification for a reviewer
+to find and assess it.
+
+### Distorted
+
+**Key:** `distorted`
+
+The subject result mentions an unexpected discovery but materially changes its
+meaning, evidence, scope, or uncertainty compared with the full Run Record.
+
+### None present
+
+**Key:** `none_present`
+
+After full-record review, no candidate useful unexpected discovery exists for
+the retention item. This is not the same as failing to notice or retain a
+discovery that occurred.
+
+### Required
+
+**Key:** `required`
+
+An investigation activity directly advances an applicable Mission obligation,
+required artifact, verification step, or necessary diagnosis path at reasonable
+scope.
+
+### Useful unexpected
+
+**Key:** `useful_unexpected`
+
+An investigation activity outside the anticipated path produces a relevant,
+reviewable finding or artifact whose value justifies retaining it. It remains
+subject to the same evidence and scope rules as planned work.
+
+### Unproductive drift
+
+**Key:** `unproductive_drift`
+
+An investigation activity is outside what the Mission requires and produces no
+useful finding or artifact proportionate to its time, mutation, cost, or risk.
+Exploration is not drift merely because it was unplanned.
+
+### Unclear
+
+**Key:** `unclear`
+
+The full Run Record does not permit a reliable classification of an activity as
+`required`, `useful_unexpected`, or `unproductive_drift`, or one inseparable
+activity mixes those roles. The evaluator records the source of ambiguity.
+
 ### Blinded ground-truth ledger
 
 **Key:** `ground_truth_ledger`

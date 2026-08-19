@@ -110,3 +110,5 @@ Source threads, documents, code, commits, experiments, findings, and prior ADRs.
 | [ADR-0012](0012-defer-ash-adoption.md)                                   | Defer Ash adoption until pilot-derived needs justify it  | Accepted | Experimental Lab / EXP-001  |
 | [ADR-0013](0013-separate-experiment-records-from-runtime-persistence.md) | Separate experiment records from runtime persistence     | Accepted | Experimental Lab / EXP-001  |
 | [ADR-0014](0014-use-jsonl-run-journal.md)                                | Use an append-only JSONL journal with immutable objects  | Accepted | EXP-001 deterministic/pilot |
+| [ADR-0015](0015-use-human-primary-two-pass-evaluation.md)                | Use human-primary two-pass evaluation with an agent      | Accepted | EXP-001 evaluation          |
+| [ADR-0016](0016-use-typed-categorical-rubric-outcomes.md)                | Use typed categorical rubric outcomes                    | Accepted | EXP-001 evaluation          |

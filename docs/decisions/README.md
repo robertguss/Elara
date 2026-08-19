@@ -107,3 +107,4 @@ Source threads, documents, code, commits, experiments, findings, and prior ADRs.
 | [ADR-0009](0009-normalize-consequential-claims.md)               | Normalize consequential claims independently             | Accepted | EXP-001 evaluation          |
 | [ADR-0010](0010-use-minimal-epistemic-vocabulary.md)             | Use a minimal epistemic vocabulary                       | Accepted | EXP-001                     |
 | [ADR-0011](0011-use-typed-evidence-registry.md)                  | Use a typed evidence registry with mechanical resolution | Accepted | EXP-001                     |
+| [ADR-0012](0012-defer-ash-adoption.md)                           | Defer Ash adoption until pilot-derived needs justify it  | Accepted | Experimental Lab / EXP-001  |

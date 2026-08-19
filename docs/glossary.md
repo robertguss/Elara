@@ -320,6 +320,15 @@ A reproducibly derived fact or measurement computed from raw records using a
 versioned method, such as a resolved reference, command count, or rubric answer.
 Normalization does not include a causal explanation or value judgment.
 
+### Rebuildable projection
+
+**Key:** `rebuildable_projection`
+
+A disposable query or application model derived entirely from pinned canonical
+records by a versioned process. Deleting and rebuilding it must not lose raw
+evidence or change results without a recorded input or derivation-version
+change. It is not a source of truth merely because it is easier to query.
+
 ### Interpretation
 
 **Key:** `interpretation`

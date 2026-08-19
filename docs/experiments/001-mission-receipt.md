@@ -35,6 +35,7 @@ EXP-001 design:
 - [ADR-0009 — Normalize consequential claims independently](../decisions/0009-normalize-consequential-claims.md)
 - [ADR-0010 — Use a minimal epistemic vocabulary](../decisions/0010-use-minimal-epistemic-vocabulary.md)
 - [ADR-0011 — Use a typed evidence registry with mechanical resolution](../decisions/0011-use-typed-evidence-registry.md)
+- [ADR-0012 — Defer Ash adoption until pilot-derived needs justify it](../decisions/0012-defer-ash-adoption.md)
 
 ## Why this experiment comes first
 

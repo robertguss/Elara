@@ -112,3 +112,5 @@ Source threads, documents, code, commits, experiments, findings, and prior ADRs.
 | [ADR-0014](0014-use-jsonl-run-journal.md)                                | Use an append-only JSONL journal with immutable objects  | Accepted | EXP-001 deterministic/pilot |
 | [ADR-0015](0015-use-human-primary-two-pass-evaluation.md)                | Use human-primary two-pass evaluation with an agent      | Accepted | EXP-001 evaluation          |
 | [ADR-0016](0016-use-typed-categorical-rubric-outcomes.md)                | Use typed categorical rubric outcomes                    | Accepted | EXP-001 evaluation          |
+| [ADR-0017](0017-use-atomic-pilot-correctness-ledger.md)                  | Use an atomic pilot correctness ledger                   | Accepted | EXP-001 pilot evaluation    |
+| [ADR-0018](0018-use-atomic-pilot-obligation-ledger.md)                   | Use one atomic pilot obligation ledger                   | Accepted | EXP-001 pilot evaluation    |

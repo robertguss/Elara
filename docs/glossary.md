@@ -271,6 +271,17 @@ Runs used to validate fixture, capture, prompt, parsing, and rubric mechanics
 before the main comparison. Pilot records are retained and labeled but excluded
 from the main comparative sample.
 
+### Manipulation check
+
+**Key:** `manipulation_check`
+
+A protocol observation testing whether a run received or complied with its
+assigned experimental intervention, such as whether a required structured result
+parsed as the assigned Evidence Receipt. A manipulation check establishes
+condition conformance, not task correctness or intervention benefit. Because it
+may differ by condition, it is not silently added to a shared outcome
+denominator.
+
 ### Reproduction
 
 **Key:** `reproduction`

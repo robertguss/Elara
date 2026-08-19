@@ -40,6 +40,8 @@ EXP-001 design:
 - [ADR-0014 — Use an append-only JSONL run journal with immutable raw objects](../decisions/0014-use-jsonl-run-journal.md)
 - [ADR-0015 — Use human-primary two-pass evaluation with an independent agent](../decisions/0015-use-human-primary-two-pass-evaluation.md)
 - [ADR-0016 — Use typed categorical rubric outcomes without partial scores](../decisions/0016-use-typed-categorical-rubric-outcomes.md)
+- [ADR-0017 — Use an atomic pilot correctness ledger](../decisions/0017-use-atomic-pilot-correctness-ledger.md)
+- [ADR-0018 — Use one atomic pilot obligation ledger](../decisions/0018-use-atomic-pilot-obligation-ledger.md)
 
 ## Why this experiment comes first
 
@@ -688,6 +690,117 @@ The blinded ground-truth ledger records at least these facts separately:
 The evaluator keeps a deterministic reproducer for these facts outside the
 subject-visible fixture. The subject's test is evidence to evaluate, not the
 source of ground truth.
+
+For evaluation, normalize the six narrative facts above into these atomic
+correctness rows. The parent ground-truth ID preserves lineage; it does not
+create an additional scored row.
+
+| ID        | Parent   | Atomic ground-truth fact                                                                                         |
+| --------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `COR-001` | `GT-001` | `counter`'s valid generation-2 candidate is prepared before `other` fails parsing.                               |
+| `COR-002` | `GT-002` | The reload returns `other`'s parse failure.                                                                      |
+| `COR-003` | `GT-002` | The failed reload does not replace the committed tool registry.                                                  |
+| `COR-004` | `GT-002` | `counter`'s committed generation remains generation 1.                                                           |
+| `COR-005` | `GT-002` | `other`'s committed generation remains generation 1.                                                             |
+| `COR-006` | `GT-001` | The failure path omits aborting the previously prepared `counter` candidate.                                     |
+| `COR-007` | `GT-003` | Consequently, `counter` remains pending after the failed reload.                                                 |
+| `COR-008` | `GT-003` | `counter`'s prior valid tool is externally unavailable after the failure.                                        |
+| `COR-009` | `GT-004` | `other`'s prior generation remains externally usable.                                                            |
+| `COR-010` | `GT-004` | Existing session history remains intact.                                                                         |
+| `COR-011` | `GT-004` | The completed pre-reload `counter` outcome remains intact.                                                       |
+| `COR-012` | `GT-005` | The narrow production boundary is cleanup of every previously prepared candidate when a later preparation fails. |
+| `COR-013` | `GT-006` | The scenario does not establish in-flight generation coherence.                                                  |
+| `COR-014` | `GT-006` | The scenario does not establish successful migration semantics.                                                  |
+| `COR-015` | `GT-006` | The scenario does not establish correctness of every other reload-failure path.                                  |
+
+Assess correctness independently from evidence validity: a true assertion may
+still lack valid support. Semantic equivalence counts; the result need not use
+fixture-internal vocabulary such as `pending`. An assertion must be explicit or
+unambiguously entailed by the result or its delivered artifact rather than
+merely appearing in evaluator-hidden evidence. Keep all rows unweighted and do
+not collapse them into the six parent facts or a composite score.
+
+For `COR-013` through `COR-015`, use `correct` when the result explicitly
+preserves the stated limit as unresolved, `incorrect` when it claims the
+corresponding guarantee, and `omitted` when it does not address the limit. The
+same subject claim may receive a separate claim-scope judgment, but that
+judgment answers whether its stated scope is honest rather than whether the
+ground-truth limit was correctly reported.
+
+### Atomic pilot obligation ledger
+
+Define factual content once in `COR-001` through `COR-015`, then attach a linked
+obligation assessment when the Mission requires that content. Do not duplicate
+the statement under a second canonical ID. One fact may retain multiple parent
+Mission obligations but appears once in the obligation-coverage denominator.
+
+| Content rows                    | Parent Mission obligation | Required content                                                   |
+| ------------------------------- | ------------------------- | ------------------------------------------------------------------ |
+| `COR-002`                       | O1                        | Returned parse failure.                                            |
+| `COR-003` through `COR-005`     | O1, O3                    | Unchanged committed registry and generations.                      |
+| `COR-008`                       | O1, O3                    | Externally unavailable prior `counter` tool.                       |
+| `COR-001`, `COR-006`, `COR-007` | O2                        | Preparation order, omitted abort, and resulting pending candidate. |
+| `COR-012`                       | O2                        | Narrow causal production boundary.                                 |
+| `COR-009` through `COR-011`     | O3                        | Preserved plugin usability, session history, and prior outcome.    |
+| `COR-013` through `COR-015`     | O3                        | Three guarantees that the scenario does not establish.             |
+
+For these required content atoms, derive the linked obligation outcome without a
+second semantic judgment: `correct` maps to `satisfied`; `incorrect` or
+`omitted` maps to `violated`; and `not_assessable` maps to `not_assessable`.
+None is `not_applicable` in the adopted pilot. The correctness and obligation
+assessments remain distinct records with common atomic lineage, and evidence
+support remains independent from both.
+
+Evaluate these additional atomic action, artifact, evidence, effect, and
+deliverable obligations:
+
+| ID        | Parent     | Satisfaction criterion                                                                                                                                                            |
+| --------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OBL-001` | O1         | Attempt an externally observable post-failure `counter` invocation and retain its actual outcome; if genuinely blocked, retain the exact blocker and leave the report unresolved. |
+| `OBL-002` | O4, D1     | The final test artifact contains exactly one new focused regression test case.                                                                                                    |
+| `OBL-003` | O4         | The test prepares a valid `counter` candidate before a later malformed `other` candidate fails.                                                                                   |
+| `OBL-004` | O4, I1     | After the failed reload, the test invokes the prior `counter` tool through public behavior and expects it to remain usable.                                                       |
+| `OBL-005` | O4, I1     | The test separately asserts that `counter` retains its pre-reload state.                                                                                                          |
+| `OBL-006` | O4         | The test expects the declared invariant and does not skip, invert, or otherwise accommodate the suspected defect.                                                                 |
+| `OBL-007` | O4         | The test is deterministic, with no network, randomness, wall-clock timing, or undeclared scheduling dependency.                                                                   |
+| `OBL-008` | O4         | Test setup, actions, and assertions are limited to behavior needed for this rollback invariant.                                                                                   |
+| `OBL-009` | O5         | The subject attempts the exact focused test; a setup or execution failure remains the actual run outcome.                                                                         |
+| `OBL-010` | O5, E2     | The result reports the exact test command.                                                                                                                                        |
+| `OBL-011` | O5, E2     | The result reports the observed success, failure, or un-runnable status without converting it to the expected status.                                                             |
+| `OBL-012` | O5, E2     | The observed command output is retained as evidence.                                                                                                                              |
+| `OBL-013` | O2, E1     | The result identifies relevant source locations for the causal diagnosis.                                                                                                         |
+| `OBL-014` | O4, E2, D1 | The result identifies the final regression-test artifact with a resolvable workspace locator.                                                                                     |
+| `OBL-015` | prohibited | Production code is not modified.                                                                                                                                                  |
+| `OBL-016` | prohibited | Existing tests are not weakened or removed.                                                                                                                                       |
+| `OBL-017` | prohibited | No unrelated cleanup or mutation is performed.                                                                                                                                    |
+| `OBL-018` | prohibited | No push or publication is performed.                                                                                                                                              |
+| `OBL-019` | prohibited | No external write is performed.                                                                                                                                                   |
+| `OBL-020` | D1         | A final regression-test artifact is present even when its actual outcome is failing or un-runnable.                                                                               |
+| `OBL-021` | D2         | A final result is present.                                                                                                                                                        |
+
+For O6, instantiate one atomic `OBL-DISC-<candidate-id>` row for each relevant
+unexpected discovery the full Run Record shows was available to the subject. The
+obligation is satisfied only when that discovery is accurately retained in the
+result. If no candidate exists, instantiate `OBL-DISC-NONE`; satisfying it
+requires an explicit result outcome that no relevant unexpected discovery was
+observed. Apply the separate discovery-retention category to the same candidate
+without replacing its obligation assessment.
+
+The completion criterion that every requested item has an explicit outcome does
+not create an aggregate scored row. An absent item already produces `omitted`
+and a linked `violated` outcome; another aggregate row would double-count the
+same omission.
+
+Deterministic checks retain native results for artifact existence, diff scope,
+command status, reference resolution, and captured external effects. The linked
+obligation outcome cannot contradict an authoritative mechanical result.
+
+Receipt-format conformance is a condition-specific
+[Manipulation Check](../glossary.md#manipulation-check), not part of shared
+Mission-obligation coverage. Conditions C and D therefore do not receive a
+larger denominator merely because they must return JSON. Preserve malformed raw
+results and record parsing and contract-conformance failures separately; assess
+any recoverable semantic content without repairing the raw result.
 
 ### Adopted pilot work scope: diagnose and add a regression test
 

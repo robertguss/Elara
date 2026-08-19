@@ -138,6 +138,10 @@ timeout, and tool output is truncated to 16 KiB before it enters model history.
   ([HTML companion](docs/software-production-frontiers.html)): a compact
   research map for rethinking intent, code, review, CI, local development,
   production, and the wider agentic SDLC.
+- [Living software](docs/living-software.md)
+  ([HTML companion](docs/living-software.html)): software as a continuously
+  adapting constitutional system, compiled into implementation and governed by
+  evidence, authority, causality, and human judgment.
 
 ## Develop
 

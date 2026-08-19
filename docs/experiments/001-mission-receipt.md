@@ -34,6 +34,7 @@ EXP-001 design:
 - [ADR-0008 — Use JSON v1 contracts for the pilot](../decisions/0008-use-json-v1-contracts.md)
 - [ADR-0009 — Normalize consequential claims independently](../decisions/0009-normalize-consequential-claims.md)
 - [ADR-0010 — Use a minimal epistemic vocabulary](../decisions/0010-use-minimal-epistemic-vocabulary.md)
+- [ADR-0011 — Use a typed evidence registry with mechanical resolution](../decisions/0011-use-typed-evidence-registry.md)
 
 ## Why this experiment comes first
 
@@ -178,9 +179,98 @@ Epistemic type is orthogonal to disposition:
 Do not use `unknown` as an epistemic type; represent a claim about an unknown as
 `unresolved`. Reserve `indeterminate` for an operation or effect whose outcome
 cannot be established after it may have crossed a consequential boundary.
-`test_result`, `source_content`, and `command_output` are evidence kinds, not
-epistemic types. A partly supported compound claim must be split rather than
-given a fourth disposition.
+`source_content`, `test_artifact`, `test_result`, and `session_event` are
+evidence kinds, not epistemic types. A partly supported compound claim must be
+split rather than given a fourth disposition.
+
+## Evidence reference representation and validation
+
+Receipt conditions use a top-level evidence registry. A claim links to an
+evidence entry with a claim-specific relationship:
+
+```json
+{
+  "claims": [
+    {
+      "id": "C1",
+      "statement": "The later prepare failure leaves the earlier plugin pending.",
+      "epistemic_type": "derived",
+      "disposition": "supported",
+      "evidence_links": [
+        { "evidence_id": "E1", "relation": "supports" },
+        { "evidence_id": "E2", "relation": "supports" }
+      ],
+      "scope_and_assumptions": "Multi-plugin prepare failure in this fixture."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "kind": "source_content",
+      "locator": {
+        "type": "file_span",
+        "snapshot_id": "workspace.start",
+        "path": "lib/harness/session.ex",
+        "start_line": 750,
+        "end_line": 760
+      }
+    },
+    {
+      "id": "E2",
+      "kind": "test_result",
+      "locator": {
+        "type": "command",
+        "command_id": "CMD-004"
+      }
+    }
+  ]
+}
+```
+
+Evidence IDs such as `E1` are aliases local to one receipt. Canonical identity
+comes from the referenced snapshot, command, or event in the run record. The run
+index, rather than the subject, records content digests.
+
+The pilot permits only these evidence kinds and locators:
+
+| Evidence kind    | Allowed locator | Intended target                              |
+| ---------------- | --------------- | -------------------------------------------- |
+| `source_content` | `file_span`     | Pinned starting or final workspace source.   |
+| `test_artifact`  | `file_span`     | Subject-produced test in the final snapshot. |
+| `test_result`    | `command`       | Invocation, output streams, and exit status. |
+| `session_event`  | `event`         | Retained Harness or Flight Recorder event.   |
+
+Claim links use `supports` or `contradicts`. Unlinked context may be retained in
+the evidence registry but does not count toward claim-evidence coverage.
+
+Mechanical validation records separate results for:
+
+1. Strict JSON and receipt-shape parsing.
+2. Unique claim and evidence IDs.
+3. Resolution of every claim link to one evidence entry.
+4. Compatibility of evidence kind and locator type.
+5. Existence of the snapshot, command, event, path, and line range.
+6. Ownership by the current run or its pinned fixture.
+7. Digest agreement with the run index.
+8. Relative, traversal-safe file paths.
+9. Ordered, in-bounds selectors.
+10. Missing, ambiguous, or truncated retained capture.
+
+Normalized observations include `parse_status`, `target_status`,
+`authenticity_status`, and `selector_status`; do not collapse them into one
+boolean. A separate evaluator determines whether a reference actually supports
+or contradicts the exact claim, represents scope honestly, and is independent or
+correlated with other evidence.
+
+Command and event IDs must be visible to subjects if receipt conditions require
+them. If the capture inventory finds that Harness does not expose stable IDs,
+record that as a minimal capture gap rather than weakening the contract to
+ambiguous command text.
+
+For free-form conditions, a versioned evaluator normalization maps explicit
+prose citations into the same reference representation. Evidence that merely
+exists somewhere in the transcript or artifacts but is not linked from the
+result does not count as claim-evidence linkage.
 
 ## Prompt construction and pilot serialization
 
@@ -486,8 +576,21 @@ wrappers themselves must contain no additional task fact.
       "statement": "...",
       "epistemic_type": "...",
       "disposition": "...",
-      "evidence_references": ["..."],
+      "evidence_links": [{ "evidence_id": "E1", "relation": "supports" }],
       "scope_and_assumptions": "..."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "kind": "source_content",
+      "locator": {
+        "type": "file_span",
+        "snapshot_id": "workspace.start",
+        "path": "lib/harness/session.ex",
+        "start_line": 1,
+        "end_line": 1
+      }
     }
   ],
   "obligation_outcomes": ["..."],
@@ -865,14 +968,13 @@ These are reasons to interpret carefully, not reasons to avoid the experiment.
 ## Open design questions before preregistration
 
 1. What exact main-study scenario set is small but discriminating?
-2. How are evidence references represented and mechanically validated?
-3. What exact context is information-equivalent across prompt renderings?
-4. Which evaluator should establish the primary disposition?
-5. What model/provider and run count fit the initial budget?
-6. Where should large raw transcripts live?
-7. What data must be redacted before a record can be committed?
-8. How should malformed structured results be retained and evaluated?
-9. What constitutes enough evidence to proceed to EXP-002?
+2. What exact context is information-equivalent across prompt renderings?
+3. Which evaluator should establish the primary disposition?
+4. What model/provider and run count fit the initial budget?
+5. Where should large raw transcripts live?
+6. What data must be redacted before a record can be committed?
+7. How should malformed structured results be retained and evaluated?
+8. What constitutes enough evidence to proceed to EXP-002?
 
 ## Experiment roadmap captured
 

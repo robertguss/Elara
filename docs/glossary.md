@@ -546,17 +546,52 @@ claim's epistemic type.
 
 **Key:** `evidence_reference`
 
-A machine-resolvable pointer from a claim to retained evidence. It identifies
-the run-local or pinned external object and the smallest practical locator
-within it. A reference is not valid merely because its syntax parses.
+A typed, machine-resolvable registry entry that identifies a run-local or pinned
+fixture object and the smallest practical locator within it. Its receipt-local
+ID is an alias; canonical identity comes from the referenced run record and
+digest. A reference is not valid merely because its syntax parses.
+
+### Evidence registry
+
+**Key:** `evidence_registry`
+
+The top-level collection of evidence references in an Evidence Receipt. Claims
+refer to registry entries by local ID so one locator can be reused without
+duplication.
+
+### Evidence link
+
+**Key:** `evidence_link`
+
+A claim-specific relationship from a claim to one evidence-registry entry. In
+EXP-001 the subject may declare `supports` or `contradicts`; the evaluator
+checks that declared relationship independently.
+
+### Mechanical reference validation
+
+**Key:** `mechanical_reference_validation`
+
+Reproducible checks that a reference parses, resolves uniquely, belongs to the
+declared run or fixture, matches retained digests, uses a compatible locator,
+and has safe in-bounds selectors. Mechanical validation does not decide semantic
+support.
+
+### Semantic evidence assessment
+
+**Key:** `semantic_evidence_assessment`
+
+Evaluation of whether referenced evidence actually supports or contradicts the
+exact claim, represents scope and assumptions honestly, and is independent or
+correlated with other evidence. It is recorded separately from mechanical
+reference validation.
 
 ### Evidence validity
 
 **Key:** `evidence_validity`
 
-The evaluated properties of an evidence reference: it resolves, is authentic to
-the declared source or run, supports or contradicts the exact claim, and has its
-scope and assumptions represented honestly.
+The separately retained mechanical and semantic properties of an evidence
+reference and link. Do not collapse resolution, authenticity, exact support,
+scope, and independence into one boolean.
 
 ### Unsupported assertion
 

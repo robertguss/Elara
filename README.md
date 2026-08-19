@@ -142,6 +142,9 @@ timeout, and tool output is truncated to 16 KiB before it enters model history.
   ([HTML companion](docs/living-software.html)): software as a continuously
   adapting constitutional system, compiled into implementation and governed by
   evidence, authority, causality, and human judgment.
+- [Experimental lab](docs/experiments/README.md): research methods, provenance,
+  repeatable run records, measurement rules, and the
+  [Mission Receipt experiment](docs/experiments/001-mission-receipt.md).
 
 ## Develop
 

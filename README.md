@@ -131,6 +131,20 @@ timeout, and tool output is truncated to 16 KiB before it enters model history.
   session alive after a client disconnects and execute tools elsewhere.
 - [Elixir API](docs/elixir-api.md): target another directory, subscribe to
   events, configure sessions, replay recordings, and coordinate child sessions.
+- [Harness vision](docs/harness-vision.md)
+  ([HTML companion](docs/harness-vision.html)): explore a BEAM-native fabric for
+  durable missions, workspace cells, evidence, causality, and SDLC automation.
+- [Software production frontiers](docs/software-production-frontiers.md)
+  ([HTML companion](docs/software-production-frontiers.html)): a compact
+  research map for rethinking intent, code, review, CI, local development,
+  production, and the wider agentic SDLC.
+- [Living software](docs/living-software.md)
+  ([HTML companion](docs/living-software.html)): software as a continuously
+  adapting constitutional system, compiled into implementation and governed by
+  evidence, authority, causality, and human judgment.
+- [Experimental lab](docs/experiments/README.md): research methods, provenance,
+  repeatable run records, measurement rules, and the
+  [Mission Receipt experiment](docs/experiments/001-mission-receipt.md).
 
 ## Develop
 

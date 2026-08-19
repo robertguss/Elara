@@ -19,8 +19,10 @@ erl_crash.dump
 # Also ignore archive artifacts (built via "mix archive.build").
 *.ez
 
-# OAuth tokens and local secrets
-/.harness/
+# OAuth tokens and local secrets. Repository plugins are intentionally tracked.
+/.harness/*
+!/.harness/plugins/
+!/.harness/plugins/*.exs
 auth.json
 .env
 .env.*

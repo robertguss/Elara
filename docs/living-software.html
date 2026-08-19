@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A thesis for living, constitutionally governed software and the epistemic operating system required to evolve it safely.">
+  <title>Living Software</title>
+  <style>
+    :root { --night:#11211e; --forest:#164d3f; --leaf:#3f8b65; --mint:#a8d8bd; --sun:#e6a64c; --clay:#b75c43; --paper:#f4f0e7; --ink:#17201e; --muted:#61706b; --line:#d8d1c1; --card:#fffcf5; --shadow:0 20px 60px rgba(24,44,37,.1); }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; color:var(--ink); background:radial-gradient(circle at 8% 2%,rgba(63,139,101,.18),transparent 27rem),radial-gradient(circle at 95% 15%,rgba(230,166,76,.13),transparent 29rem),var(--paper); font:17px/1.68 ui-serif,Georgia,serif; }
+    a { color:var(--forest); text-underline-offset:.18em; }
+    h1,h2,h3,.eyebrow,.tag,nav,th { font-family:ui-sans-serif,system-ui,sans-serif; }
+    h1,h2,h3 { line-height:1.08; letter-spacing:-.035em; }
+    code,pre,.law strong { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .shell { width:min(1160px,calc(100% - 40px)); margin:auto; }
+    header { min-height:82vh; display:grid; align-items:center; padding:80px 0; color:#f7f4ea; background:linear-gradient(125deg,rgba(17,33,30,.98),rgba(22,77,63,.93)),radial-gradient(circle at 80% 30%,var(--leaf),transparent 35%); }
+    .hero { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(260px,.8fr); gap:65px; align-items:center; }
+    .eyebrow { color:var(--mint); font-size:.74rem; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
+    h1 { margin:15px 0 22px; max-width:760px; font-size:clamp(4rem,10vw,8rem); }
+    h1 span { display:block; color:var(--mint); }
+    .lede { max-width:720px; color:rgba(255,255,255,.76); font-size:clamp(1.15rem,2vw,1.42rem); }
+    .cycle { position:relative; aspect-ratio:1; display:grid; place-items:center; border:1px solid rgba(168,216,189,.35); border-radius:50%; box-shadow:0 0 0 28px rgba(168,216,189,.04),0 0 0 58px rgba(168,216,189,.025); }
+    .cycle::before,.cycle::after { content:""; position:absolute; inset:13%; border:1px dashed rgba(168,216,189,.45); border-radius:50%; }
+    .cycle::after { inset:29%; border-style:solid; }
+    .cycle-core { z-index:1; width:44%; aspect-ratio:1; display:grid; place-items:center; text-align:center; border-radius:50%; color:var(--night); background:var(--mint); font:800 1rem/1.2 ui-sans-serif,system-ui; }
+    .cycle-label { position:absolute; font:700 .73rem/1 ui-sans-serif,system-ui; letter-spacing:.08em; text-transform:uppercase; }
+    .cycle-label:nth-child(2){top:7%;}.cycle-label:nth-child(3){right:0;transform:translateX(32%);}.cycle-label:nth-child(4){bottom:7%;}.cycle-label:nth-child(5){left:0;}
+    .layout { display:grid; grid-template-columns:215px minmax(0,1fr); gap:55px; padding-top:65px; }
+    nav { position:sticky; top:22px; padding:20px; border:1px solid var(--line); border-radius:16px; background:rgba(255,252,245,.88); box-shadow:var(--shadow); font-size:.78rem; }
+    nav strong { display:block; margin-bottom:10px; color:var(--muted); letter-spacing:.12em; text-transform:uppercase; }
+    nav a { display:block; padding:7px 0; color:var(--ink); text-decoration:none; border-bottom:1px solid var(--line); }
+    nav a:last-child { border:0; }
+    main { min-width:0; padding-bottom:90px; }
+    section { margin-bottom:80px; scroll-margin-top:30px; }
+    h2 { margin:0 0 24px; font-size:clamp(2.2rem,4.8vw,4rem); }
+    h3 { margin:0 0 10px; font-size:1.45rem; }
+    .number { display:block; margin-bottom:9px; color:var(--clay); font:800 .74rem/1 ui-monospace,monospace; letter-spacing:.16em; text-transform:uppercase; }
+    .thesis { padding:30px; border-left:5px solid var(--leaf); border-radius:0 18px 18px 0; background:var(--card); box-shadow:var(--shadow); font-size:1.18rem; }
+    pre { overflow:auto; padding:25px; border-radius:18px; color:#dcf5e7; background:var(--night); box-shadow:var(--shadow); font-size:.79rem; line-height:1.5; }
+    .layers,.cards,.implications,.semantics { display:grid; grid-template-columns:repeat(2,1fr); gap:15px; }
+    .card { padding:22px; border:1px solid var(--line); border-radius:17px; background:var(--card); box-shadow:0 10px 30px rgba(24,44,37,.055); }
+    .card .tag { display:inline-block; margin-bottom:10px; color:var(--leaf); font-size:.7rem; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+    .card p { margin-bottom:0; color:var(--muted); }
+    .flow { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin:28px 0; }
+    .flow div { position:relative; padding:14px 10px; border-radius:11px; text-align:center; color:white; background:var(--forest); font:700 .79rem/1.3 ui-sans-serif,system-ui; }
+    .flow div:not(:last-child)::after { content:"→"; position:absolute; right:-11px; color:var(--clay); z-index:2; }
+    table { width:100%; border-collapse:collapse; background:var(--card); box-shadow:var(--shadow); }
+    th,td { padding:14px 16px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line); }
+    th { color:var(--forest); font-size:.73rem; letter-spacing:.1em; text-transform:uppercase; }
+    tr:last-child td { border:0; }
+    .implications { counter-reset:idea; }
+    .idea { position:relative; min-height:125px; padding:20px 20px 20px 55px; border-radius:15px; background:rgba(255,252,245,.8); border:1px solid var(--line); }
+    .idea::before { counter-increment:idea; content:counter(idea,decimal-leading-zero); position:absolute; left:17px; top:19px; color:var(--sun); font:800 .78rem/1 ui-monospace,monospace; }
+    .idea strong { display:block; font-family:ui-sans-serif,system-ui; }
+    .idea span { color:var(--muted); font-size:.94rem; }
+    .laws { display:grid; gap:8px; }
+    .law { display:grid; grid-template-columns:minmax(190px,.6fr) 1fr; gap:20px; padding:14px 18px; border-radius:11px; background:var(--night); color:#f5f3e9; }
+    .law strong { color:var(--mint); font-size:.85rem; }
+    .warning { padding:30px; border-radius:18px; color:#fff7ee; background:linear-gradient(135deg,#6e3025,var(--clay)); box-shadow:var(--shadow); }
+    .warning h3 { color:white; }
+    .versions { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:22px 0; }
+    .version { padding:13px; border-radius:10px; color:#eaf8f0; background:var(--night); font:700 .75rem/1.4 ui-monospace,monospace; }
+    .version span { display:block; color:var(--mint); font-size:1rem; }
+    .two { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    .organism { padding:25px; border-radius:18px; background:#e1eee4; }
+    .organism.danger { background:#f1dfd7; }
+    .experiments { columns:2; column-gap:18px; padding:0; list-style:none; counter-reset:experiment; }
+    .experiments li { break-inside:avoid; position:relative; margin:0 0 14px; padding:17px 17px 17px 50px; border:1px solid var(--line); border-radius:13px; background:var(--card); }
+    .experiments li::before { counter-increment:experiment; content:counter(experiment); position:absolute; left:17px; width:22px; height:22px; display:grid; place-items:center; border-radius:50%; color:white; background:var(--leaf); font:700 .72rem/1 ui-sans-serif,system-ui; }
+    blockquote { margin:30px 0 0; padding:30px; border-radius:18px; color:white; background:linear-gradient(135deg,var(--forest),#1e6571); box-shadow:var(--shadow); font-size:1.23rem; }
+    footer { padding:35px 0 60px; border-top:1px solid var(--line); color:var(--muted); font-size:.9rem; }
+    @media(max-width:900px){ header{min-height:auto}.hero{grid-template-columns:1fr}.cycle{width:min(390px,80vw);margin:auto}.layout{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(3,1fr);gap:0 16px}nav strong{grid-column:1/-1}.flow{grid-template-columns:1fr}.flow div:not(:last-child)::after{content:"↓";right:auto;bottom:-13px;left:50%} }
+    @media(max-width:620px){body{font-size:16px}.shell{width:min(100% - 24px,1160px)}header{padding:55px 0}.cycle{display:none}nav,.layers,.cards,.implications,.semantics,.versions,.two{grid-template-columns:1fr}.law{grid-template-columns:1fr;gap:4px}.experiments{columns:1}pre{font-size:.68rem;padding:16px}th:first-child,td:first-child{display:none} }
+    @media print{header{min-height:0;background:white;color:var(--ink)}.lede{color:var(--muted)}.cycle,nav{display:none}.layout{display:block}.card,.idea,.law,blockquote{break-inside:avoid;box-shadow:none}body{background:white}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell hero">
+      <div><div class="eyebrow">A foundational design thesis · August 2026</div><h1>Living <span>Software</span></h1><p class="lede">Software as a continuously adapting, constitutionally governed system—and the epistemic operating system required to evolve it safely.</p></div>
+      <div class="cycle" aria-label="Living software feedback cycle"><div class="cycle-core">Living<br>Constitution</div><span class="cycle-label">Human intent</span><span class="cycle-label">Implementation</span><span class="cycle-label">Production</span><span class="cycle-label">Evidence</span></div>
+    </div>
+  </header>
+  <div class="shell layout">
+    <nav aria-label="Page sections"><strong>Explore</strong><a href="#thesis">Thesis</a><a href="#compiler">Constitution</a><a href="#kernel">Epistemic OS</a><a href="#implications">Implications</a><a href="#laws">Laws</a><a href="#harness">Harness</a><a href="#limits">Limits</a><a href="#experiments">Experiments</a></nav>
+    <main>
+      <section id="thesis"><span class="number">01 · Thesis</span><h2>Not a finished artifact. A governed living system.</h2><div class="thesis">Software continuously receives signals from people, agents, production, dependencies, policy, markets, and its environment; interprets contradictions; and adapts while preserving identity and obligations. The opportunity is an <strong>epistemic and causal operating system for changing complex systems.</strong></div>
+        <pre>Human purpose + authority
+          │
+          ▼
+  Living Constitution ──compile──▶ Missions · evidence · capabilities
+          ▲                                  │
+          │                                  ▼
+  amendments + contradictions       Harness + execution cells
+          │                                  │
+          └──────── production reality ◀─────┘</pre>
+        <p>Code remains consequential, but may become a <strong>materialized projection</strong> of intent, constraints, evidence, platform capabilities, and current reality. The durable identity of an application moves toward the obligations it preserves—not one arrangement of source files.</p>
+      </section>
+
+      <section id="compiler"><span class="number">02 · Constitutional compiler</span><h2>A language above implementation</h2><p>The constitution describes what a system is for, what it promises, what it must never do, who may change it, and what evidence is sufficient. It combines human-legible values with typed obligations, formal cores, executable policy, examples, precedent, and explicit judgment.</p>
+        <div class="layers">
+          <article class="card"><span class="tag">Purpose</span><h3>Values and outcomes</h3><p>Affected people, desired outcomes, non-goals, and tradeoffs remain human-legible and contestable.</p></article>
+          <article class="card"><span class="tag">Promises</span><h3>Obligations and invariants</h3><p>Durable, temporal promises plus safety, compatibility, privacy, security, and architecture constraints.</p></article>
+          <article class="card"><span class="tag">Power</span><h3>Authority and adaptation</h3><p>Capability-based rules govern who may observe, decide, amend, execute, and approve—and what may adapt autonomously.</p></article>
+          <article class="card"><span class="tag">Truth</span><h3>Evidence and amendment</h3><p>Risk-sensitive proof policies, retained dissent, expiration, precedent, and explicit constitutional evolution.</p></article>
+        </div>
+        <h3>Four forms of semantics</h3>
+        <div class="semantics">
+          <article class="card"><span class="tag">Normative</span><h3>What ought to be true?</h3><p>Purpose, values, obligations, protected people, and unacceptable outcomes.</p></article>
+          <article class="card"><span class="tag">Operational</span><h3>What may act?</h3><p>Permitted, forbidden, and conditional actions with required capabilities.</p></article>
+          <article class="card"><span class="tag">Evidentiary</span><h3>What justifies belief?</h3><p>Evidence scope, assumptions, contradictions, sufficiency, and invalidation.</p></article>
+          <article class="card"><span class="tag">Evolutionary</span><h3>What may change?</h3><p>Amendment, migration, dissent, expiry, and the lawful evolution of authority.</p></article>
+        </div>
+        <div class="flow"><div>Constitution</div><div>Obligations</div><div>Missions</div><div>Implementations</div><div>Evidence + outcomes</div></div>
+        <p>The compiler can emit code, infrastructure, migrations, context capsules, capabilities, verification plans, environment requirements, releases, retreat policies, and explanations. Production compiles backward into evidence, contradictions, violated obligations, and <em>proposed</em> amendments—not silent changes to purpose.</p>
+        <h3>Compiler and continuous controller</h3>
+        <p>Compilation is not one-way. A constitutional controller continuously compares desired obligations with scoped evidence about reality, then asks what changed, what authority exists, and which bounded Mission could safely reduce the difference.</p>
+        <pre>Constitution ──▶ desired obligations ──▶ reconciliation
+      ▲                                      │ Missions
+      │                                      ▼
+amendment proposals ◀── evidence ◀── implementation + production</pre>
+        <p>Application identity becomes continuity of obligations through changing implementations. Code is the current <strong>phenotype</strong>, not the timeless identity.</p>
+        <div class="versions"><div class="version">Constitution<span>v12</span></div><div class="version">Interpreter<span>H-34</span></div><div class="version">Phenotype<span>186</span></div><div class="version">Environment<span>v9</span></div><div class="version">Evidence epoch<span>43</span></div><div class="version">State lineage<span>P-882</span></div></div>
+        <h3>Compilation as governed search</h3>
+        <p>The compiler can generate competing Missions and implementations, simulate and verify them, preserve alternatives while evidence remains weak, route irreducible tradeoffs to people, and materialize a selected phenotype. It is synthesis, evolutionary search, proof, and governance—not merely translation.</p>
+      </section>
+
+      <section id="kernel"><span class="number">03 · Epistemic operating system</span><h2>Schedule belief, attention, authority, and risk</h2>
+        <div class="cards">
+          <article class="card"><span class="tag">Durability</span><h3>Obligations, not tickets</h3><p>Promises survive agents, processes, environments, branches, releases, and handoffs. Missions serve obligations; evidence determines satisfaction.</p></article>
+          <article class="card"><span class="tag">Knowledge</span><h3>Epistemic types</h3><p>Observed, measured, reproduced, derived, proven, inferred, contradicted, unknown, and indeterminate claims retain source, scope, assumptions, and invalidation.</p></article>
+          <article class="card"><span class="tag">Security</span><h3>Context as capability</h3><p>Information arrives with provenance, trust, allowed uses, privacy, validity, contamination, and a capability ceiling.</p></article>
+          <article class="card"><span class="tag">Scarcity</span><h3>Attention scheduler</h3><p>More computation resolves reducible uncertainty; people receive irreducible ambiguity, ethics, risk, and value judgment.</p></article>
+          <article class="card"><span class="tag">Effects</span><h3>Privileged syscalls</h3><p>Every consequential mutation has authority, stable identity, durable acceptance, an honest outcome, and reconciliation.</p></article>
+          <article class="card"><span class="tag">Autonomy</span><h3>Reversibility policy</h3><p>Authority grows with containment, observability, reversibility, and bounded blast radius—not faith in model perfection.</p></article>
+        </div>
+      </section>
+
+      <section id="implications"><span class="number">04 · Whole-system consequences</span><h2>Twenty-six implications</h2><div class="implications">
+        <div class="idea"><strong>Prediction-bearing releases</strong><span>State expected behavior, disconfirming signals, observation windows, and retreat policy.</span></div>
+        <div class="idea"><strong>Production-initiated development</strong><span>Typed violations create evidence, reproductions, and bounded repair Missions.</span></div>
+        <div class="idea"><strong>Counterfactual engineering</strong><span>Replay history against alternatives, dependencies, prompts, policies, and architectures.</span></div>
+        <div class="idea"><strong>Epistemic diversity</strong><span>Vary models, context, tools, methods, and visibility; discount correlated consensus.</span></div>
+        <div class="idea"><strong>Conditional runtime reputation</strong><span>Learn where agents and verifiers work well without a gameable global score.</span></div>
+        <div class="idea"><strong>Harness config as production code</strong><span>Version and replay prompts, models, plugins, tools, and context policy.</span></div>
+        <div class="idea"><strong>Constitutional self-hosting</strong><span>A system cannot redefine its own evaluation criteria and certify itself.</span></div>
+        <div class="idea"><strong>Software metabolism</strong><span>Continuously remove structure whose original causal justification expired.</span></div>
+        <div class="idea"><strong>Three review institutions</strong><span>Separate technical verification, value judgment, and authorization.</span></div>
+        <div class="idea"><strong>Executable architecture</strong><span>Make dependencies, data flow, effects, exceptions, and amendments enforceable.</span></div>
+        <div class="idea"><strong>Causal versioning</strong><span>Record obligations, claims, evidence, alternatives, effects, and outcomes.</span></div>
+        <div class="idea"><strong>Proof-maintenance CI</strong><span>Continuously repair only evidence invalidated by changed assumptions.</span></div>
+        <div class="idea"><strong>Environments as queries</strong><span>Request locality, trust, capabilities, source state, lifetime, and cost.</span></div>
+        <div class="idea"><strong>Debuggable organizations</strong><span>Expose policy gaps and handoff failures without scoring individuals.</span></div>
+        <div class="idea"><strong>Economic scheduling</strong><span>Choose inference, tools, proof, simulation, humans, or non-action by total cost and risk.</span></div>
+        <div class="idea"><strong>Implementation portfolios</strong><span>Keep competing approaches alive until evidence justifies convergence.</span></div>
+        <div class="idea"><strong>Compiled memory</strong><span>Build task-specific, provenance-rich knowledge views with contradiction and expiry.</span></div>
+        <div class="idea"><strong>Post-IDE control room</strong><span>Navigate obligations, Missions, uncertainty, evidence decay, effects, and attention.</span></div>
+        <div class="idea"><strong>Semantic garbage collection</strong><span>Distinguish legitimate dependencies from historical residue.</span></div>
+        <div class="idea"><strong>Proof leases</strong><span>Evidence expires when its validity domain changes.</span></div>
+        <div class="idea"><strong>Digital twins for change</strong><span>Simulate behavior, migrations, traffic, cost, and failure before authority.</span></div>
+        <div class="idea"><strong>Behavioral dependency contracts</strong><span>Govern capabilities, effects, provenance, compatibility, and operations.</span></div>
+        <div class="idea"><strong>Organizational causal memory</strong><span>Retain alternatives, dissent, assumptions, predictions, and outcomes.</span></div>
+        <div class="idea"><strong>Lineage-aware trust</strong><span>Detect when apparent agreement shares one model or information ancestry.</span></div>
+        <div class="idea"><strong>Non-action as a result</strong><span>Decline work whose value does not justify permanent complexity or risk.</span></div>
+        <div class="idea"><strong>Evolution over completion</strong><span>Optimize safe adaptation and retained learning—not generated code or closed tickets.</span></div>
+      </div></section>
+
+      <section id="laws"><span class="number">05 · Constitutional laws</span><h2>Ten invariants for the platform</h2><div class="laws">
+        <div class="law"><strong>No work without why</strong><span>Every Mission traces to an obligation, observation, or bounded exploration.</span></div>
+        <div class="law"><strong>No effect without authority</strong><span>Consequential mutations require capabilities and policy.</span></div>
+        <div class="law"><strong>No effect without a receipt</strong><span>Outcomes include honest uncertainty and reconciliation.</span></div>
+        <div class="law"><strong>No accepted claim without evidence</strong><span>Weak support must remain visibly weak.</span></div>
+        <div class="law"><strong>No evidence without scope</strong><span>Proof names where, when, and under which assumptions it applies.</span></div>
+        <div class="law"><strong>No artifact without lineage</strong><span>Outputs identify what produced them and why.</span></div>
+        <div class="law"><strong>No autonomy without containment</strong><span>Authority scales with reversibility, observability, and blast radius.</span></div>
+        <div class="law"><strong>No memory without invalidation</strong><span>Knowledge that cannot become stale becomes dangerous.</span></div>
+        <div class="law"><strong>No metric without gaming analysis</strong><span>Assume agents and institutions optimize what is measured.</span></div>
+        <div class="law"><strong>No self-modification without governance</strong><span>The system cannot redefine success and certify itself.</span></div>
+      </div><div class="warning"><h3>The dominant danger is false certainty at scale</h3><p>Correlated agents can inherit one bad assumption, reinforce it through generated knowledge, satisfy completion metrics, and suppress dissent through apparent consensus. Unknowns, contradictions, failed predictions, and minority hypotheses must remain first-class.</p></div></section>
+
+      <section id="harness"><span class="number">06 · Component boundary</span><h2>Harness is the cognitive runtime—not the organism</h2><table><thead><tr><th>Harness should own</th><th>Separate systems should own</th></tr></thead><tbody><tr><td>Context interpretation and model orchestration</td><td>Canonical Missions and obligation state</td></tr><tr><td>Tools, plugins, and bounded delegation</td><td>Artifact storage and causal versioning</td></tr><tr><td>Interruption, recovery, and semantic compression</td><td>Workspace isolation and executor placement</td></tr><tr><td>Structured results and honest uncertainty</td><td>Verification, identity, deployment, and production observation</td></tr></tbody></table><p>The BEAM can animate a trusted control fabric of temporary embodiments of durable work. It does not replace durable storage, sandboxing, artifact systems, or hostile security boundaries.</p></section>
+
+      <section id="limits"><span class="number">07 · Honest boundaries</span><h2>Where the metaphor breaks</h2><div class="two"><div class="organism"><h3>The analogy illuminates</h3><p><strong>Homeostasis</strong> preserves invariants. <strong>Metabolism</strong> removes expired structure. An <strong>immune system</strong> detects threats and contradictions. <strong>Senses</strong> observe reality. <strong>Memory</strong> preserves adaptation. <strong>Evolution</strong> explores alternatives.</p></div><div class="organism danger"><h3>The analogy can mislead</h3><p>Organisms optimize survival and reproduction. Software must remain subordinate to human purpose. It must not preserve itself, expand its authority, suppress shutdown, or rewrite values merely to fit observed behavior.</p></div></div><p><strong>Implementation details do not become irrelevant.</strong> Fewer humans may author them, but details remain where security, performance, correctness, cost, and failure physically occur. Generated implementations must be disposable and regenerable without becoming opaque. Humans retain drill-down, explanations, reproducibility, and escape hatches.</p></section>
+
+      <section id="experiments"><span class="number">08 · Falsifiable path</span><h2>Discover semantics before syntax</h2><p>Do not begin with a beautiful DSL. First exercise purpose, obligations, invariants, claims, evidence, capabilities, effects, Missions, amendments, precedent, and contradictions using Markdown or simple data structures. Syntax should crystallize concepts that survive contact with real work.</p><h3>Ten experiments</h3><ol class="experiments"><li><strong>Mission envelope:</strong> typed objective, capability, deliverable, and evidence policy.</li><li><strong>Evidence result:</strong> separate claims, proof, artifacts, effects, and uncertainty.</li><li><strong>Tiny constitution:</strong> model plugin hot reloading—preserve session history, coherent generations, atomic activation, reload rollback, authority, and compatibility evidence—then ask Harness to interpret and test it.</li><li><strong>Bidirectional contradiction:</strong> turn production evidence into a Mission or amendment proposal.</li><li><strong>Proof invalidation:</strong> expire only evidence touched by one changed assumption.</li><li><strong>Diverse verification:</strong> compare correlated consensus with blind and deterministic review.</li><li><strong>Effect receipt:</strong> crash at every external-mutation boundary.</li><li><strong>Semantic deletion:</strong> remove an artifact whose obligation expired.</li><li><strong>Prediction-bearing release:</strong> evaluate declared predictions against reality.</li><li><strong>Constitutional self-hosting:</strong> replay Harness history under a proposed runtime change.</li></ol>
+        <blockquote>Humans govern purpose, values, legitimacy, and irreducible judgment. Agents interpret bounded Missions and handle implementation. Verification maintains justified belief. Production supplies reality. The system adapts through explicit evidence and amendments while preserving authority, causality, reversibility, and the right to stop.</blockquote>
+        <p><strong>North star:</strong> trusted adaptation per unit of scarce human attention.</p>
+      </section>
+    </main>
+  </div>
+  <footer><div class="shell">Companions: <a href="living-software.md">Markdown</a> · <a href="harness-vision.html">Harness vision</a> · <a href="software-production-frontiers.html">Research map</a> · <a href="https://ampcode.com/threads/T-01a01640-f953-736b-9aa4-936428e10fa3">Origin discussion</a></div></footer>
+</body>
+</html>

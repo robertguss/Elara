@@ -94,17 +94,19 @@ Source threads, documents, code, commits, experiments, findings, and prior ADRs.
 
 ## Index
 
-| ID                                                               | Decision                                                 | Status   | Scope                       |
-| ---------------------------------------------------------------- | -------------------------------------------------------- | -------- | --------------------------- |
-| [ADR-0001](0001-use-versioned-decision-records.md)               | Use versioned decision records                           | Accepted | Harness research and design |
-| [ADR-0002](0002-version-canonical-research-vocabulary.md)        | Version canonical research vocabulary                    | Accepted | Harness research            |
-| [ADR-0003](0003-preserve-layered-experimental-records.md)        | Preserve layered experimental records                    | Accepted | Experimental Lab            |
-| [ADR-0004](0004-test-mission-and-receipt-as-separate-factors.md) | Test Mission and receipt as separate factors             | Accepted | EXP-001                     |
-| [ADR-0005](0005-use-partial-preparation-rollback-pilot.md)       | Use partial-preparation rollback pilot                   | Accepted | EXP-001 pilot               |
-| [ADR-0006](0006-diagnose-and-add-regression-test.md)             | Diagnose and add a regression test without repair        | Accepted | EXP-001 pilot               |
-| [ADR-0007](0007-audit-information-equivalent-prompts.md)         | Audit information-equivalent prompts                     | Accepted | EXP-001                     |
-| [ADR-0008](0008-use-json-v1-contracts.md)                        | Use JSON v1 contracts                                    | Accepted | EXP-001 pilot               |
-| [ADR-0009](0009-normalize-consequential-claims.md)               | Normalize consequential claims independently             | Accepted | EXP-001 evaluation          |
-| [ADR-0010](0010-use-minimal-epistemic-vocabulary.md)             | Use a minimal epistemic vocabulary                       | Accepted | EXP-001                     |
-| [ADR-0011](0011-use-typed-evidence-registry.md)                  | Use a typed evidence registry with mechanical resolution | Accepted | EXP-001                     |
-| [ADR-0012](0012-defer-ash-adoption.md)                           | Defer Ash adoption until pilot-derived needs justify it  | Accepted | Experimental Lab / EXP-001  |
+| ID                                                                       | Decision                                                 | Status   | Scope                       |
+| ------------------------------------------------------------------------ | -------------------------------------------------------- | -------- | --------------------------- |
+| [ADR-0001](0001-use-versioned-decision-records.md)                       | Use versioned decision records                           | Accepted | Harness research and design |
+| [ADR-0002](0002-version-canonical-research-vocabulary.md)                | Version canonical research vocabulary                    | Accepted | Harness research            |
+| [ADR-0003](0003-preserve-layered-experimental-records.md)                | Preserve layered experimental records                    | Accepted | Experimental Lab            |
+| [ADR-0004](0004-test-mission-and-receipt-as-separate-factors.md)         | Test Mission and receipt as separate factors             | Accepted | EXP-001                     |
+| [ADR-0005](0005-use-partial-preparation-rollback-pilot.md)               | Use partial-preparation rollback pilot                   | Accepted | EXP-001 pilot               |
+| [ADR-0006](0006-diagnose-and-add-regression-test.md)                     | Diagnose and add a regression test without repair        | Accepted | EXP-001 pilot               |
+| [ADR-0007](0007-audit-information-equivalent-prompts.md)                 | Audit information-equivalent prompts                     | Accepted | EXP-001                     |
+| [ADR-0008](0008-use-json-v1-contracts.md)                                | Use JSON v1 contracts                                    | Accepted | EXP-001 pilot               |
+| [ADR-0009](0009-normalize-consequential-claims.md)                       | Normalize consequential claims independently             | Accepted | EXP-001 evaluation          |
+| [ADR-0010](0010-use-minimal-epistemic-vocabulary.md)                     | Use a minimal epistemic vocabulary                       | Accepted | EXP-001                     |
+| [ADR-0011](0011-use-typed-evidence-registry.md)                          | Use a typed evidence registry with mechanical resolution | Accepted | EXP-001                     |
+| [ADR-0012](0012-defer-ash-adoption.md)                                   | Defer Ash adoption until pilot-derived needs justify it  | Accepted | Experimental Lab / EXP-001  |
+| [ADR-0013](0013-separate-experiment-records-from-runtime-persistence.md) | Separate experiment records from runtime persistence     | Accepted | Experimental Lab / EXP-001  |
+| [ADR-0014](0014-use-jsonl-run-journal.md)                                | Use an append-only JSONL journal with immutable objects  | Accepted | EXP-001 deterministic/pilot |

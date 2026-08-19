@@ -36,6 +36,8 @@ EXP-001 design:
 - [ADR-0010 — Use a minimal epistemic vocabulary](../decisions/0010-use-minimal-epistemic-vocabulary.md)
 - [ADR-0011 — Use a typed evidence registry with mechanical resolution](../decisions/0011-use-typed-evidence-registry.md)
 - [ADR-0012 — Defer Ash adoption until pilot-derived needs justify it](../decisions/0012-defer-ash-adoption.md)
+- [ADR-0013 — Separate canonical experiment records from runtime persistence](../decisions/0013-separate-experiment-records-from-runtime-persistence.md)
+- [ADR-0014 — Use an append-only JSONL run journal with immutable raw objects](../decisions/0014-use-jsonl-run-journal.md)
 
 ## Why this experiment comes first
 
@@ -780,6 +782,55 @@ Exact stochastic reproduction may be impossible when hosted models change.
 Manifest completeness and retained raw runs let us reinterpret old results under
 new knowledge.
 
+## Current Harness capture inventory
+
+The existing Harness records are complementary capture inputs, not the canonical
+EXP-001 Run Record:
+
+| Current record  | Observed retained material                                                                                                                                                                        | Material capture limits                                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session Store   | Domain messages, entry and parent IDs, message timestamps, session ID, working directory, and branch history.                                                                                     | Rewrites its complete JSONL file; tool results are post-truncation; provider failures, events, environment facts, and experiment lineage are absent. |
+| Flight Recorder | Core state seeds, system prompt, tool descriptions, provider requests and normalized results, pre-truncation tool outcomes, malformed arguments, interruptions, transition IDs, and causal links. | No clean-close marker, file digest, timing, provider wire response or usage, workspace snapshot, operator log, or failed-reload transition.          |
+| Live event log  | Turn, message, tool-start, and turn-end events with sequences for attached clients.                                                                                                               | Memory-only, limited to 1,000 events, reset per incarnation, and not exposed to the subject as canonical event locators.                             |
+
+The OpenAI-compatible provider reduces the wire response to a domain Assistant
+or Provider Error, so reported model, usage, request metadata, and malformed raw
+response material are not retained. The Bash tool returns merged standard output
+and error; it does not separately retain streams or command duration, and only a
+nonzero exit status is explicit in result text. A provider tool-call ID is
+round-tripped, but Harness does not currently assign the run-owned `CMD-*`
+identity shown by this protocol's evidence examples.
+
+Successful plugin reload creates a new Flight Recorder segment. A failed reload
+returns through the Session shell without a Core fact, Flight transition, or
+event. This is a material capture boundary for the pilot scenario rather than
+evidence that Flight Recorder should absorb all lab concerns.
+
+Per ADR-0013, the Experimental Lab owns the canonical Run Record. A run that
+uses Session Store or Flight Recorder material imports a byte-faithful copy or
+prefix, records its relationship to the source session and incarnation, and
+indexes its digest. Referencing a mutable runtime path does not establish a
+canonical evidence target. Missing, truncated, or unrecoverable material remains
+an explicit capture status.
+
+Per ADR-0014, the provisional Phase 0 storage primitive is one append-only JSONL
+Run Journal, write-once SHA-256-addressed Raw Objects, and one Run Seal. The
+seal authenticates exact retained bytes and declares termination and capture
+status; it does not convert missing data into complete capture or recorded
+assertions into truth.
+
+One writer assigns monotonic sequences and stable run-owned IDs. Each complete
+journal object is newline-terminated and synced during Phase 0. Exact binary,
+large, or byte-sensitive payloads live in Raw Objects rather than base64 in the
+journal. Recovery retains any partial final line, records its original boundary,
+and appends recovery facts instead of repairing or dropping it. Corrections and
+later derivations remain separately linked from sealed raw material.
+
+The detailed record kinds, exact field schema, redaction boundary, and
+subject-visible command/event identity mechanism remain unresolved. Phase 0 must
+validate them without turning Harness persistence into a general laboratory
+platform.
+
 ## Primary measurements
 
 Keep raw values separate. Do not create a composite score in EXP-001.
@@ -924,30 +975,33 @@ When execution begins, each run should contain:
 
 ```text
 <run-id>/
-├── manifest.json
-├── input/
-│   ├── task.md
-│   ├── system-context.digest
-│   └── condition.json
-├── raw/
-│   ├── transcript.jsonl
-│   ├── events.jsonl
-│   ├── commands.jsonl
-│   └── operator-log.jsonl
-├── artifacts/
-│   ├── index.json
+├── journal.jsonl
+├── objects/
+│   └── sha256/
+│       └── <digest>
+├── seal.json
+├── corrections/
 │   └── ...
-├── result/
-│   ├── raw.txt
-│   └── normalized.json
+├── normalized/
+│   └── ...
 └── evaluation/
     ├── blind-review.json
     └── full-review.json
 ```
 
-Run-storage formats remain provisional until the deterministic phase proves what
-Harness can capture without invasive implementation. The pilot's subject-facing
-Mission and evidence receipt use the adopted JSON v1 shapes.
+The Run Journal indexes exact input, transcript, event, command, intervention,
+result, imported runtime-record, and artifact bytes stored as Raw Objects. One
+journal preserves ordering across these kinds; separate physical logs require
+measured justification. `seal.json` covers only the closed raw journal and its
+included Raw Objects. Corrections, normalized observations, and evaluations do
+not rewrite sealed material and retain explicit derivation links.
+
+This is the provisional lab-owned canonical Run Record nucleus. Runtime Session
+Store and Flight Recorder files may be retained as byte-faithful Raw Objects;
+their original mutable paths are not canonical. Detailed record kinds and fields
+remain provisional until deterministic capture testing. The pilot's
+subject-facing Mission and Evidence Receipt continue to use the separately
+adopted JSON v1 shapes.
 
 ## Known confounds
 
@@ -972,10 +1026,12 @@ These are reasons to interpret carefully, not reasons to avoid the experiment.
 2. What exact context is information-equivalent across prompt renderings?
 3. Which evaluator should establish the primary disposition?
 4. What model/provider and run count fit the initial budget?
-5. Where should large raw transcripts live?
-6. What data must be redacted before a record can be committed?
-7. How should malformed structured results be retained and evaluated?
-8. What constitutes enough evidence to proceed to EXP-002?
+5. Which minimal journal record kinds, fields, and capture hooks retain every
+   pilot fact without turning the provisional format into a platform?
+6. Where should large raw transcripts live?
+7. What data must be redacted before a record can be committed?
+8. How should malformed structured results be retained and evaluated?
+9. What constitutes enough evidence to proceed to EXP-002?
 
 ## Experiment roadmap captured
 

@@ -78,6 +78,36 @@ including malformed, interrupted, failed, or otherwise unexpected termination. A
 retry is a new linked run unless the protocol explicitly defines it as the same
 transport attempt.
 
+### Run record
+
+**Key:** `run_record`
+
+The canonical, run-owned collection that links one attempted Run to its source
+and protocol references, immutable raw records, artifacts, normalized
+observations, evaluations, and later interpretations. Runtime session stores and
+recordings may be imported as raw objects, but their mutable original locations
+are not the experimental source of truth. Missing or partial capture remains an
+explicit part of the Run Record.
+
+### Run journal
+
+**Key:** `run_journal`
+
+The single-writer, append-only ordered record of raw facts captured during one
+Run. In EXP-001 it is a JSONL file whose complete records are newline-terminated
+JSON objects with stable run-owned identities. A partial final line is retained
+as partial capture rather than silently discarded or repaired.
+
+### Run seal
+
+**Key:** `run_seal`
+
+A write-once record created after a Run Journal is closed normally or recovered.
+It identifies the exact journal bytes and included Raw Objects by digest and
+declares termination and capture status. A valid seal establishes integrity of
+the retained bytes; it does not prove their assertions or imply that capture was
+complete.
+
 ### Artifact
 
 **Key:** `artifact`
@@ -311,6 +341,16 @@ The immutable captured representation of what occurred: exact prompts,
 responses, events, tool interactions, output streams, artifacts, timing,
 failures, and interventions. A correction appends a linked note rather than
 rewriting raw data.
+
+### Raw object
+
+**Key:** `raw_object`
+
+A write-once exact byte sequence owned by a Run Record and identified by its
+content digest. A Raw Object holds binary, large, malformed, or byte-sensitive
+material that should not be normalized or embedded directly in the Run Journal.
+Its media type, byte length, role, and provenance are journal metadata; its
+digest establishes identity, not truth.
 
 ### Normalized observation
 

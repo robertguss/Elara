@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A design exploration for a BEAM-native fabric of durable, supervised software work.">
+  <title>Harness — A BEAM-Native Fabric for Software Work</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b12;
+      --surface: #111521;
+      --surface-2: #171c2b;
+      --surface-3: #20263a;
+      --text: #e9edf7;
+      --muted: #a4aec4;
+      --faint: #6f7a92;
+      --line: rgba(167, 180, 214, .16);
+      --cyan: #64d8e8;
+      --violet: #a78bfa;
+      --green: #68d391;
+      --amber: #f4c15d;
+      --red: #fb7185;
+      --max: 82rem;
+      --reading: 48rem;
+      --radius: 1.15rem;
+      --shadow: 0 24px 70px rgba(0, 0, 0, .3);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 12% -5%, rgba(100, 216, 232, .12), transparent 28rem),
+        radial-gradient(circle at 86% 8%, rgba(167, 139, 250, .14), transparent 32rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 17px;
+      line-height: 1.72;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; text-underline-offset: .2em; }
+    strong { color: #fff; }
+    code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    code {
+      padding: .14em .38em;
+      border: 1px solid var(--line);
+      border-radius: .35rem;
+      background: rgba(255, 255, 255, .045);
+      color: #dce6ff;
+      font-size: .9em;
+    }
+
+    .hero {
+      min-height: 92vh;
+      display: grid;
+      place-items: center;
+      position: relative;
+      overflow: hidden;
+      padding: 5rem 1.5rem 7rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: .2;
+      background-image:
+        linear-gradient(var(--line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, black, transparent 80%);
+      pointer-events: none;
+    }
+
+    .hero-inner { position: relative; max-width: 68rem; text-align: center; }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: .55rem;
+      margin-bottom: 1.5rem;
+      padding: .38rem .8rem;
+      border: 1px solid rgba(100, 216, 232, .3);
+      border-radius: 999px;
+      background: rgba(100, 216, 232, .07);
+      color: var(--cyan);
+      font-size: .76rem;
+      font-weight: 750;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--green); box-shadow: 0 0 1rem var(--green); }
+
+    h1, h2, h3, h4 { line-height: 1.15; letter-spacing: -.025em; }
+    h1 {
+      margin: 0;
+      font-size: clamp(3rem, 7vw, 6.7rem);
+      letter-spacing: -.065em;
+      background: linear-gradient(135deg, #fff 20%, #b8e7ee 52%, #bca8fa 86%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .hero h1 span { display: block; font-size: .51em; letter-spacing: -.035em; margin-top: .22em; }
+    .hero .lede { max-width: 48rem; margin: 2rem auto 0; color: var(--muted); font-size: clamp(1.1rem, 2vw, 1.35rem); }
+    .hero-quote {
+      max-width: 58rem;
+      margin: 2.5rem auto 0;
+      padding: 1.4rem 1.6rem;
+      border: 1px solid rgba(167, 139, 250, .28);
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, rgba(100, 216, 232, .07), rgba(167, 139, 250, .08));
+      box-shadow: var(--shadow);
+      font-size: 1.12rem;
+    }
+    .meta { margin-top: 1.5rem; color: var(--faint); font-size: .85rem; }
+
+    .layout {
+      width: min(var(--max), calc(100% - 2rem));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 15rem minmax(0, 1fr);
+      gap: 4rem;
+      align-items: start;
+      padding: 5rem 0 8rem;
+    }
+
+    .toc {
+      position: sticky;
+      top: 1.5rem;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: .9rem;
+      background: rgba(17, 21, 33, .84);
+      backdrop-filter: blur(16px);
+      font-size: .82rem;
+    }
+    .toc-title { color: #fff; font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; margin: .25rem .55rem .7rem; }
+    .toc a { display: block; padding: .36rem .55rem; border-radius: .4rem; color: var(--muted); line-height: 1.35; }
+    .toc a:hover { color: #fff; background: var(--surface-3); text-decoration: none; }
+
+    main { min-width: 0; }
+    section { scroll-margin-top: 2rem; margin-bottom: 7rem; }
+    h2 { margin: 0 0 1.4rem; font-size: clamp(2rem, 4vw, 3.2rem); }
+    h2 .number { display: block; margin-bottom: .5rem; color: var(--violet); font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    h3 { margin: 2.5rem 0 .75rem; font-size: 1.45rem; }
+    h4 { margin: 1.6rem 0 .45rem; font-size: 1.05rem; color: #fff; }
+    p { max-width: var(--reading); color: var(--muted); }
+    ul, ol { max-width: var(--reading); color: var(--muted); padding-left: 1.35rem; }
+    li { margin: .35rem 0; }
+
+    .thesis {
+      margin: 2rem 0;
+      padding: 1.7rem 1.8rem;
+      border-left: 4px solid var(--cyan);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      background: linear-gradient(90deg, rgba(100, 216, 232, .1), rgba(100, 216, 232, .02));
+      color: #f5f8ff;
+      font-size: 1.3rem;
+      font-weight: 620;
+      max-width: 58rem;
+    }
+
+    .diagram {
+      margin: 2rem 0;
+      padding: 1.5rem;
+      overflow-x: auto;
+      border: 1px solid rgba(100, 216, 232, .2);
+      border-radius: var(--radius);
+      background: #0b0f18;
+      color: #c9f5fb;
+      box-shadow: inset 0 1px rgba(255,255,255,.035);
+      font-size: clamp(.68rem, 1.4vw, .88rem);
+      line-height: 1.42;
+      white-space: pre;
+    }
+
+    .code-block {
+      margin: 1.5rem 0;
+      padding: 1.25rem 1.4rem;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: .8rem;
+      background: #0b0e16;
+      color: #d7e2fa;
+      font-size: .84rem;
+      line-height: 1.55;
+      white-space: pre;
+    }
+
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 2rem 0; }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card {
+      padding: 1.35rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.018));
+    }
+    .card h3 { margin: 0 0 .6rem; font-size: 1.13rem; }
+    .card p { margin: 0; font-size: .92rem; }
+    .card .tag { display: inline-block; margin-bottom: .7rem; color: var(--cyan); font-size: .68rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+    .card.warning .tag { color: var(--amber); }
+    .card.future .tag { color: var(--violet); }
+
+    .callout {
+      max-width: 58rem;
+      margin: 1.6rem 0;
+      padding: 1.1rem 1.3rem;
+      border: 1px solid rgba(244, 193, 93, .25);
+      border-radius: .8rem;
+      background: rgba(244, 193, 93, .065);
+      color: #e9ddbd;
+    }
+    .callout strong { color: var(--amber); }
+    .callout.good { border-color: rgba(104, 211, 145, .25); background: rgba(104, 211, 145, .06); color: #d2ebdc; }
+    .callout.good strong { color: var(--green); }
+
+    table { width: 100%; margin: 2rem 0; border-collapse: collapse; font-size: .88rem; }
+    th, td { padding: .85rem 1rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: #fff; background: rgba(255,255,255,.035); }
+    td { color: var(--muted); }
+    tr:hover td { background: rgba(255,255,255,.018); }
+
+    .pill-list { display: flex; flex-wrap: wrap; gap: .55rem; margin: 1.25rem 0; }
+    .pill { padding: .38rem .68rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); font-size: .8rem; }
+
+    details {
+      margin: .8rem 0;
+      border: 1px solid var(--line);
+      border-radius: .8rem;
+      background: rgba(255,255,255,.02);
+    }
+    summary { cursor: pointer; padding: 1rem 1.2rem; color: #fff; font-weight: 680; }
+    details > div { padding: 0 1.2rem 1.2rem; }
+
+    .horizon { position: relative; padding: 1.8rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin: 1.2rem 0; }
+    .horizon::before { content: attr(data-step); position: absolute; right: 1.2rem; top: 1rem; color: rgba(255,255,255,.07); font-size: 4rem; font-weight: 900; line-height: 1; }
+    .horizon h3 { margin-top: 0; color: var(--cyan); }
+
+    .closing { padding: 3rem; border: 1px solid rgba(167, 139, 250, .3); border-radius: 1.5rem; background: linear-gradient(135deg, rgba(100,216,232,.08), rgba(167,139,250,.1)); text-align: center; box-shadow: var(--shadow); }
+    .closing p { margin-left: auto; margin-right: auto; font-size: 1.25rem; color: #f1f4fb; }
+    footer { padding: 2rem; border-top: 1px solid var(--line); color: var(--faint); text-align: center; font-size: .8rem; }
+
+    @media (max-width: 900px) {
+      .layout { display: block; width: min(100% - 2rem, 52rem); }
+      .toc { position: relative; top: auto; margin-bottom: 4rem; columns: 2; }
+      .toc-title { column-span: all; }
+      .grid, .grid.three { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      body { font-size: 16px; }
+      .hero { min-height: auto; padding-top: 4rem; }
+      .toc { columns: 1; }
+      .closing { padding: 1.5rem; }
+      th, td { padding: .65rem; }
+    }
+    @media print {
+      :root { color-scheme: light; --bg: #fff; --surface: #fff; --text: #111827; --muted: #374151; --line: #d1d5db; }
+      body { background: white; color: #111; font-size: 11pt; }
+      .hero { min-height: auto; padding: 2rem 0; }
+      .hero::before, .toc { display: none; }
+      h1 { color: #111; -webkit-text-fill-color: #111; }
+      .layout { display: block; width: 100%; padding: 2rem 0; }
+      section { margin-bottom: 3rem; break-inside: avoid; }
+      .diagram, .code-block { color: #111; background: #f6f8fa; white-space: pre-wrap; }
+      .card, .horizon, .closing { background: #fff; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero" id="top">
+    <div class="hero-inner">
+      <div class="eyebrow">Design exploration · August 2026</div>
+      <h1>Harness<span>A BEAM-Native Fabric for Software Work</span></h1>
+      <p class="lede">A bold architectural direction for evolving Harness beyond a conventional coding-agent CLI—toward durable missions, supervised actors, isolated workspace cells, causal replay, and evidence-bearing software delivery.</p>
+      <div class="hero-quote">Software work is a durable causal graph interpreted by supervised actors, executed in isolated cells, and accepted through evidence-bearing gates.</div>
+      <div class="meta">Canonical source: <a href="harness-vision.md">harness-vision.md</a></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Table of contents">
+      <div class="toc-title">Contents</div>
+      <a href="#thesis">The thesis</a>
+      <a href="#principles">Design principles</a>
+      <a href="#missions">Sub-agents as Missions</a>
+      <a href="#architecture">Target architecture</a>
+      <a href="#primitives">Flagship primitives</a>
+      <a href="#speculation">Speculative directions</a>
+      <a href="#failures">Failure semantics</a>
+      <a href="#reject">Ideas to reject</a>
+      <a href="#experiments">Falsifying experiments</a>
+      <a href="#horizons">Three horizons</a>
+      <a href="#evolution">Code evolution</a>
+      <a href="#constellation">Product constellation</a>
+    </nav>
+
+    <main>
+      <section id="thesis">
+        <h2><span class="number">01 · The thesis</span>Not Pi in Elixir</h2>
+        <p>Harness should not merely reproduce today’s local coding agents with GenServers, nor stop at placing familiar agents inside cloud sandboxes. The larger opportunity is a durable, supervised runtime for software work itself.</p>
+        <div class="thesis">The process is not the agent. The durable history and identity are the agent; a BEAM process is its current incarnation.</div>
+        <p>Models become replaceable reasoning components. Sandboxes become replaceable execution bodies. The durable mission, effects, evidence, identity, and causal history become the product.</p>
+
+        <pre class="diagram" aria-label="Architecture overview">                         ┌─────────────────────┐
+                         │ Human control room  │
+                         └──────────┬──────────┘
+                                    │ commands / approvals
+                                    ▼
+┌───────────────────────────────────────────────────────────────┐
+│                  BEAM control fabric                          │
+│                                                               │
+│  ┌─────────┐  ┌──────────┐  ┌───────────┐  ┌──────────────┐  │
+│  │ Project │─▶│ Missions │─▶│ Sessions  │─▶│ Verification │  │
+│  │ Reactor │  │          │  │           │  │ Gates        │  │
+│  └─────────┘  └──────────┘  └───────────┘  └──────────────┘  │
+│        │             │             │                │          │
+│        └─────────────┴──── causal journal ──────────┘          │
+└───────────────────────┬───────────────────────────────────────┘
+                        │ durable jobs + capability grants
+                        ▼
+┌───────────────────────────────────────────────────────────────┐
+│                     Workspace cells                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐  │
+│  │ Local cell   │  │ Cloud VM     │  │ Specialized worker │  │
+│  └──────────────┘  └──────────────┘  └────────────────────┘  │
+└───────────────────────┬───────────────────────────────────────┘
+                        ▼
+             Artifacts, patches, evidence, receipts</pre>
+      </section>
+
+      <section id="principles">
+        <h2><span class="number">02 · Foundations</span>Design principles</h2>
+        <div class="grid three">
+          <article class="card"><span class="tag">Identity</span><h3>Durable entity, temporary process</h3><p>A logical entity has a stable ID, journal, snapshot, causal parent, fenced lease, and pending receipts. It may have zero or one live process.</p></article>
+          <article class="card"><span class="tag">Boundary</span><h3>BEAM as control plane</h3><p>OTP owns lifecycle, ordering, cancellation, coordination, and observability. Cells, databases, and object stores own isolation and durable material.</p></article>
+          <article class="card"><span class="tag">Reliability</span><h3>Supervision is not durability</h3><p>A supervisor restarts an interpreter. Effect receipts and reconciliation recover external work.</p></article>
+          <article class="card"><span class="tag">Truth</span><h3>Uncertainty is first-class</h3><p>Distinguish not submitted, accepted, completed, failed, cancelled, and indeterminate. Never invent certainty.</p></article>
+          <article class="card"><span class="tag">Quality</span><h3>Evidence, not confidence</h3><p>Consequential work carries claims, artifacts, receipts, tests, versions, uncertainty, and approvals.</p></article>
+          <article class="card"><span class="tag">Coordination</span><h3>Bounded Missions, not swarms</h3><p>Use typed objectives, capabilities, deadlines, deliverables, and gates rather than endless peer conversations.</p></article>
+        </div>
+
+        <h3>Durable identity and activation</h3>
+        <pre class="diagram">Durable entity
+    │
+    ├── snapshot
+    ├── journal tail
+    ├── pending effect receipts
+    └── causal links
+           │
+           ▼ activation
+      ┌───────────┐
+      │ GenServer │  current embodiment
+      └───────────┘
+           │
+           ▼ passivation / crash
+     durable entity remains</pre>
+        <p>Idle entities passivate. Commands and subscribed events activate them on any trusted control node that acquires the ownership lease and fencing epoch.</p>
+        <div class="callout"><strong>Important:</strong> Distributed Erlang can be useful inside one trusted control-plane island. It should not cross tenant, worker, or hostile execution boundaries.</div>
+      </section>
+
+      <section id="missions">
+        <h2><span class="number">03 · Delegation</span>Sub-agents become Missions</h2>
+        <p>Running a tool in another process does not reduce context if its raw output still enters the parent transcript. A real sub-agent has a separate model context and tool history, performs a bounded objective, and returns a compact but complete work product.</p>
+
+        <div class="grid">
+          <article class="card warning"><span class="tag">Process-isolated tool</span><h3>Runtime separation only</h3><p>Runs elsewhere and returns raw output. The parent still absorbs that output and receives no semantic isolation.</p></article>
+          <article class="card"><span class="tag">Mission</span><h3>Context and responsibility boundary</h3><p>Own transcript, objective, deadline, capabilities, deliverable, evidence, continuation ID, and parent-controlled cancellation.</p></article>
+        </div>
+
+        <h3>Session-owned <code>delegate</code></h3>
+        <p>The model-facing operation should be a built-in Session effect, not an ordinary plugin. The Session already owns the parent identity, turn interruption, capability inheritance, causal recording, child retention, and recursion policy.</p>
+
+        <pre class="diagram">┌─────────────────── Parent Session ───────────────────┐
+│                                                      │
+│ Model requests delegate                              │
+│          │                                           │
+│          ▼                                           │
+│ Session owns child lifecycle, deadline, cancellation │
+└──────────┼───────────────────────────────────────────┘
+           ▼
+┌──────────────── Child Session ────────────────┐
+│ Separate context and tool transcript          │
+│ Fresh child-owned plugin instances            │
+│ No delegate tool in v1                        │
+│ Complete final response retained here         │
+└──────────────────┬────────────────────────────┘
+                   │ full result or semantic summary
+                   ▼
+              Parent continues</pre>
+
+        <h3>Input protocol</h3>
+        <pre class="code-block">{
+  "task": "Trace plugin reload cancellation and identify any race",
+  "context_mode": "fresh"
+}</pre>
+        <pre class="code-block">{
+  "child_session_id": "child-123",
+  "task": "Expand on the lease race and quote the relevant functions"
+}</pre>
+        <div class="pill-list"><span class="pill">fresh · task only</span><span class="pill">minimal · latest user request</span><span class="pill">inherited · settled transcript</span><span class="pill">continuation · child history</span></div>
+        <p>The recommended default is <code>fresh</code>. The delegated task should be self-contained. Inherited history must stop before the unresolved parent <code>delegate</code> call.</p>
+
+        <h3>Child policy for v1</h3>
+        <ul>
+          <li>Same repository instructions, working directory, base tools, capability ceiling, workspace, and router.</li>
+          <li>Fresh child-owned instances of the same plugins; plugin state is not shared.</li>
+          <li>No <code>delegate</code> tool, giving a hard recursion depth of one.</li>
+          <li>One active delegation per parent.</li>
+          <li>Parent interruption interrupts and stops the child.</li>
+          <li>A dedicated absolute deadline, longer than an ordinary tool timeout.</li>
+        </ul>
+
+        <h3>No blind result truncation</h3>
+        <p>A child’s conclusion must never be sliced at an arbitrary byte boundary. The complete answer is persisted in the child first. The parent receives one of three explicit delivery modes.</p>
+        <div class="grid three">
+          <article class="card"><span class="tag">Full</span><h3>Complete</h3><p>The intact result fits the parent’s result budget.</p></article>
+          <article class="card"><span class="tag">Summary</span><h3>Semantically compressed</h3><p>The same child creates a complete summary; the original remains retained.</p></article>
+          <article class="card warning"><span class="tag">Metadata only</span><h3>Details retained</h3><p>Compression could not fit safely. Return status, child ID, and explicit <code>more_available</code>.</p></article>
+        </div>
+        <pre class="diagram">Child completes work
+        │
+        ▼
+Persist complete answer in child transcript
+        │
+        ▼
+Fits parent budget? ── yes ──▶ delivery: full
+        │ no
+        ▼
+Ask child once for semantic compression
+        │
+        ▼
+Fits safely? ── yes ──▶ summary + child ID
+        │ no
+        ▼
+metadata_only + child ID + more_available</pre>
+        <p>A high emergency transport ceiling still exists because context is finite, but it is an invariant rather than the summarization mechanism. The envelope must fit before generic tool-output truncation can activate.</p>
+
+        <h3><code>ChildSession</code> as shared substrate</h3>
+        <pre class="code-block">start child
+ask child
+continue child
+interrupt child
+stop or passivate child</pre>
+        <p><code>delegate</code> owns model-facing single-child policy. Coordinator retains fan-out, candidate comparison, judges, reducers, worktrees, and aggregate budgets. Both use the smaller lifecycle primitive.</p>
+      </section>
+
+      <section id="architecture">
+        <h2><span class="number">04 · Systems</span>Layered target architecture</h2>
+
+        <h3>Plane 1 · Durable truth</h3>
+        <div class="grid three">
+          <article class="card"><span class="tag">Journal</span><h3>Entity facts</h3><p>Commands, accepted facts, transitions, effect intents, completions, migrations, and approvals.</p></article>
+          <article class="card"><span class="tag">Content graph</span><h3>Immutable artifacts</h3><p>Prompts, transcripts, patches, outputs, reports, and environment manifests addressed by digest.</p></article>
+          <article class="card"><span class="tag">Projection</span><h3>Queryable views</h3><p>Status, lists, trees, dashboards, search indexes, and durable event feeds.</p></article>
+        </div>
+        <pre class="diagram">validate fact
+   │
+   ▼
+run pure reducer
+   │
+   ▼
+atomically append:
+  fact + transition + events + effect intents
+   │
+   ▼
+dispatch effects separately
+   │
+   ▼
+append completion or reconciliation facts</pre>
+        <p>Historical outbox entries are not blindly dispatched just because a process restarted. Local Harness can use an embedded journal; a hosted deployment can use a transactional database plus object storage.</p>
+
+        <h3>Plane 2 · Activated actors</h3>
+        <pre class="diagram">Project
+├── Sessions
+│   ├── Missions
+│   │   └── Child sessions
+│   └── In-flight job proxies
+├── Workspace leases
+├── Verification gates
+└── SDLC reactors</pre>
+        <p>This is a logical ownership graph, not necessarily one physical OTP link tree. Processes are supervised by type on the node currently holding the durable entity lease.</p>
+
+        <h3>Plane 3 · Remote workspace cells</h3>
+        <pre class="code-block">submit(job_id, operation_digest, workspace_epoch, policy, deadline)
+accepted(receipt)
+query(job_id)
+stream(job_id, cursor)
+cancel(job_id)
+result(job_id, outcome, artifact_digests)</pre>
+        <pre class="diagram">planned → submitted → accepted → running
+        → completed | failed | cancelled | indeterminate</pre>
+        <p>A cell combines an immutable base, writable overlay, fenced mutation lease, resource limits, secret and egress policy, durable job ledger, resumable stream, and patch/artifact export. Its provider can be local, container, VM, Kubernetes, hosted orb, or customer runner.</p>
+
+        <h3>Plane 4 · Evidence and provenance</h3>
+        <p>Consequential results retain claims, source snapshot, patch digest, model and tool versions, commands and receipts, tests and reviews, uncertainty, approvals, and policy versions. Independent verifiers receive the claim and evidence—not the candidate’s entire persuasive transcript.</p>
+
+        <h3>Plane 5 · Gateways and collaboration</h3>
+        <p>CLI, IDE, web control room, APIs, CI adapters, webhooks, and approval queues become views onto durable entities. Multiple principals can observe and propose, but each entity preserves one serialized command order.</p>
+
+        <h3>Plane 6 · Project Reactors</h3>
+        <p>Mostly passivated repository automata wake for issues, PRs, CI, deployments, incidents, dependency changes, reviews, and schedules; create bounded Missions; wait for people or systems; and recover after machine loss.</p>
+      </section>
+
+      <section id="primitives">
+        <h2><span class="number">05 · Product</span>Nine flagship primitives</h2>
+        <div class="grid three">
+          <article class="card"><span class="tag">01</span><h3>Living Session</h3><p>Stable identity across detach, passivation, process restart, VM loss, node movement, historical forks, and unresolved-effect recovery.</p></article>
+          <article class="card"><span class="tag">02</span><h3>Mission</h3><p>Typed parent-owned work with separate context, deadline, capability ceiling, deliverable, evidence, and continuation.</p></article>
+          <article class="card"><span class="tag">03</span><h3>Workspace Cell</h3><p>Recoverable environment with snapshots, overlays, fenced mutation, durable jobs, and artifact export.</p></article>
+          <article class="card"><span class="tag">04</span><h3>Effect Receipt</h3><p>Stable effect identity, acceptance, retry class, status, and reconciliation for every external action.</p></article>
+          <article class="card"><span class="tag">05</span><h3>Evidence-Carrying Result</h3><p>Claims, artifacts, tests, receipts, uncertainty, and provenance rather than unsupported prose.</p></article>
+          <article class="card"><span class="tag">06</span><h3>Causal Fork</h3><p>Trace decisions and patches to their origin, then fork or inject counterfactual facts from any causal point.</p></article>
+          <article class="card"><span class="tag">07</span><h3>Control Room</h3><p>Durable collaboration with principals, proposals, approvals, branches, handoffs, and mutation leases.</p></article>
+          <article class="card"><span class="tag">08</span><h3>Project Reactor</h3><p>A supervised repository automaton that durably responds to SDLC events and orchestrates bounded work.</p></article>
+          <article class="card"><span class="tag">09</span><h3>Shadow Runtime</h3><p>Replay facts against new reducers, prompts, routes, plugins, and verification policies before migration.</p></article>
+        </div>
+      </section>
+
+      <section id="speculation">
+        <h2><span class="number">06 · Frontier</span>Speculative directions</h2>
+        <details open><summary>Repository memory as a provenance graph</summary><div><p>Store architectural decisions, invariants, ownership, failed approaches, incidents, and contracts as facts linked to exact source snapshots and evidence. Facts become stale when their supporting code changes. Context becomes a small provenance-bearing capsule rather than an unbounded vector search.</p></div></details>
+        <details open><summary>Software immune system</summary><div><p>Mostly sleeping sentinels watch dependency risk, performance, flakes, security-sensitive changes, API drift, and invariants. They open bounded investigation Missions and propose containment, rollback, or repair through policy gates.</p></div></details>
+        <details><summary>Many-worlds development</summary><div><p>Fork several snapshots for genuinely uncertain architecture work, assign competing hypotheses, run identical evaluation suites, compare evidence, and retain losing branches as searchable knowledge.</p></div></details>
+        <details><summary>Agent portfolios</summary><div><p>Schedule by measured capability—search model, implementation model, analyzer, fuzzer, device lab, verifier—rather than permanent anthropomorphic personalities. Learn cost, latency, and success distributions from evidence.</p></div></details>
+        <details><summary>Counterfactual CI</summary><div><p>Ask which causal assumption changed, whether a prior policy would accept the work, which historical patches relied on a broken invariant, and whether relevant Missions can replay against a changed dependency.</p></div></details>
+        <details><summary>Executable governance</summary><div><p>Versioned policies govern secrets, tools, approvals, autonomy, risk, and evidence. A blocked action returns a causal explanation rather than an opaque denial.</p></div></details>
+        <details><summary>Incident-to-patch continuity</summary><div><p>Symptoms, investigation, rollback, diagnosis, patch, tests, release, and postmortem become one causal graph surviving shifts, handoffs, environments, and process failures.</p></div></details>
+      </section>
+
+      <section id="failures">
+        <h2><span class="number">07 · Reliability</span>Failure semantics</h2>
+        <table>
+          <thead><tr><th>Failure</th><th>Required behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Session process or VM dies</td><td>New owner rehydrates the entity and reconciles pending receipts.</td></tr>
+            <tr><td>Provider call disappears</td><td>Record the lost attempt; retry only as an explicit new, budgeted attempt.</td></tr>
+            <tr><td>Worker disconnects before acceptance</td><td>Resubmit the same job ID elsewhere when policy permits.</td></tr>
+            <tr><td>Worker disconnects after accepting mutation</td><td>Query the same durable job; report <code>indeterminate</code> if proof is unavailable.</td></tr>
+            <tr><td>Parent dies while child runs</td><td>Durable Mission retains ownership; recovered parent awaits, continues, or cancels.</td></tr>
+            <tr><td>Workspace owner changes</td><td>Advance fencing epoch so stale workers cannot mutate.</td></tr>
+            <tr><td>Human client disconnects</td><td>Session continues; reconnect from a durable cursor.</td></tr>
+            <tr><td>Reducer or plugin changes</td><td>Existing entities stay pinned or undergo an explicit recorded migration.</td></tr>
+          </tbody>
+        </table>
+        <div class="callout"><strong>Non-negotiable:</strong> OTP restart intensity is not a work retry policy.</div>
+      </section>
+
+      <section id="reject">
+        <h2><span class="number">08 · Guardrails</span>Seductive ideas to reject</h2>
+        <div class="grid">
+          <article class="card warning"><span class="tag">Trust</span><h3>Naive distributed Erlang</h3><p>PIDs, cookies, atoms, code loading, and transitive connectivity are not a hostile-boundary protocol.</p></article>
+          <article class="card warning"><span class="tag">Coordination</span><h3>Autonomous swarms</h3><p>Unbounded peers amplify cost, correlated hallucination, unclear ownership, and cancellation difficulty.</p></article>
+          <article class="card warning"><span class="tag">Modeling</span><h3>Process-per-everything</h3><p>Processes model active ownership, not durable records, indexes, artifacts, or permanently idle repositories.</p></article>
+          <article class="card warning"><span class="tag">Recovery</span><h3>Supervision as durability</h3><p>Restarting restores neither durable state nor knowledge of an external mutation.</p></article>
+          <article class="card warning"><span class="tag">Mutation</span><h3>Silent failover</h3><p>Never rerun uncertain mutation elsewhere unless the same durable job is provably deduplicated.</p></article>
+          <article class="card warning"><span class="tag">Workspace</span><h3>Shared writable concurrency</h3><p>Concurrent work branches and exchanges artifacts; it does not race over one filesystem.</p></article>
+          <article class="card warning"><span class="tag">Data</span><h3>PubSub as truth</h3><p>Streams deliver projections. The durable journal establishes what happened.</p></article>
+          <article class="card warning"><span class="tag">Claims</span><h3>Replay as proof</h3><p>Replay proves reducer consistency, not that an external result was correct.</p></article>
+          <article class="card warning"><span class="tag">Evolution</span><h3>Invisible hot upgrade</h3><p>Pin generations and record migrations so every decision remains reproducible.</p></article>
+          <article class="card warning"><span class="tag">History</span><h3>CRDT transcript merging</h3><p>Conversational branches rarely merge meaningfully. Reconcile results and artifacts instead.</p></article>
+          <article class="card warning"><span class="tag">Promises</span><h3>“Exactly once” marketing</h3><p>Promise receipts, deduplication where possible, reconciliation, and explicit uncertainty.</p></article>
+        </div>
+      </section>
+
+      <section id="experiments">
+        <h2><span class="number">09 · Science</span>Experiments that can falsify the vision</h2>
+        <p>These should be vertical product slices, not infrastructure demonstrations.</p>
+        <details open><summary>1 · Crash-everywhere recovery</summary><div><p>Kill control state before submission, after acceptance, during mutation, after result arrival, during delegation, and while awaiting approval.</p><p><strong>Pass:</strong> one confirmed mutation or explicit indeterminate state, never silent duplication. <strong>Falsifies:</strong> recovery needs ad hoc phase repair or cannot distinguish unsubmitted from uncertain work.</p></div></details>
+        <details open><summary>2 · Delegation quality benchmark</summary><div><p>Compare single-agent work with delegated research, implementation, and independent verification over 30–50 real tasks. Measure correctness, parent context, latency, cost, follow-up value, and unsupported claims.</p><p><strong>Pass:</strong> meaningful correctness or context gains. <strong>Falsifies:</strong> if only cost rises, retain Missions primarily for isolation and verification.</p></div></details>
+        <details><summary>3 · Durable mutation receipt</summary><div><p>Submit one marker-producing mutation under the same job ID while repeatedly killing control processes and transport. No duplicate is allowed while worker durability remains; loss of proof must become indeterminate.</p></div></details>
+        <details><summary>4 · Cross-entity causal replay</summary><div><p>Record parent → child → job → artifact → verifier → result. Trace one patch hunk to origin, then inject verifier failure and replay without running external tools.</p></div></details>
+        <details><summary>5 · Hostile workspace cell</summary><div><p>Attempt symlink escape, host access, secret discovery, unrestricted egress, fork bomb, disk exhaustion, and stale-epoch mutation. The actual isolation boundary must block or bound them.</p></div></details>
+        <details><summary>6 · Durable collaborative control room</summary><div><p>Two humans and one agent disconnect, reconnect, compete for stale control, approve work, and survive VM loss while preserving ordering and events.</p></div></details>
+        <details><summary>7 · One real Project Reactor</summary><div><p>Use duplicate and out-of-order CI events to run one logical diagnosis, isolated patch, verification, approval, and external result without duplication.</p></div></details>
+      </section>
+
+      <section id="horizons">
+        <h2><span class="number">10 · Sequence</span>Three development horizons</h2>
+        <article class="horizon" data-step="1">
+          <h3>Durable semantics on one node</h3>
+          <p>Prove recovery before clustering.</p>
+          <ol>
+            <li>Extract <code>ChildSession</code> and add Session-owned <code>delegate</code>.</li>
+            <li>Use semantic result delivery and durable child continuation.</li>
+            <li>Add stable entity, transition, effect, and causation IDs.</li>
+            <li>Introduce a journal and effect outbox.</li>
+            <li>Recover Session from snapshot plus facts.</li>
+            <li>Persist cursors, parent-child links, and large artifacts.</li>
+            <li>Model effect acceptance, completion, cancellation, and reconciliation.</li>
+            <li>Rebuild Coordinator on <code>ChildSession</code>.</li>
+            <li>Pin plugin generations and inject crashes at every boundary.</li>
+          </ol>
+          <div class="callout good"><strong>Success gate:</strong> crash recovery and delegation benchmarks pass.</div>
+        </article>
+        <article class="horizon" data-step="2">
+          <h3>Trusted distributed control plane + isolated cells</h3>
+          <ol>
+            <li>Durable worker job protocol with query, stream, cancel, and deduplication.</li>
+            <li>Real container or VM workspace-cell provider.</li>
+            <li>Snapshot overlays, mutation leases, and fencing epochs.</li>
+            <li>mTLS and short-lived capability grants.</li>
+            <li>Durable Missions, evidence bundles, and verification gates.</li>
+            <li>Control-room roles, approvals, and durable cursors.</li>
+            <li>Multi-node entity activation inside a trusted BEAM island.</li>
+          </ol>
+          <div class="callout good"><strong>Success gate:</strong> partition, stale-writer, and hostile-cell experiments pass.</div>
+        </article>
+        <article class="horizon" data-step="3">
+          <h3>Supervised SDLC fabric</h3>
+          <ol>
+            <li>Project Reactors and issue, PR, CI, deployment, dependency, and incident adapters.</li>
+            <li>Human approval queues and policy-defined verification.</li>
+            <li>Cross-repository Missions and artifact handoffs.</li>
+            <li>Project and organization cost, concurrency, token, and risk budgets.</li>
+            <li>Versioned workflow, policy, plugin, and reducer migrations.</li>
+            <li>Provenance-aware repository memory and Shadow Runtime.</li>
+            <li>Multi-tenant isolation, retention, audit, and operations.</li>
+          </ol>
+          <p>If multi-agent benchmarks fail, this still yields a durable single-agent, verification, and SDLC automation platform. Swarms are optional; recoverable work and evidence are not.</p>
+        </article>
+      </section>
+
+      <section id="evolution">
+        <h2><span class="number">11 · Continuity</span>How today’s Harness evolves</h2>
+        <table>
+          <thead><tr><th>Current area</th><th>Evolution</th></tr></thead>
+          <tbody>
+            <tr><td><code>Session.Core</code></td><td>Remains the deterministic reducer. IO, clocks, PIDs, and retries stay outside.</td></tr>
+            <tr><td><code>Session</code></td><td>Becomes an activated entity shell with journal commit, outbox dispatch, and reconciliation.</td></tr>
+            <tr><td><code>FlightRecorder</code></td><td>Becomes causal export, debugger, replay engine, and counterfactual laboratory.</td></tr>
+            <tr><td><code>Session.Store</code></td><td>Becomes a transcript/content projection behind a storage behavior.</td></tr>
+            <tr><td><code>Executor.Router</code></td><td>Places durable job intents while preserving capability and uncertainty semantics.</td></tr>
+            <tr><td><code>Worker.Server</code></td><td>Becomes a workspace-cell agent with receipts, streams, fencing, and sandbox integration.</td></tr>
+            <tr><td><code>Server</code></td><td>Becomes an authenticated gateway and entity locator with durable cursors.</td></tr>
+            <tr><td>Plugins</td><td>Remain trusted extensions; generations are pinned and migrations become causal facts.</td></tr>
+            <tr><td><code>ChildSession</code></td><td>New minimal lifecycle substrate shared by <code>delegate</code> and Coordinator.</td></tr>
+            <tr><td>Coordinator</td><td>Becomes a Mission policy interpreter without ephemeral-child or byte-truncation semantics.</td></tr>
+          </tbody>
+        </table>
+        <p>The current code is not discarded. The pure core, flight recorder, router, session tree, remote worker, plugin lifecycle, and coordinator are all useful seeds. Durability, causal identity, and effect uncertainty should be placed beneath them before broad distribution.</p>
+      </section>
+
+      <section id="constellation">
+        <h2><span class="number">12 · Ecosystem</span>A constellation, not a monolith</h2>
+        <div class="grid">
+          <article class="card future"><span class="tag">Runtime</span><h3>Harness control plane</h3><p>Trusted BEAM actors, durable entities, Missions, policies, and lifecycle.</p></article>
+          <article class="card future"><span class="tag">Execution</span><h3>Cell daemon</h3><p>Workspace lifecycle, durable jobs, resources, secrets, egress, and sandbox enforcement.</p></article>
+          <article class="card future"><span class="tag">Interaction</span><h3>CLI, IDE, and control room</h3><p>Local work, collaboration, causality, approvals, reviews, and live operations.</p></article>
+          <article class="card future"><span class="tag">Truth</span><h3>Journal and artifact service</h3><p>Canonical facts, projections, immutable content, receipts, and provenance.</p></article>
+          <article class="card future"><span class="tag">Automation</span><h3>Reactor and adapters SDK</h3><p>Issue, PR, CI, deployment, dependency, and incident integrations.</p></article>
+          <article class="card future"><span class="tag">Quality</span><h3>Policy and verification engine</h3><p>Evidence gates, governance, risk policy, independent review, and approvals.</p></article>
+        </div>
+        <p>These products share versioned protocols and entity semantics, not necessarily one runtime or deployment artifact.</p>
+      </section>
+
+      <section>
+        <div class="closing">
+          <h2>The sharpest formulation</h2>
+          <p>The conventional model says: <strong>an agent is a model loop with tools.</strong></p>
+          <p>Harness can say: <strong>software work is a durable causal graph interpreted by supervised actors, executed in isolated cells, and accepted through evidence-bearing gates.</strong></p>
+          <p>That is not simply another agent harness. It is a different theory of how humans, models, tools, environments, and software-delivery systems can work together.</p>
+          <a href="#top">Return to the beginning ↑</a>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer>Harness design exploration · Canonical Markdown and human-readable HTML companion</footer>
+</body>
+</html>

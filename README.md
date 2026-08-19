@@ -131,6 +131,9 @@ timeout, and tool output is truncated to 16 KiB before it enters model history.
   session alive after a client disconnects and execute tools elsewhere.
 - [Elixir API](docs/elixir-api.md): target another directory, subscribe to
   events, configure sessions, replay recordings, and coordinate child sessions.
+- [Harness vision](docs/harness-vision.md)
+  ([HTML companion](docs/harness-vision.html)): explore a BEAM-native fabric for
+  durable missions, workspace cells, evidence, causality, and SDLC automation.
 
 ## Develop
 

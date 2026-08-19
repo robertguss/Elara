@@ -10,7 +10,11 @@ turning them into doctrine or production architecture. It is deliberately small
 at first. The process, schemas, and storage model should evolve when experiments
 show that they are wrong or burdensome.
 
-The first study is [EXP-001: Mission Receipt](001-mission-receipt.md).
+The first study is [EXP-001: Mission Receipt](001-mission-receipt.md). The
+[Harness Research Glossary](../glossary.md) is the canonical working vocabulary
+for lab protocols and records. The
+[Harness Decision Log](../decisions/README.md) records consequential choices,
+rationale, alternatives, and revisit triggers.
 
 ## Research posture
 
@@ -35,6 +39,12 @@ The first study is [EXP-001: Mission Receipt](001-mission-receipt.md).
    remain capturable.
 10. **Treat the lab as an experiment.** Its own ceremony, cost, and blind spots
     are measured and open to removal.
+11. **Version the language.** Semantically important terms use the canonical
+    glossary. A protocol pins its glossary revision and declares any scoped
+    narrowing rather than silently changing a definition.
+12. **Retain decisions, not only conclusions.** Consequential choices receive a
+    stable ADR that records context, rationale, rejected alternatives,
+    consequences, provenance, and revisit triggers.
 
 All data deserves preservation at this exploratory stage, but not all data has
 equal evidentiary weight. A model assertion, a deterministic test, a production
@@ -131,6 +141,7 @@ EXP-001-RUN-20260820-004       run
 EXP-001-ART-...                artifact
 EXP-001-EVAL-...               evaluation
 EXP-001-FIND-...               finding
+ADR-0005                       governing decision
 ```
 
 Each run manifest should eventually include:
@@ -138,6 +149,8 @@ Each run manifest should eventually include:
 ```text
 experiment_id
 protocol_version
+glossary_commit
+governing_decision_ids
 condition_id
 scenario_id
 run_id
@@ -169,23 +182,19 @@ Each experiment maintains a source ledger. Sources can include:
 - Human assertions labeled as assertions rather than external facts.
 
 A finding cites raw run IDs and source IDs. A conclusion cites findings. A later
-design decision cites the conclusion or states why it diverges. This creates the
-chain:
+ADR cites the conclusion or states why it diverges. Protocols cite their
+governing ADRs. This creates the chain:
 
 ```text
 conversation / paper / code
           │
           ▼
-experiment hypothesis ──▶ protocol ──▶ raw runs
-                                      │
-                                      ▼
-                              normalized findings
-                                      │
-                                      ▼
-                              conclusion / decision
-                                      │
-                                      ▼
-                              later design or eval
+  ADR ──▶ experiment hypothesis ──▶ protocol ──▶ raw runs
+   ▲                                             │
+   │                                             ▼
+   │                                     normalized findings
+   │                                             │
+   └──────────── retained or superseded ◀────────┘
 ```
 
 ## Proposed repository shape
@@ -194,9 +203,13 @@ Do not create every directory until a real artifact needs it. The intended shape
 is:
 
 ```text
-docs/experiments/
-├── README.md                         lab charter
-└── 001-mission-receipt.md            current design and preregistration
+docs/
+├── glossary.md                       canonical research vocabulary
+├── decisions/                        canonical decision records
+│   └── README.md                     ADR index and process
+└── experiments/
+    ├── README.md                     lab charter
+    └── 001-mission-receipt.md        current design and preregistration
 
 experiments/                          created when execution begins
 └── EXP-001-mission-receipt/

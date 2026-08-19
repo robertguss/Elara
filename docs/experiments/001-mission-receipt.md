@@ -1,15 +1,39 @@
 # EXP-001: Mission Receipt
 
-> **Status:** Design draft; not pre-registered  
-> **Protocol version:** 0  
-> **Updated:** August 2026  
+> **Status:** Design draft; not preregistered
+>
+> **Protocol version:** 0
+>
+> **Updated:** August 2026
+>
 > **System under study:** Harness operating on its plugin hot-reload behavior
 
 This document designs the first Harness lab experiment. Nothing here is frozen.
 The design should change before preregistration whenever a clearer question,
 fairer control, or more useful measure emerges.
 
-See the [lab charter](README.md) for provenance and data-handling rules.
+See the [lab charter](README.md) for provenance and data-handling rules and the
+[Harness Research Glossary](../glossary.md) for canonical vocabulary. The
+preregistration commit will pin the glossary revision and governing decision set
+used by this protocol.
+
+## Governing decisions
+
+Lab-wide governance:
+
+- [ADR-0001 — Use versioned decision records](../decisions/0001-use-versioned-decision-records.md)
+- [ADR-0002 — Version canonical research vocabulary](../decisions/0002-version-canonical-research-vocabulary.md)
+- [ADR-0003 — Preserve layered experimental records](../decisions/0003-preserve-layered-experimental-records.md)
+
+EXP-001 design:
+
+- [ADR-0004 — Test Mission and receipt as separate factors](../decisions/0004-test-mission-and-receipt-as-separate-factors.md)
+- [ADR-0005 — Use partial-preparation rollback for the pilot](../decisions/0005-use-partial-preparation-rollback-pilot.md)
+- [ADR-0006 — Diagnose and add a regression test without repair](../decisions/0006-diagnose-and-add-regression-test.md)
+- [ADR-0007 — Audit information-equivalent prompts](../decisions/0007-audit-information-equivalent-prompts.md)
+- [ADR-0008 — Use JSON v1 contracts for the pilot](../decisions/0008-use-json-v1-contracts.md)
+- [ADR-0009 — Normalize consequential claims independently](../decisions/0009-normalize-consequential-claims.md)
+- [ADR-0010 — Use a minimal epistemic vocabulary](../decisions/0010-use-minimal-epistemic-vocabulary.md)
 
 ## Why this experiment comes first
 
@@ -102,78 +126,384 @@ Likewise, the free-form condition may provide evidence voluntarily. It is not
 prohibited from doing good work; it simply is not required to use the receipt
 shape.
 
-## Mission draft
+## Consequential claims and epistemic vocabulary
 
-```text
-Mission
-├── id
-├── objective
-├── obligations
-├── invariants
-├── context and source references
-├── permitted and prohibited effects
-├── deliverables
-├── required evidence
-├── uncertainty policy
-└── completion criteria
+EXP-001 adopts the glossary definitions of [claim](../glossary.md#claim),
+[consequential claim](../glossary.md#consequential-claim),
+[epistemic type](../glossary.md#epistemic-type), and
+[disposition](../glossary.md#disposition).
+
+A claim is consequential when making it false, materially narrower, or
+unsupported could reasonably change an evaluator's judgment about an obligation,
+invariant, diagnosis, artifact, verification result, uncertainty, acceptance
+decision, or recommended next action. In this pilot that includes claims about:
+
+- Whether the reported symptom was reproduced or contradicted.
+- The causal mechanism and responsible production boundary.
+- Which generations, plugin state, session history, or tools remained intact.
+- Whether the regression test exercises the public invariant.
+- The test outcome and whether it occurred for the diagnosed reason.
+- What the evidence cannot establish.
+- An unexpected discovery that could change disposition or next action.
+
+Procedural narration, task restatement, navigation detail, stylistic preference,
+and duplicate assertions are excluded unless they independently meet the same
+counterfactual rule. Split a compound claim when its clauses can differ in
+evidence, scope, or disposition.
+
+The evaluator derives a normalized claim set from the subject's result and
+produced artifacts under one rubric. Receipt conditions do not control their own
+denominator by declaring fewer claims. Duplicate propositions count once; a
+separable compound proposition counts as multiple claims. The primary blinded
+pass does not mine the hidden full transcript for extra result claims. The later
+full-process pass separately records consequential findings that the result
+failed to retain.
+
+EXP-001 uses only three epistemic types:
+
+| Type       | Meaning                                                                   |
+| ---------- | ------------------------------------------------------------------------- |
+| `reported` | Inherited from the task or another source; not established in this run.   |
+| `observed` | Directly read, executed, or produced in this run at the referenced scope. |
+| `derived`  | Inferred from evidence with the connecting assumptions and scope stated.  |
+
+Epistemic type is orthogonal to disposition:
+
+| Disposition    | Meaning                                                                |
+| -------------- | ---------------------------------------------------------------------- |
+| `supported`    | Valid evidence supports the claim at its stated scope and assumptions. |
+| `contradicted` | Valid evidence supports an incompatible conclusion at that scope.      |
+| `unresolved`   | Evidence is absent, insufficient, invalid, or materially conflicting.  |
+
+Do not use `unknown` as an epistemic type; represent a claim about an unknown as
+`unresolved`. Reserve `indeterminate` for an operation or effect whose outcome
+cannot be established after it may have crossed a consequential boundary.
+`test_result`, `source_content`, and `command_output` are evidence kinds, not
+epistemic types. A partly supported compound claim must be split rather than
+given a fourth disposition.
+
+## Prompt construction and pilot serialization
+
+The pilot uses three distinct representations:
+
+1. An evaluator-only **semantic ledger** records every task-information atom and
+   its stable ID in JSON.
+2. Conditions A and C receive an ordinary prose rendering; conditions B and D
+   receive a pretty-printed JSON Mission inside a minimal text wrapper.
+3. Conditions A and B may answer in any clear form; conditions C and D must
+   return one JSON evidence receipt.
+
+The exact subject-visible prompt string is retained and digested. The semantic
+ledger is an audit device, not extra context for the subject. Both input
+renderings must represent every task atom without an additional factual claim or
+materially different presupposition. Structural fields may cross-reference an
+atom, but repetition must not strengthen or qualify it differently. Natural
+differences in ordering, formatting, salience, and length are part of the input
+intervention; the prose prompt is not padded to match JSON byte or token count.
+
+JSON is used because it is strict, mechanically parseable, supports nested
+records and stable IDs, and is available in Harness without another data-format
+dependency. Markdown remains the transport wrapper and documentation format, not
+the typed contract. YAML's implicit typing and parser variability and TOML's
+awkward nested records would add avoidable ambiguity.
+
+This is a test of a **JSON-serialized Mission and JSON evidence receipt**, not a
+format-independent test of structured semantics. Any positive result must be
+scoped accordingly and replicated with another representation before claiming
+that the syntax is incidental. Using JSON for both input and output may also
+create a representation-congruence advantage in condition D; retain that as a
+candidate explanation for any interaction effect.
+
+Do not create a general schema framework for the pilot. A small versioned shape
+and validator are sufficient when implementation begins. Raw structured output
+is retained before parsing so malformed, fenced, partial, or otherwise
+nonconforming JSON remains observable rather than being repaired silently.
+
+## Adopted pilot semantic ledger
+
+```json
+{
+  "kind": "prompt_semantic_ledger",
+  "version": 1,
+  "task_id": "EXP-001-PILOT",
+  "atoms": [
+    {
+      "id": "TA-001",
+      "category": "context",
+      "statement": "The work occurs only in an isolated EXP-001 fixture."
+    },
+    {
+      "id": "TA-002",
+      "category": "context",
+      "statement": "The scenario starts with valid stateful generation-1 plugins named counter and other, and counter has been invoked once to establish state and session history."
+    },
+    {
+      "id": "TA-003",
+      "category": "reported_symptom",
+      "statement": "A report claims that after counter is changed to a valid generation-2 candidate and other is changed to malformed source, Harness.reload_plugins/1 reports other's parse failure and commits no new generation, but a later counter invocation fails."
+    },
+    {
+      "id": "TA-004",
+      "category": "invariant",
+      "statement": "After a failed multi-plugin reload, each prior valid plugin generation should remain usable with its pre-reload state."
+    },
+    {
+      "id": "TA-005",
+      "category": "obligation",
+      "statement": "Treat the report as unverified and reproduce or contradict it through externally observable behavior."
+    },
+    {
+      "id": "TA-006",
+      "category": "obligation",
+      "statement": "Diagnose the cause and identify the narrow production boundary responsible without changing it."
+    },
+    {
+      "id": "TA-007",
+      "category": "obligation",
+      "statement": "Determine which relevant reload behaviors remain intact, which are violated, and which broader guarantees the available evidence cannot establish."
+    },
+    {
+      "id": "TA-008",
+      "category": "obligation",
+      "statement": "Add one minimal deterministic regression test that asserts the public invariant without accommodating the suspected defect; preserve and report its actual outcome. It is expected to fail if the report is correct, but a passing or un-runnable test must be reported rather than forced to fail."
+    },
+    {
+      "id": "TA-009",
+      "category": "obligation",
+      "statement": "Run the regression test and report the exact command and outcome."
+    },
+    {
+      "id": "TA-010",
+      "category": "obligation",
+      "statement": "Retain and report relevant unexpected discoveries even when they do not fit the anticipated diagnosis."
+    },
+    {
+      "id": "TA-011",
+      "category": "permitted_effects",
+      "statement": "The subject may read fixture files, run local commands, and add or modify test files."
+    },
+    {
+      "id": "TA-012",
+      "category": "prohibited_effects",
+      "statement": "The subject must not modify production code, weaken or remove existing tests, perform unrelated cleanup, push or publish, or make an external write."
+    },
+    {
+      "id": "TA-013",
+      "category": "required_evidence",
+      "statement": "The result must include source locations supporting the diagnosis, the regression-test artifact, and the exact test command and observed output."
+    },
+    {
+      "id": "TA-014",
+      "category": "uncertainty_policy",
+      "statement": "Established, contradicted, and unresolved conclusions must remain distinct; no broader reload guarantee may be inferred from this scenario without supporting evidence."
+    },
+    {
+      "id": "TA-015",
+      "category": "source_references",
+      "statement": "Relevant starting points are lib/harness/session.ex, lib/harness/plugin/server.ex, and test/harness/plugin_test.exs."
+    },
+    {
+      "id": "TA-016",
+      "category": "completion",
+      "statement": "The task is complete when every obligation has an explicit outcome and both the regression-test artifact and result are present, including explicit unresolved outcomes when necessary."
+    }
+  ]
+}
 ```
 
-Candidate content:
+The semantic ledger is part of the protocol record but is unavailable in the
+subject fixture. It contains prompt facts and requirements, not the blinded
+cause or evaluator-only expected observations in GT-001 through GT-006.
+
+## Exact ordinary input segment for A and C
 
 ```text
-Objective
-  Verify plugin hot-reload correctness and identify any unsupported guarantee.
+Task EXP-001-PILOT takes place only in an isolated experiment fixture. The
+scenario starts with valid stateful generation-1 plugins named `counter` and
+`other`; `counter` has been invoked once to establish state and session history.
 
-Obligations
-  Reloaded tools become available to subsequent turns.
-  Existing session history remains intact.
-  In-flight calls retain one coherent plugin generation.
+A report claims that after `counter` is changed to a valid generation-2
+candidate and `other` is changed to malformed source,
+`Harness.reload_plugins/1` reports `other`'s parse failure and commits no new
+generation, but a later `counter` invocation fails. Treat this report as
+unverified. The relevant public invariant is that after a failed multi-plugin
+reload, each prior valid plugin generation remains usable with its pre-reload
+state.
 
-Invariants
-  A session never observes a partially installed generation.
-  Failed reload preserves the last valid generation.
-  State transitions remain attributable to one generation.
+Investigate the report and:
 
-Permitted effects
-  Read and modify the isolated fixture checkout.
-  Run targeted tests and local commands.
+1. Reproduce or contradict it through externally observable behavior.
+2. Diagnose the cause and identify the narrow production boundary responsible
+   without changing it.
+3. Determine which relevant reload behaviors remain intact, which are violated,
+   and which broader guarantees the available evidence cannot establish.
+4. Add one minimal deterministic regression test that asserts the public
+   invariant without accommodating the suspected defect. Preserve its actual
+   outcome. It is expected to fail if the report is correct, but if it passes or
+   cannot run, report that rather than forcing a failure.
+5. Run that test and report the exact command and outcome.
+6. Retain and report relevant unexpected discoveries even if they do not fit the
+   anticipated diagnosis.
 
-Prohibited effects
-  No push, publication, external write, or unrelated cleanup.
+You may read fixture files, run local commands, and add or modify test files. Do
+not modify production code, weaken or remove existing tests, perform unrelated
+cleanup, push or publish, or make an external write. Relevant starting points
+are `lib/harness/session.ex`, `lib/harness/plugin/server.ex`, and the
+`test/harness/plugin_test.exs` file.
 
-Required evidence
-  Relevant tests and their exact outcomes.
-  Observed generation/state behavior.
-  Reload failure behavior.
-  File or event references for consequential claims.
+Support the diagnosis with relevant source locations and include the
+regression-test artifact plus the exact test command and observed output. Keep
+established, contradicted, and unresolved conclusions distinct; do not infer a
+broader reload guarantee without supporting evidence.
 
-Completion
-  Every obligation is supported, contradicted, or explicitly unresolved.
+The task is complete when every requested item has an explicit outcome and both
+the regression-test artifact and result are present. An explicit unresolved
+outcome is valid when the available evidence cannot decide it.
 ```
 
-This is a starting representation, not a proposed public API.
+## Exact JSON Mission input segment for B and D
 
-## Evidence-carrying result draft
+The subject receives the following pretty-printed object inside a minimal text
+wrapper identifying it as the task Mission:
 
-```text
-MissionResult
-├── mission_id
-├── status
-├── claims[]
-│   ├── stable claim ID
-│   ├── statement
-│   ├── epistemic type
-│   ├── evidence references
-│   ├── scope and assumptions
-│   └── supporting · contradicted · unresolved
-├── obligation outcomes[]
-├── artifacts[]
-├── effects[]
-├── contradictions[]
-├── unexpected discoveries[]
-├── unresolved uncertainty[]
-└── recommended next action
+```json
+{
+  "kind": "mission",
+  "version": 1,
+  "id": "EXP-001-PILOT",
+  "objective": "Investigate the reported failed multi-plugin reload, diagnose its cause and scope without repairing production code, and leave a focused regression test with its actual outcome preserved.",
+  "context": {
+    "fixture": "Isolated EXP-001 experiment fixture.",
+    "starting_state": [
+      "counter and other are valid stateful generation-1 plugins.",
+      "counter has been invoked once to establish state and session history."
+    ],
+    "reported_symptom": {
+      "status": "unverified",
+      "statement": "After counter is changed to a valid generation-2 candidate and other is changed to malformed source, Harness.reload_plugins/1 reports other's parse failure and commits no new generation, but a later counter invocation fails."
+    },
+    "source_references": [
+      "lib/harness/session.ex",
+      "lib/harness/plugin/server.ex",
+      "test/harness/plugin_test.exs"
+    ]
+  },
+  "obligations": [
+    {
+      "id": "O1",
+      "statement": "Reproduce or contradict the report through externally observable behavior."
+    },
+    {
+      "id": "O2",
+      "statement": "Diagnose the cause and identify the narrow production boundary responsible without changing it."
+    },
+    {
+      "id": "O3",
+      "statement": "Determine which relevant reload behaviors remain intact, which are violated, and which broader guarantees the available evidence cannot establish."
+    },
+    {
+      "id": "O4",
+      "statement": "Add one minimal deterministic regression test that asserts I1 without accommodating the suspected defect. Preserve its actual outcome. It is expected to fail if the report is correct, but report a passing or un-runnable test rather than forcing a failure."
+    },
+    {
+      "id": "O5",
+      "statement": "Run the regression test and report the exact command and outcome."
+    },
+    {
+      "id": "O6",
+      "statement": "Retain and report relevant unexpected discoveries even when they do not fit the anticipated diagnosis."
+    }
+  ],
+  "invariants": [
+    {
+      "id": "I1",
+      "statement": "After a failed multi-plugin reload, each prior valid plugin generation remains usable with its pre-reload state."
+    }
+  ],
+  "permitted_effects": [
+    "Read fixture files.",
+    "Run local commands.",
+    "Add or modify test files."
+  ],
+  "prohibited_effects": [
+    "Modify production code.",
+    "Weaken or remove existing tests.",
+    "Perform unrelated cleanup.",
+    "Push or publish.",
+    "Make an external write."
+  ],
+  "deliverables": [
+    {
+      "id": "D1",
+      "kind": "regression_test_patch",
+      "outcome_policy": "preserve_actual",
+      "expected_if_report_is_correct": "failing",
+      "satisfies": ["O4"]
+    },
+    {
+      "id": "D2",
+      "kind": "result",
+      "satisfies": ["O1", "O2", "O3", "O5", "O6"]
+    }
+  ],
+  "required_evidence": [
+    {
+      "id": "E1",
+      "supports": ["O1", "O2", "O3"],
+      "kinds": ["source_location", "observed_behavior"]
+    },
+    {
+      "id": "E2",
+      "supports": ["O4", "O5"],
+      "kinds": ["test_artifact", "test_command", "observed_output"]
+    }
+  ],
+  "uncertainty_policy": "Keep established, contradicted, and unresolved conclusions distinct. Do not infer a broader reload guarantee without supporting evidence.",
+  "completion_criteria": [
+    "O1 through O6 have explicit outcomes, including unresolved when necessary.",
+    "D1 and D2 are present."
+  ]
+}
 ```
+
+Conditions A and B append exactly:
+`When finished, provide your result in any clear form.` Conditions C and D
+instead append the same evidence-receipt clause, which will be frozen after
+consequential claims, epistemic types, and evidence references are defined. The
+wrappers themselves must contain no additional task fact.
+
+## Pilot evidence-receipt shape
+
+```json
+{
+  "kind": "evidence_receipt",
+  "version": 1,
+  "task_id": "EXP-001-PILOT",
+  "status": "...",
+  "claims": [
+    {
+      "id": "C1",
+      "statement": "...",
+      "epistemic_type": "...",
+      "disposition": "...",
+      "evidence_references": ["..."],
+      "scope_and_assumptions": "..."
+    }
+  ],
+  "obligation_outcomes": ["..."],
+  "artifacts": ["..."],
+  "effects": ["..."],
+  "contradictions": ["..."],
+  "unexpected_discoveries": ["..."],
+  "unresolved_uncertainty": ["..."],
+  "recommended_next_action": "..."
+}
+```
+
+The receipt uses `task_id`, rather than `mission_id`, so the output factor does
+not presuppose that its input was a Mission. Consequential-claim rules,
+epistemic types, dispositions, evidence-reference syntax, and the nested shapes
+still require separate decisions before this contract is frozen.
 
 No byte cap is part of the semantic contract. Result size is measured. If a
 result cannot fit naturally, it should retain full detail and produce semantic
@@ -199,9 +529,92 @@ Candidate scenarios:
    concurrency guarantee; assess whether uncertainty is preserved.
 6. **Decoy:** an unrelated suspicious detail tests Mission drift and restraint.
 
-Do not begin with all scenarios. Select one representative scenario for the
-pilot, then freeze a small balanced set for the main run. Seeded defects must be
-documented in a blinded ground-truth ledger unavailable to the subject.
+Do not begin with all scenarios. The main study should later freeze a small,
+balanced set. Seeded defects must be documented in a blinded ground-truth ledger
+unavailable to the subject.
+
+### Adopted pilot scenario: partial-preparation rollback
+
+The pilot uses a deterministic, seeded defect in **multi-plugin invalid-reload
+rollback**. This is stronger than making the first replacement malformed: a
+failure before any candidate is prepared tests rejection, but not whether a
+partially prepared reload is rolled back atomically.
+
+The isolated fixture is derived from the Harness revision that introduced this
+experiment and contains:
+
+1. Two valid, stateful generation-1 plugins, A and B.
+2. A recorded invocation of A that establishes plugin state and session history.
+3. A valid generation-2 candidate for A followed by a malformed candidate for B.
+4. One narrow seeded defect: when B fails during preparation, the reload error
+   path does not abort A's already prepared candidate.
+
+The reload therefore reports B's parse failure and does not commit a new tool
+registry, but A remains pending. The old A tool is no longer available for a
+subsequent invocation even though the last valid generation should have remained
+active. B's old generation, prior history, and prior tool outcome remain intact.
+
+The exact existing test that states this invariant must not be visible in the
+subject fixture. All four conditions receive the same fixture, symptom report,
+repository context, and available tools. The fixture commit and digest will be
+frozen after the pilot mechanics are implemented; this design decision does not
+create the fixture yet.
+
+The blinded ground-truth ledger records at least these facts separately:
+
+- **GT-001 — Seeded cause:** the later prepare-failure path omits cleanup of an
+  earlier prepared candidate.
+- **GT-002 — Reported failure:** reload returns B's parse error and commits no
+  new registry or generation.
+- **GT-003 — Violated invariant:** A remains pending, so its prior valid tool is
+  unavailable rather than active after the failed reload.
+- **GT-004 — Preserved behavior:** B remains on its prior generation and is
+  usable; session history and completed pre-reload outcomes remain intact.
+- **GT-005 — Repair boundary:** successful diagnosis identifies cleanup of all
+  previously prepared candidates as the relevant production boundary; the
+  experiment does not require a production repair.
+- **GT-006 — Scope limit:** this scenario does not establish in-flight
+  generation coherence, successful migration semantics, or correctness of every
+  other reload-failure path.
+
+The evaluator keeps a deterministic reproducer for these facts outside the
+subject-visible fixture. The subject's test is evidence to evaluate, not the
+source of ground truth.
+
+### Adopted pilot work scope: diagnose and add a regression test
+
+The subject must diagnose the seeded defect and add one minimal deterministic
+regression test, but must not repair production code. The test asserts the
+public invariant without accommodating the suspected defect, and its actual
+outcome is preserved. It is expected to fail when the report is correct, but the
+protocol does not require the subject to manufacture a failure.
+
+The subject must:
+
+1. Reproduce the externally visible failed-rollback behavior.
+2. Identify the causal production boundary without changing it.
+3. Add a focused test of the public guarantee that A's prior generation remains
+   usable, with its state preserved, after the multi-plugin reload fails.
+4. Run the test and report the exact command and outcome.
+5. Leave the regression test and its actual outcome as reviewable artifacts.
+6. Distinguish established findings from guarantees this scenario cannot test.
+
+Production changes, test weakening, unrelated cleanup, pushes, and external
+writes are prohibited. A test that merely inspects private pending state is
+insufficient by itself: the regression must assert externally observable
+behavior. Internal state may still be inspected as diagnostic evidence.
+
+All four conditions must state the same outcome policy: failure is expected if
+the report is correct, production must not be repaired, and a passing or
+un-runnable test must be reported rather than forced to fail. Otherwise ordinary
+agent conventions to leave a green worktree could create an instructional
+difference or induce an unrequested production repair. The subject-authored test
+does not replace the evaluator's blinded reproducer.
+
+This scope provides a concrete artifact and execution evidence for claim linkage
+and review-effort measurement. Diagnose-only work would over-weight prose
+quality; requiring a production fix would add implementation quality, repair
+choice, and broader mutation as confounds.
 
 ## Phases
 
@@ -428,8 +841,9 @@ When execution begins, each run should contain:
     └── full-review.json
 ```
 
-Formats remain provisional until the deterministic phase proves what Harness can
-capture without invasive implementation.
+Run-storage formats remain provisional until the deterministic phase proves what
+Harness can capture without invasive implementation. The pilot's subject-facing
+Mission and evidence receipt use the adopted JSON v1 shapes.
 
 ## Known confounds
 
@@ -443,23 +857,22 @@ capture without invasive implementation.
 - Same-model subject and evaluator failures may be correlated.
 - Tool output truncation can remove relevant raw evidence.
 - A seeded bug may reward benchmark-specific behavior.
+- JSON syntax or input-output representation congruence may drive an observed
+  effect that is incorrectly attributed to Mission or receipt semantics.
 
 These are reasons to interpret carefully, not reasons to avoid the experiment.
 
 ## Open design questions before preregistration
 
-1. What exact scenario set is small but discriminating?
-2. Should the subject diagnose only, or diagnose and modify?
-3. What qualifies as a consequential claim?
-4. Which epistemic types are useful without becoming ceremonial?
-5. How are evidence references represented and mechanically validated?
-6. What context is information-equivalent across prompt formats?
-7. Which evaluator should establish the primary disposition?
-8. What model/provider and run count fit the initial budget?
-9. Where should large raw transcripts live?
-10. What data must be redacted before a record can be committed?
-11. How should malformed structured results be retained and evaluated?
-12. What constitutes enough evidence to proceed to EXP-002?
+1. What exact main-study scenario set is small but discriminating?
+2. How are evidence references represented and mechanically validated?
+3. What exact context is information-equivalent across prompt renderings?
+4. Which evaluator should establish the primary disposition?
+5. What model/provider and run count fit the initial budget?
+6. Where should large raw transcripts live?
+7. What data must be redacted before a record can be committed?
+8. How should malformed structured results be retained and evaluated?
+9. What constitutes enough evidence to proceed to EXP-002?
 
 ## Experiment roadmap captured
 
@@ -473,6 +886,8 @@ the original vision.
 
 - [Origin conversation and first-experiment rationale](https://ampcode.com/threads/T-01a01640-f953-736b-9aa4-936428e10fa3)
 - [Harness Experimental Lab charter](README.md)
+- [Harness Research Glossary](../glossary.md)
+- [Harness Decision Log](../decisions/README.md)
 - [Living Software](../living-software.md)
 - [Harness Vision experiments](../harness-vision.md#experiments-that-can-falsify-the-vision)
 - Current API boundary: `Harness.start_session/1`, `Harness.ask/3`

@@ -1,5 +1,51 @@
 # AGENTS.md
 
+## Research, experiments, and decision records
+
+Git-tracked repository documents—not Amp threads, Harness Sessions, or orbs—are
+the canonical research record. Before changing research semantics, experiment
+design, evaluation, or related architecture, read:
+
+- `docs/glossary.md` — canonical working vocabulary and stable term keys.
+- `docs/decisions/README.md` — ADR process, status rules, template, and index.
+- `docs/experiments/README.md` — Experimental Lab charter, record layers,
+  provenance, retention, and curation rules.
+- The relevant protocol under `docs/experiments/` and every ADR it lists as a
+  governing decision.
+
+Follow these rules:
+
+- Add or revise a glossary entry before preregistration when a term can change a
+  hypothesis, permission, state transition, measurement, evaluation, or
+  conclusion. Protocols pin the glossary Git commit they use.
+- Record a consequential research or design choice as a small numbered ADR in
+  `docs/decisions/`; update the index and link the ADR from governed protocols.
+  Do not create ADRs for routine edits with no meaningful alternative.
+- Do not rewrite an accepted ADR to make history look different. A material
+  change creates a superseding ADR; retain the prior rationale, alternatives,
+  consequences, provenance, and revisit triggers.
+- Keep source assertions, immutable raw records, normalized observations,
+  interpretations, findings, and decisions distinct. Preserve negative,
+  malformed, interrupted, and unexpected records subject to declared privacy and
+  secret redaction.
+- After preregistration, change protocol semantics only through an explicit,
+  versioned amendment that states what changed, why, and which data had already
+  been observed. Never silently mix runs from incompatible protocol versions.
+- Respect each experiment's lifecycle status. Do not implement or execute a
+  fixture, schema, runner, capture system, or product change while its protocol
+  still reserves that work for a later phase.
+- Run manifests must identify their protocol version, pinned glossary commit,
+  and governing ADR IDs. Findings and later ADRs must cite the runs and
+  decisions they use or affect.
+- Use terms precisely: an Amp thread is not a Harness Session, an orb is an
+  execution environment, and a run is one attempted condition/scenario
+  execution.
+
+For documentation changes, run `git diff --check`, validate embedded JSON, and
+verify local Markdown links. Markdown and JSON are canonical unless a protocol
+explicitly adopts another format; do not hand-maintain a second generated source
+of truth.
+
 ## Cursor Cloud specific instructions
 
 Harness is a single Mix app (an Elixir coding-agent CLI). Standard commands live

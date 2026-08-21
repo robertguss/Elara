@@ -289,6 +289,28 @@ defmodule Harness.Session.StoreTest do
     assert File.regular?(store.path)
   end
 
+  test "named new stores persist a header and appear in list", %{cwd: cwd} do
+    store = Store.new(cwd, "manual-startup-name")
+
+    assert File.regular?(store.path)
+    [info] = Store.list(cwd)
+    assert info.path == store.path
+    assert info.name == "manual-startup-name"
+    assert info.id == store.id
+
+    [header] = decode_lines(store.path)
+    assert header["name"] == "manual-startup-name"
+    assert header["id"] == store.id
+    assert header["cwd"] == Path.expand(cwd)
+    assert header["version"] == 1
+    assert Map.has_key?(header, "leaf")
+
+    assert {:ok, renamed} = Store.rename(store, "a different readable name")
+    [info] = Store.list(cwd)
+    assert info.path == renamed.path
+    assert info.name == "a different readable name"
+  end
+
   test "memory stores never touch disk", %{root: root, cwd: cwd} do
     store = Store.memory(cwd)
     assert {:ok, store} = Store.append(store, Message.user("ephemeral"))

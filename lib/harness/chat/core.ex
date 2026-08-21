@@ -19,6 +19,7 @@ defmodule Harness.Chat.Core do
           | {:branch_result, :tree | :fork, {:ok, String.t(), [Message.t()]} | {:error, term()}}
           | {:action_result, :clone | :name, :ok | {:error, term()}}
           | {:reload_result, {:ok, [Harness.Plugin.Info.t()]} | {:error, term()}}
+          | {:why_result, {:ok, map()} | {:error, term()}}
           | :ask_rejected
 
   @type effect ::
@@ -31,6 +32,7 @@ defmodule Harness.Chat.Core do
           | :clone_session
           | {:name_session, String.t()}
           | :reload_plugins
+          | {:why, :latest | pos_integer()}
           | :interrupt
           | {:halt, 0 | 1}
 
@@ -41,6 +43,7 @@ defmodule Harness.Chat.Core do
     "/interrupt" => :interrupt,
     "/stop" => :interrupt,
     "/reload" => :reload,
+    "/why" => :why_latest,
     "/resume" => :resume_list,
     "/tree" => :tree_list,
     "/fork" => :fork_list,
@@ -54,6 +57,7 @@ defmodule Harness.Chat.Core do
   /help       this list
   /interrupt  cancel the current turn
   /reload     reload local plugins
+  /why [N]    explain the latest event, or event N
   /resume     list saved sessions
   /resume N   resume saved session N
   /tree       list user turns; /tree N branches in this session
@@ -104,6 +108,10 @@ defmodule Harness.Chat.Core do
     {:idle, print([reload_result(result), @prompt])}
   end
 
+  def step(:idle, {:why_result, result}) do
+    {:idle, print([why_result(result), @prompt])}
+  end
+
   def step(:idle, {:resume_result, {:ok, history}}) do
     {:idle, print([render_transcript(history), @prompt])}
   end
@@ -127,6 +135,7 @@ defmodule Harness.Chat.Core do
   def step({:in_turn, _} = phase, {:branch_result, _, _}), do: {phase, []}
   def step({:in_turn, _} = phase, {:action_result, _, _}), do: {phase, []}
   def step({:in_turn, _} = phase, {:reload_result, _}), do: {phase, []}
+  def step({:in_turn, _} = phase, {:why_result, _}), do: {phase, []}
 
   def step({:in_turn, prompt}, {:event, event}) do
     in_turn_event(prompt, event)
@@ -148,6 +157,7 @@ defmodule Harness.Chat.Core do
   def step({:exiting, _} = phase, {:branch_result, _, _}), do: {phase, []}
   def step({:exiting, _} = phase, {:action_result, _, _}), do: {phase, []}
   def step({:exiting, _} = phase, {:reload_result, _}), do: {phase, []}
+  def step({:exiting, _} = phase, {:why_result, _}), do: {phase, []}
 
   def step({:exiting, code} = phase, {:event, {:turn_ended, outcome} = event}) do
     {phase, end_prints(outcome, event) ++ [{:halt, code}]}
@@ -162,6 +172,9 @@ defmodule Harness.Chat.Core do
   defp idle_line(:interrupt), do: {:idle, print(@prompt)}
   defp idle_line(:help), do: {:idle, print([@help, @prompt])}
   defp idle_line(:reload), do: {:idle, [:reload_plugins]}
+  defp idle_line(:why_latest), do: {:idle, [{:why, :latest}]}
+  defp idle_line({:why, sequence}), do: {:idle, [{:why, sequence}]}
+  defp idle_line(:invalid_why), do: {:idle, print(["usage: /why or /why N\n", @prompt])}
   defp idle_line(:resume_list), do: {:idle, [:list_sessions]}
   defp idle_line({:resume, index}), do: {:idle, [{:resume_session, index}]}
   defp idle_line(:invalid_resume), do: {:idle, print(["usage: /resume or /resume N\n", @prompt])}
@@ -196,6 +209,8 @@ defmodule Harness.Chat.Core do
               :fork_list,
               :clone,
               :reload,
+              :why_latest,
+              :invalid_why,
               :invalid_tree,
               :invalid_fork,
               :invalid_name
@@ -203,7 +218,7 @@ defmodule Harness.Chat.Core do
        do: {phase, print(@refuse)}
 
   defp in_turn_line(phase, _prompt, {command, _})
-       when command in [:tree, :fork, :name],
+       when command in [:tree, :fork, :name, :why],
        do: {phase, print(@refuse)}
 
   defp in_turn_line(phase, _prompt, {:unknown, _}), do: {phase, print(@refuse)}
@@ -270,6 +285,11 @@ defmodule Harness.Chat.Core do
     ["    error · ", first, "\n\n"]
   end
 
+  defp tool_result_line({:indeterminate, text}) do
+    first = text |> String.split("\n") |> hd()
+    ["    indeterminate · ", first, "\n\n"]
+  end
+
   defp tool_detail({:ok, map}) when map_size(map) == 0, do: nil
 
   defp tool_detail({:ok, map}) do
@@ -319,6 +339,9 @@ defmodule Harness.Chat.Core do
 
       Regex.match?(~r/^\/name(?:\s|$)/, trimmed) ->
         parse_name(trimmed)
+
+      Regex.match?(~r/^\/why\s/, trimmed) ->
+        parse_index_command(trimmed, "/why", :why, :invalid_why)
 
       String.starts_with?(trimmed, "/") ->
         {:unknown, trimmed}
@@ -380,6 +403,30 @@ defmodule Harness.Chat.Core do
   end
 
   defp reload_result({:error, reason}), do: "reload failed: #{inspect(reason)}\n"
+
+  defp why_result({:ok, explanation}) do
+    id = explanation.transition_id
+
+    chain =
+      Enum.map_join(explanation.chain, " -> ", &Integer.to_string(&1.transition_id.sequence))
+
+    [
+      "transition ",
+      id.recording_id,
+      ":",
+      Integer.to_string(id.sequence),
+      " effect ",
+      to_string(explanation.effect_index || "-"),
+      "\nfact: ",
+      inspect(explanation.fact),
+      "\ncausal chain: ",
+      chain,
+      "\n"
+    ]
+  end
+
+  defp why_result({:error, :not_found}), do: "no recorded transition for that event\n"
+  defp why_result({:error, reason}), do: "why failed: #{inspect(reason)}\n"
 
   defp session_list([]), do: "no saved sessions for this directory\n"
 

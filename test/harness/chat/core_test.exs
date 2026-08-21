@@ -29,6 +29,9 @@ defmodule Harness.Chat.CoreTest do
     {:idle_eof, :idle, :eof, :idle, [{:halt, 0}]},
     {:idle_interrupt, :idle, {:line, "/interrupt"}, :idle, [{:print, "> "}]},
     {:idle_reload, :idle, {:line, "/reload"}, :idle, [:reload_plugins]},
+    {:idle_why, :idle, {:line, "/why"}, :idle, [{:why, :latest}]},
+    {:idle_why_event, :idle, {:line, "/why 7"}, :idle, [{:why, 7}]},
+    {:idle_why_bad, :idle, {:line, "/why nope"}, :idle, [{:print, "usage: /why or /why N\n> "}]},
     {:idle_resume_list, :idle, {:line, "/resume"}, :idle, [:list_sessions]},
     {:idle_resume_pick, :idle, {:line, "/resume 2"}, :idle, [{:resume_session, 2}]},
     {:idle_resume_bad_index, :idle, {:line, "/resume 0"}, :idle,
@@ -45,12 +48,12 @@ defmodule Harness.Chat.CoreTest do
     {:idle_help, :idle, {:line, "/help"}, :idle,
      [
        {:print,
-        "/help       this list\n/interrupt  cancel the current turn\n/reload     reload local plugins\n/resume     list saved sessions\n/resume N   resume saved session N\n/tree       list user turns; /tree N branches in this session\n/fork       list user turns; /fork N branches into a new session\n/clone      copy the current path into a new session\n/name TEXT  name the current session\n/quit       exit\n> "}
+        "/help       this list\n/interrupt  cancel the current turn\n/reload     reload local plugins\n/why [N]    explain the latest event, or event N\n/resume     list saved sessions\n/resume N   resume saved session N\n/tree       list user turns; /tree N branches in this session\n/fork       list user turns; /fork N branches into a new session\n/clone      copy the current path into a new session\n/name TEXT  name the current session\n/quit       exit\n> "}
      ]},
     {:idle_h, :idle, {:line, "/h"}, :idle,
      [
        {:print,
-        "/help       this list\n/interrupt  cancel the current turn\n/reload     reload local plugins\n/resume     list saved sessions\n/resume N   resume saved session N\n/tree       list user turns; /tree N branches in this session\n/fork       list user turns; /fork N branches into a new session\n/clone      copy the current path into a new session\n/name TEXT  name the current session\n/quit       exit\n> "}
+        "/help       this list\n/interrupt  cancel the current turn\n/reload     reload local plugins\n/why [N]    explain the latest event, or event N\n/resume     list saved sessions\n/resume N   resume saved session N\n/tree       list user turns; /tree N branches in this session\n/fork       list user turns; /fork N branches into a new session\n/clone      copy the current path into a new session\n/name TEXT  name the current session\n/quit       exit\n> "}
      ]},
     {:idle_unknown, :idle, {:line, "/foo"}, :idle, [{:print, "unknown command /foo. /help\n> "}]},
     {:idle_escape, :idle, {:line, "//quit"}, {:in_turn, "/quit"},

@@ -97,6 +97,7 @@ defmodule Harness.Provider.OpenAI do
       case outcome do
         {:ok, text} -> text
         {:error, text} -> "ERROR: " <> text
+        {:indeterminate, text} -> "INDETERMINATE: " <> text
       end
 
     %{"role" => "tool", "tool_call_id" => id, "content" => content}

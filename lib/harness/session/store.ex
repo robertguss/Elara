@@ -77,12 +77,23 @@ defmodule Harness.Session.Store do
     id = generate_id()
     {:ok, root} = root()
 
-    %__MODULE__{
+    store = %__MODULE__{
       id: id,
       cwd: cwd,
       path: Path.join([root, cwd_key(cwd), "#{id}.jsonl"]),
       name: name
     }
+
+    case name do
+      name when is_binary(name) and name != "" ->
+        case save(store) do
+          {:ok, store} -> store
+          {:error, _reason} -> store
+        end
+
+      _ ->
+        store
+    end
   end
 
   @spec memory(String.t()) :: t()
@@ -134,6 +145,18 @@ defmodule Harness.Session.Store do
   @spec user_entries(t()) :: [Entry.t()]
   def user_entries(%__MODULE__{entries: entries}) do
     Enum.filter(entries, &is_struct(&1.message, User))
+  end
+
+  @spec history_before_user(t(), String.t()) :: {:ok, [Message.t()]} | {:error, :invalid_entry}
+  def history_before_user(%__MODULE__{} = store, id) when is_binary(id) do
+    case Enum.find(store.entries, &(&1.id == id and is_struct(&1.message, User))) do
+      nil ->
+        {:error, :invalid_entry}
+
+      entry ->
+        history = store |> path_entries(entry.parent_id) |> Enum.map(& &1.message)
+        {:ok, history}
+    end
   end
 
   @spec move_before_user(t(), String.t()) :: {:ok, t(), String.t()} | {:error, term()}
@@ -424,11 +447,17 @@ defmodule Harness.Session.Store do
   defp info_for_path(path, cwd) do
     with {:ok, %{type: :regular, mtime: timestamp}} <- File.stat(path, time: :posix),
          {:ok, store} <- open(path, cwd),
-         true <- Enum.any?(store.entries, &is_struct(&1.message, User)) do
+         true <- listable?(store) do
       [%Info{path: path, id: store.id, cwd: store.cwd, timestamp: timestamp, name: store.name}]
     else
       _ -> []
     end
+  end
+
+  defp listable?(%__MODULE__{name: name}) when is_binary(name) and name != "", do: true
+
+  defp listable?(%__MODULE__{entries: entries}) do
+    Enum.any?(entries, &is_struct(&1.message, User))
   end
 
   defp decode_file_lines(raw) do
@@ -625,6 +654,7 @@ defmodule Harness.Session.Store do
 
   defp encode_outcome({:ok, text}), do: %{"ok" => text}
   defp encode_outcome({:error, text}), do: %{"error" => text}
+  defp encode_outcome({:indeterminate, text}), do: %{"indeterminate" => text}
 
   defp decode_outcome(%{"ok" => text} = encoded)
        when map_size(encoded) == 1 and is_binary(text),
@@ -633,6 +663,10 @@ defmodule Harness.Session.Store do
   defp decode_outcome(%{"error" => text} = encoded)
        when map_size(encoded) == 1 and is_binary(text),
        do: {:ok, {:error, text}}
+
+  defp decode_outcome(%{"indeterminate" => text} = encoded)
+       when map_size(encoded) == 1 and is_binary(text),
+       do: {:ok, {:indeterminate, text}}
 
   defp decode_outcome(_encoded), do: {:error, :invalid_message}
 

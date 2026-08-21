@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A compact research map for reinventing software production in the age of AI and agentic development.">
+  <title>Software Production Frontiers</title>
+  <style>
+    :root {
+      --ink: #15201d;
+      --muted: #5d6b66;
+      --paper: #f5f1e8;
+      --panel: rgba(255, 253, 247, .82);
+      --line: #d9d2c2;
+      --green: #176b57;
+      --teal: #128f82;
+      --gold: #bf772d;
+      --violet: #6750a4;
+      --shadow: 0 20px 55px rgba(35, 48, 43, .09);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 5%, rgba(18,143,130,.13), transparent 24rem),
+        radial-gradient(circle at 92% 18%, rgba(191,119,45,.12), transparent 26rem),
+        var(--paper);
+      font: 17px/1.68 ui-serif, Georgia, Cambria, "Times New Roman", serif;
+    }
+    a { color: var(--green); text-underline-offset: .18em; }
+    a:hover { color: var(--teal); }
+    code, pre, .eyebrow, nav, th, .tag, .index {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+    header { padding: 76px 0 48px; }
+    .eyebrow { color: var(--green); text-transform: uppercase; letter-spacing: .15em; font-size: .76rem; font-weight: 800; }
+    h1, h2, h3 { font-family: ui-sans-serif, system-ui, sans-serif; line-height: 1.08; letter-spacing: -.035em; }
+    h1 { max-width: 850px; margin: 15px 0 22px; font-size: clamp(3rem, 8vw, 6.5rem); }
+    h1 span { display: block; color: var(--green); }
+    .lede { max-width: 770px; margin: 0; color: var(--muted); font-size: clamp(1.15rem, 2vw, 1.38rem); }
+    .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 55px; align-items: start; }
+    nav { position: sticky; top: 24px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); font-size: .78rem; box-shadow: var(--shadow); }
+    nav strong { display: block; margin-bottom: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+    nav a { display: block; padding: 7px 0; color: var(--ink); text-decoration: none; border-bottom: 1px solid rgba(217,210,194,.65); }
+    nav a:last-child { border: 0; }
+    main { min-width: 0; padding-bottom: 90px; }
+    section { margin-bottom: 70px; scroll-margin-top: 30px; }
+    h2 { margin: 0 0 24px; font-size: clamp(2rem, 4vw, 3.3rem); }
+    h3 { margin: 32px 0 12px; font-size: 1.45rem; }
+    .number { display: block; margin-bottom: 8px; color: var(--gold); font: 800 .76rem/1 ui-monospace, monospace; letter-spacing: .15em; text-transform: uppercase; }
+    .thesis { padding: 30px; border-left: 5px solid var(--green); border-radius: 0 18px 18px 0; background: var(--panel); box-shadow: var(--shadow); font-size: 1.17rem; }
+    .scarcity { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 25px 0; }
+    .pill { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.52); font-family: ui-sans-serif, system-ui, sans-serif; font-size: .92rem; font-weight: 650; }
+    pre { overflow-x: auto; margin: 26px 0; padding: 24px; border-radius: 16px; color: #d8f3ea; background: #142622; font-size: .81rem; line-height: 1.45; box-shadow: var(--shadow); }
+    .layers { display: grid; gap: 17px; }
+    .layer { padding: 25px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); box-shadow: 0 10px 30px rgba(35,48,43,.055); }
+    .layer-head { display: flex; gap: 14px; align-items: baseline; }
+    .index { color: var(--teal); font-weight: 900; }
+    .layer h3 { margin: 0; }
+    .frontiers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 20px; }
+    .frontier { padding: 16px; border-radius: 12px; background: rgba(23,107,87,.065); }
+    .frontier strong { display: block; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .frontier span { color: var(--muted); font-size: .94rem; }
+    .deep-dives { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .dive { display: flex; flex-direction: column; padding: 24px; border-radius: 18px; color: #f7f5ee; background: #173c34; box-shadow: var(--shadow); }
+    .dive:nth-child(2) { background: #4b3b70; }
+    .dive:nth-child(3) { background: #7a4921; }
+    .dive h3 { margin-top: 8px; }
+    .dive p { flex: 1; color: rgba(255,255,255,.78); }
+    .dive a { color: white; font-family: ui-sans-serif, system-ui, sans-serif; font-weight: 750; }
+    .tag { color: rgba(255,255,255,.7); font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; }
+    .seeds { columns: 2; column-gap: 16px; padding: 0; list-style: none; }
+    .seeds li { break-inside: avoid; margin: 0 0 16px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+    .seeds strong { display: block; font-family: ui-sans-serif, system-ui, sans-serif; }
+    table { width: 100%; border-collapse: collapse; background: var(--panel); box-shadow: var(--shadow); }
+    th, td { padding: 14px 16px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    th { color: var(--green); font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; }
+    tr:last-child td { border-bottom: 0; }
+    .discipline { padding: 28px; border-radius: 18px; color: white; background: linear-gradient(135deg, #176b57, #124a63); box-shadow: var(--shadow); }
+    .discipline h2 { color: white; }
+    .discipline ol { padding-left: 22px; }
+    .index-list { columns: 2; column-gap: 45px; }
+    .index-list li { margin-bottom: 10px; break-inside: avoid; }
+    footer { padding: 28px 0 60px; color: var(--muted); border-top: 1px solid var(--line); font-size: .9rem; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: static; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 18px; }
+      nav strong { grid-column: 1 / -1; }
+      .scarcity, .deep-dives { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 620px) {
+      body { font-size: 16px; }
+      .shell { width: min(100% - 24px, 1180px); }
+      header { padding-top: 48px; }
+      nav, .frontiers { grid-template-columns: 1fr; }
+      .seeds, .index-list { columns: 1; }
+      pre { padding: 17px; font-size: .7rem; }
+      th:first-child, td:first-child { display: none; }
+    }
+    @media print {
+      body { background: white; }
+      nav { display: none; }
+      .layout { display: block; }
+      .layer, table, .dive, .discipline { box-shadow: none; break-inside: avoid; }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <header class="shell">
+    <div class="eyebrow">Harness research map · August 2026</div>
+    <h1>Software Production <span>Frontiers</span></h1>
+    <p class="lede">A compact map of assumptions worth challenging as humans and agents begin to conceive, build, prove, operate, and evolve software together.</p>
+  </header>
+
+  <div class="shell layout">
+    <nav aria-label="Page sections">
+      <strong>Explore</strong>
+      <a href="#premise">Premise</a>
+      <a href="#layers">Four layers</a>
+      <a href="#replacements">Replacements</a>
+      <a href="#primitives">Wild primitives</a>
+      <a href="#beam">Why BEAM</a>
+      <a href="#discipline">Discipline</a>
+      <a href="#index">Next threads</a>
+    </nav>
+
+    <main>
+      <section id="premise">
+        <span class="number">01 · Premise</span>
+        <h2>Implementation becomes abundant. Trust does not.</h2>
+        <div class="thesis">The opportunity is not to accelerate every old ceremony. It is to ask which ceremonies existed because implementation was slow, humans held all context, machines were passive, and work moved through documents and queues.</div>
+        <div class="scarcity" aria-label="Scarce resources">
+          <div class="pill">Precise intent</div><div class="pill">Trustworthy evidence</div><div class="pill">Human judgment</div>
+          <div class="pill">Causal history</div><div class="pill">Safe authority</div><div class="pill">Work reconciliation</div>
+        </div>
+        <pre aria-label="Production system transition">Old: Idea → ticket → code → review → CI → deploy
+
+New: Intent + constraints
+              │
+              ▼
+       causal work graph
+              │
+       ┌──────┼──────────┐
+       ▼      ▼          ▼
+   Missions  Cells   Proof graph
+       └──────┼──────────┘
+              ▼
+   reversible release + learning</pre>
+      </section>
+
+      <section id="layers">
+        <span class="number">02 · The whole system</span>
+        <h2>Four layers to reinvent</h2>
+        <div class="layers">
+          <article class="layer">
+            <div class="layer-head"><span class="index">01</span><h3>Meaning · What should exist?</h3></div>
+            <p>Move from prose handed to implementation toward a living model of intent, constraints, assumptions, examples, conflicts, and constitutional invariants.</p>
+            <div class="frontiers">
+              <div class="frontier"><strong>Intent Graph</strong><span>Goals and assumptions become causal, amendable objects.</span></div>
+              <div class="frontier"><strong>Software Constitution</strong><span>Architecture, risk policy, and amendment rules become executable.</span></div>
+              <div class="frontier"><strong>Semantic system model</strong><span>Code becomes one projection of behavior and evidence.</span></div>
+              <div class="frontier"><strong>Agent-verifiable IR</strong><span>Effects, invariants, uncertainty, and provenance are explicit.</span></div>
+            </div>
+          </article>
+          <article class="layer">
+            <div class="layer-head"><span class="index">02</span><h3>Making · How does change happen?</h3></div>
+            <p>Shift from humans editing files and moving tickets toward steering typed missions, alternatives, authority, risk, and evidence across a living system.</p>
+            <div class="frontiers">
+              <div class="frontier"><strong>Software Control Room</strong><span>Missions, causality, evidence, risk, and approvals replace tab primacy.</span></div>
+              <div class="frontier"><strong>Mission topology</strong><span>Objectives carry dependencies, budgets, capabilities, and gates.</span></div>
+              <div class="frontier"><strong>Change portfolios</strong><span>Competing implementations survive until evidence selects among them.</span></div>
+              <div class="frontier"><strong>Invariant stewardship</strong><span>People own promises and risks rather than directory trees.</span></div>
+            </div>
+          </article>
+          <article class="layer">
+            <div class="layer-head"><span class="index">03</span><h3>Proving · Why should change be trusted?</h3></div>
+            <p>Review an argument, not only a diff. Link claims to evidence and assumptions; invalidate proof causally; spend verification in proportion to uncertainty and blast radius.</p>
+            <div class="frontiers">
+              <div class="frontier"><strong>Evidence-first review</strong><span>Claims, uncertainty, scope, and counterexamples lead.</span></div>
+              <div class="frontier"><strong>Living Proof Graph</strong><span>Each claim links to its smallest relevant support.</span></div>
+              <div class="frontier"><strong>Proof leases</strong><span>Evidence expires when its validity domain changes.</span></div>
+              <div class="frontier"><strong>Verification fabric</strong><span>CI becomes incremental, causal, speculative, and risk-adaptive.</span></div>
+            </div>
+          </article>
+          <article class="layer">
+            <div class="layer-head"><span class="index">04</span><h3>Running · How does the system learn?</h3></div>
+            <p>Erase the one-way pipeline. Releases become reversible hypotheses; production evidence updates development assumptions, proof, policy, and organizational memory.</p>
+            <div class="frontiers">
+              <div class="frontier"><strong>Closed evidence loop</strong><span>Reality continuously confirms or invalidates development claims.</span></div>
+              <div class="frontier"><strong>Reversible hypotheses</strong><span>Releases carry predictions, budgets, and retreat policies.</span></div>
+              <div class="frontier"><strong>Causal debugging</strong><span>Trace symptoms through effects and decisions back to intent.</span></div>
+              <div class="frontier"><strong>Durable violations</strong><span>Bugs permanently change future generation and verification.</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="replacements">
+        <span class="number">03 · Deep explorations</span>
+        <h2>Three foundational replacements</h2>
+        <div class="deep-dives">
+          <article class="dive"><span class="tag">History</span><h3>After Git</h3><p>Preserve offline work, immutability, content addressing, and decentralization—but challenge commits, branches, staging, merges, and line diffs as the primary concepts for concurrent agent work.</p><a href="https://ampcode.com/threads/T-01a017c1-34b6-75ac-84c0-3b1aa03344c6">Open version-control discussion →</a></article>
+          <article class="dive"><span class="tag">Evidence</span><h3>After CI</h3><p>Replace broad post-push pipelines with continuously maintained proof selected by causal impact, uncertainty, risk, and reusable verified artifacts.</p><a href="https://ampcode.com/threads/T-01a017c1-4483-732f-9608-1b6082a93435">Open CI discussion →</a></article>
+          <article class="dive"><span class="tag">Environment</span><h3>After “local”</h3><p>Do not merely put a laptop in a cloud VM. Decide which state, identity, authority, privacy, latency, and failure boundaries follow the human, mission, organization, or data.</p><a href="https://ampcode.com/threads/T-01a017c7-68de-754c-8aeb-c07d022ec1a1">Open local-development discussion →</a></article>
+        </div>
+      </section>
+
+      <section id="primitives">
+        <span class="number">04 · Provocations</span>
+        <h2>Strange but promising primitives</h2>
+        <ul class="seeds">
+          <li><strong>Semantic garbage collection</strong>Remove artifacts whose original causal reason no longer exists.</li>
+          <li><strong>Proof leases</strong>Expire evidence when a dependency, assumption, environment, or policy changes.</li>
+          <li><strong>Many-worlds development</strong>Evaluate plausible alternatives before collapsing to one implementation.</li>
+          <li><strong>Human attention scheduler</strong>Route only irreducible ambiguity, risk, and value judgments to people.</li>
+          <li><strong>Organizational causal memory</strong>Retain evidence, alternatives, assumptions, decisions, and outcomes.</li>
+          <li><strong>Digital twin for a change</strong>Simulate behavior, migration, traffic, cost, and failure before granting authority.</li>
+          <li><strong>Evolution laboratory</strong>Replay history against new models, prompts, tools, and policies.</li>
+          <li><strong>Capability-scoped agency</strong>Use least authority, short-lived credentials, and durable effect receipts.</li>
+          <li><strong>Behavioral dependency contracts</strong>Judge capabilities, effects, provenance, evidence, and operations—not only semver.</li>
+        </ul>
+      </section>
+
+      <section id="beam">
+        <span class="number">05 · Technical leverage</span>
+        <h2>Why the BEAM may matter</h2>
+        <p>The BEAM does not solve sandboxing, durable storage, artifact distribution, or hostile multi-tenancy. Its opportunity is as the trusted control fabric for huge numbers of mostly dormant, independently failing, causally connected units of software work.</p>
+        <table>
+          <thead><tr><th>BEAM property</th><th>Possible leverage</th></tr></thead>
+          <tbody>
+            <tr><td>Lightweight processes</td><td>Temporary embodiments of sessions, missions, gates, and project reactors.</td></tr>
+            <tr><td>Supervision</td><td>Explicit lifecycle and recovery policy for active control-plane actors.</td></tr>
+            <tr><td>Mailbox serialization</td><td>One ordered authority for each durable logical entity.</td></tr>
+            <tr><td>Links and monitors</td><td>Failure propagation, cancellation, and bounded delegated work.</td></tr>
+            <tr><td>Trusted distribution</td><td>Location-transparent activation inside a controlled cluster.</td></tr>
+            <tr><td>Hot evolution</td><td>Versioned experiments and migrations with explicit generations and provenance.</td></tr>
+          </tbody>
+        </table>
+        <p><strong>The discipline:</strong> a process is not durable truth, a supervisor is not a transaction, PubSub is not history, and distributed Erlang is not a security boundary.</p>
+      </section>
+
+      <section id="discipline" class="discipline">
+        <span class="number" style="color:#b9eee2">06 · Research discipline</span>
+        <h2>Dream boldly. Design falsifiable experiments.</h2>
+        <ol>
+          <li>Name the old assumption and the valuable property it protected.</li>
+          <li>Propose a replacement primitive, not merely an improved interface.</li>
+          <li>Define the smallest experiment that could disprove its advantage.</li>
+          <li>Measure trustworthy outcomes, latency, cost, and human attention.</li>
+          <li>Preserve provenance so failed ideas improve the next experiment.</li>
+        </ol>
+      </section>
+
+      <section id="index">
+        <span class="number">07 · Continue pulling threads</span>
+        <h2>Exploration index</h2>
+        <ol class="index-list">
+          <li>Intent Graph and Software Constitution</li>
+          <li>Code Is No Longer the Source of Truth</li>
+          <li>Agent-Native Programming Languages and IRs</li>
+          <li>The Post-IDE Software Control Room</li>
+          <li>Human Attention as a Schedulable Resource</li>
+          <li>Evidence-First Review and Living Proof Graphs</li>
+          <li>Repository Memory and Knowledge Invalidation</li>
+          <li>Dependency and Supply-Chain Contracts</li>
+          <li>The Production–Development Continuum</li>
+          <li>Executable Architecture and Governance</li>
+        </ol>
+        <p>This is a navigational companion to <a href="harness-vision.html">Harness: A BEAM-Native Fabric for Software Work</a>. Focused ideas should graduate into separate discussions rather than making either document unbounded.</p>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <div class="shell">Origin: <a href="https://ampcode.com/threads/T-01a01640-f953-736b-9aa4-936428e10fa3">Harness vision and SDLC reinvention discussion</a> · <a href="software-production-frontiers.md">Markdown companion</a></div>
+  </footer>
+</body>
+</html>

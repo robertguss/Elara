@@ -21,6 +21,11 @@ defmodule Harness.ChatTest do
     )
   end
 
+  defp session_pid(session) do
+    {:ok, pid} = Harness.session_pid(session)
+    pid
+  end
+
   defp stored_turn(cwd, prompt, answer) do
     store = Store.new(cwd)
     user = Message.user(prompt)
@@ -104,7 +109,7 @@ defmodule Harness.ChatTest do
 
     task = Task.async(fn -> Harness.Chat.run(session, out) end)
     assert await_output(out, "harness")
-    Process.exit(session, :kill)
+    Process.exit(session_pid(session), :kill)
 
     assert 1 = Task.await(task, 5_000)
   end
@@ -135,7 +140,7 @@ defmodule Harness.ChatTest do
     resumed = await_idle_after(out, "new answer")
 
     assert session == same_pid
-    assert Process.alive?(session)
+    assert Process.alive?(session_pid(session))
     assert Harness.transcript(session) == newest_history
     assert resumed =~ "  you\n  new question\n"
     assert resumed =~ "new answer\n"

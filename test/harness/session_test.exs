@@ -90,6 +90,11 @@ defmodule Harness.SessionTest do
     )
   end
 
+  defp session_pid(session) do
+    {:ok, pid} = Harness.session_pid(session)
+    pid
+  end
+
   test "sync ask returns final text and fans events" do
     provider = script([{:ok, asst("hello")}])
     {:ok, session} = Harness.start_session(provider: provider, tools: [])
@@ -130,6 +135,41 @@ defmodule Harness.SessionTest do
     assert {:error, :busy} = Harness.ask_async(session, "again")
   end
 
+  test "interrupt kills the running tool task immediately" do
+    provider =
+      script([
+        {:ok, asst(nil, [%ToolCall{id: "1", name: "slow", args: {:ok, %{}}}])}
+      ])
+
+    tools = [
+      %Tool{
+        name: "slow",
+        description: "slow",
+        parameters: %{"type" => "object", "properties" => %{}},
+        run: {SlowTool, :run}
+      }
+    ]
+
+    {:ok, session} =
+      Harness.start_session(provider: provider, tools: tools, persist: false)
+
+    :ok = Harness.subscribe(session)
+    assert :ok = Harness.ask_async(session, "go")
+    assert_receive {:harness, ^session, {:tool_started, %ToolCall{id: "1"}}}, 1_000
+
+    Harness.interrupt(session)
+    assert_receive {:harness, ^session, {:turn_ended, :interrupted}}, 1_000
+
+    status = Harness.status(session)
+    assert status.phase == :idle
+    assert status.current_effect == nil
+    assert status.task_count == 0
+
+    refute_receive {:harness, ^session,
+                    {:message_appended, %Message.ToolResult{outcome: {:ok, "late"}}}},
+                   100
+  end
+
   test "tool crash isolates and continues" do
     provider =
       script([
@@ -148,7 +188,7 @@ defmodule Harness.SessionTest do
 
     {:ok, session} = Harness.start_session(provider: provider, tools: tools)
     assert {:ok, "recovered"} = Harness.ask(session, "go")
-    assert Process.alive?(session)
+    assert Process.alive?(session_pid(session))
   end
 
   test "tool timeout becomes error and continues" do
@@ -205,7 +245,7 @@ defmodule Harness.SessionTest do
 
     prior = Harness.transcript(first_session)
     assert {:ok, info} = Store.newest(cwd)
-    GenServer.stop(first_session)
+    GenServer.stop(session_pid(first_session))
 
     next_provider = recording_script([{:ok, asst("a3")}], cwd)
 
@@ -339,6 +379,16 @@ defmodule Harness.SessionTest do
     assert Store.list(cwd) == []
   end
 
+  test "a named session is listable before any user turn" do
+    cwd = unique_cwd()
+
+    assert {:ok, _session} =
+             Harness.start_session(provider: script([]), tools: [], cwd: cwd, name: "startup")
+
+    [info] = Harness.list_sessions(cwd)
+    assert info.name == "startup"
+  end
+
   test "a second writer cannot open the same session file" do
     cwd = unique_cwd()
     store = Store.new(cwd)
@@ -398,7 +448,7 @@ defmodule Harness.SessionTest do
     assert request_messages == prior ++ [Message.user("next")]
     assert persisted_messages == request_messages
 
-    GenServer.stop(session)
+    GenServer.stop(session_pid(session))
     {:ok, reopened} = Store.open(store.path, cwd)
     assert Store.history(reopened) == request_messages ++ [asst("after")]
   end

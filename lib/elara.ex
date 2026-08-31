@@ -36,6 +36,8 @@ defmodule Elara do
     with {:ok, provider} <- fetch_provider(opts),
          {:ok, store} <- prepare_store(opts, cwd),
          {:ok, store} <- seed_store(store, Keyword.get(opts, :seed_history, [])) do
+      effect_journal_path = Keyword.get(opts, :effect_journal_path) || effect_journal_path(store)
+
       core_config = %Core.Config{
         system: system,
         tools: Tool.table(tools),
@@ -52,7 +54,9 @@ defmodule Elara do
         plugin_paths: plugin_paths,
         router: router,
         workspace_id: workspace_id,
-        allowed_capabilities: allowed_capabilities
+        allowed_capabilities: allowed_capabilities,
+        effect_journal_path: effect_journal_path,
+        effect_fault_hook: Keyword.get(opts, :effect_fault_hook, fn _point -> :ok end)
       ]
 
       case DynamicSupervisor.start_child(supervisor, {Session, child_opts}) do
@@ -285,4 +289,16 @@ defmodule Elara do
     |> :crypto.hash(Path.expand(cwd))
     |> Base.url_encode64(padding: false)
   end
+
+  defp effect_journal_path(%Store{id: id, path: nil}) do
+    root =
+      case Store.root() do
+        {:ok, root} -> root
+        {:error, :no_home} -> System.tmp_dir!()
+      end
+
+    Path.join([root, "_effect_journals", "#{id}.sqlite3"])
+  end
+
+  defp effect_journal_path(%Store{path: path}), do: Path.rootname(path) <> ".effects.sqlite3"
 end

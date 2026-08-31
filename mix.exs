@@ -22,6 +22,7 @@ defmodule Elara.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:exqlite, "~> 0.40.0"},
       {:req, "~> 0.5"}
     ]
   end

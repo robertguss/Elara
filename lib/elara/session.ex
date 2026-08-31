@@ -5,6 +5,7 @@ defmodule Elara.Session do
 
   use GenServer
 
+  alias Elara.Effect.{ControllerJournal, Job}
   alias Elara.FlightRecorder
   alias Elara.Plugin.Server, as: PluginServer
   alias Elara.Provider
@@ -21,6 +22,8 @@ defmodule Elara.Session do
             provider: {module(), term()},
             cwd: String.t(),
             tool_timeout_ms: pos_integer(),
+            effect_journal: pid() | nil,
+            effect_journal_path: String.t(),
             base_tools: %{String.t() => Tool.t()},
             plugins: [%{pid: pid(), path: String.t()}],
             subscribers: %{pid() => reference()},
@@ -43,6 +46,8 @@ defmodule Elara.Session do
       :workspace_id,
       :allowed_capabilities,
       :recorder,
+      :effect_journal_path,
+      :effect_fault_hook,
       base_tools: %{},
       plugins: [],
       subscribers: %{},
@@ -52,6 +57,7 @@ defmodule Elara.Session do
       event_log: :queue.new(),
       event_log_size: 0,
       event_log_limit: 1_000,
+      effect_journal: nil,
       pending_reply: nil,
       tasks: %{},
       timers: %{}
@@ -84,6 +90,8 @@ defmodule Elara.Session do
     router = Keyword.fetch!(opts, :router)
     workspace_id = Keyword.fetch!(opts, :workspace_id)
     allowed_capabilities = Keyword.fetch!(opts, :allowed_capabilities)
+    effect_journal_path = Keyword.fetch!(opts, :effect_journal_path)
+    effect_fault_hook = Keyword.fetch!(opts, :effect_fault_hook)
 
     case hydrate(store, core_config) do
       {:ok, store, core} ->
@@ -99,6 +107,8 @@ defmodule Elara.Session do
             router: router,
             workspace_id: workspace_id,
             allowed_capabilities: allowed_capabilities,
+            effect_journal_path: effect_journal_path,
+            effect_fault_hook: effect_fault_hook,
             provider: provider,
             cwd: cwd,
             tool_timeout_ms: tool_timeout_ms,
@@ -121,6 +131,7 @@ defmodule Elara.Session do
 
   @impl true
   def terminate(_reason, shell) do
+    close_effect_journal(shell.effect_journal)
     FlightRecorder.close(shell.recorder)
     Store.release(shell.store)
     :ok
@@ -500,7 +511,7 @@ defmodule Elara.Session do
 
   defp run_effect(
          {:run_tool, core_ref, call, %Tool{plugin: %PluginRef{} = plugin} = tool},
-         _effect_id,
+         effect_id,
          shell
        ) do
     {:ok, args} = call.args
@@ -509,6 +520,7 @@ defmodule Elara.Session do
       {:ok, lease, module, plugin_state} ->
         ctx = %Ctx{cwd: shell.cwd}
         request = tool_request(shell, call, tool, args)
+        shell = commit_tool_intent(shell, effect_id, request, tool)
         config = %{module: module, plugin_state: plugin_state, ctx: ctx}
 
         task =
@@ -529,11 +541,12 @@ defmodule Elara.Session do
     end
   end
 
-  defp run_effect({:run_tool, core_ref, call, tool}, _effect_id, shell) do
+  defp run_effect({:run_tool, core_ref, call, tool}, effect_id, shell) do
     {:ok, args} = call.args
 
     if capabilities_allowed?(tool.capabilities, shell.allowed_capabilities) do
       request = tool_request(shell, call, tool, args)
+      shell = commit_tool_intent(shell, effect_id, request, tool)
 
       task =
         Task.Supervisor.async_nolink(
@@ -856,6 +869,44 @@ defmodule Elara.Session do
       placement: tool.placement,
       mutating: tool.mutating
     }
+  end
+
+  defp commit_tool_intent(shell, _effect_id, %Request{mutating: false}, _tool), do: shell
+
+  defp commit_tool_intent(shell, effect_id, request, tool) do
+    shell = ensure_effect_journal(shell)
+
+    job =
+      Job.new(effect_id,
+        operation_kind: :run_tool,
+        tool_name: request.tool_name,
+        tool_version: request.tool_version,
+        arguments: request.arguments,
+        workspace_id: request.workspace_id,
+        required_capabilities: request.required_capabilities,
+        allowed_capabilities: shell.allowed_capabilities,
+        placement: tool.placement
+      )
+
+    case ControllerJournal.commit_intent(shell.effect_journal, job, shell.effect_fault_hook) do
+      {:ok, ^job} -> shell
+      {:error, reason} -> raise "controller intent persistence failed: #{inspect(reason)}"
+    end
+  end
+
+  defp ensure_effect_journal(%{effect_journal: nil} = shell) do
+    case ControllerJournal.start_link(path: shell.effect_journal_path) do
+      {:ok, journal} -> %{shell | effect_journal: journal}
+      {:error, reason} -> raise "controller journal failed to open: #{inspect(reason)}"
+    end
+  end
+
+  defp ensure_effect_journal(shell), do: shell
+
+  defp close_effect_journal(nil), do: :ok
+
+  defp close_effect_journal(journal) do
+    if Process.alive?(journal), do: ControllerJournal.close(journal), else: :ok
   end
 
   defp capabilities_allowed?(_required, :all), do: true

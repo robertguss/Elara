@@ -520,7 +520,7 @@ defmodule Elara.Session do
       {:ok, lease, module, plugin_state} ->
         ctx = %Ctx{cwd: shell.cwd}
         request = tool_request(shell, call, tool, args)
-        shell = commit_tool_intent(shell, effect_id, request, tool)
+        {shell, request} = commit_tool_intent(shell, effect_id, request, tool)
         config = %{module: module, plugin_state: plugin_state, ctx: ctx}
 
         task =
@@ -546,7 +546,7 @@ defmodule Elara.Session do
 
     if capabilities_allowed?(tool.capabilities, shell.allowed_capabilities) do
       request = tool_request(shell, call, tool, args)
-      shell = commit_tool_intent(shell, effect_id, request, tool)
+      {shell, request} = commit_tool_intent(shell, effect_id, request, tool)
 
       task =
         Task.Supervisor.async_nolink(
@@ -871,7 +871,8 @@ defmodule Elara.Session do
     }
   end
 
-  defp commit_tool_intent(shell, _effect_id, %Request{mutating: false}, _tool), do: shell
+  defp commit_tool_intent(shell, _effect_id, %Request{mutating: false} = request, _tool),
+    do: {shell, request}
 
   defp commit_tool_intent(shell, effect_id, request, tool) do
     shell = ensure_effect_journal(shell)
@@ -889,8 +890,17 @@ defmodule Elara.Session do
       )
 
     case ControllerJournal.commit_intent(shell.effect_journal, job, shell.effect_fault_hook) do
-      {:ok, ^job} -> shell
-      {:error, reason} -> raise "controller intent persistence failed: #{inspect(reason)}"
+      {:ok, ^job} ->
+        request = %{
+          request
+          | job_id: job.job_id,
+            operation_digest: job.operation_digest
+        }
+
+        {shell, request}
+
+      {:error, reason} ->
+        raise "controller intent persistence failed: #{inspect(reason)}"
     end
   end
 

@@ -71,6 +71,8 @@ defmodule Elara.ExecutorTest do
 
   test "request wire value contains identity, deadline, cancellation, capabilities, and placement" do
     request = %Request{
+      job_id: "er1j_v1_job",
+      operation_digest: String.duplicate("a", 64),
       tool_call_id: "call",
       session_id: "session",
       tool_name: "read",

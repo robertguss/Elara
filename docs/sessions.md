@@ -1,6 +1,6 @@
 # Sessions and chat
 
-`mix harness.chat` is the persistent, interactive Harness client. It writes
+`mix elara.chat` is the persistent, interactive Elara client. It writes
 conversation history after each message and lets you resume or branch that
 history later.
 
@@ -8,19 +8,19 @@ history later.
 
 ```bash
 # New session
-mix harness.chat
+mix elara.chat
 
 # New session with a display name and optional first prompt
-mix harness.chat --name "fix parser" "inspect the parser tests"
+mix elara.chat --name "fix parser" "inspect the parser tests"
 
 # New process, newest session for this working directory
-mix harness.chat --continue
-mix harness.chat --continue "continue the previous investigation"
+mix elara.chat --continue
+mix elara.chat --continue "continue the previous investigation"
 ```
 
-Session files live under `~/.harness/sessions/<cwd-key>/`. They are scoped by
+Session files live under `~/.elara/sessions/<cwd-key>/`. They are scoped by
 the session working directory and created with mode `0600`. Starting plain
-`mix harness.chat` creates a new session; it does not silently continue an old
+`mix elara.chat` creates a new session; it does not silently continue an old
 one.
 
 Only one turn runs in a session at a time. A second prompt and commands that
@@ -34,22 +34,22 @@ first, then `/resume N` to switch the current chat to one of them. Its
 transcript is printed after the switch.
 
 Use `/name TEXT` to update the current session's display name. You can also name
-a new session with `mix harness.chat --name TEXT`.
+a new session with `mix elara.chat --name TEXT`.
 
-`mix harness.chat --continue` is the noninteractive shortcut for resuming the
+`mix elara.chat --continue` is the noninteractive shortcut for resuming the
 newest usable session. If there is no saved session for the current directory,
 startup fails instead of creating one.
 
 ## Branch conversation history
 
-Harness stores a tree of messages rather than only a linear transcript.
+Elara stores a tree of messages rather than only a linear transcript.
 
 ### Branch in the same session
 
 1. Run `/tree` to list user turns on the active path.
 2. Run `/tree N` to select one.
 
-Harness moves the active history to just before that user turn and re-submits
+Elara moves the active history to just before that user turn and re-submits
 the selected prompt. Later messages on the old path remain in the same JSONL
 file but are no longer sent to the model on the new path.
 
@@ -58,7 +58,7 @@ file but are no longer sent to the model on the new path.
 1. Run `/fork` to list user turns.
 2. Run `/fork N` to select one.
 
-Harness copies the history before that turn into a new session, switches to it,
+Elara copies the history before that turn into a new session, switches to it,
 and re-submits the selected prompt. The source session is unchanged.
 
 Run `/clone` to copy the complete current path into a new session without

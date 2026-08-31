@@ -2,7 +2,7 @@
 
 ## Cursor Cloud specific instructions
 
-Harness is a single Mix app (an Elixir coding-agent CLI). Standard commands live
+Elara is a single Mix app (an Elixir coding-agent CLI). Standard commands live
 in `README.md` (the "Develop" section) and `mix.exs`; the notes below only cover
 things that are non-obvious in the Cloud environment.
 
@@ -19,26 +19,26 @@ things that are non-obvious in the Cloud environment.
 
 - Lint (check only): `mix format --check-formatted`. Auto-format: `mix format`.
 - Test: `mix test`. Tests never touch the network — they use
-  `Harness.Provider.Scripted`.
+  `Elara.Provider.Scripted`.
 - Build: `mix compile`.
-- Run the CLI: `mix harness.ask "..."`, `mix harness.chat`, `mix harness.login`.
+- Run the CLI: `mix elara.ask "..."`, `mix elara.chat`, `mix elara.login`.
 
 ### Gotchas
 
 - `mix test` intentionally logs a `[error] ... (RuntimeError) boom` line from a
-  crash-recovery test (`Harness.SessionTest.CrashTool`). This is expected; the
+  crash-recovery test (`Elara.SessionTest.CrashTool`). This is expected; the
   run still ends with all tests passing. Do not treat that log line as a
   failure.
-- The real agent (`mix harness.ask` / `mix harness.chat`) needs xAI/Grok
-  credentials: `HARNESS_API_KEY` (preferred) or `XAI_API_KEY`, or an interactive
-  `mix harness.login` (tokens land in `~/.harness/auth.json`). Without
+- The real agent (`mix elara.ask` / `mix elara.chat`) needs xAI/Grok
+  credentials: `ELARA_API_KEY` (preferred) or `XAI_API_KEY`, or an interactive
+  `mix elara.login` (tokens land in `~/.elara/auth.json`). Without
   credentials these commands fail at the network call.
 - To exercise the full agent loop (session + read/write/edit/bash tools) without
   credentials, drive it with the scripted provider via the public API:
-  `Harness.start_session(provider: {Harness.Provider.Scripted, agent_pid}, cwd: dir, persist: false)`,
+  `Elara.start_session(provider: {Elara.Provider.Scripted, agent_pid}, cwd: dir, persist: false)`,
   where `agent_pid` is an `Agent` holding a queue of canned
-  `{:ok, %Harness.Message.Assistant{}}` turns. This is the same mechanism the
+  `{:ok, %Elara.Message.Assistant{}}` turns. This is the same mechanism the
   test suite uses.
-- Chat/ask session files persist under `~/.harness/sessions/<cwd-key>/`;
-  `mix harness.chat --continue` resumes the newest session for the current
+- Chat/ask session files persist under `~/.elara/sessions/<cwd-key>/`;
+  `mix elara.chat --continue` resumes the newest session for the current
   working directory.

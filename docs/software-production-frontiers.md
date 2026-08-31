@@ -7,7 +7,7 @@
 
 This document is intentionally a map, not a complete manifesto. Detailed
 architecture belongs in
-[Harness: A BEAM-Native Fabric for Software Work](harness-vision.md); focused
+[Elara: A BEAM-Native Fabric for Software Work](elara-vision.md); focused
 questions should become their own research threads or design notes rather than
 making this file grow without bound.
 
@@ -234,4 +234,4 @@ Potential focused discussions, in roughly causal order:
 10. Executable Architecture and Governance.
 
 **Origin:**
-[Harness vision and SDLC reinvention discussion](https://ampcode.com/threads/T-01a01640-f953-736b-9aa4-936428e10fa3)
+[Elara vision and SDLC reinvention discussion](https://ampcode.com/threads/T-01a01640-f953-736b-9aa4-936428e10fa3)

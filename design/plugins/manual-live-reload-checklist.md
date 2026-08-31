@@ -4,9 +4,9 @@ This checklist verifies plugin discovery, real xAI tool invocation, state
 continuity, state migration, reload rollback, per-session revision isolation,
 safe reload boundaries, and the `/reload` CLI path.
 
-Run it from the Harness repository on the `feature/live-plugin-reload` branch.
+Run it from the Elara repository on the `feature/live-plugin-reload` branch.
 The plugin is trusted local code and runs with the same operating-system access
-as Harness.
+as Elara.
 
 ## 1. Preflight
 
@@ -26,17 +26,17 @@ as Harness.
 - [ ] Confirm xAI authentication without printing a credential:
 
   ```bash
-  if [ -n "${HARNESS_API_KEY:-${XAI_API_KEY:-}}" ] || [ -f "$HOME/.harness/auth.json" ]; then
+  if [ -n "${ELARA_API_KEY:-${XAI_API_KEY:-}}" ] || [ -f "$HOME/.elara/auth.json" ]; then
     echo "xAI credentials available"
   else
-    echo "Run: mix harness.login"
+    echo "Run: mix elara.login"
   fi
   ```
 
 - [ ] Check for existing plugins. Do not remove or overwrite them:
 
   ```bash
-  find .harness/plugins -maxdepth 1 -type f 2>/dev/null || true
+  find .elara/plugins -maxdepth 1 -type f 2>/dev/null || true
   ```
 
   The test plugin uses the unique ID `manual-counter` and tool name
@@ -46,22 +46,22 @@ as Harness.
 - [ ] Create the plugin directory and clear only this checklist's old files:
 
   ```bash
-  mkdir -p .harness/plugins
-  rm -f .harness/plugins/manual_counter.exs \
-    .harness/plugins/manual_counter.exs.good \
-    .harness/manual-plugin-audit.log
+  mkdir -p .elara/plugins
+  rm -f .elara/plugins/manual_counter.exs \
+    .elara/plugins/manual_counter.exs.good \
+    .elara/manual-plugin-audit.log
   ```
 
 ## 2. Install revision 1
 
-- [ ] Create `.harness/plugins/manual_counter.exs`:
+- [ ] Create `.elara/plugins/manual_counter.exs`:
 
   ```bash
-  cat > .harness/plugins/manual_counter.exs <<'ELIXIR'
+  cat > .elara/plugins/manual_counter.exs <<'ELIXIR'
   defmodule ManualCounterPlugin do
-    @behaviour Harness.Plugin
+    @behaviour Elara.Plugin
 
-    alias Harness.Plugin.ToolSpec
+    alias Elara.Plugin.ToolSpec
 
     @impl true
     def metadata, do: %{id: "manual-counter", version: "1"}
@@ -98,7 +98,7 @@ as Harness.
       Process.sleep(Map.get(args, "delay_ms", 0))
       next = state.count + 1
       output = "v1 count=#{next} instance=#{state.instance}"
-      File.write!(Path.join(ctx.cwd, ".harness/manual-plugin-audit.log"), output <> "\n", [:append])
+      File.write!(Path.join(ctx.cwd, ".elara/manual-plugin-audit.log"), output <> "\n", [:append])
       {{:ok, output}, %{state | count: next}}
     end
   end
@@ -109,7 +109,7 @@ as Harness.
 
   ```bash
   # Terminal A
-  mix harness.chat --name plugin-manual-a
+  mix elara.chat --name plugin-manual-a
   ```
 
   Expected: the chat starts normally. A plugin compile, contract, or discovery
@@ -137,11 +137,11 @@ as Harness.
 - [ ] Replace the plugin with revision 2 from a third shell:
 
   ```bash
-  cat > .harness/plugins/manual_counter.exs <<'ELIXIR'
+  cat > .elara/plugins/manual_counter.exs <<'ELIXIR'
   defmodule ManualCounterPlugin do
-    @behaviour Harness.Plugin
+    @behaviour Elara.Plugin
 
-    alias Harness.Plugin.ToolSpec
+    alias Elara.Plugin.ToolSpec
 
     @impl true
     def metadata, do: %{id: "manual-counter", version: "2"}
@@ -178,7 +178,7 @@ as Harness.
       Process.sleep(Map.get(args, "delay_ms", 0))
       next = state.counter + 1
       output = "v2 count=#{next} instance=#{state.instance} migrated_from=#{state.migrated_from}"
-      File.write!(Path.join(ctx.cwd, ".harness/manual-plugin-audit.log"), output <> "\n", [:append])
+      File.write!(Path.join(ctx.cwd, ".elara/manual-plugin-audit.log"), output <> "\n", [:append])
       {{:ok, output}, %{state | counter: next}}
     end
 
@@ -191,15 +191,15 @@ as Harness.
   end
   ELIXIR
 
-  cp .harness/plugins/manual_counter.exs \
-    .harness/plugins/manual_counter.exs.good
+  cp .elara/plugins/manual_counter.exs \
+    .elara/plugins/manual_counter.exs.good
   ```
 
 - [ ] Before reloading A, start live chat B in a second terminal:
 
   ```bash
   # Terminal B
-  mix harness.chat --name plugin-manual-b
+  mix elara.chat --name plugin-manual-b
   ```
 
 - [ ] In terminal B, call `manual_counter` once with the imperative prompt.
@@ -245,7 +245,7 @@ Continue in terminal A.
 
   ```bash
   printf '%s\n' 'defmodule BrokenPlugin do' > \
-    .harness/plugins/manual_counter.exs
+    .elara/plugins/manual_counter.exs
   ```
 
 - [ ] In terminal A, run `/reload`.
@@ -261,8 +261,8 @@ Continue in terminal A.
 - [ ] Restore the valid source and reload:
 
   ```bash
-  cp .harness/plugins/manual_counter.exs.good \
-    .harness/plugins/manual_counter.exs
+  cp .elara/plugins/manual_counter.exs.good \
+    .elara/plugins/manual_counter.exs
   ```
 
   ```text
@@ -278,11 +278,11 @@ Continue in terminal A.
   `handle_tool/4`:
 
   ```bash
-  cat > .harness/plugins/manual_counter.exs <<'ELIXIR'
+  cat > .elara/plugins/manual_counter.exs <<'ELIXIR'
   defmodule ManualCounterPlugin do
-    @behaviour Harness.Plugin
+    @behaviour Elara.Plugin
 
-    alias Harness.Plugin.ToolSpec
+    alias Elara.Plugin.ToolSpec
 
     @impl true
     def metadata, do: %{id: "manual-counter", version: "invalid-contract"}
@@ -318,8 +318,8 @@ Continue in terminal A.
 - [ ] Restore revision 2 without reloading:
 
   ```bash
-  cp .harness/plugins/manual_counter.exs.good \
-    .harness/plugins/manual_counter.exs
+  cp .elara/plugins/manual_counter.exs.good \
+    .elara/plugins/manual_counter.exs
   ```
 
 ## 6. Verify failed-migration rollback
@@ -332,8 +332,8 @@ Continue in terminal A.
   sed \
     -e 's/version: "2"/version: "migration-failure"/' \
     -e 's/def migrate(state, _metadata), do: {:ok, state}/def migrate(_state, _metadata), do: {:error, :manual_failure}/' \
-    .harness/plugins/manual_counter.exs.good > \
-    .harness/plugins/manual_counter.exs
+    .elara/plugins/manual_counter.exs.good > \
+    .elara/plugins/manual_counter.exs
   ```
 
 - [ ] In terminal A, run `/reload`.
@@ -349,8 +349,8 @@ Continue in terminal A.
 - [ ] Restore revision 2 without reloading:
 
   ```bash
-  cp .harness/plugins/manual_counter.exs.good \
-    .harness/plugins/manual_counter.exs
+  cp .elara/plugins/manual_counter.exs.good \
+    .elara/plugins/manual_counter.exs
   ```
 
 ## 7. Verify tool-registry collision rollback
@@ -361,8 +361,8 @@ Continue in terminal A.
   sed \
     -e 's/version: "2"/version: "collision"/' \
     -e 's/name: "manual_counter"/name: "read"/' \
-    .harness/plugins/manual_counter.exs.good > \
-    .harness/plugins/manual_counter.exs
+    .elara/plugins/manual_counter.exs.good > \
+    .elara/plugins/manual_counter.exs
   ```
 
 - [ ] In terminal A, run `/reload`.
@@ -377,8 +377,8 @@ Continue in terminal A.
 - [ ] Restore revision 2:
 
   ```bash
-  cp .harness/plugins/manual_counter.exs.good \
-    .harness/plugins/manual_counter.exs
+  cp .elara/plugins/manual_counter.exs.good \
+    .elara/plugins/manual_counter.exs
   ```
 
 ## 8. Verify safe reload around an interrupted invocation
@@ -389,8 +389,8 @@ Continue in terminal A.
   sed \
     -e 's/version: "2"/version: "3"/' \
     -e 's/v2 count=/v3 count=/' \
-    .harness/plugins/manual_counter.exs.good > \
-    .harness/plugins/manual_counter.exs
+    .elara/plugins/manual_counter.exs.good > \
+    .elara/plugins/manual_counter.exs
   ```
 
 - [ ] In terminal A, request a long revision 2 call:
@@ -428,7 +428,7 @@ Continue in terminal A.
 - [ ] Inspect the actual execution audit from a shell:
 
   ```bash
-  tail -n 8 .harness/manual-plugin-audit.log
+  tail -n 8 .elara/manual-plugin-audit.log
   ```
 
   Expected: entries before activation are labeled `v2`; entries after the
@@ -458,21 +458,21 @@ B's session files.
 - [ ] Create and run a temporary live-session probe:
 
   ```bash
-  cat > /tmp/harness-plugin-timeout-check.exs <<'ELIXIR'
-  alias Harness.Message.ToolResult
+  cat > /tmp/elara-plugin-timeout-check.exs <<'ELIXIR'
+  alias Elara.Message.ToolResult
 
   {:ok, session} =
-    Harness.start_session(
+    Elara.start_session(
       persist: false,
       tool_timeout_ms: 500
     )
 
-  [%{pid: plugin_pid}] = Harness.plugins(session)
+  [%{pid: plugin_pid}] = Elara.plugins(session)
   plugin_monitor = Process.monitor(plugin_pid)
 
   try do
     first =
-      Harness.ask(
+      Elara.ask(
         session,
         ~s|You must call the manual_counter tool exactly once with {"delay_ms": 2000}. After it returns, briefly report the result and do not call another tool.|
       )
@@ -481,14 +481,14 @@ B's session files.
 
     first_outcomes =
       session
-      |> Harness.transcript()
+      |> Elara.transcript()
       |> Enum.filter(&match?(%ToolResult{}, &1))
       |> Enum.map(& &1.outcome)
 
     IO.inspect(first_outcomes, label: "outcomes after timeout")
 
     second =
-      Harness.ask(
+      Elara.ask(
         session,
         ~s|You must call the manual_counter tool exactly once with {"delay_ms": 0}. After it returns, briefly report the result and do not call another tool.|
       )
@@ -497,7 +497,7 @@ B's session files.
 
     latest_outcome =
       session
-      |> Harness.transcript()
+      |> Elara.transcript()
       |> Enum.filter(&match?(%ToolResult{}, &1))
       |> List.last()
       |> Map.fetch!(:outcome)
@@ -516,8 +516,8 @@ B's session files.
   end
   ELIXIR
 
-  mix run /tmp/harness-plugin-timeout-check.exs
-  rm /tmp/harness-plugin-timeout-check.exs
+  mix run /tmp/elara-plugin-timeout-check.exs
+  rm /tmp/elara-plugin-timeout-check.exs
   ```
 
   Expected:
@@ -539,10 +539,10 @@ B's session files.
 - [ ] Remove only the manual test files:
 
   ```bash
-  rm -f .harness/plugins/manual_counter.exs \
-    .harness/plugins/manual_counter.exs.good \
-    .harness/manual-plugin-audit.log
-  rmdir .harness/plugins .harness 2>/dev/null || true
+  rm -f .elara/plugins/manual_counter.exs \
+    .elara/plugins/manual_counter.exs.good \
+    .elara/manual-plugin-audit.log
+  rmdir .elara/plugins .elara 2>/dev/null || true
   ```
 
 - [ ] Confirm no checklist files remain:

@@ -55,7 +55,7 @@ fi
 
 export PATH="$ELIXIR_DIR/bin:$PATH"
 
-profile_marker="# elixir-harness toolchain"
+profile_marker="# elixir-elara toolchain"
 if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile" 2>/dev/null; then
   cat >>"$HOME/.bash_profile" <<EOF
 

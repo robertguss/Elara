@@ -1,9 +1,9 @@
-# Harness Experimental Lab
+# Elara Experimental Lab
 
 > **Status:** Draft lab charter  
 > **Updated:** August 2026  
 > **Purpose:** Establish a repeatable, traceable, and revisable method for
-> testing the Harness and living-software hypotheses.
+> testing the Elara and living-software hypotheses.
 
 The lab exists to turn provocative ideas into evidence without prematurely
 turning them into doctrine or production architecture. It is deliberately small
@@ -86,7 +86,7 @@ What happened:
 
 - Exact input and system/context material available to the subject.
 - Complete model and tool transcript.
-- Harness events and Flight Recorder references.
+- Elara events and Flight Recorder references.
 - Standard output, standard error, exit status, and timing.
 - Produced files and artifact digests.
 - Environment and implementation manifest.
@@ -144,7 +144,7 @@ run_id
 parent/source thread URLs
 repository URL, branch, starting commit, dirty-state digest
 fixture and task versions
-Harness commit and configuration digest
+Elara commit and configuration digest
 provider, requested model/mode, reported model when available
 system prompt, plugin, and tool-description digests
 Elixir/OTP/OS/toolchain versions
@@ -319,6 +319,6 @@ reorder, remove, or redefine what follows.
 
 ## Origin
 
-- [Harness vision and experiment discussion](https://ampcode.com/threads/T-01a01640-f953-736b-9aa4-936428e10fa3)
+- [Elara vision and experiment discussion](https://ampcode.com/threads/T-01a01640-f953-736b-9aa4-936428e10fa3)
 - [Living Software](../living-software.md)
-- [Harness Vision](../harness-vision.md)
+- [Elara Vision](../elara-vision.md)

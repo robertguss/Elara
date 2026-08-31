@@ -1,5 +1,12 @@
 # BEAM-native harness roadmap
 
+> **Status:** The four prototype experiments in this document are implemented.
+> It is retained as the architectural path that produced the current runtime.
+> See the
+> [canonical Elara roadmap](https://linear.app/robert-guss/project/elara-ff8cc023e770)
+> for current implementation status, the next challenge, and its falsification
+> criteria.
+
 ## Product thesis
 
 The goal is not merely to rewrite an existing coding agent in Elixir. The goal
@@ -11,10 +18,10 @@ BEAM's most useful advantage here is not raw throughput. It is the combination
 of explicit state ownership, cheap isolated processes, supervision, message
 passing, distribution, and runtime introspection.
 
-Harness already has the right core boundaries:
+Elara already has the right core boundaries:
 
 - One supervised session process owns each history.
-- `Harness.Session.Core` is a pure, deterministic state machine.
+- `Elara.Session.Core` is a pure, deterministic state machine.
 - Provider and tool effects run in isolated tasks.
 - Tools are data rather than closures.
 - Sessions are persisted and can be resumed, cloned, forked, and rewound.
@@ -26,10 +33,10 @@ small core with a framework.
 
 ### Hot code does not preserve state by itself
 
-Code and state must be separate. Stateful plugins should keep state in a
-process that survives implementation reloads. Reloads happen at a safe
-boundary, never during one of that session's tool calls. A plugin may provide
-an explicit state migration when its state shape changes.
+Code and state must be separate. Stateful plugins should keep state in a process
+that survives implementation reloads. Reloads happen at a safe boundary, never
+during one of that session's tool calls. A plugin may provide an explicit state
+migration when its state shape changes.
 
 ### Actors are not an external protocol
 
@@ -74,9 +81,9 @@ failure, execute concurrently, or have an independent lifecycle.
                                   +------------+   +---------------+
 ```
 
-`Harness.Session.Core` should remain unaware of placement. It emits provider
-and tool effects; the session shell and its collaborators decide where those
-effects execute.
+`Elara.Session.Core` should remain unaware of placement. It emits provider and
+tool effects; the session shell and its collaborators decide where those effects
+execute.
 
 ## Experiment 1: stateful live plugin reload
 
@@ -105,8 +112,8 @@ history, no mid-tool version switch, and rollback to the previous working code
 when a replacement is invalid.
 
 Start with trusted local source plugins. Do not add package management, remote
-installation, dependency resolution, or a marketplace until the runtime
-contract has been proven.
+installation, dependency resolution, or a marketplace until the runtime contract
+has been proven.
 
 ## Experiment 2: detachable session server
 
@@ -121,7 +128,7 @@ Build:
 - Events with monotonic sequence numbers.
 - Subscription from an event cursor so reconnecting clients can replay missed
   events without duplicates.
-- Initial `mix harness.server` and `mix harness.attach SESSION` clients.
+- Initial `mix elara.server` and `mix elara.attach SESSION` clients.
 - Multiple observers, with explicit control ownership where needed.
 
 Proof scenario:
@@ -236,8 +243,8 @@ Once tool reload proves the contract, the same lifecycle may apply to:
 - Provider adapters.
 - Tool-result processors.
 
-Do not generalize the plugin framework to these extension points before the
-tool experiment supplies concrete requirements.
+Do not generalize the plugin framework to these extension points before the tool
+experiment supplies concrete requirements.
 
 ### Observability and admission control
 
@@ -245,13 +252,15 @@ Expose session phase, current effect, mailbox length, worker health, budgets,
 and child process relationships. Use those signals for per-session limits and
 load-aware admission rather than adding unconstrained concurrency.
 
-## Recommended sequence
+## Outcome and successor
 
-1. Stateful live plugin reload.
-2. Detachable session server and replayable events.
-3. Remote tool executors.
-4. Multi-agent coordinator.
-5. Deterministic replay and observability throughout every step.
+The prototype now includes stateful plugin reload, detachable sessions,
+capability-routed remote execution, a coordinator, deterministic replay, and
+runtime observability. These results established useful boundaries, but they do
+not make session work durable across VM loss and do not reconcile mutations
+whose acknowledgement was lost.
 
-Defer MCP, Phoenix, clustering, a plugin marketplace, and elaborate scheduling
-until these experiments reveal the contracts they actually need.
+The next stage is therefore not another breadth feature. It is the
+[durable-effect research sequence](https://linear.app/robert-guss/project/elara-ff8cc023e770):
+commit one mutation as a stable job, crash every boundary, and test whether
+Elara can recover truthfully without a duplicate effect.

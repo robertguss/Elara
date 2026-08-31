@@ -1,22 +1,21 @@
 # Live plugins
 
-Plugins add stateful tools to a Harness session. On startup, Harness discovers
-`.ex` and `.exs` files under `.harness/plugins/` in the session working
-directory.
+Plugins add stateful tools to an Elara session. On startup, Elara discovers
+`.ex` and `.exs` files under `.elara/plugins/` in the session working directory.
 
 > [!WARNING] Plugins are trusted local code. They are compiled and executed
-> inside the Harness VM with the same filesystem, network, and operating-system
-> access as Harness. They are not a sandbox or a package-security boundary.
+> inside the Elara VM with the same filesystem, network, and operating-system
+> access as Elara. They are not a sandbox or a package-security boundary.
 
 ## Create a plugin
 
-Each plugin file must define exactly one module implementing `Harness.Plugin`:
+Each plugin file must define exactly one module implementing `Elara.Plugin`:
 
 ```elixir
 defmodule CounterPlugin do
-  @behaviour Harness.Plugin
+  @behaviour Elara.Plugin
 
-  alias Harness.Plugin.ToolSpec
+  alias Elara.Plugin.ToolSpec
 
   @impl true
   def metadata, do: %{id: "counter", version: "1"}
@@ -92,8 +91,8 @@ end
 def migrate(state, _old_metadata), do: {:ok, state}
 ```
 
-Without `migrate/2`, Harness preserves the old state term as-is. Keep plugin
-state as plain data: do not store functions or structs defined by the reloadable
+Without `migrate/2`, Elara preserves the old state term as-is. Keep plugin state
+as plain data: do not store functions or structs defined by the reloadable
 module. Migration should transform state only, without external side effects.
 
 ## Select plugins through the API
@@ -102,19 +101,19 @@ Discovery is the default. To choose files explicitly or disable plugins:
 
 ```elixir
 {:ok, selected} =
-  Harness.start_session(
+  Elara.start_session(
     cwd: "/absolute/path/to/project",
     plugins: ["/absolute/path/to/counter.exs"]
   )
 
-{:ok, without_plugins} = Harness.start_session(plugins: [])
+{:ok, without_plugins} = Elara.start_session(plugins: [])
 ```
 
 Inspect and reload the active session with:
 
 ```elixir
-Harness.plugins(selected)
-Harness.reload_plugins(selected)
+Elara.plugins(selected)
+Elara.reload_plugins(selected)
 ```
 
 Plugin state belongs to its session and stops when that session stops.

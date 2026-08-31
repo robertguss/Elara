@@ -1,9 +1,9 @@
-defmodule Harness.MixProject do
+defmodule Elara.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :harness,
+      app: :elara,
       version: "0.1.0",
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
@@ -15,7 +15,7 @@ defmodule Harness.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Harness.Application, []}
+      mod: {Elara.Application, []}
     ]
   end
 

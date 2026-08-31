@@ -20,15 +20,15 @@ erl_crash.dump
 *.ez
 
 # OAuth tokens and local secrets. Repository plugins are intentionally tracked.
-/.harness/*
-!/.harness/plugins/
-!/.harness/plugins/*.exs
+/.elara/*
+!/.elara/plugins/
+!/.elara/plugins/*.exs
 auth.json
 .env
 .env.*
 
 # Ignore package tarball (built via "mix hex.build").
-harness-*.tar
+elara-*.tar
 
 # Amp generates portal manifests for supervised orb services.
 /.amp/portals/*

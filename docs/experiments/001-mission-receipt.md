@@ -3,9 +3,9 @@
 > **Status:** Design draft; not pre-registered  
 > **Protocol version:** 0  
 > **Updated:** August 2026  
-> **System under study:** Harness operating on its plugin hot-reload behavior
+> **System under study:** Elara operating on its plugin hot-reload behavior
 
-This document designs the first Harness lab experiment. Nothing here is frozen.
+This document designs the first Elara lab experiment. Nothing here is frozen.
 The design should change before preregistration whenever a clearer question,
 fairer control, or more useful measure emerges.
 
@@ -20,7 +20,7 @@ software work:
 Mission in ──▶ cognitive runtime ──▶ Evidence-Carrying Result out
 ```
 
-If this contract is useful, it can connect Harness to delegation, a control
+If this contract is useful, it can connect Elara to delegation, a control
 plane, workspace cells, verification, causal versioning, and eventually a
 constitutional controller. If it is ceremonial or harmful, learning that now is
 far cheaper than building those systems around it.
@@ -33,7 +33,7 @@ tested without consequential external effects.
 
 Does expressing work as a typed Mission and/or requiring an evidence-carrying
 result improve the correctness, completeness, traceability, uncertainty
-handling, and review efficiency of Harness work enough to justify the added
+handling, and review efficiency of Elara work enough to justify the added
 structure and cost?
 
 The “and/or” matters. Mission input and evidence output are two interventions,
@@ -181,7 +181,7 @@ projections—not blindly truncate claims or evidence.
 
 ## Study subject and scenarios
 
-The first study should use an isolated fixture derived from real Harness plugin
+The first study should use an isolated fixture derived from real Elara plugin
 behavior, pinned to an exact commit. Running directly against a changing main
 checkout would contaminate comparisons and risk accidental edits.
 
@@ -207,7 +207,7 @@ documented in a blinded ground-truth ledger unavailable to the subject.
 
 ### Phase 0 — Deterministic mechanics
 
-Use `Harness.Provider.Scripted` to validate capture, IDs, schema parsing, event
+Use `Elara.Provider.Scripted` to validate capture, IDs, schema parsing, event
 references, and storage. This phase tests the protocol plumbing, not model
 quality.
 
@@ -243,13 +243,13 @@ missed discoveries.
 ### Phase 4 — Replication
 
 If the result is promising, repeat with another task class or model generation
-before changing Harness’s public architecture.
+before changing Elara’s public architecture.
 
 ## Variables to hold or record
 
 - Starting repository commit and fixture digest.
 - Elixir, Erlang/OTP, OS, Mix lock, and tool versions.
-- Harness system prompt and tool-description digests.
+- Elara system prompt and tool-description digests.
 - Plugin generation and configuration.
 - Provider, requested model/mode, reported model, and model-route date.
 - Turn/tool limits and timeouts.
@@ -428,7 +428,7 @@ When execution begins, each run should contain:
     └── full-review.json
 ```
 
-Formats remain provisional until the deterministic phase proves what Harness can
+Formats remain provisional until the deterministic phase proves what Elara can
 capture without invasive implementation.
 
 ## Known confounds
@@ -472,9 +472,9 @@ the original vision.
 ## Sources
 
 - [Origin conversation and first-experiment rationale](https://ampcode.com/threads/T-01a01640-f953-736b-9aa4-936428e10fa3)
-- [Harness Experimental Lab charter](README.md)
+- [Elara Experimental Lab charter](README.md)
 - [Living Software](../living-software.md)
-- [Harness Vision experiments](../harness-vision.md#experiments-that-can-falsify-the-vision)
-- Current API boundary: `Harness.start_session/1`, `Harness.ask/3`
-- Current observability: session events and `Harness.FlightRecorder`
-- Current test control: `Harness.Provider.Scripted`
+- [Elara Vision experiments](../elara-vision.md#experiments-that-can-falsify-the-vision)
+- Current API boundary: `Elara.start_session/1`, `Elara.ask/3`
+- Current observability: session events and `Elara.FlightRecorder`
+- Current test control: `Elara.Provider.Scripted`

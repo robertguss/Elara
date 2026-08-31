@@ -6,7 +6,7 @@
 > system—and the epistemic operating system required to evolve it safely.
 
 This is a focused companion to
-[Harness: A BEAM-Native Fabric for Software Work](harness-vision.md) and the
+[Elara: A BEAM-Native Fabric for Software Work](elara-vision.md) and the
 [Software Production Frontiers](software-production-frontiers.md). It captures
 the emerging thesis without turning either broader document into an unbounded
 manifesto.
@@ -41,7 +41,7 @@ Human values, goals, judgment, and authority
           ┌───────▼───┐ ┌───▼────────────┐
           │ Cognitive │ │ Execution and  │
           │ runtimes  │ │ verification   │
-          │ Harness   │ │ cells          │
+          │ Elara   │ │ cells          │
           └───────┬───┘ └───┬────────────┘
                   └─────┬────┘
                         ▼
@@ -336,7 +336,7 @@ The thesis reaches across the entire production system:
    tools, methods, and visibility; parallel copies of one model are correlated.
 5. **Conditional runtime reputation:** learn where an agent, prompt, plugin, or
    verifier is reliable without collapsing performance into a gameable score.
-6. **Harness configuration as production code:** version prompts, models,
+6. **Elara configuration as production code:** version prompts, models,
    plugins, tool descriptions, and context policies; shadow and replay changes.
 7. **Constitutional self-hosting:** a system may improve itself but cannot
    unilaterally redefine its evaluation criteria or erase failed predictions.
@@ -415,9 +415,9 @@ reinforces it, metrics reward completion, and apparent consensus suppresses
 dissent. Unknown, contradicted, and minority hypotheses must remain first-class
 state.
 
-## Where Harness belongs
+## Where Elara belongs
 
-Harness should be a replaceable **cognitive runtime**, not the whole organism:
+Elara should be a replaceable **cognitive runtime**, not the whole organism:
 
 ```text
 Mission in
@@ -435,7 +435,7 @@ Evidence-Carrying Result out
 └── completed · failed · cancelled · indeterminate
 ```
 
-Harness should excel at context interpretation, model orchestration, tools,
+Elara should excel at context interpretation, model orchestration, tools,
 delegation, semantic compression, interruption, recovery, plugins, structured
 results, and honest uncertainty. Separate systems should own canonical Missions,
 artifact storage, environment isolation, versioning, verification, identity,
@@ -484,17 +484,17 @@ progress while hiding whether the underlying objects are correct.
 
 Begin with plain Markdown, Elixir structs, JSON, or database records. Exercise
 purpose, obligation, invariant, claim, evidence, capability, effect, Mission,
-amendment, precedent, and contradiction against real Harness work. A language
+amendment, precedent, and contradiction against real Elara work. A language
 should crystallize semantics that survive those experiments—not substitute
 syntax for understanding.
 
 ## Experiments
 
-1. **Mission envelope:** run Harness from a typed objective, capability grant,
+1. **Mission envelope:** run Elara from a typed objective, capability grant,
    deliverable, and evidence policy instead of only a prompt.
 2. **Evidence-carrying result:** separate claims, evidence, artifacts, effects,
    and uncertainty; compare review quality with prose output.
-3. **Tiny constitution:** describe one existing Harness behavior using purpose,
+3. **Tiny constitution:** describe one existing Elara behavior using purpose,
    obligations, invariants, examples, authority, and amendment rules. Plugin hot
    reloading is a strong first subject:
 
@@ -520,7 +520,7 @@ syntax for understanding.
      Isolation changes require independent compatibility evidence.
    ```
 
-   Ask Harness to interpret it, compare it with current behavior, propose a
+   Ask Elara to interpret it, compare it with current behavior, propose a
    Mission, implement or simulate the change, return evidence and uncertainty,
    and react to an injected contradiction.
 
@@ -537,7 +537,7 @@ syntax for understanding.
    obligation and test whether it can now be removed.
 9. **Prediction-bearing release:** state predictions and disconfirming signals
    for one small change, then evaluate the actual outcome.
-10. **Constitutional self-hosting:** replay historical Harness Missions against
+10. **Constitutional self-hosting:** replay historical Elara Missions against
     a proposed prompt, plugin, or runtime change under independent criteria.
 
 ## Closing formulation
@@ -555,4 +555,4 @@ Its north star is not code produced or tickets completed. It is **trusted
 adaptation per unit of scarce human attention**.
 
 **Origin:**
-[Harness vision and living-software discussion](https://ampcode.com/threads/T-01a01640-f953-736b-9aa4-936428e10fa3)
+[Elara vision and living-software discussion](https://ampcode.com/threads/T-01a01640-f953-736b-9aa4-936428e10fa3)

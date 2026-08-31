@@ -3,14 +3,29 @@ defmodule Elara.Effect.ControllerJournal do
 
   use GenServer
 
+  alias Elara.Effect.ExecutorLedger.Record
   alias Elara.Effect.Job
   alias Exqlite.Sqlite3
 
-  @schema_version 1
+  @schema_version 2
 
   defmodule State do
     @moduledoc false
     defstruct [:db, :path, :configuration]
+  end
+
+  defmodule Observation do
+    @moduledoc false
+
+    @enforce_keys [:job_id, :operation_digest, :executor_record]
+    defstruct [:job_id, :operation_digest, :executor_record, result_persisted?: false]
+
+    @type t :: %__MODULE__{
+            job_id: String.t(),
+            operation_digest: String.t(),
+            executor_record: Record.t(),
+            result_persisted?: boolean()
+          }
   end
 
   @type fault_hook :: (atom() -> :ok)
@@ -42,6 +57,21 @@ defmodule Elara.Effect.ControllerJournal do
 
   @spec all(GenServer.server()) :: {:ok, [Job.t()]} | {:error, term()}
   def all(journal), do: GenServer.call(journal, :all)
+
+  @spec observe(GenServer.server(), Record.t()) :: {:ok, Observation.t()} | {:error, term()}
+  def observe(journal, %Record{} = record) do
+    GenServer.call(journal, {:observe, record})
+  end
+
+  @spec observation(GenServer.server(), String.t()) ::
+          {:ok, Observation.t() | nil} | {:error, term()}
+  def observation(journal, job_id), do: GenServer.call(journal, {:observation, job_id})
+
+  @spec mark_result_persisted(GenServer.server(), String.t()) ::
+          {:ok, Observation.t()} | {:error, term()}
+  def mark_result_persisted(journal, job_id) do
+    GenServer.call(journal, {:mark_result_persisted, job_id})
+  end
 
   @spec configuration(GenServer.server()) :: map()
   def configuration(journal), do: GenServer.call(journal, :configuration)
@@ -78,6 +108,18 @@ defmodule Elara.Effect.ControllerJournal do
 
   def handle_call(:all, _from, state) do
     {:reply, select_all(state.db), state}
+  end
+
+  def handle_call({:observe, record}, _from, state) do
+    {:reply, observe_transaction(state.db, record), state}
+  end
+
+  def handle_call({:observation, job_id}, _from, state) do
+    {:reply, select_observation(state.db, job_id), state}
+  end
+
+  def handle_call({:mark_result_persisted, job_id}, _from, state) do
+    {:reply, persist_result_transaction(state.db, job_id), state}
   end
 
   def handle_call(:configuration, _from, state) do
@@ -125,16 +167,30 @@ defmodule Elara.Effect.ControllerJournal do
   end
 
   defp initialize_schema(db, 0) do
-    with :ok <- Sqlite3.execute(db, schema_sql()),
+    with :ok <- ensure_schema(db),
          :ok <- Sqlite3.execute(db, "PRAGMA user_version=#{@schema_version}") do
       :ok
     end
   end
 
-  defp initialize_schema(db, @schema_version), do: Sqlite3.execute(db, schema_sql())
+  defp initialize_schema(db, 1) do
+    with :ok <- Sqlite3.execute(db, observation_schema_sql()),
+         :ok <- Sqlite3.execute(db, "PRAGMA user_version=#{@schema_version}") do
+      :ok
+    end
+  end
+
+  defp initialize_schema(db, @schema_version), do: ensure_schema(db)
   defp initialize_schema(_db, version), do: {:error, {:unsupported_schema_version, version}}
 
-  defp schema_sql do
+  defp ensure_schema(db) do
+    with :ok <- Sqlite3.execute(db, intent_schema_sql()),
+         :ok <- Sqlite3.execute(db, observation_schema_sql()) do
+      :ok
+    end
+  end
+
+  defp intent_schema_sql do
     """
     CREATE TABLE IF NOT EXISTS controller_intents (
       job_id TEXT PRIMARY KEY,
@@ -147,6 +203,18 @@ defmodule Elara.Effect.ControllerJournal do
       authority_metadata BLOB NOT NULL,
       job BLOB NOT NULL,
       UNIQUE (job_id, operation_digest)
+    ) STRICT
+    """
+  end
+
+  defp observation_schema_sql do
+    """
+    CREATE TABLE IF NOT EXISTS controller_observations (
+      job_id TEXT PRIMARY KEY,
+      operation_digest TEXT NOT NULL,
+      executor_record BLOB NOT NULL,
+      result_persisted INTEGER NOT NULL CHECK (result_persisted IN (0, 1)),
+      FOREIGN KEY (job_id) REFERENCES controller_intents(job_id)
     ) STRICT
     """
   end
@@ -217,6 +285,58 @@ defmodule Elara.Effect.ControllerJournal do
     end)
   end
 
+  defp observe_transaction(db, %Record{} = record) do
+    transaction(db, fn ->
+      with {:ok, %Job{} = job} <- require_job(db, record.job_id),
+           :ok <- require_observation_identity(job, record),
+           {:ok, existing} <- select_observation(db, record.job_id),
+           :ok <- require_observation_advance(existing, record),
+           :ok <- upsert_observation(db, existing, record),
+           {:ok, %Observation{} = observation} <- select_observation(db, record.job_id) do
+        {:ok, observation}
+      end
+    end)
+  end
+
+  defp persist_result_transaction(db, job_id) do
+    transaction(db, fn ->
+      with {:ok, %Observation{}} <- require_observation(db, job_id),
+           :ok <- update_result_persisted(db, job_id),
+           {:ok, %Observation{} = updated} <- select_observation(db, job_id) do
+        {:ok, updated}
+      end
+    end)
+  end
+
+  defp upsert_observation(db, existing, record) do
+    result_persisted = if match?(%Observation{result_persisted?: true}, existing), do: 1, else: 0
+
+    sql = """
+    INSERT INTO controller_observations (
+      job_id, operation_digest, executor_record, result_persisted
+    ) VALUES (?1, ?2, ?3, ?4)
+    ON CONFLICT(job_id) DO UPDATE SET
+      operation_digest = excluded.operation_digest,
+      executor_record = excluded.executor_record,
+      result_persisted = controller_observations.result_persisted
+    """
+
+    execute_statement(db, sql, [
+      record.job_id,
+      record.operation_digest,
+      {:blob, encode(record)},
+      result_persisted
+    ])
+  end
+
+  defp update_result_persisted(db, job_id) do
+    execute_statement(
+      db,
+      "UPDATE controller_observations SET result_persisted = 1 WHERE job_id = ?1",
+      [job_id]
+    )
+  end
+
   defp select_one(db, job_id) do
     sql = """
     SELECT job_id, job_id_version, operation_digest, digest_version, schema_version,
@@ -260,6 +380,24 @@ defmodule Elara.Effect.ControllerJournal do
     end)
   end
 
+  defp select_observation(db, job_id) do
+    sql = """
+    SELECT job_id, operation_digest, executor_record, result_persisted
+    FROM controller_observations
+    WHERE job_id = ?1
+    """
+
+    with_statement(db, sql, fn statement ->
+      with :ok <- Sqlite3.bind(statement, [job_id]) do
+        case Sqlite3.step(db, statement) do
+          {:row, row} -> decode_observation(row)
+          :done -> {:ok, nil}
+          {:error, reason} -> {:error, reason}
+        end
+      end
+    end)
+  end
+
   defp decode_row([
          job_id,
          job_id_version,
@@ -295,6 +433,119 @@ defmodule Elara.Effect.ControllerJournal do
   end
 
   defp decode_row(_row), do: {:error, :invalid_intent_record}
+
+  defp decode_observation([job_id, operation_digest, record_binary, result_persisted])
+       when result_persisted in [0, 1] do
+    record = decode(record_binary)
+
+    if match?(%Record{}, record) and record.job_id == job_id and
+         record.operation_digest == operation_digest do
+      {:ok,
+       %Observation{
+         job_id: job_id,
+         operation_digest: operation_digest,
+         executor_record: record,
+         result_persisted?: result_persisted == 1
+       }}
+    else
+      {:error, :invalid_observation_record}
+    end
+  rescue
+    ArgumentError -> {:error, :invalid_observation_record}
+  end
+
+  defp decode_observation(_row), do: {:error, :invalid_observation_record}
+
+  defp require_job(db, job_id) do
+    case select_one(db, job_id) do
+      {:ok, nil} -> {:error, :unknown_job}
+      other -> other
+    end
+  end
+
+  defp require_observation(db, job_id) do
+    case select_observation(db, job_id) do
+      {:ok, nil} -> {:error, :observation_missing}
+      other -> other
+    end
+  end
+
+  defp require_observation_identity(
+         %Job{job_id: job_id, operation_digest: operation_digest},
+         %Record{job_id: job_id, operation_digest: operation_digest}
+       ),
+       do: :ok
+
+  defp require_observation_identity(%Job{}, %Record{}), do: {:error, :observation_conflict}
+
+  defp require_observation_advance(nil, %Record{}), do: :ok
+
+  defp require_observation_advance(
+         %Observation{executor_record: existing},
+         %Record{} = record
+       ) do
+    cond do
+      existing == record ->
+        :ok
+
+      existing.executor_id != record.executor_id ->
+        {:error, :observation_conflict}
+
+      observation_rank(record) > observation_rank(existing) ->
+        :ok
+
+      true ->
+        {:error, :stale_observation}
+    end
+  end
+
+  defp observation_rank(%Record{state: :accepted, callback_attempt_count: 0}), do: 0
+  defp observation_rank(%Record{state: :accepted, callback_attempt_count: 1}), do: 1
+  defp observation_rank(%Record{state: state}) when state in [:completed, :failed], do: 2
+
+  defp transaction(db, fun) do
+    with :ok <- Sqlite3.execute(db, "BEGIN IMMEDIATE") do
+      try do
+        case fun.() do
+          {:ok, value} ->
+            case Sqlite3.execute(db, "COMMIT") do
+              :ok ->
+                {:ok, value}
+
+              {:error, _reason} = error ->
+                rollback(db)
+                error
+            end
+
+          {:error, _reason} = error ->
+            rollback(db)
+            error
+
+          other ->
+            rollback(db)
+            {:error, {:invalid_transaction_result, other}}
+        end
+      catch
+        kind, reason ->
+          rollback(db)
+          :erlang.raise(kind, reason, __STACKTRACE__)
+      end
+    end
+  end
+
+  defp rollback(db) do
+    Sqlite3.execute(db, "ROLLBACK")
+    :ok
+  end
+
+  defp execute_statement(db, sql, values) do
+    with_statement(db, sql, fn statement ->
+      with :ok <- Sqlite3.bind(statement, values),
+           :done <- Sqlite3.step(db, statement) do
+        :ok
+      end
+    end)
+  end
 
   defp scalar(db, sql) do
     with_statement(db, sql, fn statement ->

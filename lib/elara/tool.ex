@@ -16,9 +16,11 @@ defmodule Elara.Tool do
     @type t :: %__MODULE__{
             cwd: String.t(),
             plugin: PluginRef.t() | nil,
-            tool_name: String.t() | nil
+            tool_name: String.t() | nil,
+            job_id: String.t() | nil,
+            operation_digest: String.t() | nil
           }
-    defstruct [:cwd, :plugin, :tool_name]
+    defstruct [:cwd, :plugin, :tool_name, :job_id, :operation_digest]
   end
 
   @type outcome :: {:ok, String.t()} | {:error, String.t()} | {:indeterminate, String.t()}

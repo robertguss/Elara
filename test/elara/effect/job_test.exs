@@ -2,9 +2,11 @@ defmodule Elara.Effect.JobTest do
   use ExUnit.Case, async: false
 
   alias Elara.Effect.{ControllerJournal, Job}
+  alias Elara.Effect.ExecutorLedger.Record
   alias Elara.Message
   alias Elara.Message.ToolCall
   alias Elara.Tool
+  alias Exqlite.Sqlite3
 
   defmodule MarkerTool do
     def run(%{"path" => path}, _ctx) do
@@ -72,7 +74,7 @@ defmodule Elara.Effect.JobTest do
 
     assert ControllerJournal.configuration(journal) == %{
              journal_mode: "wal",
-             schema_version: 1,
+             schema_version: 2,
              synchronous: 2
            }
 
@@ -95,6 +97,40 @@ defmodule Elara.Effect.JobTest do
 
     assert {:ok, stat} = File.stat(context.journal_path)
     assert Bitwise.band(stat.mode, 0o777) == 0o600
+  end
+
+  test "version 1 intent journals migrate without losing controller truth", context do
+    intent = job()
+    journal = start_journal(context.journal_path)
+    assert {:ok, ^intent} = ControllerJournal.commit_intent(journal, intent)
+    assert :ok = ControllerJournal.close(journal)
+
+    {:ok, db} = Sqlite3.open(context.journal_path)
+    assert :ok = Sqlite3.execute(db, "DROP TABLE controller_observations")
+    assert :ok = Sqlite3.execute(db, "PRAGMA user_version=1")
+    assert :ok = Sqlite3.close(db)
+
+    migrated = start_journal(context.journal_path)
+    assert ControllerJournal.configuration(migrated).schema_version == 2
+    assert {:ok, ^intent} = ControllerJournal.get(migrated, intent.job_id)
+    assert {:ok, nil} = ControllerJournal.observation(migrated, intent.job_id)
+
+    accepted = %Record{
+      job_id: intent.job_id,
+      operation_digest: intent.operation_digest,
+      executor_id: "executor-1",
+      state: :accepted,
+      admission_count: 1,
+      callback_attempt_count: 0,
+      terminal_count: 0,
+      schema_version: 1,
+      result_digest_version: 1
+    }
+
+    assert {:ok, %{executor_record: ^accepted, result_persisted?: false}} =
+             ControllerJournal.observe(migrated, accepted)
+
+    assert :ok = ControllerJournal.close(migrated)
   end
 
   test "crash before intent commit leaves no recoverable job", context do

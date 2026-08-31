@@ -21,6 +21,7 @@ defmodule Elara.Effect.Job do
   defstruct [
     :job_id,
     :operation_digest,
+    :tool_call_id,
     :effect_id,
     :operation_kind,
     :tool_name,
@@ -50,6 +51,7 @@ defmodule Elara.Effect.Job do
   @type t :: %__MODULE__{
           job_id: String.t(),
           operation_digest: String.t(),
+          tool_call_id: String.t() | nil,
           effect_id: effect_id(),
           operation_kind: atom(),
           tool_name: String.t(),
@@ -73,6 +75,7 @@ defmodule Elara.Effect.Job do
       when is_binary(recording_id) and is_integer(sequence) and sequence > 0 and
              is_integer(effect_index) and effect_index >= 0 and is_list(attrs) do
     operation_kind = Keyword.fetch!(attrs, :operation_kind)
+    tool_call_id = Keyword.get(attrs, :tool_call_id)
     tool_name = Keyword.fetch!(attrs, :tool_name)
     tool_version = Keyword.fetch!(attrs, :tool_version)
     arguments = Keyword.fetch!(attrs, :arguments)
@@ -110,6 +113,7 @@ defmodule Elara.Effect.Job do
     %__MODULE__{
       job_id: "er1j_v#{@job_id_version}_#{job_id}",
       operation_digest: operation_digest,
+      tool_call_id: tool_call_id,
       effect_id: effect_id,
       operation_kind: operation_kind,
       tool_name: tool_name,

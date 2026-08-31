@@ -218,7 +218,15 @@ defmodule Elara.Worker.Server do
 
   defp invoke(request, cwd, tool) do
     {module, function} = tool.run
-    apply(module, function, [request.arguments, %Ctx{cwd: cwd, tool_name: request.tool_name}])
+
+    ctx = %Ctx{
+      cwd: cwd,
+      tool_name: request.tool_name,
+      job_id: request.job_id,
+      operation_digest: request.operation_digest
+    }
+
+    apply(module, function, [request.arguments, ctx])
   rescue
     error -> {:error, "worker tool crashed: #{Exception.message(error)}"}
   catch

@@ -56,6 +56,7 @@ defmodule Elara do
         workspace_id: workspace_id,
         allowed_capabilities: allowed_capabilities,
         effect_journal_path: effect_journal_path,
+        effect_executor: Keyword.get(opts, :effect_executor),
         effect_fault_hook: Keyword.get(opts, :effect_fault_hook, fn _point -> :ok end)
       ]
 

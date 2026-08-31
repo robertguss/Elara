@@ -5,14 +5,18 @@ defmodule Elara.Session do
 
   use GenServer
 
-  alias Elara.Effect.{ControllerJournal, Job}
+  alias Elara.Effect.{ControllerJournal, Job, Sidecar}
   alias Elara.FlightRecorder
+  alias Elara.Message
+  alias Elara.Message.{Assistant, ToolResult}
   alias Elara.Plugin.Server, as: PluginServer
   alias Elara.Provider
   alias Elara.Executor.{Request, Router}
   alias Elara.Session.{Core, Store}
   alias Elara.Tool
   alias Elara.Tool.{Ctx, PluginRef}
+
+  @effect_recovery_timeout_ms 1_000
 
   defmodule Shell do
     @moduledoc false
@@ -24,6 +28,7 @@ defmodule Elara.Session do
             tool_timeout_ms: pos_integer(),
             effect_journal: pid() | nil,
             effect_journal_path: String.t(),
+            effect_executor: GenServer.server() | nil,
             base_tools: %{String.t() => Tool.t()},
             plugins: [%{pid: pid(), path: String.t()}],
             subscribers: %{pid() => reference()},
@@ -47,6 +52,7 @@ defmodule Elara.Session do
       :allowed_capabilities,
       :recorder,
       :effect_journal_path,
+      :effect_executor,
       :effect_fault_hook,
       base_tools: %{},
       plugins: [],
@@ -91,10 +97,21 @@ defmodule Elara.Session do
     workspace_id = Keyword.fetch!(opts, :workspace_id)
     allowed_capabilities = Keyword.fetch!(opts, :allowed_capabilities)
     effect_journal_path = Keyword.fetch!(opts, :effect_journal_path)
+    effect_executor = Keyword.get(opts, :effect_executor)
     effect_fault_hook = Keyword.fetch!(opts, :effect_fault_hook)
 
-    case hydrate(store, core_config) do
-      {:ok, store, core} ->
+    recovery = %{
+      cwd: cwd,
+      router: router,
+      executor: effect_executor,
+      journal_path: effect_journal_path,
+      workspace_id: workspace_id,
+      allowed_capabilities: allowed_capabilities,
+      fault_hook: effect_fault_hook
+    }
+
+    case prepare_session(store, core_config, recovery) do
+      {:ok, store, core, effect_journal} ->
         with {:ok, _} <- Registry.register(Elara.Sessions, store.id, nil),
              {:ok, plugins, tools} <- start_plugins(plugin_paths, cwd, core.config.tools) do
           incarnation = new_incarnation()
@@ -108,7 +125,9 @@ defmodule Elara.Session do
             workspace_id: workspace_id,
             allowed_capabilities: allowed_capabilities,
             effect_journal_path: effect_journal_path,
+            effect_executor: effect_executor,
             effect_fault_hook: effect_fault_hook,
+            effect_journal: effect_journal,
             provider: provider,
             cwd: cwd,
             tool_timeout_ms: tool_timeout_ms,
@@ -120,6 +139,7 @@ defmodule Elara.Session do
           {:ok, %{shell | recorder: recorder}}
         else
           {:error, reason} ->
+            close_effect_journal(effect_journal)
             Store.release(store)
             {:stop, reason}
         end
@@ -347,6 +367,10 @@ defmodule Elara.Session do
           shell = %{shell | provider: {elem(shell.provider, 0), new_cfg}}
           feed({:provider_result, core_ref, {:error, error}}, shell)
 
+        {:tool, %Sidecar.Result{} = result} ->
+          shell = feed({:tool_result, core_ref, result.outcome}, shell)
+          persist_effect_result(shell, result)
+
         {:tool, result} ->
           outcome = settle_tool_result(plugin_lease, result)
           feed({:tool_result, core_ref, outcome}, shell)
@@ -424,6 +448,165 @@ defmodule Elara.Session do
 
   def handle_info(_msg, shell), do: {:noreply, shell}
 
+  defp prepare_session(store, config, %{executor: nil}) do
+    case hydrate(store, config) do
+      {:ok, store, core} -> {:ok, store, core, nil}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp prepare_session(store, config, recovery) do
+    case Store.claim(store) do
+      {:ok, store} -> prepare_claimed_session(store, config, recovery)
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp prepare_claimed_session(store, config, recovery) do
+    case ControllerJournal.start_link(path: recovery.journal_path) do
+      {:ok, journal} ->
+        case recover_store(store, config.tools, journal, recovery) do
+          {:ok, store} ->
+            case persist_repairs(store, Core.new(config, Store.history(store))) do
+              {:ok, store, core} ->
+                {:ok, store, core, journal}
+
+              {:error, reason} ->
+                close_effect_journal(journal)
+                Store.release(store)
+                {:error, reason}
+            end
+
+          {:error, reason} ->
+            close_effect_journal(journal)
+            Store.release(store)
+            {:error, reason}
+        end
+
+      {:error, reason} ->
+        Store.release(store)
+        {:error, reason}
+    end
+  end
+
+  defp recover_store(store, tools, journal, recovery) do
+    with {:ok, jobs} <- ControllerJournal.all(journal) do
+      jobs_by_call = jobs_by_tool_call(jobs)
+
+      store
+      |> Store.history()
+      |> unresolved_tool_calls()
+      |> Enum.reduce_while({:ok, store}, fn call, {:ok, store} ->
+        case Map.get(jobs_by_call, call.id) do
+          nil ->
+            {:cont, {:ok, store}}
+
+          job ->
+            case recover_tool_call(store, call, job, tools, journal, recovery) do
+              {:ok, store} -> {:cont, {:ok, store}}
+              {:error, reason} -> {:halt, {:error, reason}}
+            end
+        end
+      end)
+    end
+  end
+
+  defp jobs_by_tool_call(jobs) do
+    Enum.reduce(jobs, %{}, fn job, jobs_by_call ->
+      case Map.get(job, :tool_call_id) do
+        tool_call_id when is_binary(tool_call_id) and tool_call_id != "" ->
+          Map.update(jobs_by_call, tool_call_id, job, fn existing ->
+            if job.effect_id.sequence > existing.effect_id.sequence, do: job, else: existing
+          end)
+
+        _tool_call_id ->
+          jobs_by_call
+      end
+    end)
+  end
+
+  defp unresolved_tool_calls(history) do
+    {trailing_results, rest} =
+      history
+      |> Enum.reverse()
+      |> Enum.split_while(&is_struct(&1, ToolResult))
+
+    case rest do
+      [%Assistant{tool_calls: calls} | _] when calls != [] ->
+        completed = trailing_results |> Enum.map(& &1.call_id) |> MapSet.new()
+        Enum.reject(calls, &MapSet.member?(completed, &1.id))
+
+      _history ->
+        []
+    end
+  end
+
+  defp recover_tool_call(store, call, job, tools, journal, recovery) do
+    with {:ok, args} <- call.args,
+         %Tool{plugin: nil, mutating: true} = tool <- Map.get(tools, call.name),
+         true <- recoverable_job?(job, call, args, tool, recovery) do
+      request = request_from_job(store.id, job, tool)
+      operation = fn -> Router.execute(recovery.router, request, tool, recovery.cwd) end
+
+      result =
+        Sidecar.reconcile(
+          recovery.executor,
+          journal,
+          job,
+          operation,
+          @effect_recovery_timeout_ms,
+          recovery.fault_hook
+        )
+
+      with {:ok, store} <- Store.append(store, Message.tool_result(call, result.outcome)),
+           :ok <- mark_effect_result_persisted(journal, result) do
+        {:ok, store}
+      end
+    else
+      _reason -> {:error, {:unrecoverable_effect, job.job_id}}
+    end
+  end
+
+  defp recoverable_job?(job, call, args, tool, recovery) do
+    authority_scope = %{
+      allowed_capabilities: canonical_capabilities(recovery.allowed_capabilities),
+      placement: tool.placement
+    }
+
+    job.operation_kind == :run_tool and
+      job.tool_call_id == call.id and
+      job.tool_name == call.name and
+      job.tool_version == tool.version and
+      job.arguments == args and
+      job.workspace_id == recovery.workspace_id and
+      job.required_capabilities == canonical_capabilities(tool.capabilities) and
+      job.authority_scope == authority_scope
+  end
+
+  defp canonical_capabilities(:all), do: :all
+
+  defp canonical_capabilities(capabilities) when is_list(capabilities) do
+    capabilities |> Enum.uniq() |> Enum.sort()
+  end
+
+  defp request_from_job(session_id, job, tool) do
+    %Request{
+      job_id: job.job_id,
+      operation_digest: job.operation_digest,
+      tool_call_id: job.tool_call_id,
+      session_id: session_id,
+      tool_name: job.tool_name,
+      tool_version: job.tool_version,
+      arguments: job.arguments,
+      workspace_id: job.workspace_id,
+      deadline_ms: System.system_time(:millisecond) + @effect_recovery_timeout_ms,
+      cancellation_id: new_cancellation_id(),
+      required_capabilities: job.required_capabilities,
+      placement: tool.placement,
+      mutating: true
+    }
+  end
+
   defp hydrate(store, config) do
     with {:ok, store} <- Store.claim(store) do
       persist_repairs(store, Core.new(config, Store.history(store)))
@@ -475,6 +658,22 @@ defmodule Elara.Session do
     end
   end
 
+  defp persist_effect_result(shell, %Sidecar.Result{} = result) do
+    case mark_effect_result_persisted(shell.effect_journal, result) do
+      :ok -> shell
+      {:error, reason} -> raise "effect result persistence failed: #{inspect(reason)}"
+    end
+  end
+
+  defp mark_effect_result_persisted(_journal, %Sidecar.Result{executor_record: nil}), do: :ok
+
+  defp mark_effect_result_persisted(journal, %Sidecar.Result{job: job}) do
+    case ControllerJournal.mark_result_persisted(journal, job.job_id) do
+      {:ok, _observation} -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
   defp feed(fact, shell) do
     {recorder, begin} = FlightRecorder.begin_transition(shell.recorder, shell.core, fact)
     {core, effects} = Core.step(shell.core, fact)
@@ -520,7 +719,7 @@ defmodule Elara.Session do
       {:ok, lease, module, plugin_state} ->
         ctx = %Ctx{cwd: shell.cwd}
         request = tool_request(shell, call, tool, args)
-        {shell, request} = commit_tool_intent(shell, effect_id, request, tool)
+        {shell, request, _job} = commit_tool_intent(shell, effect_id, request, tool)
         config = %{module: module, plugin_state: plugin_state, ctx: ctx}
 
         task =
@@ -546,15 +745,30 @@ defmodule Elara.Session do
 
     if capabilities_allowed?(tool.capabilities, shell.allowed_capabilities) do
       request = tool_request(shell, call, tool, args)
-      {shell, request} = commit_tool_intent(shell, effect_id, request, tool)
+      {shell, request, job} = commit_tool_intent(shell, effect_id, request, tool)
 
       task =
-        Task.Supervisor.async_nolink(
-          Elara.TaskSup,
-          Router,
-          :execute,
-          [shell.router, request, tool, shell.cwd]
-        )
+        if job && shell.effect_executor do
+          operation = fn -> Router.execute(shell.router, request, tool, shell.cwd) end
+
+          Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
+            Sidecar.execute(
+              shell.effect_executor,
+              shell.effect_journal,
+              job,
+              operation,
+              @effect_recovery_timeout_ms,
+              shell.effect_fault_hook
+            )
+          end)
+        else
+          Task.Supervisor.async_nolink(
+            Elara.TaskSup,
+            Router,
+            :execute,
+            [shell.router, request, tool, shell.cwd]
+          )
+        end
 
       track_tool_task(shell, task, core_ref, nil)
     else
@@ -872,7 +1086,7 @@ defmodule Elara.Session do
   end
 
   defp commit_tool_intent(shell, _effect_id, %Request{mutating: false} = request, _tool),
-    do: {shell, request}
+    do: {shell, request, nil}
 
   defp commit_tool_intent(shell, effect_id, request, tool) do
     shell = ensure_effect_journal(shell)
@@ -880,6 +1094,7 @@ defmodule Elara.Session do
     job =
       Job.new(effect_id,
         operation_kind: :run_tool,
+        tool_call_id: request.tool_call_id,
         tool_name: request.tool_name,
         tool_version: request.tool_version,
         arguments: request.arguments,
@@ -897,7 +1112,7 @@ defmodule Elara.Session do
             operation_digest: job.operation_digest
         }
 
-        {shell, request}
+        {shell, request, job}
 
       {:error, reason} ->
         raise "controller intent persistence failed: #{inspect(reason)}"

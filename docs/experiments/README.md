@@ -10,7 +10,9 @@ turning them into doctrine or production architecture. It is deliberately small
 at first. The process, schemas, and storage model should evolve when experiments
 show that they are wrong or burdensome.
 
-The first study is [EXP-001: Mission Receipt](001-mission-receipt.md).
+The first study is [EXP-001: Mission Receipt](001-mission-receipt.md). The
+durable-effects sequence is governed by the
+[frozen EXP-003 / ER-1 contract](003-effect-receipt-er1-contract.md).
 
 ## Research posture
 

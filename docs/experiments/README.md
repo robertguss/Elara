@@ -12,7 +12,8 @@ show that they are wrong or burdensome.
 
 The first study is [EXP-001: Mission Receipt](001-mission-receipt.md). The
 durable-effects sequence is governed by the
-[frozen EXP-003 / ER-1 contract](003-effect-receipt-er1-contract.md).
+[frozen EXP-003 / ER-1 contract](003-effect-receipt-er1-contract.md) and its
+[confirmatory preregistration](003-effect-receipt-confirmatory-preregistration.md).
 
 ## Research posture
 

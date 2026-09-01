@@ -46,7 +46,7 @@
     {"id":"W03","class":"write","primary_fault":"F4","secondary_fault":"F1","fault_target_job_mutations":0,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
     {"id":"W04","class":"write","primary_fault":"F4","secondary_fault":"F1","fault_target_job_mutations":0,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
     {"id":"W05","class":"write","primary_fault":"F1","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
-    {"id":"W06","class":"write","primary_fault":"F2","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"W06","class":"write","primary_fault":"F2","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
     {"id":"W07","class":"write","primary_fault":"F3","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
     {"id":"W08","class":"write","primary_fault":"F2","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":1,"step_count":1,"complete_task_requires_live_continuation":false},
     {"id":"P01","class":"patch","primary_fault":"F1","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
@@ -58,13 +58,9 @@
     {"id":"P07","class":"patch","primary_fault":"F3","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
     {"id":"P08","class":"patch","primary_fault":"F2","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
     {"id":"S01","class":"shell","primary_fault":"F1","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
-    {"id":"S02","class":"shell","primary_fault":"F2","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
-    {"id":"S03","class":"shell","primary_fault":"F3","secondary_fault":"F1","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
-    {"id":"S04","class":"shell","primary_fault":"F4","secondary_fault":"F2","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
-    {"id":"S05","class":"shell","primary_fault":"F1","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
-    {"id":"S06","class":"shell","primary_fault":"F2","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
-    {"id":"S07","class":"shell","primary_fault":"F3","secondary_fault":"F1","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
-    {"id":"S08","class":"shell","primary_fault":"F4","secondary_fault":"F2","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false}
+    {"id":"S02","class":"shell","primary_fault":"F2","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"S03","class":"shell","primary_fault":"F3","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"S04","class":"shell","primary_fault":"F2","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false}
   ],
   "corrections": [
     {"candidate_id":"P05","field":"secondary_fault","v2":"F3","v3":"F4","reason":"The conflict target performs zero job-attributed mutations; its environmental edit cannot satisfy F3."},

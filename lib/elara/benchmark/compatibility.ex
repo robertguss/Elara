@@ -61,11 +61,12 @@ defmodule Elara.Benchmark.Compatibility do
     ids = Enum.map(candidates, &map_value(&1, "id"))
 
     expected_ids =
-      for class <- ~w(W P S), n <- 1..8, do: class <> String.pad_leading("#{n}", 2, "0")
+      for(class <- ~w(W P), n <- 1..8, do: class <> String.pad_leading("#{n}", 2, "0")) ++
+        for n <- 1..4, do: "S" <> String.pad_leading("#{n}", 2, "0")
 
     errors =
       errors
-      |> require(length(candidates) == 24, :candidate_count_mismatch)
+      |> require(length(candidates) == 20, :candidate_count_mismatch)
       |> require(Enum.sort(ids) == Enum.sort(expected_ids), :candidate_frame_mismatch)
       |> require(Enum.uniq(ids) == ids, :duplicate_candidate_id)
 

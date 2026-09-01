@@ -14,15 +14,35 @@ defmodule Elara.Benchmark.PreregistrationV3Test do
     %{contract: contract}
   end
 
-  test "all 24 candidates and 48 corrected assignments are compatible", %{contract: contract} do
+  test "all 20 candidates and 40 corrected assignments match the frozen frame", %{
+    contract: contract
+  } do
     assert :ok = Compatibility.validate(contract)
-    assert length(contract["candidates"]) == 24
+    assert length(contract["candidates"]) == 20
 
     assert Enum.sum(
              Enum.map(contract["candidates"], fn candidate ->
                Enum.count([candidate["primary_fault"], candidate["secondary_fault"]])
              end)
-           ) == 48
+           ) == 40
+
+    source =
+      @root
+      |> Path.join("test/fixtures/benchmark/exp003/manifest.json")
+      |> File.read!()
+      |> JSON.decode!()
+      |> then(&Map.new(&1["candidate_frame"], fn candidate -> {candidate["id"], candidate} end))
+
+    for candidate <- contract["candidates"] do
+      frozen = source[candidate["id"]]
+
+      assert candidate["class"] == frozen["operation_class"]
+      assert candidate["primary_fault"] == frozen["primary_fault"]
+
+      if candidate["id"] not in ~w(P05 P06) do
+        assert candidate["secondary_fault"] == frozen["secondary_fault"]
+      end
+    end
 
     assert candidate(contract, "P05")["secondary_fault"] == "F4"
     assert candidate(contract, "P06")["secondary_fault"] == "F2"

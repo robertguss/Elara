@@ -58,7 +58,7 @@ Every v1/v2 rule remains normative unless changed here.
 1. Protocol identity changes to `ER-3/FND-2-v3`; all generated inputs are fresh.
 2. `P05` keeps primary F2 and changes secondary F3 to F4.
 3. `P06` keeps primary F1 and changes secondary F3 to F2.
-4. The materializer must validate all 48 primary/secondary assignments against
+4. The materializer must validate all 40 primary/secondary assignments against
    the machine contract before selection. An incompatible assignment blocks
    materialization; it cannot be replaced after selection.
 5. Workspace evidence has four distinct identities:
@@ -79,10 +79,10 @@ Every v1/v2 rule remains normative unless changed here.
    task workspace are scored separately. A partial workspace is never silently
    compared with the no-fault final workspace.
 
-The 24-candidate frame, primary assignments, and all other secondary assignments
-remain unchanged. The machine contract records all candidates, both assignments,
-target and environmental mutation counts, step counts, workspace contracts, and
-exact amendments.
+The 20-candidate frame (eight write, eight patch, four shell), primary
+assignments, and all other secondary assignments remain unchanged. The machine
+contract records all candidates, both assignments, target and environmental
+mutation counts, step counts, workspace contracts, and exact amendments.
 
 ## Multi-step `P06` contract
 
@@ -162,7 +162,8 @@ invalidates v3 and requires a new future seed and new issue identities.
 ROB-848 must prove that:
 
 - this commit predates 2026-09-01T06:38:00Z;
-- all 24 candidates and 48 assignments validate mechanically;
+- all 20 candidates and 40 assignments validate mechanically against the
+  preserved v1/v2 candidate frame;
 - restoring `P05` secondary F3 or `P06` secondary F3 fails validation;
 - future-round arithmetic and the zero-exposure statement are exact;
 - the recorded v1/v2 artifact hashes remain unchanged; and

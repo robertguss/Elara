@@ -718,7 +718,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
       "old_text" => fixture["old_text"],
       "new_text" => fixture["new_text"],
       "postimage_sha256" => fixture["postimage"]["sha256"],
-      "replacement" => "single_literal_once"
+      "replacement" => "same_directory_temp_rename"
     }
   end
 

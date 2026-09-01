@@ -97,7 +97,7 @@ defmodule Elara.Effect.LiteralPatch do
       "old_text" => old_text,
       "new_text" => new_text,
       "postimage_sha256" => sha256(postimage),
-      "replacement" => "single_literal_once"
+      "replacement" => "same_directory_temp_rename"
     }
   end
 
@@ -349,7 +349,7 @@ defmodule Elara.Effect.LiteralPatch do
          true <- is_binary(args["new_text"]),
          true <- String.valid?(args["new_text"]),
          :ok <- validate_digest(args["postimage_sha256"]),
-         true <- args["replacement"] == "single_literal_once" do
+         true <- args["replacement"] == "same_directory_temp_rename" do
       {:ok, args}
     else
       false -> {:error, :invalid_arguments}

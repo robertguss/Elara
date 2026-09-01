@@ -157,7 +157,7 @@ defmodule Elara.Effect.Sidecar do
     rejected(job, nil, {:executor_rejected, reason})
   end
 
-  defp await_completion(executor, journal, job, operation, timeout, fault_hook, monitor) do
+  defp await_completion(_executor, journal, job, _operation, timeout, fault_hook, monitor) do
     receive do
       {:elara_test_executor, _executor_id, job_id, {state, %Record{state: state} = record}}
       when job_id == job.job_id and state in [:completed, :failed] ->
@@ -177,11 +177,18 @@ defmodule Elara.Effect.Sidecar do
     after
       timeout ->
         demonitor(monitor)
-
-        executor
-        |> TestExecutor.query(job.job_id)
-        |> resolve(executor, journal, job, operation, timeout, fn _ -> :ok end)
+        timed_out(job, journal)
     end
+  end
+
+  defp timed_out(job, journal) do
+    record =
+      case safe_observation(journal, job.job_id) do
+        %Observation{executor_record: record} -> record
+        nil -> nil
+      end
+
+    indeterminate(job, record, :completion_timeout)
   end
 
   defp safely(job, journal, fun) do

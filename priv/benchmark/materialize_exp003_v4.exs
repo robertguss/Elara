@@ -26,5 +26,6 @@ source =
   |> String.replace("V3 reuses", "V4 reuses")
   |> String.replace("v3 changes", "v4 changes")
   |> String.replace("v3 evidence", "v4 evidence")
+  |> String.replace("v3_evidence", "v4_evidence")
 
 Code.eval_string(source, [], file: "priv/benchmark/materialize_exp003_v3.exs")

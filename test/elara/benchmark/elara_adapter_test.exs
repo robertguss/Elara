@@ -4,6 +4,7 @@ defmodule Elara.Benchmark.ElaraAdapterTest do
   alias Elara.Benchmark.{ElaraAdapter, Manifest}
 
   @manifest_path Path.expand("../../fixtures/benchmark/exp003/manifest.json", __DIR__)
+  @v3_manifest_path Path.expand("../../fixtures/benchmark/exp003-v3/manifest.json", __DIR__)
 
   setup do
     {:ok, manifest} = Manifest.load(@manifest_path)
@@ -45,13 +46,48 @@ defmodule Elara.Benchmark.ElaraAdapterTest do
   test "categorically forbids confirmatory fault execution" do
     task = manifest_task("P01")
     row = manifest_row("P01-F1")
+    config = %{targets: %{}, fault_authorization: nil}
 
     assert {:error, :confirmatory_fault_execution_forbidden} =
-             ElaraAdapter.execute(task, "/tmp/not-used", %{
-               kind: :fault,
-               condition: "baseline",
-               row: row
-             })
+             ElaraAdapter.with_config(config, fn ->
+               ElaraAdapter.execute(task, "/tmp/not-used", %{
+                 kind: :fault,
+                 condition: "baseline",
+                 row: row
+               })
+             end)
+  end
+
+  test "only the exact frozen v3 manifest authorizes later confirmatory execution" do
+    {:ok, manifest} = Manifest.load(@v3_manifest_path)
+    base = %{targets: %{}, fault_authorization: nil}
+
+    assert {:ok, authorized} = ElaraAdapter.authorize_confirmatory(base, manifest)
+
+    assert {:error, {:target_not_prepared, "baseline"}} =
+             ElaraAdapter.with_config(authorized, fn ->
+               ElaraAdapter.execute(manifest.tasks["P01"], "/tmp/not-used", %{
+                 kind: :fault,
+                 condition: "baseline",
+                 row: manifest.rows["P01-F1"]
+               })
+             end)
+
+    forged_row = Map.put(manifest.rows["P01-F1"], "observation_deadline_ms", 1)
+
+    assert {:error, :confirmatory_fault_execution_forbidden} =
+             ElaraAdapter.with_config(authorized, fn ->
+               ElaraAdapter.execute(manifest.tasks["P01"], "/tmp/not-used", %{
+                 kind: :fault,
+                 condition: "baseline",
+                 row: forged_row
+               })
+             end)
+
+    altered = %{manifest | sha256: String.duplicate("0", 64)}
+
+    assert {:error, :confirmatory_manifest_not_frozen_v3} =
+             ElaraAdapter.authorize_confirmatory(base, altered)
   end
 
   test "pins both immutable target commits" do

@@ -12,6 +12,7 @@ defmodule Elara.Benchmark.ElaraAdapter do
   @neutral_runner_path "lib/elara/benchmark/runner.ex"
   @config_key {__MODULE__, :config}
   @conditions ~w(baseline receipts)
+  @v3_manifest_sha256 "4129ae964daf35469499dc9506ace9fa89db0c9f00a20826dfc6790edd5b5491"
 
   @spec target_commits() :: %{String.t() => String.t()}
   def target_commits do
@@ -33,7 +34,8 @@ defmodule Elara.Benchmark.ElaraAdapter do
          state_root: state_root,
          runner_path: Path.join(repo_root, @runner_path),
          targets: targets,
-         evidence_sink: nil
+         evidence_sink: nil,
+         fault_authorization: nil
        }}
     end
   end
@@ -49,6 +51,29 @@ defmodule Elara.Benchmark.ElaraAdapter do
       if previous, do: Process.put(@config_key, previous), else: Process.delete(@config_key)
     end
   end
+
+  @spec authorize_confirmatory(map(), Manifest.t()) :: {:ok, map()} | {:error, term()}
+  def authorize_confirmatory(config, %Manifest{
+        sha256: @v3_manifest_sha256,
+        tasks: tasks,
+        rows: rows,
+        data: %{
+          "schema" => "elara.exp003.corpus.v3",
+          "preregistration_version" => "ER-3/FND-2-v3"
+        }
+      })
+      when is_map(config) do
+    {:ok,
+     Map.put(config, :fault_authorization, %{
+       mode: :confirmatory,
+       source_manifest_sha256: @v3_manifest_sha256,
+       tasks: tasks,
+       rows: rows
+     })}
+  end
+
+  def authorize_confirmatory(_config, %Manifest{}),
+    do: {:error, :confirmatory_manifest_not_frozen_v3}
 
   @spec mapping(map()) :: {:ok, map()} | {:error, term()}
   def mapping(%{"plan" => %{"steps" => [step], "scripted_provider" => [call, final]}}) do
@@ -77,8 +102,8 @@ defmodule Elara.Benchmark.ElaraAdapter do
   @impl true
   def execute(task, cwd, %{kind: :fault, condition: condition, row: row} = context)
       when condition in @conditions do
-    with :ok <- authorize_qualification(task, row),
-         {:ok, config} <- fetch_config(),
+    with {:ok, config} <- fetch_config(),
+         :ok <- authorize_fault(task, row, config),
          {:ok, target} <- fetch_target(config, condition),
          {:ok, mapped} <- mapping(task),
          {:ok, observation} <- run_target(config, target, task, mapped, cwd, context),
@@ -586,24 +611,48 @@ defmodule Elara.Benchmark.ElaraAdapter do
     end
   end
 
-  defp authorize_qualification(task, row) do
+  defp authorize_fault(task, row, config) do
     cond do
-      task["exposure_split"] != "development_adapter_fixture" ->
-        {:error, :confirmatory_fault_execution_forbidden}
+      development_fault?(task, row) ->
+        :ok
 
-      row["exposure_split"] != "development_adapter_fixture" ->
-        {:error, :confirmatory_fault_execution_forbidden}
-
-      not String.starts_with?(row["row_id"] || "", "QUAL-") ->
-        {:error, :confirmatory_fault_execution_forbidden}
-
-      row["fault_role"] != "development_qualification" ->
-        {:error, :confirmatory_fault_execution_forbidden}
+      confirmatory_fault?(task, row, Map.get(config, :fault_authorization)) ->
+        :ok
 
       true ->
-        :ok
+        {:error, :confirmatory_fault_execution_forbidden}
     end
   end
+
+  defp development_fault?(task, row) do
+    task["exposure_split"] == "development_adapter_fixture" and
+      row["exposure_split"] == "development_adapter_fixture" and
+      String.starts_with?(row["row_id"] || "", "QUAL-") and
+      row["fault_role"] == "development_qualification"
+  end
+
+  defp confirmatory_fault?(
+         task,
+         row,
+         %{
+           mode: :confirmatory,
+           source_manifest_sha256: @v3_manifest_sha256,
+           tasks: tasks,
+           rows: rows
+         }
+       ) do
+    task_id = task["id"]
+    row_id = row["row_id"]
+
+    task["exposure_split"] == "held_out_relative_to_target_implementation" and
+      row["task_id"] == task_id and
+      not String.starts_with?(row["row_id"] || "", "QUAL-") and
+      row["fault_role"] in ~w(primary secondary) and
+      Map.get(tasks, task_id) == task and
+      Map.get(rows, row_id) == row
+  end
+
+  defp confirmatory_fault?(_task, _row, _authorization), do: false
 
   defp fault_evidence(observation, task, row, condition, final_digest) do
     fixture = task["fixture"]

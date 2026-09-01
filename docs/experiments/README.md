@@ -14,6 +14,11 @@ The first study is [EXP-001: Mission Receipt](001-mission-receipt.md). The
 durable-effects sequence is governed by the
 [frozen EXP-003 / ER-1 contract](003-effect-receipt-er1-contract.md) and its
 [confirmatory preregistration](003-effect-receipt-confirmatory-preregistration.md).
+ER-1 v1 concluded Stop without a safety failure because row 1's frozen result
+counts were internally inconsistent. The separate
+[corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
+[fresh fixture manifest](003-effect-receipt-er1-v2-manifest.json) preserve that
+result while preregistering a new revalidation.
 
 ## Research posture
 

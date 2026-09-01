@@ -4,6 +4,7 @@ defmodule Elara.Effect.CrashMatrixTest do
   alias Elara.Effect.ControllerJournal
   alias Elara.Effect.ControllerJournal.Observation
   alias Elara.Effect.ExecutorLedger.Record
+  alias Elara.Effect.Job
   alias Elara.Effect.TestExecutor
   alias Elara.Message
   alias Elara.Message.{ToolCall, ToolResult}
@@ -13,14 +14,22 @@ defmodule Elara.Effect.CrashMatrixTest do
   alias Exqlite.Sqlite3
 
   @bound_ms 1_000
+  @manifest_path Path.expand(
+                   "../../../docs/experiments/003-effect-receipt-er1-v2-manifest.json",
+                   __DIR__
+                 )
+  @external_resource @manifest_path
+  @manifest @manifest_path |> File.read!() |> JSON.decode!()
+  @fixtures Map.new(@manifest["cases"], &{&1["id"], &1})
 
   defmodule MarkerTool do
     def run(
-          %{"path" => path, "token" => token},
+          %{"fixture_variant" => variant, "path" => path, "token" => token},
           %Ctx{job_id: job_id, operation_digest: operation_digest}
         )
         when is_binary(job_id) and is_binary(operation_digest) do
       marker = %{
+        "fixture_variant" => variant,
         "job_id" => job_id,
         "operation_digest" => operation_digest,
         "token" => token
@@ -33,7 +42,7 @@ defmodule Elara.Effect.CrashMatrixTest do
 
   setup do
     root =
-      Path.join(System.tmp_dir!(), "elara-er1-matrix-#{System.unique_integer([:positive])}")
+      Path.join(System.tmp_dir!(), "elara-er1-v2-#{System.unique_integer([:positive])}")
 
     cwd = Path.join(root, "workspace")
     File.mkdir_p!(cwd)
@@ -58,7 +67,8 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path)
-    call = marker_call(context.marker_path, "row-1")
+    fixture = fixture("row_1")
+    call = marker_call(context.marker_path, fixture)
 
     session =
       start_marker_session(
@@ -82,9 +92,20 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert {0, 0, 0} = executor_totals(context.executor_path)
     assert [] = marker_records(context.marker_path)
 
-    assert [%ToolResult{outcome: {:error, message}}] = tool_results(recovered)
+    results = tool_results(recovered)
+    assert [%ToolResult{outcome: {:error, message}}] = results
     assert message =~ "not_started"
     assert message =~ "action=do_not_reconcile_or_auto_retry"
+
+    assert_manifest_counts(fixture, %{
+      controller_intent_count: 0,
+      executor_admission_count: 0,
+      executor_callback_attempt_count: 0,
+      external_mutation_count: 0,
+      executor_terminal_result_count: 0,
+      session_tool_result_count: length(results)
+    })
+
     assert elapsed <= @bound_ms
 
     stop_session(recovered)
@@ -101,7 +122,8 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path)
-    call = marker_call(context.marker_path, "row-2")
+    fixture = fixture("row_2")
+    call = marker_call(context.marker_path, fixture)
 
     session =
       start_marker_session(
@@ -124,7 +146,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     recovered = start_marker_session(context, executor, script([]), no_fault(), store_path)
     elapsed = elapsed_ms(started)
 
-    assert_success(recovered, executor, context, job, "row-2")
+    assert_success(recovered, executor, context, job, fixture)
     assert elapsed <= @bound_ms
 
     stop_session(recovered)
@@ -141,7 +163,8 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path, executor_hook)
-    call = marker_call(context.marker_path, "row-3")
+    fixture = fixture("row_3")
+    call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
     call_ask_unlinked(session)
 
@@ -157,7 +180,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
     elapsed = elapsed_ms(started)
 
-    assert_success(session, reopened, context, job, "row-3")
+    assert_success(session, reopened, context, job, fixture)
     assert elapsed <= @bound_ms
 
     stop_session(session)
@@ -174,7 +197,8 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path, executor_hook)
-    call = marker_call(context.marker_path, "row-4")
+    fixture = fixture("row_4")
+    call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
     call_ask_unlinked(session)
 
@@ -195,7 +219,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
     elapsed = elapsed_ms(started)
 
-    assert_success(session, reopened, context, job, "row-4")
+    assert_success(session, reopened, context, job, fixture)
     assert elapsed <= @bound_ms
 
     stop_session(session)
@@ -211,7 +235,8 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path, executor_hook)
-    call = marker_call(context.marker_path, "row-5")
+    fixture = fixture("row_5")
+    call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
     call_ask_unlinked(session)
 
@@ -231,7 +256,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
     elapsed = elapsed_ms(started)
 
-    assert_success(session, reopened, context, job, "row-5")
+    assert_success(session, reopened, context, job, fixture)
     assert elapsed <= @bound_ms
 
     stop_session(session)
@@ -251,7 +276,8 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path, executor_hook)
-    call = marker_call(context.marker_path, "row-6")
+    fixture = fixture("row_6")
+    call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
     call_ask_unlinked(session)
 
@@ -262,7 +288,7 @@ defmodule Elara.Effect.CrashMatrixTest do
       controller_evidence(context.journal_path)
 
     assert [marker] = marker_records(context.marker_path)
-    assert_marker(marker, job, "row-6")
+    assert_marker(marker, job, fixture)
     kill_executor(executor)
 
     started = now_ms()
@@ -285,10 +311,20 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert {1, 1, 0} = executor_totals(context.executor_path)
     assert [^marker] = marker_records(context.marker_path)
 
-    assert [%ToolResult{outcome: {:indeterminate, message}}] = tool_results(session)
+    results = tool_results(session)
+    assert [%ToolResult{outcome: {:indeterminate, message}}] = results
     assert message =~ "last_proven=callback_invoked"
     assert message =~ "missing=completed_or_failed"
     assert message =~ "action=do_not_retry_or_fail_over"
+
+    assert_manifest_counts(fixture, %{
+      controller_intent_count: 1,
+      executor_admission_count: attempted.admission_count,
+      executor_callback_attempt_count: attempted.callback_attempt_count,
+      external_mutation_count: length(marker_records(context.marker_path)),
+      executor_terminal_result_count: attempted.terminal_count,
+      session_tool_result_count: length(results)
+    })
 
     assert %Observation{executor_record: ^attempted, result_persisted?: true} =
              observation(context.journal_path, job.job_id)
@@ -312,7 +348,8 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path, executor_hook)
-    call = marker_call(context.marker_path, "row-7")
+    fixture = fixture("row_7")
+    call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
     call_ask_unlinked(session)
 
@@ -332,7 +369,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
     elapsed = elapsed_ms(started)
 
-    assert_success(session, reopened, context, job, "row-7", completed)
+    assert_success(session, reopened, context, job, fixture, completed)
     assert elapsed <= @bound_ms
 
     stop_session(session)
@@ -352,7 +389,8 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path)
-    call = marker_call(context.marker_path, "row-8")
+    fixture = fixture("row_8")
+    call = marker_call(context.marker_path, fixture)
 
     session =
       start_marker_session(
@@ -382,7 +420,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     recovered = start_marker_session(context, executor, script([]), no_fault(), store_path)
     elapsed = elapsed_ms(started)
 
-    assert_success(recovered, executor, context, job, "row-8")
+    assert_success(recovered, executor, context, job, fixture)
 
     refute Enum.any?(
              tool_results(recovered),
@@ -398,7 +436,8 @@ defmodule Elara.Effect.CrashMatrixTest do
   test "control: no fault produces one intent, admission, attempt, mutation, and result",
        context do
     executor = start_executor(context.executor_path)
-    call = marker_call(context.marker_path, "control-normal")
+    fixture = fixture("control_no_fault")
+    call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
 
     started = now_ms()
@@ -406,7 +445,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     elapsed = elapsed_ms(started)
 
     {job, _observation} = controller_evidence(context.journal_path)
-    assert_success(session, executor, context, job, "control-normal")
+    assert_success(session, executor, context, job, fixture)
     assert elapsed <= @bound_ms
 
     stop_session(session)
@@ -425,7 +464,8 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path)
-    call = marker_call(context.marker_path, "control-replay")
+    fixture = fixture("control_same_digest")
+    call = marker_call(context.marker_path, fixture)
     session = start_marker_session(context, executor, live_script(call), controller_hook)
     call_ask_unlinked(session)
 
@@ -461,7 +501,7 @@ defmodule Elara.Effect.CrashMatrixTest do
 
     assert {:completed, ^completed} = TestExecutor.query(executor, job.job_id)
     assert elapsed_ms(started) <= @bound_ms
-    assert_success(session, executor, context, job, "control-replay", completed)
+    assert_success(session, executor, context, job, fixture, completed)
 
     stop_session(session)
     assert :ok = TestExecutor.close(executor)
@@ -479,17 +519,20 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path)
-    call = marker_call(context.marker_path, "control-conflict")
+    fixture = fixture("control_conflicting_digest")
+    call = marker_call(context.marker_path, fixture)
     session = start_marker_session(context, executor, live_script(call), controller_hook)
     call_ask_unlinked(session)
 
     assert_receive {:controller_hook, :after_accept_observation_before_continue, task}, @bound_ms
     {job, %Observation{executor_record: accepted}} = controller_evidence(context.journal_path)
-    conflicting_digest = conflicting_digest(job.operation_digest)
+    conflicting_job = conflicting_job(job, fixture)
+    assert conflicting_job.job_id == job.job_id
+    refute conflicting_job.operation_digest == job.operation_digest
     started = now_ms()
 
     assert {:error, :digest_conflict} =
-             TestExecutor.submit(executor, job.job_id, conflicting_digest, fn ->
+             TestExecutor.submit(executor, job.job_id, conflicting_job.operation_digest, fn ->
                raise "conflicting digest invoked callback"
              end)
 
@@ -500,13 +543,14 @@ defmodule Elara.Effect.CrashMatrixTest do
 
     send(task, {:continue, :after_accept_observation_before_continue})
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
-    assert_success(session, executor, context, job, "control-conflict")
+    assert_success(session, executor, context, job, fixture)
 
     stop_session(session)
     assert :ok = TestExecutor.close(executor)
   end
 
-  defp assert_success(session, executor, context, job, token, expected_record \\ nil) do
+  defp assert_success(session, executor, context, job, fixture, expected_record \\ nil) do
+    token = fixture["token"]
     assert {:completed, %Record{} = completed} = TestExecutor.query(executor, job.job_id)
     if expected_record, do: assert(completed == expected_record)
 
@@ -517,19 +561,39 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert {1, 1, 1} = executor_totals(context.executor_path)
 
     assert [marker] = marker_records(context.marker_path)
-    assert_marker(marker, job, token)
+    assert_marker(marker, job, fixture)
 
-    assert [%ToolResult{outcome: {:ok, "marker " <> ^token <> " committed"}}] =
-             tool_results(session)
+    results = tool_results(session)
+
+    assert [%ToolResult{outcome: {:ok, "marker " <> ^token <> " committed"}}] = results
 
     assert %Observation{executor_record: ^completed, result_persisted?: true} =
              observation(context.journal_path, job.job_id)
+
+    assert_manifest_counts(fixture, %{
+      controller_intent_count: 1,
+      executor_admission_count: completed.admission_count,
+      executor_callback_attempt_count: completed.callback_attempt_count,
+      external_mutation_count: 1,
+      executor_terminal_result_count: completed.terminal_count,
+      session_tool_result_count: length(results)
+    })
   end
 
-  defp assert_marker(marker, job, token) do
+  defp assert_marker(marker, job, fixture) do
     assert marker["job_id"] == job.job_id
     assert marker["operation_digest"] == job.operation_digest
-    assert marker["token"] == token
+    assert marker["token"] == fixture["token"]
+    assert marker["fixture_variant"] == fixture["variant"]
+  end
+
+  defp assert_manifest_counts(fixture, observed) do
+    expected =
+      Map.new(fixture["expected_counts"], fn {key, value} ->
+        {String.to_existing_atom(key), value}
+      end)
+
+    assert observed == expected
   end
 
   defp live_marker_session(context, executor, call) do
@@ -575,13 +639,21 @@ defmodule Elara.Effect.CrashMatrixTest do
     }
   end
 
-  defp marker_call(path, token) do
+  defp marker_call(path, fixture) do
     %ToolCall{
-      id: "marker-call",
+      id: "marker-call-#{fixture["id"]}",
       name: "marker",
-      args: {:ok, %{"path" => path, "token" => token}}
+      args:
+        {:ok,
+         %{
+           "fixture_variant" => fixture["variant"],
+           "path" => path,
+           "token" => fixture["token"]
+         }}
     }
   end
+
+  defp fixture(id), do: Map.fetch!(@fixtures, id)
 
   defp script(replies) do
     {:ok, agent} = Agent.start_link(fn -> replies end)
@@ -708,9 +780,19 @@ defmodule Elara.Effect.CrashMatrixTest do
     GenServer.stop(pid)
   end
 
-  defp conflicting_digest(digest) do
-    replacement = if String.starts_with?(digest, "a"), do: "b", else: "a"
-    replacement <> binary_part(digest, 1, byte_size(digest) - 1)
+  defp conflicting_job(job, fixture) do
+    args =
+      Map.update!(job.args, "fixture_variant", fn variant ->
+        Map.put(variant, "conflict_nonce", fixture["variant"]["nonce"] <> "-conflict")
+      end)
+
+    Job.new(job.effect_id,
+      executor_id: job.executor_id,
+      tool_name: job.tool_name,
+      tool_version: job.tool_version,
+      args: args,
+      metadata: job.metadata
+    )
   end
 
   defp no_fault, do: fn _point -> :ok end

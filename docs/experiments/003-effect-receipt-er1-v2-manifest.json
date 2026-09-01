@@ -1,0 +1,237 @@
+{
+  "experiment_id": "EXP-003-ER1-V2",
+  "contract_version": "ER-1/FND-V2-1",
+  "schema_version": 1,
+  "production_baseline_commit": "a1ee8b39924de38ee08eb0d222d873d3f4061767",
+  "storage_policy": {
+    "workspace": "fresh_per_case_and_run",
+    "controller_journal": "fresh_per_case_and_run",
+    "executor_ledger": "fresh_per_case_and_run",
+    "job_identity": "fresh_recording_identity_per_case_and_run"
+  },
+  "seeds": [104729, 130363, 155921],
+  "repeat": {
+    "seed": 104729,
+    "repeat_until_failure": 25
+  },
+  "commands": [
+    "mix test test/elara/effect/crash_matrix_test.exs --seed 104729",
+    "mix test test/elara/effect/crash_matrix_test.exs --seed 130363",
+    "mix test test/elara/effect/crash_matrix_test.exs --seed 155921",
+    "mix test test/elara/effect/crash_matrix_test.exs --seed 104729 --repeat-until-failure 25",
+    "mix test",
+    "mix format --check-formatted",
+    "mix compile --warnings-as-errors"
+  ],
+  "cases": [
+    {
+      "id": "row_1",
+      "kind": "fault",
+      "token": "v2-r1-nacre-7f2c9a",
+      "variant": {
+        "nonce": "7f2c9a18",
+        "ordinal": 1,
+        "schedule": "before_intent"
+      },
+      "expected_counts": {
+        "controller_intent_count": 0,
+        "executor_admission_count": 0,
+        "executor_callback_attempt_count": 0,
+        "external_mutation_count": 0,
+        "executor_terminal_result_count": 0,
+        "session_tool_result_count": 1
+      },
+      "session_classification": "not_started"
+    },
+    {
+      "id": "row_2",
+      "kind": "fault",
+      "token": "v2-r2-pulsar-b1846d",
+      "variant": {
+        "nonce": "b1846dd3",
+        "ordinal": 2,
+        "schedule": "intent_before_dispatch"
+      },
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      },
+      "session_classification": "success"
+    },
+    {
+      "id": "row_3",
+      "kind": "fault",
+      "token": "v2-r3-cobalt-0de751",
+      "variant": {
+        "nonce": "0de751ac",
+        "ordinal": 3,
+        "schedule": "receipt_before_accept"
+      },
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      },
+      "session_classification": "success"
+    },
+    {
+      "id": "row_4",
+      "kind": "fault",
+      "token": "v2-r4-orbit-96a32f",
+      "variant": {
+        "nonce": "96a32f40",
+        "ordinal": 4,
+        "schedule": "accept_before_reply"
+      },
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      },
+      "session_classification": "success"
+    },
+    {
+      "id": "row_5",
+      "kind": "fault",
+      "token": "v2-r5-tidal-43ce80",
+      "variant": {
+        "nonce": "43ce80b7",
+        "ordinal": 5,
+        "schedule": "reply_before_callback"
+      },
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      },
+      "session_classification": "success"
+    },
+    {
+      "id": "row_6",
+      "kind": "fault",
+      "token": "v2-r6-lyric-f208bd",
+      "variant": {
+        "nonce": "f208bd65",
+        "ordinal": 6,
+        "schedule": "mutation_before_completion"
+      },
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 0,
+        "session_tool_result_count": 1
+      },
+      "session_classification": "indeterminate"
+    },
+    {
+      "id": "row_7",
+      "kind": "fault",
+      "token": "v2-r7-quasar-5a17c4",
+      "variant": {
+        "nonce": "5a17c4e9",
+        "ordinal": 7,
+        "schedule": "completion_before_reply"
+      },
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      },
+      "session_classification": "success"
+    },
+    {
+      "id": "row_8",
+      "kind": "fault",
+      "token": "v2-r8-sonata-c6310e",
+      "variant": {
+        "nonce": "c6310e72",
+        "ordinal": 8,
+        "schedule": "observation_before_session_result"
+      },
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      },
+      "session_classification": "success"
+    },
+    {
+      "id": "control_no_fault",
+      "kind": "control",
+      "token": "v2-c1-aurora-81d5f3",
+      "variant": {
+        "nonce": "81d5f39b",
+        "ordinal": 9,
+        "schedule": "no_fault"
+      },
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      },
+      "session_classification": "success"
+    },
+    {
+      "id": "control_same_digest",
+      "kind": "control",
+      "token": "v2-c2-marina-2e9a64",
+      "variant": {
+        "nonce": "2e9a64d1",
+        "ordinal": 10,
+        "schedule": "same_digest_replay"
+      },
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      },
+      "session_classification": "success"
+    },
+    {
+      "id": "control_conflicting_digest",
+      "kind": "control",
+      "token": "v2-c3-tempo-a4701b",
+      "variant": {
+        "nonce": "a4701bc6",
+        "ordinal": 11,
+        "schedule": "conflicting_digest"
+      },
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      },
+      "session_classification": "success"
+    }
+  ]
+}

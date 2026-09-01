@@ -1,0 +1,24 @@
+{
+  "verified": true,
+  "client": "drand-client@1.4.2",
+  "chain": {
+    "chainHash": "8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce",
+    "publicKey": "868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31"
+  },
+  "results": [
+    {
+      "url": "https://api.drand.sh",
+      "round": 6429026,
+      "randomness": "da1187a4e2f7053c917fabcd2edf5e96109b22ab08db3318f19efe59757dfd55",
+      "signature": "a4e1d9a54b40bb822489333ba8af72f91401da9a11beba08b72fa0e3237a08423c375f50c7be24b911eee96e7317138315e1cb183f07b9dd2103bf01ac588ddfd5769df3356e908cb9c3f7ef9bb8896efc9a038a6e703380145b2a9a33ac3d3c",
+      "previous_signature": "a515ec79bb68261fa268345f67c3cfa13dc635b6a9f3cc03dc44c65e59f9a0bcbbd8f93062a1e4421961e21ca654542303625e7e5d471ddeeede2d1177842586fa069a5d81b90b2df21c3989a6506cbe2f43f09cae8d37c8d46042cf3f8c99a6"
+    },
+    {
+      "url": "https://drand.cloudflare.com",
+      "round": 6429026,
+      "randomness": "da1187a4e2f7053c917fabcd2edf5e96109b22ab08db3318f19efe59757dfd55",
+      "signature": "a4e1d9a54b40bb822489333ba8af72f91401da9a11beba08b72fa0e3237a08423c375f50c7be24b911eee96e7317138315e1cb183f07b9dd2103bf01ac588ddfd5769df3356e908cb9c3f7ef9bb8896efc9a038a6e703380145b2a9a33ac3d3c",
+      "previous_signature": "a515ec79bb68261fa268345f67c3cfa13dc635b6a9f3cc03dc44c65e59f9a0bcbbd8f93062a1e4421961e21ca654542303625e7e5d471ddeeede2d1177842586fa069a5d81b90b2df21c3989a6506cbe2f43f09cae8d37c8d46042cf3f8c99a6"
+    }
+  ]
+}

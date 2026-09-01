@@ -1,0 +1,578 @@
+{
+  "adapter": {
+    "neutral_runner_sha256": "3b3ab321dcd0540bc1a8532be834021c8d3f471b7c87951a5626a6663f084a71",
+    "neutral_runner_source": "lib/elara/benchmark/runner.ex",
+    "sha256": "f10a53d9edacd820fcd99ad08dde6c359c30352423ab447963b01b15b143f913",
+    "source": "lib/elara/benchmark/external_adapter.ex",
+    "target_runner_sha256": "6dcdef9e6669e75bf11e32c26eef5603b91d38e699acaf6aa339646e7400521a",
+    "target_runner_source": "priv/benchmark/lemon_target_runner.exs"
+  },
+  "attestation_materializer": {
+    "method": "generated-token-invariant isomorphism to three direct v2 Lemon no-fault runs",
+    "sha256": "f919b1b7a82ddf55d705af26dd80cc43fb56c3be4f7b17c9a5c7b5ee7cf178b8",
+    "source": "priv/benchmark/materialize_exp003_v6.exs"
+  },
+  "comparability_floor": {
+    "minimum_equivalent_fault_rows": 3,
+    "minimum_equivalent_fault_types": 2,
+    "observed_equivalent_fault_rows": 0,
+    "observed_equivalent_fault_types": [],
+    "observed_no_fault_equivalent_classes": [
+      "write",
+      "patch",
+      "shell"
+    ],
+    "required_later_outcome": "Insufficient comparability",
+    "required_no_fault_equivalent_classes": [
+      "write",
+      "patch",
+      "shell"
+    ],
+    "status": "below_floor"
+  },
+  "comparator": {
+    "checkout_clean": true,
+    "commit": "b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39",
+    "name": "Lemon",
+    "repository": "https://github.com/z80dev/lemon",
+    "source_materialization": "pre-existing checkout verified by exact HEAD and clean status"
+  },
+  "comparator_checks": {
+    "focused_native_tests": {
+      "result": "253 passed",
+      "scope": "CodingAgent agent loop, write, edit, edit edge cases, bash tool, and bash executor",
+      "status": "passed"
+    },
+    "full_umbrella_test": {
+      "qualification": "The inherited-environment run exposed unrelated provider-config failures. A clean environment run exposed existing stale-doc, CLI backup, automation, LSP, and web guard failures, then was interrupted by the orb executor SIGTERM before the final umbrella summary. No comparator source was changed.",
+      "status": "not_green_or_complete_in_orb"
+    },
+    "git_pin_and_clean_checkout": "passed",
+    "mix_compile": "passed_with_upstream_warnings",
+    "mix_compile_warnings_as_errors": {
+      "qualification": "Pinned Lemon emits existing compiler and type warnings. The comparator was not modified or the warnings suppressed.",
+      "status": "failed"
+    },
+    "mix_format_check": "passed"
+  },
+  "configuration": {
+    "environment": {
+      "LANG": "C",
+      "LC_ALL": "C",
+      "MIX_ENV": "test"
+    },
+    "model": "deterministic LemonAi mock-shaped model; no provider or network",
+    "session": {
+      "compaction": false,
+      "extensions": [],
+      "python_repl": false,
+      "register": false,
+      "retry": false
+    },
+    "stream_fn": "supported CodingAgent.Session stream_fn; exactly one tool-call turn then Task complete.",
+    "tools": {
+      "bash": {
+        "pty": false,
+        "stderr": "merged",
+        "timeout_ms": 5000
+      },
+      "edit": {
+        "diagnostics": false,
+        "match": "exact and unique"
+      },
+      "write": {
+        "diagnostics": false,
+        "format": false
+      }
+    },
+    "workspace": "fresh exact fixture reset per run; Lemon workspace outside fixture workspace"
+  },
+  "exposure": {
+    "B_or_T_calculated": false,
+    "fault_execution": "forbidden",
+    "lemon_fault_rows_executed": 0,
+    "statement": "V6 reuses the pinned source capability finding; 20 rows remain non-comparable and no comparator or target fault row ran.",
+    "target_fault_rows_executed": 0
+  },
+  "fault_comparability": [
+    {
+      "adapter_failure": false,
+      "barrier_id": "executor_dispatch_observed_before_callback",
+      "classification": "non_comparable",
+      "fault_type": "F2",
+      "operation_class": "shell",
+      "reason": "Lemon emits tool_execution_start before starting the task, but session delivery is an asynchronous observation and cannot stop execution before the callback without replacing or wrapping the native tool.",
+      "row_id": "S04-F2",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L547-L576",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L86-L105"
+      ],
+      "task_id": "S04"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "executor_dispatch_observed_before_callback",
+      "classification": "non_comparable",
+      "fault_type": "F2",
+      "operation_class": "patch",
+      "reason": "Lemon emits tool_execution_start before starting the task, but session delivery is an asynchronous observation and cannot stop execution before the callback without replacing or wrapping the native tool.",
+      "row_id": "P08-F2",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L547-L576",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L86-L105"
+      ],
+      "task_id": "P08"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "executor_dispatch_observed_before_callback",
+      "classification": "non_comparable",
+      "fault_type": "F2",
+      "operation_class": "write",
+      "reason": "Lemon emits tool_execution_start before starting the task, but session delivery is an asynchronous observation and cannot stop execution before the callback without replacing or wrapping the native tool.",
+      "row_id": "W02-F2",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L547-L576",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L86-L105"
+      ],
+      "task_id": "W02"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "controller_intent_committed_before_executor_dispatch",
+      "classification": "non_comparable",
+      "fault_type": "F1",
+      "operation_class": "patch",
+      "reason": "Lemon records session messages in process state but has no durable intent record before executor dispatch and no synchronous external gate at that boundary.",
+      "row_id": "P06-F1",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/persistence.ex#L11-L40",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L547-L576"
+      ],
+      "task_id": "P06"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "executor_dispatch_observed_before_callback",
+      "classification": "non_comparable",
+      "fault_type": "F2",
+      "operation_class": "shell",
+      "reason": "Lemon emits tool_execution_start before starting the task, but session delivery is an asynchronous observation and cannot stop execution before the callback without replacing or wrapping the native tool.",
+      "row_id": "S02-F2",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L547-L576",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L86-L105"
+      ],
+      "task_id": "S02"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "controller_intent_committed_before_executor_dispatch",
+      "classification": "non_comparable",
+      "fault_type": "F1",
+      "operation_class": "write",
+      "reason": "Lemon records session messages in process state but has no durable intent record before executor dispatch and no synchronous external gate at that boundary.",
+      "row_id": "W05-F1",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/persistence.ex#L11-L40",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L547-L576"
+      ],
+      "task_id": "W05"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "terminal_outcome_at_controller_before_session_persist",
+      "classification": "non_comparable",
+      "fault_type": "F4",
+      "operation_class": "write",
+      "reason": "Lemon exposes terminal lifecycle events and persists messages, but has no synchronous controller-observed barrier between terminal delivery and session persistence.",
+      "row_id": "W04-F4",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L62-L66",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L108-L126"
+      ],
+      "task_id": "W04"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "controller_intent_committed_before_executor_dispatch",
+      "classification": "non_comparable",
+      "fault_type": "F1",
+      "operation_class": "shell",
+      "reason": "Lemon records session messages in process state but has no durable intent record before executor dispatch and no synchronous external gate at that boundary.",
+      "row_id": "S01-F1",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/persistence.ex#L11-L40",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L547-L576"
+      ],
+      "task_id": "S01"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "terminal_outcome_at_controller_before_session_persist",
+      "classification": "non_comparable",
+      "fault_type": "F4",
+      "operation_class": "patch",
+      "reason": "Lemon exposes terminal lifecycle events and persists messages, but has no synchronous controller-observed barrier between terminal delivery and session persistence.",
+      "row_id": "P03-F4",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L62-L66",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L108-L126"
+      ],
+      "task_id": "P03"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "classification": "non_comparable",
+      "fault_type": "F3",
+      "operation_class": "patch",
+      "reason": "Write and edit have a source-ordered interval after filesystem mutation and before their result returns, but expose no synchronous gate there; shell mutation count is defined by the opaque workload rather than a runtime mutation boundary.",
+      "row_id": "P07-F3",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/write.ex#L223-L253",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/edit.ex#L165-L203",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/bash_executor.ex#L75-L135",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L627-L631",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L672-L696"
+      ],
+      "task_id": "P07"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "classification": "non_comparable",
+      "fault_type": "F3",
+      "operation_class": "write",
+      "reason": "Write and edit have a source-ordered interval after filesystem mutation and before their result returns, but expose no synchronous gate there; shell mutation count is defined by the opaque workload rather than a runtime mutation boundary.",
+      "row_id": "W07-F3",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/write.ex#L223-L253",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/edit.ex#L165-L203",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/bash_executor.ex#L75-L135",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L627-L631",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L672-L696"
+      ],
+      "task_id": "W07"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "classification": "non_comparable",
+      "fault_type": "F3",
+      "operation_class": "shell",
+      "reason": "Write and edit have a source-ordered interval after filesystem mutation and before their result returns, but expose no synchronous gate there; shell mutation count is defined by the opaque workload rather than a runtime mutation boundary.",
+      "row_id": "S03-F3",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/write.ex#L223-L253",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/edit.ex#L165-L203",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/bash_executor.ex#L75-L135",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L627-L631",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L672-L696"
+      ],
+      "task_id": "S03"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "terminal_outcome_at_controller_before_session_persist",
+      "classification": "non_comparable",
+      "fault_type": "F4",
+      "operation_class": "shell",
+      "reason": "Lemon exposes terminal lifecycle events and persists messages, but has no synchronous controller-observed barrier between terminal delivery and session persistence.",
+      "row_id": "S04-F4",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L62-L66",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L108-L126"
+      ],
+      "task_id": "S04"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "terminal_outcome_at_controller_before_session_persist",
+      "classification": "non_comparable",
+      "fault_type": "F4",
+      "operation_class": "patch",
+      "reason": "Lemon exposes terminal lifecycle events and persists messages, but has no synchronous controller-observed barrier between terminal delivery and session persistence.",
+      "row_id": "P08-F4",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L62-L66",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L108-L126"
+      ],
+      "task_id": "P08"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "terminal_outcome_at_controller_before_session_persist",
+      "classification": "non_comparable",
+      "fault_type": "F4",
+      "operation_class": "write",
+      "reason": "Lemon exposes terminal lifecycle events and persists messages, but has no synchronous controller-observed barrier between terminal delivery and session persistence.",
+      "row_id": "W02-F4",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L62-L66",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L108-L126"
+      ],
+      "task_id": "W02"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "executor_dispatch_observed_before_callback",
+      "classification": "non_comparable",
+      "fault_type": "F2",
+      "operation_class": "patch",
+      "reason": "Lemon emits tool_execution_start before starting the task, but session delivery is an asynchronous observation and cannot stop execution before the callback without replacing or wrapping the native tool.",
+      "row_id": "P06-F2",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L547-L576",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L86-L105"
+      ],
+      "task_id": "P06"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "classification": "non_comparable",
+      "fault_type": "F3",
+      "operation_class": "shell",
+      "reason": "Write and edit have a source-ordered interval after filesystem mutation and before their result returns, but expose no synchronous gate there; shell mutation count is defined by the opaque workload rather than a runtime mutation boundary.",
+      "row_id": "S02-F3",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/write.ex#L223-L253",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/edit.ex#L165-L203",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/bash_executor.ex#L75-L135",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L627-L631",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L672-L696"
+      ],
+      "task_id": "S02"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "classification": "non_comparable",
+      "fault_type": "F3",
+      "operation_class": "write",
+      "reason": "Write and edit have a source-ordered interval after filesystem mutation and before their result returns, but expose no synchronous gate there; shell mutation count is defined by the opaque workload rather than a runtime mutation boundary.",
+      "row_id": "W05-F3",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/write.ex#L223-L253",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/edit.ex#L165-L203",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/bash_executor.ex#L75-L135",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L627-L631",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L672-L696"
+      ],
+      "task_id": "W05"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "controller_intent_committed_before_executor_dispatch",
+      "classification": "non_comparable",
+      "fault_type": "F1",
+      "operation_class": "write",
+      "reason": "Lemon records session messages in process state but has no durable intent record before executor dispatch and no synchronous external gate at that boundary.",
+      "row_id": "W04-F1",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/persistence.ex#L11-L40",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L547-L576"
+      ],
+      "task_id": "W04"
+    },
+    {
+      "adapter_failure": false,
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "classification": "non_comparable",
+      "fault_type": "F3",
+      "operation_class": "shell",
+      "reason": "Write and edit have a source-ordered interval after filesystem mutation and before their result returns, but expose no synchronous gate there; shell mutation count is defined by the opaque workload rather than a runtime mutation boundary.",
+      "row_id": "S01-F3",
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/write.ex#L223-L253",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/edit.ex#L165-L203",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/bash_executor.ex#L75-L135",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L627-L631",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L672-L696"
+      ],
+      "task_id": "S01"
+    }
+  ],
+  "limitations": [
+    "No-fault semantic equivalence does not establish fault-boundary equivalence.",
+    "Native lifecycle events are asynchronous observations, not externally controlled barriers.",
+    "Workspace postconditions do not prove causal job completion.",
+    "The external comparison cannot proceed as confirmatory evidence because the frozen floor is not met."
+  ],
+  "manifest_sha256": "b415272e106db54087edbd54500c3544c94ca13b2d42950c0a63b82a38c0973c",
+  "native_hook_inventory": {
+    "adapter_added_hooks": [],
+    "message_persistence_and_agent_end": {
+      "behavior": "session message persistence and terminal lifecycle notification",
+      "behavior_neutral_use": "observation and count only",
+      "fault_gate": false,
+      "native": true,
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L62-L66",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L108-L126"
+      ]
+    },
+    "tool_execution_end": {
+      "behavior": "asynchronous session event emitted after the native callback result returns",
+      "behavior_neutral_use": "observation and count only",
+      "fault_gate": false,
+      "native": true,
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/write.ex#L223-L253",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/tools/edit.ex#L165-L203",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/bash_executor.ex#L75-L135",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L627-L631",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L672-L696"
+      ]
+    },
+    "tool_execution_start": {
+      "behavior": "asynchronous session event emitted before the native task callback starts",
+      "behavior_neutral_use": "observation and count only",
+      "fault_gate": false,
+      "native": true,
+      "source_refs": [
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/lemon_agent/lib/lemon_agent/loop/tool_calls.ex#L547-L576",
+        "https://github.com/z80dev/lemon/blob/b9ed0660e0d7fe61f38156f0aeb65e839b4e7f39/apps/coding_agent/lib/coding_agent/session/event_handler.ex#L86-L105"
+      ]
+    }
+  },
+  "preregistration_version": "ER-3/FND-2-v6",
+  "runtime": {
+    "elixir": "1.20.3",
+    "erts": "17.0.5",
+    "otp_release": "29",
+    "system_architecture": "x86_64-pc-linux-gnu"
+  },
+  "schema": "elara.exp003.external-adapter-equivalence.v6",
+  "summary": {
+    "equivalent_fault_rows": 0,
+    "fault_rows": 20,
+    "fixture_count": 3,
+    "included_operation_classes": [
+      "write",
+      "patch",
+      "shell"
+    ],
+    "no_fault_equivalent": 3,
+    "required_outcome": "Insufficient comparability"
+  },
+  "tasks": [
+    {
+      "classification": "equivalent_by_frozen_template_isomorphism",
+      "evidence": {
+        "basis": "v6 changes generated literals and schema identity only; native Lemon tool mapping and no-fault control flow are unchanged",
+        "v2_attestation_path": "test/fixtures/benchmark/exp003-v2/external-adapter-equivalence.json",
+        "v2_attestation_sha256": "557bc146767ea23e50d43eb505cca114a340225cfddf3c28dc0e4e87758dfd32",
+        "v2_direct_classification": "equivalent",
+        "v2_direct_fixture_commit": "sha256:b88f4fcedbcc8dfb7f3a4145ea9417a484c2a71960358c6e3d6f9dbed9fa000d",
+        "v2_direct_observed_outcome": "ok"
+      },
+      "expected_outcome": "ok",
+      "expected_workspace_sha256": "406805ad57859eb57c846c43d1faf4f84ff2235ddd17c838c8ce66d5e8ffa502",
+      "fixture_commit": "sha256:23c7d55478f64e7b292184755ab83cade6d34a9e82dae4b5f0e556dc17b11e69",
+      "fixture_id": "adapter-w01",
+      "initial_workspace_sha256": "228df9eb78890fee235f509c55dcc500e58b6557887ed4ad73cd3c5f40f2a493",
+      "mapping": {
+        "execution_constraints": {
+          "diagnostics": false,
+          "format": false,
+          "source_schema": "elara.declarative_write.v1"
+        },
+        "final_assistant_text": "Task complete.",
+        "operation_kind": "write",
+        "tool_arguments": {
+          "content": "defmodule Corpus259df84e87e945fa do\n  def value, do: \"bb3dc4e854f930ee\"\nend\n",
+          "diagnostics": false,
+          "format": false,
+          "path": "lib/nested_ef5f595dd35417af/created.ex"
+        },
+        "tool_call_id": "exp003-w01",
+        "tool_name": "write"
+      },
+      "operation_class": "write",
+      "template_id": "W01"
+    },
+    {
+      "classification": "equivalent_by_frozen_template_isomorphism",
+      "evidence": {
+        "basis": "v6 changes generated literals and schema identity only; native Lemon tool mapping and no-fault control flow are unchanged",
+        "v2_attestation_path": "test/fixtures/benchmark/exp003-v2/external-adapter-equivalence.json",
+        "v2_attestation_sha256": "557bc146767ea23e50d43eb505cca114a340225cfddf3c28dc0e4e87758dfd32",
+        "v2_direct_classification": "equivalent",
+        "v2_direct_fixture_commit": "sha256:21f6e472eb9e649ac966b3362c02132e965476e9cfe3f96528a2655fafd474af",
+        "v2_direct_observed_outcome": "ok"
+      },
+      "expected_outcome": "ok",
+      "expected_workspace_sha256": "52ff5cc2c4fe6dc4f1d60a0cae2ed737f68e9156b81e2e6506bfd18647ec770f",
+      "fixture_commit": "sha256:a6daa667a6ce9924090ce953770ca7e26206e4b069fb211932866b5e18d1cfb9",
+      "fixture_id": "adapter-p01",
+      "initial_workspace_sha256": "8b530ef3fcc0367a084b8d2c5d879bfcce59ad993b4c2670f1b73175ce134294",
+      "mapping": {
+        "execution_constraints": {
+          "diagnostics": false,
+          "fuzzy_fallback_used": false,
+          "match": "exact_unique",
+          "source_schema": "elara.literal_patch.v1"
+        },
+        "final_assistant_text": "Task complete.",
+        "operation_kind": "patch",
+        "tool_arguments": {
+          "diagnostics": false,
+          "new_text": "new_a852f4f81a81c9d5",
+          "old_text": "old_d8d88c9ddf8664c6",
+          "path": "lib/generated_57e0eee3760a5775/corpus_case.ex"
+        },
+        "tool_call_id": "exp003-p01",
+        "tool_name": "edit"
+      },
+      "operation_class": "patch",
+      "template_id": "P01"
+    },
+    {
+      "classification": "equivalent_by_frozen_template_isomorphism",
+      "evidence": {
+        "basis": "v6 changes generated literals and schema identity only; native Lemon tool mapping and no-fault control flow are unchanged",
+        "v2_attestation_path": "test/fixtures/benchmark/exp003-v2/external-adapter-equivalence.json",
+        "v2_attestation_sha256": "557bc146767ea23e50d43eb505cca114a340225cfddf3c28dc0e4e87758dfd32",
+        "v2_direct_classification": "equivalent",
+        "v2_direct_fixture_commit": "sha256:ee572f8af41945caf6fc0e8f7924f596300298ed36f789380cf17e12ff6b99f7",
+        "v2_direct_observed_outcome": "ok"
+      },
+      "expected_outcome": "ok",
+      "expected_workspace_sha256": "c79fbff10bb40b84671b8fd4c5d162c9abd602eb095b17c1b9b2060dd173a4a6",
+      "fixture_commit": "sha256:0014bffc4db778e45644981eb663ccf2f5bd134a3329ce44353a7a6db4e92b00",
+      "fixture_id": "adapter-s02",
+      "initial_workspace_sha256": "0b055045760a280246191d7735c3036e156bf2ea70cf33202cd913db9942cb64",
+      "mapping": {
+        "execution_constraints": {
+          "environment": {
+            "LANG": "C",
+            "LC_ALL": "C"
+          },
+          "pty": false,
+          "relative_cwd": ".",
+          "source_schema": "elara.opaque_shell.v1",
+          "stderr": "merged",
+          "timeout_ms": 5000
+        },
+        "final_assistant_text": "Task complete.",
+        "operation_kind": "shell",
+        "tool_arguments": {
+          "command": "mkdir -p data; printf '%s\\n' 'first_bcc4ebf6040866ba' > data/first.txt; printf '%s\\n' 'second_525a3643dab67586' > data/second.txt",
+          "pty": false
+        },
+        "tool_call_id": "exp003-s02",
+        "tool_name": "bash"
+      },
+      "operation_class": "shell",
+      "template_id": "S02"
+    }
+  ],
+  "version_adapter": {
+    "direct_execution_evidence_version": "ER-3/FND-2-v2",
+    "sha256": "f10a53d9edacd820fcd99ad08dde6c359c30352423ab447963b01b15b143f913",
+    "source": "lib/elara/benchmark/external_adapter.ex",
+    "v6_evidence_method": "generated-token-invariant fixture and mapping isomorphism"
+  }
+}

@@ -1,0 +1,4529 @@
+{
+  "adapter_equivalence_fixtures": [
+    {
+      "exposure_split": "development_adapter_fixture",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpus259df84e87e945faRoot do\n  def ready?, do: true\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_ef5f595dd35417af/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus259df84e87e945faTest do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert true\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          },
+          {
+            "content": "defmodule Corpus259df84e87e945fa do\n  def value, do: \"bb3dc4e854f930ee\"\nend\n",
+            "mode": "0644",
+            "path": "lib/nested_ef5f595dd35417af/created.ex"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "406805ad57859eb57c846c43d1faf4f84ff2235ddd17c838c8ce66d5e8ffa502",
+        "fixture_commit": "sha256:23c7d55478f64e7b292184755ab83cade6d34a9e82dae4b5f0e556dc17b11e69",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#adapter-W01",
+        "fixture_sha256": "23c7d55478f64e7b292184755ab83cade6d34a9e82dae4b5f0e556dc17b11e69",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpus259df84e87e945faRoot do\n  def ready?, do: true\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_ef5f595dd35417af/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus259df84e87e945faTest do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert true\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "228df9eb78890fee235f509c55dcc500e58b6557887ed4ad73cd3c5f40f2a493",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "id": "adapter-w01",
+      "operation_class": "write",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "write",
+            "tool_call_id": "exp003-w01",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "desired": {
+                "content": "defmodule Corpus259df84e87e945fa do\n  def value, do: \"bb3dc4e854f930ee\"\nend\n",
+                "sha256": "cfa2c1e5806f3326aeded36d132822152b47c7f0ed9389c18362ce1a829b1e98"
+              },
+              "expected": {
+                "state": "absent"
+              },
+              "parent_policy": "create",
+              "path": "lib/nested_ef5f595dd35417af/created.ex",
+              "replacement": "same_directory_temp_rename",
+              "schema": "elara.declarative_write.v1"
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "frozen_declarations": {
+              "desired_postimage_content": "defmodule Corpus259df84e87e945fa do\n  def value, do: \"bb3dc4e854f930ee\"\nend\n",
+              "expected_preimage_state": "absent"
+            },
+            "id": "effect",
+            "operation_kind": "write"
+          }
+        ]
+      },
+      "scored": false,
+      "template_id": "W01"
+    },
+    {
+      "exposure_split": "development_adapter_fixture",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpuse4eaa0fd8d16d5a2 do\n  def value, do: \"new_a852f4f81a81c9d5\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_57e0eee3760a5775/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpuse4eaa0fd8d16d5a2Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpuse4eaa0fd8d16d5a2.value() == \"new_a852f4f81a81c9d5\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "52ff5cc2c4fe6dc4f1d60a0cae2ed737f68e9156b81e2e6506bfd18647ec770f",
+        "fixture_commit": "sha256:a6daa667a6ce9924090ce953770ca7e26206e4b069fb211932866b5e18d1cfb9",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#adapter-P01",
+        "fixture_sha256": "a6daa667a6ce9924090ce953770ca7e26206e4b069fb211932866b5e18d1cfb9",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpuse4eaa0fd8d16d5a2 do\n  def value, do: \"old_d8d88c9ddf8664c6\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_57e0eee3760a5775/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpuse4eaa0fd8d16d5a2Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpuse4eaa0fd8d16d5a2.value() == \"new_a852f4f81a81c9d5\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "8b530ef3fcc0367a084b8d2c5d879bfcce59ad993b4c2670f1b73175ce134294",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "id": "adapter-p01",
+      "operation_class": "patch",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "patch",
+            "tool_call_id": "exp003-p01",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "new_text": "new_a852f4f81a81c9d5",
+              "old_text": "old_d8d88c9ddf8664c6",
+              "path": "lib/generated_57e0eee3760a5775/corpus_case.ex",
+              "postimage_sha256": "0ee8e09a8727408f079addf8e925a31aedbe09cacc69d306403a4055932935f1",
+              "preimage_sha256": "54f37c929a9ad83d0bc18380da0e15beeb7aa7dc2aeec7a7e49858d2431ca96e",
+              "replacement": "same_directory_temp_rename",
+              "schema": "elara.literal_patch.v1"
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "frozen_declarations": {
+              "postimage_content": "defmodule Corpuse4eaa0fd8d16d5a2 do\n  def value, do: \"new_a852f4f81a81c9d5\"\nend\n",
+              "preimage_content": "defmodule Corpuse4eaa0fd8d16d5a2 do\n  def value, do: \"old_d8d88c9ddf8664c6\"\nend\n"
+            },
+            "id": "effect",
+            "operation_kind": "patch"
+          }
+        ]
+      },
+      "scored": false,
+      "template_id": "P01"
+    },
+    {
+      "exposure_split": "development_adapter_fixture",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpus47245c92627aef20 do\n  def value, do: \"bcc4ebf6040866ba\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_a5694669866c7c7a/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus47245c92627aef20Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus47245c92627aef20.value() == \"bcc4ebf6040866ba\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          },
+          {
+            "content": "first_bcc4ebf6040866ba\n",
+            "mode": "0644",
+            "path": "data/first.txt"
+          },
+          {
+            "content": "second_525a3643dab67586\n",
+            "mode": "0644",
+            "path": "data/second.txt"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "c79fbff10bb40b84671b8fd4c5d162c9abd602eb095b17c1b9b2060dd173a4a6",
+        "fixture_commit": "sha256:0014bffc4db778e45644981eb663ccf2f5bd134a3329ce44353a7a6db4e92b00",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#adapter-S02",
+        "fixture_sha256": "0014bffc4db778e45644981eb663ccf2f5bd134a3329ce44353a7a6db4e92b00",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpus47245c92627aef20 do\n  def value, do: \"bcc4ebf6040866ba\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_a5694669866c7c7a/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus47245c92627aef20Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus47245c92627aef20.value() == \"bcc4ebf6040866ba\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "0b055045760a280246191d7735c3036e156bf2ea70cf33202cd913db9942cb64",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "id": "adapter-s02",
+      "operation_class": "shell",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "shell",
+            "tool_call_id": "exp003-s02",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "command": "mkdir -p data; printf '%s\\n' 'first_bcc4ebf6040866ba' > data/first.txt; printf '%s\\n' 'second_525a3643dab67586' > data/second.txt",
+              "environment": {
+                "LANG": "C",
+                "LC_ALL": "C"
+              },
+              "postcondition": {
+                "files": [
+                  {
+                    "path": "data/first.txt",
+                    "sha256": "144c3bc25d5e94b02fe6b7f9cc1bfc5b22e0cc92beb6aab0b205392a8bc9e6c7"
+                  },
+                  {
+                    "path": "data/second.txt",
+                    "sha256": "fd3cbca397ebc291f6e54790157f94fc1ed31e66f3e3079cbff9879c1d4c8500"
+                  }
+                ],
+                "kind": "files_sha256"
+              },
+              "relative_cwd": ".",
+              "schema": "elara.opaque_shell.v1",
+              "timeout_ms": 5000
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "id": "effect",
+            "operation_kind": "shell"
+          }
+        ]
+      },
+      "scored": false,
+      "template_id": "S02"
+    }
+  ],
+  "amendment_policy": {
+    "fresh_future_round": 6429026,
+    "missing_or_inconsistent_rows_invalidate_instead_of_shrinking_denominator": true,
+    "post_exposure_changes_require_new_version_seed_and_inputs": true,
+    "v1_preserved": true,
+    "version": "ER-3/FND-2-v6"
+  },
+  "beacon": {
+    "artifact_sha256": {
+      "api.drand.sh.json": "55679fa09143f4aaa3ee8ff092662797acbe967c4c82e5d2bd344d05e71e973e",
+      "drand.cloudflare.com.json": "f36be1d4002e00c26863d5cea2100992c1bb4d2855d22c15c377964b595b9bd3",
+      "verification.json": "c177f1c140d9e75552817b2d0fb350cd5375e07c100d601d1cdc05a383114018"
+    },
+    "chain_hash": "8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce",
+    "genesis_time": 1595431050,
+    "nominal_time": "2026-09-01T22:30:00Z",
+    "official_client": "drand-client@1.4.2",
+    "period_seconds": 30,
+    "randomness": "da1187a4e2f7053c917fabcd2edf5e96109b22ab08db3318f19efe59757dfd55",
+    "relay_response_paths": [
+      "beacon/api.drand.sh.json",
+      "beacon/drand.cloudflare.com.json"
+    ],
+    "round": 6429026,
+    "round_formula": "ER-3/FND-2-v6 exact committed future round",
+    "signature_verified": true,
+    "verification_command": "npm install --ignore-scripts && node verify.cjs",
+    "verification_path": "beacon/verification.json",
+    "verification_script_path": "beacon/verify.cjs"
+  },
+  "candidate_frame": [
+    {
+      "brief": "Make one exact unique LF-delimited old_text/new_text edit.",
+      "id": "P01",
+      "operation_class": "patch",
+      "order_key": "7cce2ad4eb704aa56028ff5c3da392d390fd165396b1e3c1795d23b60133a929",
+      "primary_fault": "F1",
+      "secondary_fault": "F3"
+    },
+    {
+      "brief": "Make one exact unique edit in a CRLF file without changing other bytes.",
+      "id": "P02",
+      "operation_class": "patch",
+      "order_key": "2ca67c0d652f24429ad330a6fb895b4929375138cacab3a71f3f5b130eee3919",
+      "primary_fault": "F2",
+      "secondary_fault": "F4"
+    },
+    {
+      "brief": "Reconcile when the exact desired postimage already exists.",
+      "id": "P03",
+      "operation_class": "patch",
+      "order_key": "72f8a674b8c77097585fa4d88fb2b3b1cf574aa096d3cd7ae8136852a6ec05f0",
+      "primary_fault": "F4",
+      "secondary_fault": "F1"
+    },
+    {
+      "brief": "Reject when neither the exact preimage nor postimage exists.",
+      "id": "P04",
+      "operation_class": "patch",
+      "order_key": "b373211acb80d032b88cafa26b331d1b0ad3367589b4c45dcf00ca503f6b16a4",
+      "primary_fault": "F4",
+      "secondary_fault": "F1"
+    },
+    {
+      "brief": "Preserve or truthfully conflict with an unrelated same-file concurrent edit.",
+      "id": "P05",
+      "operation_class": "patch",
+      "order_key": "aa3924566f04c69b8224843896db91ace2cd9aefd89c757a5e13d4ed1681626c",
+      "primary_fault": "F2",
+      "secondary_fault": "F4"
+    },
+    {
+      "brief": "Apply one bounded two-file source-and-test transformation.",
+      "id": "P06",
+      "operation_class": "patch",
+      "order_key": "1fee490347fb55d57649257ba366be2fc58703e9e118265253688cc8ba0376ec",
+      "primary_fault": "F1",
+      "secondary_fault": "F2"
+    },
+    {
+      "brief": "Apply a bounded create-and-modify source transformation.",
+      "id": "P07",
+      "operation_class": "patch",
+      "order_key": "b02175a55f7e1eba3fe36a98d077dfba637a96a4877b60a9f4630d4495f3785d",
+      "primary_fault": "F3",
+      "secondary_fault": "F4"
+    },
+    {
+      "brief": "Apply a bounded delete-and-modify source transformation.",
+      "id": "P08",
+      "operation_class": "patch",
+      "order_key": "0bf20d3da50d1e10277f30c6fd1b65ce1e53bdf6ff9db7c8e742e6ab98a0dfcd",
+      "primary_fault": "F2",
+      "secondary_fault": "F4"
+    },
+    {
+      "brief": "Run an opaque command that appends one record and creates a second sentinel.",
+      "id": "S01",
+      "operation_class": "shell",
+      "order_key": "6410c3a403656009ee12bdc0bd8ec0d784cd4c4f331b11ee674cd6e6ed82ddad",
+      "primary_fault": "F1",
+      "secondary_fault": "F3"
+    },
+    {
+      "brief": "Run an opaque command with two ordered filesystem effects and exit 0.",
+      "id": "S02",
+      "operation_class": "shell",
+      "order_key": "30bc6a4b493e0b1e832f96daba7fca94f2071b33864caba09c51f61c3a5c2d5c",
+      "primary_fault": "F2",
+      "secondary_fault": "F3"
+    },
+    {
+      "brief": "Run an opaque command that mutates once and then exits nonzero.",
+      "id": "S03",
+      "operation_class": "shell",
+      "order_key": "dcbaee118cbdb3ea01f51cc07fe996411f305df60a21afd0ab82fc7129ef1b5f",
+      "primary_fault": "F3",
+      "secondary_fault": "F4"
+    },
+    {
+      "brief": "Run an opaque build/test command that creates an undeclared build artifact.",
+      "id": "S04",
+      "operation_class": "shell",
+      "order_key": "09fac3266d426651d0beebaa65ae9704ba0e467f55af5a4ef1125cde26e872bc",
+      "primary_fault": "F2",
+      "secondary_fault": "F4"
+    },
+    {
+      "brief": "Create an absent nested UTF-8 source file with exact desired bytes.",
+      "id": "W01",
+      "operation_class": "write",
+      "order_key": "4de6cb420b31513179081b6743dc4b3cd77dcabf5f4f1f7057360b7fe5f5f9da",
+      "primary_fault": "F1",
+      "secondary_fault": "F3"
+    },
+    {
+      "brief": "Replace a file whose complete bytes equal the declared preimage.",
+      "id": "W02",
+      "operation_class": "write",
+      "order_key": "192c2ec47c728d78f51f59bf9a99625c398ff222a4eedf00e127e82d572712d3",
+      "primary_fault": "F2",
+      "secondary_fault": "F4"
+    },
+    {
+      "brief": "Reconcile a target whose bytes already equal the desired postimage.",
+      "id": "W03",
+      "operation_class": "write",
+      "order_key": "bb9b33f9609320724a12744506c5a1b6b75f41e1db5aac38ca99a8a0d6173ef5",
+      "primary_fault": "F4",
+      "secondary_fault": "F1"
+    },
+    {
+      "brief": "Reject a target differing from both declared preimage and postimage.",
+      "id": "W04",
+      "operation_class": "write",
+      "order_key": "3d9c09f0ff347f91ad0f6e4236d49e4c9f666ded21a64b57ee3a4fc0214fbe43",
+      "primary_fault": "F4",
+      "secondary_fault": "F1"
+    },
+    {
+      "brief": "Replace an existing empty file with generated source content.",
+      "id": "W05",
+      "operation_class": "write",
+      "order_key": "345ce782112d2162b865e38a4aa3a6d0c7181d3903116960a408217947ece2af",
+      "primary_fault": "F1",
+      "secondary_fault": "F3"
+    },
+    {
+      "brief": "Replace exact generated content with an empty file.",
+      "id": "W06",
+      "operation_class": "write",
+      "order_key": "b0fab42c128d40dd5cb825f31ed8c01203caf569aa21f714577e5f4ec7673989",
+      "primary_fault": "F2",
+      "secondary_fault": "F4"
+    },
+    {
+      "brief": "Create a file and missing parent path without changing sibling files.",
+      "id": "W07",
+      "operation_class": "write",
+      "order_key": "d968f17f9ff9651e91197ace34ace6aa8493b61e1a059f891422d9624e813d36",
+      "primary_fault": "F3",
+      "secondary_fault": "F4"
+    },
+    {
+      "brief": "Apply an exact target write while an unrelated workspace file changes.",
+      "id": "W08",
+      "operation_class": "write",
+      "order_key": "6f591c92265979213de205da8088ac1fab60462a2442a7b9173880251bd22866",
+      "primary_fault": "F2",
+      "secondary_fault": "F3"
+    }
+  ],
+  "compatibility": {
+    "candidate_count": 20,
+    "path": "docs/experiments/003-effect-receipt-v6-compatibility.json",
+    "preflight_path": "docs/experiments/003-effect-receipt-v6-preflight.json",
+    "preflight_sha256": "8f69b8d15b2c7bb3ee782c87b778b0b32e536be1a548c207e7cd7664dd8b0216",
+    "preflight_source_sha256": "48f36d9047138546e962ad636f18c8d936b0aa9cea8402ddff18ccdf6bb35121",
+    "sha256": "ffb997e4d74e229ea615b5461ea7b833a4e1f3606fba9d2c6bd6872b1468b5eb",
+    "validated_assignment_count": 40,
+    "validated_before_seed_selection": true
+  },
+  "exposure_statement": {
+    "B_or_T_calculated": false,
+    "dogfood_fault_runs": 0,
+    "dogfood_task_runs": 0,
+    "external_fault_rows_executed": 0,
+    "statement": "V6 materialization only; no internal, external, or dogfood fault output observed.",
+    "target_fault_rows_executed": 0
+  },
+  "fault_repetitions": {
+    "count_per_condition": 3,
+    "interleaving": [
+      "baseline",
+      "receipts",
+      "receipts",
+      "baseline",
+      "baseline",
+      "receipts"
+    ]
+  },
+  "fault_rows": [
+    {
+      "order_index": 1,
+      "restart_order": [
+        "original_logical_executor",
+        "controller"
+      ],
+      "failpoint": "after dispatch/acceptance is observed and before callback or external mutation",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "original owner continues callback once; never fail over"
+      ],
+      "barrier_id": "executor_dispatch_observed_before_callback",
+      "last_durable_fact": {
+        "baseline": "dispatch observed; target acceptance seam N/A",
+        "receipts": "accepted on original executor with attempt 0"
+      },
+      "expected_workspace_observation": "pre_effect_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "workspace_initial",
+          "available session/recorder facts"
+        ],
+        "receipts": [
+          "workspace_initial",
+          "controller_intent",
+          "executor_accepted_attempt_0"
+        ]
+      },
+      "target_relation": "nearest target cut 5",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "zero job-attributed mutations at cut; 0 declared environmental mutations reported separately"
+      },
+      "task_id": "S04",
+      "name": "worker_loss_after_dispatch_before_callback",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a",
+        "initial_reset_workspace_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a",
+        "pre_effect_workspace_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a"
+      },
+      "fault_target_tool_call_id": "exp003-s04",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "executor_acceptance_reply"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "pre_effect_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "S04-F2",
+      "historical_execution_knowledge": "not_invoked at barrier",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor accepted record",
+          "workspace"
+        ]
+      },
+      "operation_class": "shell",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "callback_invocation",
+        "terminal_result"
+      ],
+      "crash_target": "selected_worker_or_tool_owner",
+      "fault_type": "F2",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "original owner continues callback once; never fail over"
+      },
+      "observation_deadline_ms": 5000
+    },
+    {
+      "order_index": 2,
+      "restart_order": [
+        "original_logical_executor",
+        "controller"
+      ],
+      "failpoint": "after dispatch/acceptance is observed and before callback or external mutation",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "original owner continues callback once; never fail over"
+      ],
+      "barrier_id": "executor_dispatch_observed_before_callback",
+      "last_durable_fact": {
+        "baseline": "dispatch observed; target acceptance seam N/A",
+        "receipts": "accepted on original executor with attempt 0"
+      },
+      "expected_workspace_observation": "pre_effect_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "workspace_initial",
+          "available session/recorder facts"
+        ],
+        "receipts": [
+          "workspace_initial",
+          "controller_intent",
+          "executor_accepted_attempt_0"
+        ]
+      },
+      "target_relation": "nearest target cut 5",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "zero job-attributed mutations at cut; 0 declared environmental mutations reported separately"
+      },
+      "task_id": "P08",
+      "name": "worker_loss_after_dispatch_before_callback",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "f6864a6bc7695dd722fed3313b6094a868f0be5ef5c28423f70fcd934106f563",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "f6864a6bc7695dd722fed3313b6094a868f0be5ef5c28423f70fcd934106f563",
+        "initial_reset_workspace_sha256": "d143d20a534578c89d9ddd4ed1488090dbb56eb6457a236a966ded6099762c21",
+        "pre_effect_workspace_sha256": "d143d20a534578c89d9ddd4ed1488090dbb56eb6457a236a966ded6099762c21"
+      },
+      "fault_target_tool_call_id": "exp003-p08",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "executor_acceptance_reply"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "pre_effect_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "P08-F2",
+      "historical_execution_knowledge": "not_invoked at barrier",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor accepted record",
+          "workspace"
+        ]
+      },
+      "operation_class": "patch",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "callback_invocation",
+        "terminal_result"
+      ],
+      "crash_target": "selected_worker_or_tool_owner",
+      "fault_type": "F2",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "original owner continues callback once; never fail over"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 3,
+      "restart_order": [
+        "original_logical_executor",
+        "controller"
+      ],
+      "failpoint": "after dispatch/acceptance is observed and before callback or external mutation",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "original owner continues callback once; never fail over"
+      ],
+      "barrier_id": "executor_dispatch_observed_before_callback",
+      "last_durable_fact": {
+        "baseline": "dispatch observed; target acceptance seam N/A",
+        "receipts": "accepted on original executor with attempt 0"
+      },
+      "expected_workspace_observation": "pre_effect_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "workspace_initial",
+          "available session/recorder facts"
+        ],
+        "receipts": [
+          "workspace_initial",
+          "controller_intent",
+          "executor_accepted_attempt_0"
+        ]
+      },
+      "target_relation": "nearest target cut 5",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "zero job-attributed mutations at cut; 0 declared environmental mutations reported separately"
+      },
+      "task_id": "W02",
+      "name": "worker_loss_after_dispatch_before_callback",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "5fbcfee75d1a7000f0d7f0d677b83e228226358dcc8350a7571e372d4354bfdf",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "5fbcfee75d1a7000f0d7f0d677b83e228226358dcc8350a7571e372d4354bfdf",
+        "initial_reset_workspace_sha256": "ad600e3a765b475198fa2c3aa984095e0fedf4b367d9a6aac7793877641d6a29",
+        "pre_effect_workspace_sha256": "ad600e3a765b475198fa2c3aa984095e0fedf4b367d9a6aac7793877641d6a29"
+      },
+      "fault_target_tool_call_id": "exp003-w02",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "executor_acceptance_reply"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "pre_effect_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "W02-F2",
+      "historical_execution_knowledge": "not_invoked at barrier",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor accepted record",
+          "workspace"
+        ]
+      },
+      "operation_class": "write",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "callback_invocation",
+        "terminal_result"
+      ],
+      "crash_target": "selected_worker_or_tool_owner",
+      "fault_type": "F2",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "original owner continues callback once; never fail over"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 4,
+      "restart_order": [
+        "controller",
+        "original_logical_executor"
+      ],
+      "failpoint": "after tool request is durably represented by condition nearest existing evidence and before executor dispatch",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "same ID/digest dispatch once to original owner, then no action"
+      ],
+      "barrier_id": "controller_intent_committed_before_executor_dispatch",
+      "last_durable_fact": {
+        "baseline": "nearest existing request evidence; target-only intent seam N/A",
+        "receipts": "controller intent committed; executor start unknown"
+      },
+      "expected_workspace_observation": "pre_effect_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "workspace_initial",
+          "flight_recorder_request_or_session_call_if_present"
+        ],
+        "receipts": [
+          "workspace_initial",
+          "controller_intent"
+        ]
+      },
+      "target_relation": "nearest target cut 2",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "zero job-attributed mutations at cut; 0 declared environmental mutations reported separately"
+      },
+      "task_id": "P06",
+      "name": "controller_loss_before_executor_dispatch",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "99dc226a1cf533279d496e02fbd818f12e9629d66561947b5494bfab6f3abdaf",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "80ad89926c5338307d0b0ffb5181fc74ac120c9159fc958d255c1510e49e7f41",
+        "initial_reset_workspace_sha256": "9d24ad4bc26a59b40c21855b76073101d336037a1ab386a07251045de6293418",
+        "pre_effect_workspace_sha256": "9d24ad4bc26a59b40c21855b76073101d336037a1ab386a07251045de6293418"
+      },
+      "fault_target_tool_call_id": "exp003-p06",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "provider_tool_request",
+        "condition_nearest_durable_request_evidence"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "pre_effect_workspace",
+        "receipts": "fault_target_postcondition"
+      },
+      "row_id": "P06-F1",
+      "historical_execution_knowledge": "not_invoked at barrier",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor query",
+          "workspace"
+        ]
+      },
+      "operation_class": "patch",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "executor_dispatch",
+        "executor_acceptance",
+        "callback_result"
+      ],
+      "crash_target": "controller",
+      "fault_type": "F1",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "same ID/digest dispatch once to original owner, then no action"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 5,
+      "restart_order": [
+        "original_logical_executor",
+        "controller"
+      ],
+      "failpoint": "after dispatch/acceptance is observed and before callback or external mutation",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "original owner continues callback once; never fail over"
+      ],
+      "barrier_id": "executor_dispatch_observed_before_callback",
+      "last_durable_fact": {
+        "baseline": "dispatch observed; target acceptance seam N/A",
+        "receipts": "accepted on original executor with attempt 0"
+      },
+      "expected_workspace_observation": "pre_effect_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "workspace_initial",
+          "available session/recorder facts"
+        ],
+        "receipts": [
+          "workspace_initial",
+          "controller_intent",
+          "executor_accepted_attempt_0"
+        ]
+      },
+      "target_relation": "nearest target cut 5",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "zero job-attributed mutations at cut; 0 declared environmental mutations reported separately"
+      },
+      "task_id": "S02",
+      "name": "worker_loss_after_dispatch_before_callback",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "c79fbff10bb40b84671b8fd4c5d162c9abd602eb095b17c1b9b2060dd173a4a6",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "c79fbff10bb40b84671b8fd4c5d162c9abd602eb095b17c1b9b2060dd173a4a6",
+        "initial_reset_workspace_sha256": "0b055045760a280246191d7735c3036e156bf2ea70cf33202cd913db9942cb64",
+        "pre_effect_workspace_sha256": "0b055045760a280246191d7735c3036e156bf2ea70cf33202cd913db9942cb64"
+      },
+      "fault_target_tool_call_id": "exp003-s02",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "executor_acceptance_reply"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "pre_effect_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "S02-F2",
+      "historical_execution_knowledge": "not_invoked at barrier",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor accepted record",
+          "workspace"
+        ]
+      },
+      "operation_class": "shell",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "callback_invocation",
+        "terminal_result"
+      ],
+      "crash_target": "selected_worker_or_tool_owner",
+      "fault_type": "F2",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "original owner continues callback once; never fail over"
+      },
+      "observation_deadline_ms": 5000
+    },
+    {
+      "order_index": 6,
+      "restart_order": [
+        "controller",
+        "original_logical_executor"
+      ],
+      "failpoint": "after tool request is durably represented by condition nearest existing evidence and before executor dispatch",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "same ID/digest dispatch once to original owner, then no action"
+      ],
+      "barrier_id": "controller_intent_committed_before_executor_dispatch",
+      "last_durable_fact": {
+        "baseline": "nearest existing request evidence; target-only intent seam N/A",
+        "receipts": "controller intent committed; executor start unknown"
+      },
+      "expected_workspace_observation": "pre_effect_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "workspace_initial",
+          "flight_recorder_request_or_session_call_if_present"
+        ],
+        "receipts": [
+          "workspace_initial",
+          "controller_intent"
+        ]
+      },
+      "target_relation": "nearest target cut 2",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "zero job-attributed mutations at cut; 0 declared environmental mutations reported separately"
+      },
+      "task_id": "W05",
+      "name": "controller_loss_before_executor_dispatch",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "be9847b7118f33d82cb6cad7b73762cbdceef6604aaff49399fc5ef4d83d4382",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "be9847b7118f33d82cb6cad7b73762cbdceef6604aaff49399fc5ef4d83d4382",
+        "initial_reset_workspace_sha256": "b86965fd3d490f8f0587269fca39c2c700985c4cbffaeb1ce5ee4213f5dfbef2",
+        "pre_effect_workspace_sha256": "b86965fd3d490f8f0587269fca39c2c700985c4cbffaeb1ce5ee4213f5dfbef2"
+      },
+      "fault_target_tool_call_id": "exp003-w05",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "provider_tool_request",
+        "condition_nearest_durable_request_evidence"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "pre_effect_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "W05-F1",
+      "historical_execution_knowledge": "not_invoked at barrier",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor query",
+          "workspace"
+        ]
+      },
+      "operation_class": "write",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "executor_dispatch",
+        "executor_acceptance",
+        "callback_result"
+      ],
+      "crash_target": "controller",
+      "fault_type": "F1",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "same ID/digest dispatch once to original owner, then no action"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 7,
+      "restart_order": [
+        "controller",
+        "original_logical_executor"
+      ],
+      "failpoint": "after terminal tool outcome reaches controller boundary and before session-result persistence",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": true
+      },
+      "permitted_recovery_actions": [
+        "persist exactly one session result; no callback"
+      ],
+      "barrier_id": "terminal_outcome_at_controller_before_session_persist",
+      "last_durable_fact": {
+        "baseline": "terminal reached volatile controller boundary; target observation seam N/A",
+        "receipts": "causal terminal observation durably synchronized"
+      },
+      "expected_workspace_observation": "complete_task_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "expected_workspace",
+          "available pre-result session/recorder facts"
+        ],
+        "receipts": [
+          "expected_workspace",
+          "controller_intent",
+          "executor_terminal",
+          "controller_terminal_observation"
+        ]
+      },
+      "target_relation": "target cut 8",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "terminal delivered after task-defined target mutation count 0"
+      },
+      "task_id": "W04",
+      "name": "controller_loss_after_terminal_delivery_before_session_persistence",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 0,
+        "fault_target_postcondition_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b",
+        "initial_reset_workspace_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b",
+        "pre_effect_workspace_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b"
+      },
+      "fault_target_tool_call_id": "exp003-w04",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "callback_invocation",
+        "external_outcome",
+        "terminal_result_to_controller"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "complete_task_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "W04-F4",
+      "historical_execution_knowledge": "invoked with causal terminal evidence only for receipts condition",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "durable controller terminal observation",
+          "executor terminal record",
+          "workspace"
+        ]
+      },
+      "operation_class": "write",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "session_result_persist"
+      ],
+      "crash_target": "controller",
+      "fault_type": "F4",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "persist exactly one session result; no callback"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 8,
+      "restart_order": [
+        "controller",
+        "original_logical_executor"
+      ],
+      "failpoint": "after tool request is durably represented by condition nearest existing evidence and before executor dispatch",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "same ID/digest dispatch once to original owner, then no action"
+      ],
+      "barrier_id": "controller_intent_committed_before_executor_dispatch",
+      "last_durable_fact": {
+        "baseline": "nearest existing request evidence; target-only intent seam N/A",
+        "receipts": "controller intent committed; executor start unknown"
+      },
+      "expected_workspace_observation": "pre_effect_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "workspace_initial",
+          "flight_recorder_request_or_session_call_if_present"
+        ],
+        "receipts": [
+          "workspace_initial",
+          "controller_intent"
+        ]
+      },
+      "target_relation": "nearest target cut 2",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "zero job-attributed mutations at cut; 0 declared environmental mutations reported separately"
+      },
+      "task_id": "S01",
+      "name": "controller_loss_before_executor_dispatch",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "eb414551f050ae3972f17f981c9e87c24017006d2c8161e3432982166735fdd7",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "eb414551f050ae3972f17f981c9e87c24017006d2c8161e3432982166735fdd7",
+        "initial_reset_workspace_sha256": "226a4ce80a7455191c1c7c80ea7ace920c8ab14021ebdd57b1c2691e27f82d0e",
+        "pre_effect_workspace_sha256": "226a4ce80a7455191c1c7c80ea7ace920c8ab14021ebdd57b1c2691e27f82d0e"
+      },
+      "fault_target_tool_call_id": "exp003-s01",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "provider_tool_request",
+        "condition_nearest_durable_request_evidence"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "pre_effect_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "S01-F1",
+      "historical_execution_knowledge": "not_invoked at barrier",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor query",
+          "workspace"
+        ]
+      },
+      "operation_class": "shell",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "executor_dispatch",
+        "executor_acceptance",
+        "callback_result"
+      ],
+      "crash_target": "controller",
+      "fault_type": "F1",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "same ID/digest dispatch once to original owner, then no action"
+      },
+      "observation_deadline_ms": 5000
+    },
+    {
+      "order_index": 9,
+      "restart_order": [
+        "controller",
+        "original_logical_executor"
+      ],
+      "failpoint": "after terminal tool outcome reaches controller boundary and before session-result persistence",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": true
+      },
+      "permitted_recovery_actions": [
+        "persist exactly one session result; no callback"
+      ],
+      "barrier_id": "terminal_outcome_at_controller_before_session_persist",
+      "last_durable_fact": {
+        "baseline": "terminal reached volatile controller boundary; target observation seam N/A",
+        "receipts": "causal terminal observation durably synchronized"
+      },
+      "expected_workspace_observation": "complete_task_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "expected_workspace",
+          "available pre-result session/recorder facts"
+        ],
+        "receipts": [
+          "expected_workspace",
+          "controller_intent",
+          "executor_terminal",
+          "controller_terminal_observation"
+        ]
+      },
+      "target_relation": "target cut 8",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "terminal delivered after task-defined target mutation count 0"
+      },
+      "task_id": "P03",
+      "name": "controller_loss_after_terminal_delivery_before_session_persistence",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "9ba2c83d8d9bc131d4e178ef7df6dc415b047b99183246a73ff03a543a8ce773",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 0,
+        "fault_target_postcondition_sha256": "9ba2c83d8d9bc131d4e178ef7df6dc415b047b99183246a73ff03a543a8ce773",
+        "initial_reset_workspace_sha256": "9ba2c83d8d9bc131d4e178ef7df6dc415b047b99183246a73ff03a543a8ce773",
+        "pre_effect_workspace_sha256": "9ba2c83d8d9bc131d4e178ef7df6dc415b047b99183246a73ff03a543a8ce773"
+      },
+      "fault_target_tool_call_id": "exp003-p03",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "callback_invocation",
+        "external_outcome",
+        "terminal_result_to_controller"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "complete_task_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "P03-F4",
+      "historical_execution_knowledge": "invoked with causal terminal evidence only for receipts condition",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "durable controller terminal observation",
+          "executor terminal record",
+          "workspace"
+        ]
+      },
+      "operation_class": "patch",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "session_result_persist"
+      ],
+      "crash_target": "controller",
+      "fault_type": "F4",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "persist exactly one session result; no callback"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 10,
+      "restart_order": [
+        "original_logical_executor",
+        "controller"
+      ],
+      "failpoint": "after exactly one job-attributed external mutation and before terminal result reaches session",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      ],
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "last_durable_fact": {
+        "baseline": "effect may have occurred; target receipt seam N/A",
+        "receipts": "attempt 1 without causal terminal proof"
+      },
+      "expected_workspace_observation": "fault_target_postcondition",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "postmutation_workspace",
+          "available session/recorder facts"
+        ],
+        "receipts": [
+          "postmutation_workspace",
+          "controller_intent",
+          "executor_accepted_attempt_1"
+        ]
+      },
+      "target_relation": "target cut 6",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "exactly one fault-target job mutation; environmental activity cannot substitute"
+      },
+      "task_id": "P07",
+      "name": "worker_loss_after_external_mutation_before_terminal_result",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "c792813214176d61337cd773f20335d32f0068bd90e335b7c6ea7eee80b24de8",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "c792813214176d61337cd773f20335d32f0068bd90e335b7c6ea7eee80b24de8",
+        "initial_reset_workspace_sha256": "94a59f47670de7e37d38f012128bef4e3ebd4e3b1198fef21769caa7afbc1439",
+        "pre_effect_workspace_sha256": "94a59f47670de7e37d38f012128bef4e3ebd4e3b1198fef21769caa7afbc1439"
+      },
+      "fault_target_tool_call_id": "exp003-p07",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "executor_acceptance_reply",
+        "callback_invocation",
+        "one_ground_truth_external_mutation"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "fault_target_postcondition",
+        "receipts": "fault_target_postcondition"
+      },
+      "row_id": "P07-F3",
+      "historical_execution_knowledge": "invoked; causal terminal outcome unknown",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor attempt record",
+          "declared exact postimage observation"
+        ]
+      },
+      "operation_class": "patch",
+      "expected_primary_recovery_class": {
+        "baseline": "ambiguous_no_safe_action",
+        "receipts": "automatic_safe_indeterminate"
+      },
+      "dropped_messages": [
+        "terminal_commit_or_delivery",
+        "session_result"
+      ],
+      "crash_target": "selected_worker_or_tool_owner",
+      "fault_type": "F3",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "no unique automatic safe action",
+        "receipts": "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 11,
+      "restart_order": [
+        "original_logical_executor",
+        "controller"
+      ],
+      "failpoint": "after exactly one job-attributed external mutation and before terminal result reaches session",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      ],
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "last_durable_fact": {
+        "baseline": "effect may have occurred; target receipt seam N/A",
+        "receipts": "attempt 1 without causal terminal proof"
+      },
+      "expected_workspace_observation": "fault_target_postcondition",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "postmutation_workspace",
+          "available session/recorder facts"
+        ],
+        "receipts": [
+          "postmutation_workspace",
+          "controller_intent",
+          "executor_accepted_attempt_1"
+        ]
+      },
+      "target_relation": "target cut 6",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "exactly one fault-target job mutation; environmental activity cannot substitute"
+      },
+      "task_id": "W07",
+      "name": "worker_loss_after_external_mutation_before_terminal_result",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "fc002ff97acdcba57970ad0816892e82e1056b8b61ba5ed5e1fec937976e238d",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "fc002ff97acdcba57970ad0816892e82e1056b8b61ba5ed5e1fec937976e238d",
+        "initial_reset_workspace_sha256": "539d0d798b94ca7fab62f82a9fee03ae2865288c901e4096664c9ec2171bc670",
+        "pre_effect_workspace_sha256": "539d0d798b94ca7fab62f82a9fee03ae2865288c901e4096664c9ec2171bc670"
+      },
+      "fault_target_tool_call_id": "exp003-w07",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "executor_acceptance_reply",
+        "callback_invocation",
+        "one_ground_truth_external_mutation"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "fault_target_postcondition",
+        "receipts": "fault_target_postcondition"
+      },
+      "row_id": "W07-F3",
+      "historical_execution_knowledge": "invoked; causal terminal outcome unknown",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor attempt record",
+          "declared exact postimage observation"
+        ]
+      },
+      "operation_class": "write",
+      "expected_primary_recovery_class": {
+        "baseline": "ambiguous_no_safe_action",
+        "receipts": "automatic_safe_indeterminate"
+      },
+      "dropped_messages": [
+        "terminal_commit_or_delivery",
+        "session_result"
+      ],
+      "crash_target": "selected_worker_or_tool_owner",
+      "fault_type": "F3",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "no unique automatic safe action",
+        "receipts": "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 12,
+      "restart_order": [
+        "original_logical_executor",
+        "controller"
+      ],
+      "failpoint": "after exactly one job-attributed external mutation and before terminal result reaches session",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      ],
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "last_durable_fact": {
+        "baseline": "effect may have occurred; target receipt seam N/A",
+        "receipts": "attempt 1 without causal terminal proof"
+      },
+      "expected_workspace_observation": "fault_target_postcondition",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "postmutation_workspace",
+          "available session/recorder facts"
+        ],
+        "receipts": [
+          "postmutation_workspace",
+          "controller_intent",
+          "executor_accepted_attempt_1"
+        ]
+      },
+      "target_relation": "target cut 6",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "exactly one fault-target job mutation; environmental activity cannot substitute"
+      },
+      "task_id": "S03",
+      "name": "worker_loss_after_external_mutation_before_terminal_result",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "584ec3aaa823e3ace35700de1ade4bcac2c865db6e151ea81c48f01691abe729",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "584ec3aaa823e3ace35700de1ade4bcac2c865db6e151ea81c48f01691abe729",
+        "initial_reset_workspace_sha256": "b2cd96ca89f02dfd43dca0ae29cb0d903740e527c648e6970b82861eebe3568f",
+        "pre_effect_workspace_sha256": "b2cd96ca89f02dfd43dca0ae29cb0d903740e527c648e6970b82861eebe3568f"
+      },
+      "fault_target_tool_call_id": "exp003-s03",
+      "fault_role": "primary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "executor_acceptance_reply",
+        "callback_invocation",
+        "one_ground_truth_external_mutation"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "fault_target_postcondition",
+        "receipts": "fault_target_postcondition"
+      },
+      "row_id": "S03-F3",
+      "historical_execution_knowledge": "invoked; causal terminal outcome unknown",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor attempt record",
+          "declared exact postimage observation"
+        ]
+      },
+      "operation_class": "shell",
+      "expected_primary_recovery_class": {
+        "baseline": "ambiguous_no_safe_action",
+        "receipts": "automatic_safe_indeterminate"
+      },
+      "dropped_messages": [
+        "terminal_commit_or_delivery",
+        "session_result"
+      ],
+      "crash_target": "selected_worker_or_tool_owner",
+      "fault_type": "F3",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "no unique automatic safe action",
+        "receipts": "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      },
+      "observation_deadline_ms": 5000
+    },
+    {
+      "order_index": 13,
+      "restart_order": [
+        "controller",
+        "original_logical_executor"
+      ],
+      "failpoint": "after terminal tool outcome reaches controller boundary and before session-result persistence",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": true
+      },
+      "permitted_recovery_actions": [
+        "persist exactly one session result; no callback"
+      ],
+      "barrier_id": "terminal_outcome_at_controller_before_session_persist",
+      "last_durable_fact": {
+        "baseline": "terminal reached volatile controller boundary; target observation seam N/A",
+        "receipts": "causal terminal observation durably synchronized"
+      },
+      "expected_workspace_observation": "complete_task_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "expected_workspace",
+          "available pre-result session/recorder facts"
+        ],
+        "receipts": [
+          "expected_workspace",
+          "controller_intent",
+          "executor_terminal",
+          "controller_terminal_observation"
+        ]
+      },
+      "target_relation": "target cut 8",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "terminal delivered after task-defined target mutation count 1"
+      },
+      "task_id": "S04",
+      "name": "controller_loss_after_terminal_delivery_before_session_persistence",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a",
+        "initial_reset_workspace_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a",
+        "pre_effect_workspace_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a"
+      },
+      "fault_target_tool_call_id": "exp003-s04",
+      "fault_role": "secondary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "callback_invocation",
+        "external_outcome",
+        "terminal_result_to_controller"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "complete_task_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "S04-F4",
+      "historical_execution_knowledge": "invoked with causal terminal evidence only for receipts condition",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "durable controller terminal observation",
+          "executor terminal record",
+          "workspace"
+        ]
+      },
+      "operation_class": "shell",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "session_result_persist"
+      ],
+      "crash_target": "controller",
+      "fault_type": "F4",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "persist exactly one session result; no callback"
+      },
+      "observation_deadline_ms": 5000
+    },
+    {
+      "order_index": 14,
+      "restart_order": [
+        "controller",
+        "original_logical_executor"
+      ],
+      "failpoint": "after terminal tool outcome reaches controller boundary and before session-result persistence",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": true
+      },
+      "permitted_recovery_actions": [
+        "persist exactly one session result; no callback"
+      ],
+      "barrier_id": "terminal_outcome_at_controller_before_session_persist",
+      "last_durable_fact": {
+        "baseline": "terminal reached volatile controller boundary; target observation seam N/A",
+        "receipts": "causal terminal observation durably synchronized"
+      },
+      "expected_workspace_observation": "complete_task_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "expected_workspace",
+          "available pre-result session/recorder facts"
+        ],
+        "receipts": [
+          "expected_workspace",
+          "controller_intent",
+          "executor_terminal",
+          "controller_terminal_observation"
+        ]
+      },
+      "target_relation": "target cut 8",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "terminal delivered after task-defined target mutation count 1"
+      },
+      "task_id": "P08",
+      "name": "controller_loss_after_terminal_delivery_before_session_persistence",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "f6864a6bc7695dd722fed3313b6094a868f0be5ef5c28423f70fcd934106f563",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "f6864a6bc7695dd722fed3313b6094a868f0be5ef5c28423f70fcd934106f563",
+        "initial_reset_workspace_sha256": "d143d20a534578c89d9ddd4ed1488090dbb56eb6457a236a966ded6099762c21",
+        "pre_effect_workspace_sha256": "d143d20a534578c89d9ddd4ed1488090dbb56eb6457a236a966ded6099762c21"
+      },
+      "fault_target_tool_call_id": "exp003-p08",
+      "fault_role": "secondary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "callback_invocation",
+        "external_outcome",
+        "terminal_result_to_controller"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "complete_task_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "P08-F4",
+      "historical_execution_knowledge": "invoked with causal terminal evidence only for receipts condition",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "durable controller terminal observation",
+          "executor terminal record",
+          "workspace"
+        ]
+      },
+      "operation_class": "patch",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "session_result_persist"
+      ],
+      "crash_target": "controller",
+      "fault_type": "F4",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "persist exactly one session result; no callback"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 15,
+      "restart_order": [
+        "controller",
+        "original_logical_executor"
+      ],
+      "failpoint": "after terminal tool outcome reaches controller boundary and before session-result persistence",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": true
+      },
+      "permitted_recovery_actions": [
+        "persist exactly one session result; no callback"
+      ],
+      "barrier_id": "terminal_outcome_at_controller_before_session_persist",
+      "last_durable_fact": {
+        "baseline": "terminal reached volatile controller boundary; target observation seam N/A",
+        "receipts": "causal terminal observation durably synchronized"
+      },
+      "expected_workspace_observation": "complete_task_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "expected_workspace",
+          "available pre-result session/recorder facts"
+        ],
+        "receipts": [
+          "expected_workspace",
+          "controller_intent",
+          "executor_terminal",
+          "controller_terminal_observation"
+        ]
+      },
+      "target_relation": "target cut 8",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "terminal delivered after task-defined target mutation count 1"
+      },
+      "task_id": "W02",
+      "name": "controller_loss_after_terminal_delivery_before_session_persistence",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "5fbcfee75d1a7000f0d7f0d677b83e228226358dcc8350a7571e372d4354bfdf",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "5fbcfee75d1a7000f0d7f0d677b83e228226358dcc8350a7571e372d4354bfdf",
+        "initial_reset_workspace_sha256": "ad600e3a765b475198fa2c3aa984095e0fedf4b367d9a6aac7793877641d6a29",
+        "pre_effect_workspace_sha256": "ad600e3a765b475198fa2c3aa984095e0fedf4b367d9a6aac7793877641d6a29"
+      },
+      "fault_target_tool_call_id": "exp003-w02",
+      "fault_role": "secondary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "callback_invocation",
+        "external_outcome",
+        "terminal_result_to_controller"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "complete_task_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "W02-F4",
+      "historical_execution_knowledge": "invoked with causal terminal evidence only for receipts condition",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "durable controller terminal observation",
+          "executor terminal record",
+          "workspace"
+        ]
+      },
+      "operation_class": "write",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "session_result_persist"
+      ],
+      "crash_target": "controller",
+      "fault_type": "F4",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "persist exactly one session result; no callback"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 16,
+      "restart_order": [
+        "original_logical_executor",
+        "controller"
+      ],
+      "failpoint": "after dispatch/acceptance is observed and before callback or external mutation",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "original owner continues callback once; never fail over"
+      ],
+      "barrier_id": "executor_dispatch_observed_before_callback",
+      "last_durable_fact": {
+        "baseline": "dispatch observed; target acceptance seam N/A",
+        "receipts": "accepted on original executor with attempt 0"
+      },
+      "expected_workspace_observation": "pre_effect_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "workspace_initial",
+          "available session/recorder facts"
+        ],
+        "receipts": [
+          "workspace_initial",
+          "controller_intent",
+          "executor_accepted_attempt_0"
+        ]
+      },
+      "target_relation": "nearest target cut 5",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "zero job-attributed mutations at cut; 0 declared environmental mutations reported separately"
+      },
+      "task_id": "P06",
+      "name": "worker_loss_after_dispatch_before_callback",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "99dc226a1cf533279d496e02fbd818f12e9629d66561947b5494bfab6f3abdaf",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "80ad89926c5338307d0b0ffb5181fc74ac120c9159fc958d255c1510e49e7f41",
+        "initial_reset_workspace_sha256": "9d24ad4bc26a59b40c21855b76073101d336037a1ab386a07251045de6293418",
+        "pre_effect_workspace_sha256": "9d24ad4bc26a59b40c21855b76073101d336037a1ab386a07251045de6293418"
+      },
+      "fault_target_tool_call_id": "exp003-p06",
+      "fault_role": "secondary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "executor_acceptance_reply"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "pre_effect_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "P06-F2",
+      "historical_execution_knowledge": "not_invoked at barrier",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor accepted record",
+          "workspace"
+        ]
+      },
+      "operation_class": "patch",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "callback_invocation",
+        "terminal_result"
+      ],
+      "crash_target": "selected_worker_or_tool_owner",
+      "fault_type": "F2",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "original owner continues callback once; never fail over"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 17,
+      "restart_order": [
+        "original_logical_executor",
+        "controller"
+      ],
+      "failpoint": "after exactly one job-attributed external mutation and before terminal result reaches session",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      ],
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "last_durable_fact": {
+        "baseline": "effect may have occurred; target receipt seam N/A",
+        "receipts": "attempt 1 without causal terminal proof"
+      },
+      "expected_workspace_observation": "fault_target_postcondition",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "postmutation_workspace",
+          "available session/recorder facts"
+        ],
+        "receipts": [
+          "postmutation_workspace",
+          "controller_intent",
+          "executor_accepted_attempt_1"
+        ]
+      },
+      "target_relation": "target cut 6",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "exactly one fault-target job mutation; environmental activity cannot substitute"
+      },
+      "task_id": "S02",
+      "name": "worker_loss_after_external_mutation_before_terminal_result",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "c79fbff10bb40b84671b8fd4c5d162c9abd602eb095b17c1b9b2060dd173a4a6",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "c79fbff10bb40b84671b8fd4c5d162c9abd602eb095b17c1b9b2060dd173a4a6",
+        "initial_reset_workspace_sha256": "0b055045760a280246191d7735c3036e156bf2ea70cf33202cd913db9942cb64",
+        "pre_effect_workspace_sha256": "0b055045760a280246191d7735c3036e156bf2ea70cf33202cd913db9942cb64"
+      },
+      "fault_target_tool_call_id": "exp003-s02",
+      "fault_role": "secondary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "executor_acceptance_reply",
+        "callback_invocation",
+        "one_ground_truth_external_mutation"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "fault_target_postcondition",
+        "receipts": "fault_target_postcondition"
+      },
+      "row_id": "S02-F3",
+      "historical_execution_knowledge": "invoked; causal terminal outcome unknown",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor attempt record",
+          "declared exact postimage observation"
+        ]
+      },
+      "operation_class": "shell",
+      "expected_primary_recovery_class": {
+        "baseline": "ambiguous_no_safe_action",
+        "receipts": "automatic_safe_indeterminate"
+      },
+      "dropped_messages": [
+        "terminal_commit_or_delivery",
+        "session_result"
+      ],
+      "crash_target": "selected_worker_or_tool_owner",
+      "fault_type": "F3",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "no unique automatic safe action",
+        "receipts": "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      },
+      "observation_deadline_ms": 5000
+    },
+    {
+      "order_index": 18,
+      "restart_order": [
+        "original_logical_executor",
+        "controller"
+      ],
+      "failpoint": "after exactly one job-attributed external mutation and before terminal result reaches session",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      ],
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "last_durable_fact": {
+        "baseline": "effect may have occurred; target receipt seam N/A",
+        "receipts": "attempt 1 without causal terminal proof"
+      },
+      "expected_workspace_observation": "fault_target_postcondition",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "postmutation_workspace",
+          "available session/recorder facts"
+        ],
+        "receipts": [
+          "postmutation_workspace",
+          "controller_intent",
+          "executor_accepted_attempt_1"
+        ]
+      },
+      "target_relation": "target cut 6",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "exactly one fault-target job mutation; environmental activity cannot substitute"
+      },
+      "task_id": "W05",
+      "name": "worker_loss_after_external_mutation_before_terminal_result",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "be9847b7118f33d82cb6cad7b73762cbdceef6604aaff49399fc5ef4d83d4382",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "be9847b7118f33d82cb6cad7b73762cbdceef6604aaff49399fc5ef4d83d4382",
+        "initial_reset_workspace_sha256": "b86965fd3d490f8f0587269fca39c2c700985c4cbffaeb1ce5ee4213f5dfbef2",
+        "pre_effect_workspace_sha256": "b86965fd3d490f8f0587269fca39c2c700985c4cbffaeb1ce5ee4213f5dfbef2"
+      },
+      "fault_target_tool_call_id": "exp003-w05",
+      "fault_role": "secondary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "executor_acceptance_reply",
+        "callback_invocation",
+        "one_ground_truth_external_mutation"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "fault_target_postcondition",
+        "receipts": "fault_target_postcondition"
+      },
+      "row_id": "W05-F3",
+      "historical_execution_knowledge": "invoked; causal terminal outcome unknown",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor attempt record",
+          "declared exact postimage observation"
+        ]
+      },
+      "operation_class": "write",
+      "expected_primary_recovery_class": {
+        "baseline": "ambiguous_no_safe_action",
+        "receipts": "automatic_safe_indeterminate"
+      },
+      "dropped_messages": [
+        "terminal_commit_or_delivery",
+        "session_result"
+      ],
+      "crash_target": "selected_worker_or_tool_owner",
+      "fault_type": "F3",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "no unique automatic safe action",
+        "receipts": "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 19,
+      "restart_order": [
+        "controller",
+        "original_logical_executor"
+      ],
+      "failpoint": "after tool request is durably represented by condition nearest existing evidence and before executor dispatch",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "same ID/digest dispatch once to original owner, then no action"
+      ],
+      "barrier_id": "controller_intent_committed_before_executor_dispatch",
+      "last_durable_fact": {
+        "baseline": "nearest existing request evidence; target-only intent seam N/A",
+        "receipts": "controller intent committed; executor start unknown"
+      },
+      "expected_workspace_observation": "pre_effect_workspace",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "workspace_initial",
+          "flight_recorder_request_or_session_call_if_present"
+        ],
+        "receipts": [
+          "workspace_initial",
+          "controller_intent"
+        ]
+      },
+      "target_relation": "nearest target cut 2",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "zero job-attributed mutations at cut; 0 declared environmental mutations reported separately"
+      },
+      "task_id": "W04",
+      "name": "controller_loss_before_executor_dispatch",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 0,
+        "fault_target_postcondition_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b",
+        "initial_reset_workspace_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b",
+        "pre_effect_workspace_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b"
+      },
+      "fault_target_tool_call_id": "exp003-w04",
+      "fault_role": "secondary",
+      "delivered_messages": [
+        "provider_tool_request",
+        "condition_nearest_durable_request_evidence"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "pre_effect_workspace",
+        "receipts": "complete_task_workspace"
+      },
+      "row_id": "W04-F1",
+      "historical_execution_knowledge": "not_invoked at barrier",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor query",
+          "workspace"
+        ]
+      },
+      "operation_class": "write",
+      "expected_primary_recovery_class": {
+        "baseline": "manual_recovery",
+        "receipts": "automatic_terminal"
+      },
+      "dropped_messages": [
+        "executor_dispatch",
+        "executor_acceptance",
+        "callback_result"
+      ],
+      "crash_target": "controller",
+      "fault_type": "F1",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "manual recovery under baseline semantics",
+        "receipts": "same ID/digest dispatch once to original owner, then no action"
+      },
+      "observation_deadline_ms": 2000
+    },
+    {
+      "order_index": 20,
+      "restart_order": [
+        "original_logical_executor",
+        "controller"
+      ],
+      "failpoint": "after exactly one job-attributed external mutation and before terminal result reaches session",
+      "safety_invariants": [
+        "external_mutation_count <= 1",
+        "callback_attempt_count <= 1 unless atomic whole-mutation ID/digest deduplication is declared",
+        "same job ID with conflicting digest is rejected",
+        "accepted work never moves to a replacement logical executor",
+        "success/error requires admissible causal terminal evidence",
+        "workspace postcondition never proves this job caused it"
+      ],
+      "evidence_scope": "fault-target durable job only; task totals reported separately",
+      "causal_terminal_evidence_expected_to_survive": {
+        "baseline": false,
+        "receipts": false
+      },
+      "permitted_recovery_actions": [
+        "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      ],
+      "barrier_id": "ground_truth_external_mutation_count_eq_1_before_terminal_delivery",
+      "last_durable_fact": {
+        "baseline": "effect may have occurred; target receipt seam N/A",
+        "receipts": "attempt 1 without causal terminal proof"
+      },
+      "expected_workspace_observation": "fault_target_postcondition",
+      "prohibited_recovery_actions": [
+        "replacement-executor failover",
+        "post-attempt callback retry without atomic whole-mutation deduplication",
+        "infer causal completion from workspace alone"
+      ],
+      "surviving_storage": {
+        "baseline": [
+          "postmutation_workspace",
+          "available session/recorder facts"
+        ],
+        "receipts": [
+          "postmutation_workspace",
+          "controller_intent",
+          "executor_accepted_attempt_1"
+        ]
+      },
+      "target_relation": "target cut 6",
+      "semantic_equivalence": {
+        "baseline_target_only_seams": "N/A/non-equivalent, never fabricated",
+        "required_alignment": "exactly one fault-target job mutation; environmental activity cannot substitute"
+      },
+      "task_id": "S01",
+      "name": "worker_loss_after_external_mutation_before_terminal_result",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "eb414551f050ae3972f17f981c9e87c24017006d2c8161e3432982166735fdd7",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "eb414551f050ae3972f17f981c9e87c24017006d2c8161e3432982166735fdd7",
+        "initial_reset_workspace_sha256": "226a4ce80a7455191c1c7c80ea7ace920c8ab14021ebdd57b1c2691e27f82d0e",
+        "pre_effect_workspace_sha256": "226a4ce80a7455191c1c7c80ea7ace920c8ab14021ebdd57b1c2691e27f82d0e"
+      },
+      "fault_target_tool_call_id": "exp003-s01",
+      "fault_role": "secondary",
+      "delivered_messages": [
+        "executor_dispatch",
+        "executor_acceptance_reply",
+        "callback_invocation",
+        "one_ground_truth_external_mutation"
+      ],
+      "expected_converged_workspace_by_condition": {
+        "baseline": "fault_target_postcondition",
+        "receipts": "fault_target_postcondition"
+      },
+      "row_id": "S01-F3",
+      "historical_execution_knowledge": "invoked; causal terminal outcome unknown",
+      "admissible_evidence": {
+        "baseline": [
+          "workspace",
+          "persisted session/recorder facts only"
+        ],
+        "receipts": [
+          "controller intent",
+          "original executor attempt record",
+          "declared exact postimage observation"
+        ]
+      },
+      "operation_class": "shell",
+      "expected_primary_recovery_class": {
+        "baseline": "ambiguous_no_safe_action",
+        "receipts": "automatic_safe_indeterminate"
+      },
+      "dropped_messages": [
+        "terminal_commit_or_delivery",
+        "session_result"
+      ],
+      "crash_target": "selected_worker_or_tool_owner",
+      "fault_type": "F3",
+      "fault_target_step": "effect",
+      "knowledge_and_safe_action_convergence_bound_ms": 1000,
+      "expected_safe_action": {
+        "baseline": "no unique automatic safe action",
+        "receipts": "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+      },
+      "observation_deadline_ms": 5000
+    }
+  ],
+  "gate_2": {
+    "completed_at": "2026-09-01T02:39:05.162Z",
+    "completed_at_unix_second": 1788230345,
+    "decision": "Continue — Universal",
+    "future_target_unix_second": 1788230645,
+    "issue": "ROB-832"
+  },
+  "linear_issue": "ROB-868",
+  "materializer": {
+    "sha256": "f919b1b7a82ddf55d705af26dd80cc43fb56c3be4f7b17c9a5c7b5ee7cf178b8",
+    "source": "priv/benchmark/materialize_exp003_v6.exs",
+    "source_template": "test/fixtures/benchmark/exp003/manifest.json",
+    "source_template_sha256": "a40fa18d3ea00eee5c6b8963055cff49ca7f94388f42325c793e0460be98a5b7"
+  },
+  "no_fault_timing": {
+    "measured_repetitions": 10,
+    "warmups": 2
+  },
+  "preregistration_version": "ER-3/FND-2-v6",
+  "references": {
+    "gate_2": "ROB-832",
+    "materialization": "ROB-868",
+    "preregistration": "docs/experiments/003-effect-receipt-confirmatory-preregistration-v6.md",
+    "preserved_v1": "docs/experiments/003-effect-receipt-confirmatory-preregistration.md"
+  },
+  "required_evidence_fields": [
+    "preregistration_version",
+    "seed_round",
+    "seed_digest",
+    "corpus_manifest_digest",
+    "task_id",
+    "row_id",
+    "operation_class",
+    "scope_id",
+    "exposure_split",
+    "fixture_commit",
+    "initial_workspace_digest",
+    "condition",
+    "target_commit",
+    "adapter_digest",
+    "run_index",
+    "order_index",
+    "fault_type",
+    "barrier_id",
+    "killed_owner",
+    "delivered_messages",
+    "dropped_messages",
+    "surviving_storage",
+    "restart_order",
+    "observation_deadline_ms",
+    "controller_facts",
+    "executor_facts",
+    "workspace_observations",
+    "last_durable_fact",
+    "causal_terminal_evidence_expected",
+    "causal_terminal_evidence_observed",
+    "historical_execution_knowledge",
+    "session_classification",
+    "safe_next_action_expected",
+    "safe_next_action_observed",
+    "knowledge_convergence_ms",
+    "terminal_convergence_ms",
+    "admission_count",
+    "callback_attempt_count",
+    "external_mutation_count",
+    "session_result_count",
+    "unplanned_intervention_count",
+    "initial_reset_verified",
+    "final_workspace_digest",
+    "expected_workspace_digest",
+    "primary_recovery_class",
+    "safety_disqualifiers",
+    "harness_errors",
+    "elapsed_ms",
+    "cpu_ms",
+    "storage_bytes",
+    "model_call_count",
+    "tool_call_count",
+    "raw_evidence_digest",
+    "artifact_digests"
+  ],
+  "safety_disqualifiers": [
+    "duplicate external mutation",
+    "callback reinvocation without declared atomic whole-mutation ID/digest deduplication and causal receipt",
+    "wrong or corrupt external effect",
+    "false success or false error relative to admissible causal evidence",
+    "accepted-job failover to another executor",
+    "benchmark contamination, row substitution, or post-exposure tuning"
+  ],
+  "schema": "elara.exp003.corpus.v6",
+  "scope_id": "continue_universal",
+  "seed": {
+    "derivation": "SHA-256(\"elara:exp-003:er3:fnd-2:v6\\0\" || chain_hash || \":\" || decimal_round || \":\" || randomness_hex || \":\" || frozen_commit)",
+    "frozen_commit": "ed9a2dbbdd2ba9ab743a9dc95d1f0ba08663891c",
+    "sha256": "10513722487da5bd0068d4d0466e179ba42d4310c174359ec8b87d558936509e"
+  },
+  "selection": {
+    "algorithm": "Universal: lowest order key per primary F1-F4 for write and patch; explicit all S01-S04; all selected primary rows plus secondary rows for eight lowest-key selected tasks",
+    "candidate_order_keys": {
+      "P01": "7cce2ad4eb704aa56028ff5c3da392d390fd165396b1e3c1795d23b60133a929",
+      "P02": "2ca67c0d652f24429ad330a6fb895b4929375138cacab3a71f3f5b130eee3919",
+      "P03": "72f8a674b8c77097585fa4d88fb2b3b1cf574aa096d3cd7ae8136852a6ec05f0",
+      "P04": "b373211acb80d032b88cafa26b331d1b0ad3367589b4c45dcf00ca503f6b16a4",
+      "P05": "aa3924566f04c69b8224843896db91ace2cd9aefd89c757a5e13d4ed1681626c",
+      "P06": "1fee490347fb55d57649257ba366be2fc58703e9e118265253688cc8ba0376ec",
+      "P07": "b02175a55f7e1eba3fe36a98d077dfba637a96a4877b60a9f4630d4495f3785d",
+      "P08": "0bf20d3da50d1e10277f30c6fd1b65ce1e53bdf6ff9db7c8e742e6ab98a0dfcd",
+      "S01": "6410c3a403656009ee12bdc0bd8ec0d784cd4c4f331b11ee674cd6e6ed82ddad",
+      "S02": "30bc6a4b493e0b1e832f96daba7fca94f2071b33864caba09c51f61c3a5c2d5c",
+      "S03": "dcbaee118cbdb3ea01f51cc07fe996411f305df60a21afd0ab82fc7129ef1b5f",
+      "S04": "09fac3266d426651d0beebaa65ae9704ba0e467f55af5a4ef1125cde26e872bc",
+      "W01": "4de6cb420b31513179081b6743dc4b3cd77dcabf5f4f1f7057360b7fe5f5f9da",
+      "W02": "192c2ec47c728d78f51f59bf9a99625c398ff222a4eedf00e127e82d572712d3",
+      "W03": "bb9b33f9609320724a12744506c5a1b6b75f41e1db5aac38ca99a8a0d6173ef5",
+      "W04": "3d9c09f0ff347f91ad0f6e4236d49e4c9f666ded21a64b57ee3a4fc0214fbe43",
+      "W05": "345ce782112d2162b865e38a4aa3a6d0c7181d3903116960a408217947ece2af",
+      "W06": "b0fab42c128d40dd5cb825f31ed8c01203caf569aa21f714577e5f4ec7673989",
+      "W07": "d968f17f9ff9651e91197ace34ace6aa8493b61e1a059f891422d9624e813d36",
+      "W08": "6f591c92265979213de205da8088ac1fab60462a2442a7b9173880251bd22866"
+    },
+    "non_amending_shell_interpretation": "Preserve table labels S01/S02/S03/S04 = F1/F2/F3/F2, select all four from explicit prose/count, and disclose absent shell primary F4; do not correct S04.",
+    "scored_row_count": 20,
+    "secondary_row_task_ids": [
+      "S04",
+      "P08",
+      "W02",
+      "P06",
+      "S02",
+      "W05",
+      "W04",
+      "S01"
+    ],
+    "selected_task_ids": [
+      "S04",
+      "P08",
+      "W02",
+      "P06",
+      "S02",
+      "W05",
+      "W04",
+      "S01",
+      "P03",
+      "P07",
+      "W07",
+      "S03"
+    ],
+    "shell_primary_distribution": [
+      "F1",
+      "F2",
+      "F3",
+      "F2"
+    ],
+    "stratum_choices": {
+      "patch": {
+        "F1": "P06",
+        "F2": "P08",
+        "F3": "P07",
+        "F4": "P03"
+      },
+      "shell": [
+        "S01",
+        "S02",
+        "S03",
+        "S04"
+      ],
+      "write": {
+        "F1": "W05",
+        "F2": "W02",
+        "F3": "W07",
+        "F4": "W04"
+      }
+    },
+    "task_count": 12
+  },
+  "tasks": [
+    {
+      "brief": "Run an opaque build/test command that creates an undeclared build artifact.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpus551c606d26b0c63e do\n  def value, do: \"dc7dc5fae996934e\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_347f2ce6b2e80fc2/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus551c606d26b0c63eTest do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus551c606d26b0c63e.value() == \"dc7dc5fae996934e\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a",
+        "fixture_commit": "sha256:2b115b9c5395e268335bb144414df8a9d111055bb413a107a4f519df6c28b755",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-S04",
+        "fixture_sha256": "2b115b9c5395e268335bb144414df8a9d111055bb413a107a4f519df6c28b755",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpus551c606d26b0c63e do\n  def value, do: \"dc7dc5fae996934e\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_347f2ce6b2e80fc2/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus551c606d26b0c63eTest do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus551c606d26b0c63e.value() == \"dc7dc5fae996934e\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "551c606d26b0c63e",
+        "new_value": "9e45058f328006dd",
+        "path": "347f2ce6b2e80fc2",
+        "postimage": "8a357c0a82f3b1f0",
+        "preimage": "5099105ca33f838c",
+        "sentinel": "03fcd0099342f0d6",
+        "value": "dc7dc5fae996934e"
+      },
+      "ground_truth": {
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 1,
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "S04",
+      "operation_class": "shell",
+      "order_key": "09fac3266d426651d0beebaa65ae9704ba0e467f55af5a4ef1125cde26e872bc",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "shell",
+            "tool_call_id": "exp003-s04",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "command": "MIX_ENV=test mix test",
+              "environment": {
+                "LANG": "C",
+                "LC_ALL": "C"
+              },
+              "postcondition": null,
+              "relative_cwd": ".",
+              "schema": "elara.opaque_shell.v1",
+              "timeout_ms": 5000
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "expected_undeclared_artifacts": [
+              "_build/"
+            ],
+            "id": "effect",
+            "operation_kind": "shell",
+            "semantic_workspace_digest_excludes": [
+              "_build/",
+              "deps/",
+              ".elara/"
+            ]
+          }
+        ]
+      },
+      "primary_fault": "F2",
+      "request": "Run an opaque build/test command that creates an undeclared build artifact.",
+      "secondary_fault": "F4",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a",
+        "initial_reset_workspace_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a",
+        "pre_effect_workspace_sha256": "cd883537eed0280eeb2381710f661b8ee81c50205771325994e0f700e08d015a"
+      }
+    },
+    {
+      "brief": "Apply a bounded delete-and-modify source transformation.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpusdc0b25ee67aa95b6 do\n  def value, do: \"78d1d7844e612dc5\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_1c47633c1331e674/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpusdc0b25ee67aa95b6Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpusdc0b25ee67aa95b6.value() == \"78d1d7844e612dc5\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "f6864a6bc7695dd722fed3313b6094a868f0be5ef5c28423f70fcd934106f563",
+        "fixture_commit": "sha256:7a1c17455e42dba7e1c85f25b51dd9a3ef5236d94e5630398a7cec49fb6f49ba",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-P08",
+        "fixture_sha256": "7a1c17455e42dba7e1c85f25b51dd9a3ef5236d94e5630398a7cec49fb6f49ba",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpusdc0b25ee67aa95b6 do\n  def value, do: legacy()\n  def legacy, do: \"75211c8b3c1cba64\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_1c47633c1331e674/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpusdc0b25ee67aa95b6Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpusdc0b25ee67aa95b6.value() == \"78d1d7844e612dc5\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "d143d20a534578c89d9ddd4ed1488090dbb56eb6457a236a966ded6099762c21",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "dc0b25ee67aa95b6",
+        "new_value": "78d1d7844e612dc5",
+        "path": "1c47633c1331e674",
+        "postimage": "aaa14a10b0dfa7e0",
+        "preimage": "34325eb35f98d394",
+        "sentinel": "620275c4e3cc7132",
+        "value": "75211c8b3c1cba64"
+      },
+      "ground_truth": {
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 1,
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "P08",
+      "operation_class": "patch",
+      "order_key": "0bf20d3da50d1e10277f30c6fd1b65ce1e53bdf6ff9db7c8e742e6ab98a0dfcd",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "patch",
+            "tool_call_id": "exp003-p08",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "new_text": "  def value, do: \"78d1d7844e612dc5\"",
+              "old_text": "  def value, do: legacy()\n  def legacy, do: \"75211c8b3c1cba64\"",
+              "path": "lib/generated_1c47633c1331e674/corpus_case.ex",
+              "postimage_sha256": "8a8963e9542c2ed76228ebd4d3311c011bc3529948d2183e5da585b203061061",
+              "preimage_sha256": "b349c3bb74a3f9ebc3c22247ea7a739aecda1fa47fdd5ff39dbf6e8abd2b04ee",
+              "replacement": "same_directory_temp_rename",
+              "schema": "elara.literal_patch.v1"
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "frozen_declarations": {
+              "postimage_content": "defmodule Corpusdc0b25ee67aa95b6 do\n  def value, do: \"78d1d7844e612dc5\"\nend\n",
+              "preimage_content": "defmodule Corpusdc0b25ee67aa95b6 do\n  def value, do: legacy()\n  def legacy, do: \"75211c8b3c1cba64\"\nend\n"
+            },
+            "id": "effect",
+            "operation_kind": "patch"
+          }
+        ]
+      },
+      "primary_fault": "F2",
+      "request": "Apply a bounded delete-and-modify source transformation.",
+      "secondary_fault": "F4",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "f6864a6bc7695dd722fed3313b6094a868f0be5ef5c28423f70fcd934106f563",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "f6864a6bc7695dd722fed3313b6094a868f0be5ef5c28423f70fcd934106f563",
+        "initial_reset_workspace_sha256": "d143d20a534578c89d9ddd4ed1488090dbb56eb6457a236a966ded6099762c21",
+        "pre_effect_workspace_sha256": "d143d20a534578c89d9ddd4ed1488090dbb56eb6457a236a966ded6099762c21"
+      }
+    },
+    {
+      "brief": "Replace a file whose complete bytes equal the declared preimage.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule CorpusB50ebab3bed8c942 do\n  def value, do: \"new_aca8af6ce53a6ec5\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_32c019f6da59c655/corpus_case.ex"
+          },
+          {
+            "content": "defmodule CorpusB50ebab3bed8c942Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert CorpusB50ebab3bed8c942.value() == \"new_aca8af6ce53a6ec5\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "5fbcfee75d1a7000f0d7f0d677b83e228226358dcc8350a7571e372d4354bfdf",
+        "fixture_commit": "sha256:fe9be496e872706d2b9510d1528fd9b18f6affcb3d2cbe21f665c2362ac694ea",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-W02",
+        "fixture_sha256": "fe9be496e872706d2b9510d1528fd9b18f6affcb3d2cbe21f665c2362ac694ea",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule CorpusB50ebab3bed8c942 do\n  def value, do: \"pre_bc6ddbc0f0e89abb\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_32c019f6da59c655/corpus_case.ex"
+          },
+          {
+            "content": "defmodule CorpusB50ebab3bed8c942Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert CorpusB50ebab3bed8c942.value() == \"new_aca8af6ce53a6ec5\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "ad600e3a765b475198fa2c3aa984095e0fedf4b367d9a6aac7793877641d6a29",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "b50ebab3bed8c942",
+        "new_value": "aca8af6ce53a6ec5",
+        "path": "32c019f6da59c655",
+        "postimage": "f518183cddd0ddf9",
+        "preimage": "155232881f2876eb",
+        "sentinel": "00470f4f1727b0cf",
+        "value": "bc6ddbc0f0e89abb"
+      },
+      "ground_truth": {
+        "evidence_identity": "fault target step -> tool call ID -> distinct durable job ID/digest",
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 1,
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "W02",
+      "operation_class": "write",
+      "order_key": "192c2ec47c728d78f51f59bf9a99625c398ff222a4eedf00e127e82d572712d3",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "write",
+            "tool_call_id": "exp003-w02",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "desired": {
+                "content": "defmodule CorpusB50ebab3bed8c942 do\n  def value, do: \"new_aca8af6ce53a6ec5\"\nend\n",
+                "sha256": "0b00b05a6f7ea16f550a53279cfebf6193441da0720d9425536ef4586a3e9bdd"
+              },
+              "expected": {
+                "sha256": "134ba4270b3a85d1418de46491bf194b87d3e2e02e9e3e391de49a5d68ee7226",
+                "state": "regular"
+              },
+              "parent_policy": "create",
+              "path": "lib/generated_32c019f6da59c655/corpus_case.ex",
+              "replacement": "same_directory_temp_rename",
+              "schema": "elara.declarative_write.v1"
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "frozen_declarations": {
+              "desired_postimage_content": "defmodule CorpusB50ebab3bed8c942 do\n  def value, do: \"new_aca8af6ce53a6ec5\"\nend\n",
+              "expected_preimage_content": "defmodule CorpusB50ebab3bed8c942 do\n  def value, do: \"pre_bc6ddbc0f0e89abb\"\nend\n"
+            },
+            "id": "effect",
+            "operation_kind": "write"
+          }
+        ]
+      },
+      "primary_fault": "F2",
+      "request": "Replace a file whose complete bytes equal the declared preimage.",
+      "secondary_fault": "F4",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "5fbcfee75d1a7000f0d7f0d677b83e228226358dcc8350a7571e372d4354bfdf",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "5fbcfee75d1a7000f0d7f0d677b83e228226358dcc8350a7571e372d4354bfdf",
+        "initial_reset_workspace_sha256": "ad600e3a765b475198fa2c3aa984095e0fedf4b367d9a6aac7793877641d6a29",
+        "pre_effect_workspace_sha256": "ad600e3a765b475198fa2c3aa984095e0fedf4b367d9a6aac7793877641d6a29"
+      }
+    },
+    {
+      "brief": "Apply one bounded two-file source-and-test transformation.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus0db67b64f016d4a3 do\n  def value, do: \"new_1df4d595ac305610\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_0abf65fe2683201e/corpus_case.ex"
+          },
+          {
+            "content": "defmodule Corpus0db67b64f016d4a3Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus0db67b64f016d4a3.value() == \"new_1df4d595ac305610\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "99dc226a1cf533279d496e02fbd818f12e9629d66561947b5494bfab6f3abdaf",
+        "fixture_commit": "sha256:9d496c236b132026c3f8cb82463c8ab7b1d09283aa062b7afcc07749fc575cd1",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-P06",
+        "fixture_sha256": "9d496c236b132026c3f8cb82463c8ab7b1d09283aa062b7afcc07749fc575cd1",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus0db67b64f016d4a3 do\n  def value, do: \"old_7632eaab566fd36d\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_0abf65fe2683201e/corpus_case.ex"
+          },
+          {
+            "content": "defmodule Corpus0db67b64f016d4a3Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus0db67b64f016d4a3.value() == \"old_7632eaab566fd36d\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "9d24ad4bc26a59b40c21855b76073101d336037a1ab386a07251045de6293418",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "0db67b64f016d4a3",
+        "new_value": "1df4d595ac305610",
+        "path": "0abf65fe2683201e",
+        "postimage": "8452965319e1d3a4",
+        "preimage": "e43f8d1d37b68990",
+        "sentinel": "f3e28a0394a3edff",
+        "value": "7632eaab566fd36d"
+      },
+      "ground_truth": {
+        "evidence_identity": "fault target step -> tool call ID -> distinct durable job ID/digest",
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 1,
+        "expected_task_external_mutation_count": 2,
+        "expected_task_session_result_count": 2,
+        "expected_task_tool_call_count": 2,
+        "fault_evidence_scope": "effect job only",
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "P06",
+      "operation_class": "patch",
+      "order_key": "1fee490347fb55d57649257ba366be2fc58703e9e118265253688cc8ba0376ec",
+      "plan": {
+        "continuation_policy": {
+          "after_target_error": "halt without continuation",
+          "after_target_indeterminate": "halt without retry or continuation",
+          "after_target_ok_live_controller": "execute continuation exactly once",
+          "after_target_ok_recovered_controller": "do not invent model-loop continuation; report partial task workspace",
+          "fault_injection": "effect only; continuation is never faulted",
+          "parallelism": "forbidden"
+        },
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "patch",
+            "tool_call_id": "exp003-p06",
+            "turn": 1
+          },
+          {
+            "arguments_ref": "plan.steps[1].arguments",
+            "kind": "tool_call",
+            "operation_kind": "patch",
+            "tool_call_id": "exp003-p06-continuation",
+            "turn": 2
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 3
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "new_text": "new_1df4d595ac305610",
+              "old_text": "old_7632eaab566fd36d",
+              "path": "lib/generated_0abf65fe2683201e/corpus_case.ex",
+              "postimage_sha256": "5c526433a8e3dc2849faf87e421ad079ed2346fd89982d8d4d060718994d5280",
+              "preimage_sha256": "24c8871e2651852e56074d257dc1989eaf5e4d39cd6d996422c267a5ae83a612",
+              "replacement": "same_directory_temp_rename",
+              "schema": "elara.literal_patch.v1"
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "frozen_declarations": {
+              "postimage_content": "defmodule Corpus0db67b64f016d4a3 do\n  def value, do: \"new_1df4d595ac305610\"\nend\n",
+              "preimage_content": "defmodule Corpus0db67b64f016d4a3 do\n  def value, do: \"old_7632eaab566fd36d\"\nend\n"
+            },
+            "id": "effect",
+            "operation_kind": "patch"
+          },
+          {
+            "arguments": {
+              "new_text": "new_1df4d595ac305610",
+              "old_text": "old_7632eaab566fd36d",
+              "path": "test/corpus_case_test.exs",
+              "postimage_sha256": "08fdce8b98a66bf1f00dcef647896633ae9f0201a478312dc1ffe6fcd2f9160a",
+              "preimage_sha256": "acdcff23f8847f7784f8e23189d2725fda15cd39c3bc630b92969e4c45952a8b",
+              "replacement": "same_directory_temp_rename",
+              "schema": "elara.literal_patch.v1"
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "frozen_declarations": {
+              "postimage_content": "defmodule Corpus0db67b64f016d4a3Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus0db67b64f016d4a3.value() == \"new_1df4d595ac305610\"\n  end\nend\n",
+              "preimage_content": "defmodule Corpus0db67b64f016d4a3Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus0db67b64f016d4a3.value() == \"old_7632eaab566fd36d\"\n  end\nend\n"
+            },
+            "id": "continuation",
+            "operation_kind": "patch"
+          }
+        ]
+      },
+      "primary_fault": "F1",
+      "request": "Apply one bounded two-file source-and-test transformation.",
+      "secondary_fault": "F2",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "99dc226a1cf533279d496e02fbd818f12e9629d66561947b5494bfab6f3abdaf",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "80ad89926c5338307d0b0ffb5181fc74ac120c9159fc958d255c1510e49e7f41",
+        "initial_reset_workspace_sha256": "9d24ad4bc26a59b40c21855b76073101d336037a1ab386a07251045de6293418",
+        "pre_effect_workspace_sha256": "9d24ad4bc26a59b40c21855b76073101d336037a1ab386a07251045de6293418"
+      }
+    },
+    {
+      "brief": "Run an opaque command with two ordered filesystem effects and exit 0.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpus47245c92627aef20 do\n  def value, do: \"bcc4ebf6040866ba\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_a5694669866c7c7a/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus47245c92627aef20Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus47245c92627aef20.value() == \"bcc4ebf6040866ba\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          },
+          {
+            "content": "first_bcc4ebf6040866ba\n",
+            "mode": "0644",
+            "path": "data/first.txt"
+          },
+          {
+            "content": "second_525a3643dab67586\n",
+            "mode": "0644",
+            "path": "data/second.txt"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "c79fbff10bb40b84671b8fd4c5d162c9abd602eb095b17c1b9b2060dd173a4a6",
+        "fixture_commit": "sha256:0014bffc4db778e45644981eb663ccf2f5bd134a3329ce44353a7a6db4e92b00",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-S02",
+        "fixture_sha256": "0014bffc4db778e45644981eb663ccf2f5bd134a3329ce44353a7a6db4e92b00",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpus47245c92627aef20 do\n  def value, do: \"bcc4ebf6040866ba\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_a5694669866c7c7a/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus47245c92627aef20Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus47245c92627aef20.value() == \"bcc4ebf6040866ba\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "0b055045760a280246191d7735c3036e156bf2ea70cf33202cd913db9942cb64",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "47245c92627aef20",
+        "new_value": "525a3643dab67586",
+        "path": "a5694669866c7c7a",
+        "postimage": "9156589b90ce02b1",
+        "preimage": "cb009ca34e2ec863",
+        "sentinel": "e5140dd55eba0b0c",
+        "value": "bcc4ebf6040866ba"
+      },
+      "ground_truth": {
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 1,
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "S02",
+      "operation_class": "shell",
+      "order_key": "30bc6a4b493e0b1e832f96daba7fca94f2071b33864caba09c51f61c3a5c2d5c",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "shell",
+            "tool_call_id": "exp003-s02",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "command": "mkdir -p data; printf '%s\\n' 'first_bcc4ebf6040866ba' > data/first.txt; printf '%s\\n' 'second_525a3643dab67586' > data/second.txt",
+              "environment": {
+                "LANG": "C",
+                "LC_ALL": "C"
+              },
+              "postcondition": {
+                "files": [
+                  {
+                    "path": "data/first.txt",
+                    "sha256": "144c3bc25d5e94b02fe6b7f9cc1bfc5b22e0cc92beb6aab0b205392a8bc9e6c7"
+                  },
+                  {
+                    "path": "data/second.txt",
+                    "sha256": "fd3cbca397ebc291f6e54790157f94fc1ed31e66f3e3079cbff9879c1d4c8500"
+                  }
+                ],
+                "kind": "files_sha256"
+              },
+              "relative_cwd": ".",
+              "schema": "elara.opaque_shell.v1",
+              "timeout_ms": 5000
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "id": "effect",
+            "operation_kind": "shell"
+          }
+        ]
+      },
+      "primary_fault": "F2",
+      "request": "Run an opaque command with two ordered filesystem effects and exit 0.",
+      "secondary_fault": "F3",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "c79fbff10bb40b84671b8fd4c5d162c9abd602eb095b17c1b9b2060dd173a4a6",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "c79fbff10bb40b84671b8fd4c5d162c9abd602eb095b17c1b9b2060dd173a4a6",
+        "initial_reset_workspace_sha256": "0b055045760a280246191d7735c3036e156bf2ea70cf33202cd913db9942cb64",
+        "pre_effect_workspace_sha256": "0b055045760a280246191d7735c3036e156bf2ea70cf33202cd913db9942cb64"
+      }
+    },
+    {
+      "brief": "Replace an existing empty file with generated source content.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpus368383cdc4699571 do\n  def value, do: \"5a046108ffb7797d\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_e708e2d9bcce921a/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus368383cdc4699571Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus368383cdc4699571.value() == \"5a046108ffb7797d\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "be9847b7118f33d82cb6cad7b73762cbdceef6604aaff49399fc5ef4d83d4382",
+        "fixture_commit": "sha256:fd8ed0f051099e066120369fa8cae5217eb356cc01c0466dfedad4203c1614d5",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-W05",
+        "fixture_sha256": "fd8ed0f051099e066120369fa8cae5217eb356cc01c0466dfedad4203c1614d5",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "",
+            "mode": "0644",
+            "path": "lib/generated_e708e2d9bcce921a/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus368383cdc4699571Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus368383cdc4699571.value() == \"5a046108ffb7797d\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "b86965fd3d490f8f0587269fca39c2c700985c4cbffaeb1ce5ee4213f5dfbef2",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "368383cdc4699571",
+        "new_value": "8c14d5f9b88d3c91",
+        "path": "e708e2d9bcce921a",
+        "postimage": "92fdf0b9e711ca14",
+        "preimage": "6cc777de11c4a038",
+        "sentinel": "3bbd4e1be630f902",
+        "value": "5a046108ffb7797d"
+      },
+      "ground_truth": {
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 1,
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "W05",
+      "operation_class": "write",
+      "order_key": "345ce782112d2162b865e38a4aa3a6d0c7181d3903116960a408217947ece2af",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "write",
+            "tool_call_id": "exp003-w05",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "desired": {
+                "content": "defmodule Corpus368383cdc4699571 do\n  def value, do: \"5a046108ffb7797d\"\nend\n",
+                "sha256": "a95d51e20cbaf1750edc7a0691b4368d2e156579955380ef4a09aec03475ee82"
+              },
+              "expected": {
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "state": "regular"
+              },
+              "parent_policy": "create",
+              "path": "lib/generated_e708e2d9bcce921a/corpus_case.ex",
+              "replacement": "same_directory_temp_rename",
+              "schema": "elara.declarative_write.v1"
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "frozen_declarations": {
+              "desired_postimage_content": "defmodule Corpus368383cdc4699571 do\n  def value, do: \"5a046108ffb7797d\"\nend\n",
+              "expected_preimage_content": ""
+            },
+            "id": "effect",
+            "operation_kind": "write"
+          }
+        ]
+      },
+      "primary_fault": "F1",
+      "request": "Replace an existing empty file with generated source content.",
+      "secondary_fault": "F3",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "be9847b7118f33d82cb6cad7b73762cbdceef6604aaff49399fc5ef4d83d4382",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "be9847b7118f33d82cb6cad7b73762cbdceef6604aaff49399fc5ef4d83d4382",
+        "initial_reset_workspace_sha256": "b86965fd3d490f8f0587269fca39c2c700985c4cbffaeb1ce5ee4213f5dfbef2",
+        "pre_effect_workspace_sha256": "b86965fd3d490f8f0587269fca39c2c700985c4cbffaeb1ce5ee4213f5dfbef2"
+      }
+    },
+    {
+      "brief": "Reject a target differing from both declared preimage and postimage.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus7674f3e6effd1396 do\n  def value, do: \"conflict_441bfb938d75f3c2\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_58ef8c27d119e186/corpus_case.ex"
+          },
+          {
+            "content": "defmodule Corpus7674f3e6effd1396Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus7674f3e6effd1396.value() == \"conflict_441bfb938d75f3c2\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b",
+        "fixture_commit": "sha256:4da4f3645feb58b9dcebf592c654d331aa73d173279e378381634610595de862",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-W04",
+        "fixture_sha256": "4da4f3645feb58b9dcebf592c654d331aa73d173279e378381634610595de862",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus7674f3e6effd1396 do\n  def value, do: \"conflict_441bfb938d75f3c2\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_58ef8c27d119e186/corpus_case.ex"
+          },
+          {
+            "content": "defmodule Corpus7674f3e6effd1396Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus7674f3e6effd1396.value() == \"conflict_441bfb938d75f3c2\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "7674f3e6effd1396",
+        "new_value": "9d4095e9c1ded6cb",
+        "path": "58ef8c27d119e186",
+        "postimage": "87471b6bd048e3b3",
+        "preimage": "465c0fe2c9bc6071",
+        "sentinel": "441bfb938d75f3c2",
+        "value": "56a37bbc3f990587"
+      },
+      "ground_truth": {
+        "evidence_identity": "fault target step -> tool call ID -> distinct durable job ID/digest",
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 0,
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "W04",
+      "operation_class": "write",
+      "order_key": "3d9c09f0ff347f91ad0f6e4236d49e4c9f666ded21a64b57ee3a4fc0214fbe43",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "write",
+            "tool_call_id": "exp003-w04",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "desired": {
+                "content": "defmodule Corpus7674f3e6effd1396 do\n  def value, do: \"post_9d4095e9c1ded6cb\"\nend\n",
+                "sha256": "20404f57b4ffc6cfffe6a07e22df2ed173e2b070feb5abc67d02d2c80b4073a9"
+              },
+              "expected": {
+                "sha256": "0e48de60a5f3ad63df4648683621a90264fee8a2684900210f94c962714f0775",
+                "state": "regular"
+              },
+              "parent_policy": "create",
+              "path": "lib/generated_58ef8c27d119e186/corpus_case.ex",
+              "replacement": "same_directory_temp_rename",
+              "schema": "elara.declarative_write.v1"
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 0,
+            "expected_no_fault_outcome": "error_conflict",
+            "frozen_declarations": {
+              "desired_postimage_content": "defmodule Corpus7674f3e6effd1396 do\n  def value, do: \"post_9d4095e9c1ded6cb\"\nend\n",
+              "expected_preimage_content": "defmodule Corpus7674f3e6effd1396 do\n  def value, do: \"pre_56a37bbc3f990587\"\nend\n"
+            },
+            "id": "effect",
+            "operation_kind": "write"
+          }
+        ]
+      },
+      "primary_fault": "F4",
+      "request": "Reject a target differing from both declared preimage and postimage.",
+      "secondary_fault": "F1",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 0,
+        "fault_target_postcondition_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b",
+        "initial_reset_workspace_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b",
+        "pre_effect_workspace_sha256": "680a95d34f99c9c2c1fa2f01f2ed6218776ace6f1f59f71ceb281eacafa7926b"
+      }
+    },
+    {
+      "brief": "Run an opaque command that appends one record and creates a second sentinel.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpusa4429d0f0a7776fb do\n  def value, do: \"4743cb0d9105fe91\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_b9611c58da6f47cb/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpusa4429d0f0a7776fbTest do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpusa4429d0f0a7776fb.value() == \"4743cb0d9105fe91\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          },
+          {
+            "content": "header\nrecord_4743cb0d9105fe91\n",
+            "mode": "0644",
+            "path": "data/records.log"
+          },
+          {
+            "content": "sentinel_fb29b08c84354c50\n",
+            "mode": "0644",
+            "path": "data/sentinel.txt"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "eb414551f050ae3972f17f981c9e87c24017006d2c8161e3432982166735fdd7",
+        "fixture_commit": "sha256:fb41f9207c41191b0c40c7bb87e0eba0d946c6c19420cd20e000ef1336dcfdbf",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-S01",
+        "fixture_sha256": "fb41f9207c41191b0c40c7bb87e0eba0d946c6c19420cd20e000ef1336dcfdbf",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpusa4429d0f0a7776fb do\n  def value, do: \"4743cb0d9105fe91\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_b9611c58da6f47cb/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpusa4429d0f0a7776fbTest do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpusa4429d0f0a7776fb.value() == \"4743cb0d9105fe91\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          },
+          {
+            "content": "header\n",
+            "mode": "0644",
+            "path": "data/records.log"
+          }
+        ],
+        "initial_workspace_sha256": "226a4ce80a7455191c1c7c80ea7ace920c8ab14021ebdd57b1c2691e27f82d0e",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "a4429d0f0a7776fb",
+        "new_value": "a97afd664ce8ad04",
+        "path": "b9611c58da6f47cb",
+        "postimage": "84170bceb3c100c2",
+        "preimage": "7336eaa07f30292c",
+        "sentinel": "fb29b08c84354c50",
+        "value": "4743cb0d9105fe91"
+      },
+      "ground_truth": {
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 1,
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "S01",
+      "operation_class": "shell",
+      "order_key": "6410c3a403656009ee12bdc0bd8ec0d784cd4c4f331b11ee674cd6e6ed82ddad",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "shell",
+            "tool_call_id": "exp003-s01",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "command": "mkdir -p data; printf '%s\\n' 'record_4743cb0d9105fe91' >> data/records.log; printf '%s\\n' 'sentinel_fb29b08c84354c50' > data/sentinel.txt",
+              "environment": {
+                "LANG": "C",
+                "LC_ALL": "C"
+              },
+              "postcondition": {
+                "files": [
+                  {
+                    "path": "data/records.log",
+                    "sha256": "d47d1dbc36e5a4a0644b8a9cbff1f97157f277bb40c9f1d2b0be3974fb2deb19"
+                  },
+                  {
+                    "path": "data/sentinel.txt",
+                    "sha256": "509f90b5ebc12c15edae7ca01c83d4877752dc6ebe038e128753bb9ebe9e635b"
+                  }
+                ],
+                "kind": "files_sha256"
+              },
+              "relative_cwd": ".",
+              "schema": "elara.opaque_shell.v1",
+              "timeout_ms": 5000
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "id": "effect",
+            "operation_kind": "shell"
+          }
+        ]
+      },
+      "primary_fault": "F1",
+      "request": "Run an opaque command that appends one record and creates a second sentinel.",
+      "secondary_fault": "F3",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "eb414551f050ae3972f17f981c9e87c24017006d2c8161e3432982166735fdd7",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "eb414551f050ae3972f17f981c9e87c24017006d2c8161e3432982166735fdd7",
+        "initial_reset_workspace_sha256": "226a4ce80a7455191c1c7c80ea7ace920c8ab14021ebdd57b1c2691e27f82d0e",
+        "pre_effect_workspace_sha256": "226a4ce80a7455191c1c7c80ea7ace920c8ab14021ebdd57b1c2691e27f82d0e"
+      }
+    },
+    {
+      "brief": "Reconcile when the exact desired postimage already exists.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule CorpusD759fff40a50c842 do\n  def value, do: \"post_3ab2e26837cdbb12\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_f466c6d3656c2110/corpus_case.ex"
+          },
+          {
+            "content": "defmodule CorpusD759fff40a50c842Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert CorpusD759fff40a50c842.value() == \"post_3ab2e26837cdbb12\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "9ba2c83d8d9bc131d4e178ef7df6dc415b047b99183246a73ff03a543a8ce773",
+        "fixture_commit": "sha256:a93c75596421efa63ce794bf1ff7399c73b514c0aae7d0959b0be6d4b7ecea39",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-P03",
+        "fixture_sha256": "a93c75596421efa63ce794bf1ff7399c73b514c0aae7d0959b0be6d4b7ecea39",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule CorpusD759fff40a50c842 do\n  def value, do: \"post_3ab2e26837cdbb12\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_f466c6d3656c2110/corpus_case.ex"
+          },
+          {
+            "content": "defmodule CorpusD759fff40a50c842Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert CorpusD759fff40a50c842.value() == \"post_3ab2e26837cdbb12\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "9ba2c83d8d9bc131d4e178ef7df6dc415b047b99183246a73ff03a543a8ce773",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "d759fff40a50c842",
+        "new_value": "3ab2e26837cdbb12",
+        "path": "f466c6d3656c2110",
+        "postimage": "cb77e8b082c578ec",
+        "preimage": "69f8e4410667d56c",
+        "sentinel": "4cd5ef13292abbd4",
+        "value": "57aa0612e79f4a1e"
+      },
+      "ground_truth": {
+        "evidence_identity": "fault target step -> tool call ID -> distinct durable job ID/digest",
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 0,
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "P03",
+      "operation_class": "patch",
+      "order_key": "72f8a674b8c77097585fa4d88fb2b3b1cf574aa096d3cd7ae8136852a6ec05f0",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "patch",
+            "tool_call_id": "exp003-p03",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "new_text": "post_3ab2e26837cdbb12",
+              "old_text": "pre_57aa0612e79f4a1e",
+              "path": "lib/generated_f466c6d3656c2110/corpus_case.ex",
+              "postimage_sha256": "74fc5d54c76797d5e2303a8faa30570171e47c0910b507ef933c60f9450c13fd",
+              "preimage_sha256": "d57fe18a8304087628144c032d51df0079f50d62d520f89cce3834e2b68d7b57",
+              "replacement": "same_directory_temp_rename",
+              "schema": "elara.literal_patch.v1"
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 0,
+            "expected_no_fault_outcome": "ok",
+            "frozen_declarations": {
+              "postimage_content": "defmodule CorpusD759fff40a50c842 do\n  def value, do: \"post_3ab2e26837cdbb12\"\nend\n",
+              "preimage_content": "defmodule CorpusD759fff40a50c842 do\n  def value, do: \"pre_57aa0612e79f4a1e\"\nend\n"
+            },
+            "id": "effect",
+            "operation_kind": "patch"
+          }
+        ]
+      },
+      "primary_fault": "F4",
+      "request": "Reconcile when the exact desired postimage already exists.",
+      "secondary_fault": "F1",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "9ba2c83d8d9bc131d4e178ef7df6dc415b047b99183246a73ff03a543a8ce773",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 0,
+        "fault_target_postcondition_sha256": "9ba2c83d8d9bc131d4e178ef7df6dc415b047b99183246a73ff03a543a8ce773",
+        "initial_reset_workspace_sha256": "9ba2c83d8d9bc131d4e178ef7df6dc415b047b99183246a73ff03a543a8ce773",
+        "pre_effect_workspace_sha256": "9ba2c83d8d9bc131d4e178ef7df6dc415b047b99183246a73ff03a543a8ce773"
+      }
+    },
+    {
+      "brief": "Apply a bounded create-and-modify source transformation.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpusd44f14ebede14847 do\n  def helper, do: \"e4f4500bb8603947\"\n  def value, do: helper()\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_507cc9f142854c38/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpusd44f14ebede14847Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpusd44f14ebede14847.value() == \"e4f4500bb8603947\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "c792813214176d61337cd773f20335d32f0068bd90e335b7c6ea7eee80b24de8",
+        "fixture_commit": "sha256:99f556797f6663eb4a1e67270fedf227d276b055d60b394a3ddc28dcceb86403",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-P07",
+        "fixture_sha256": "99f556797f6663eb4a1e67270fedf227d276b055d60b394a3ddc28dcceb86403",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpusd44f14ebede14847 do\n  def value, do: \"cba319d374c85e1c\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_507cc9f142854c38/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpusd44f14ebede14847Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpusd44f14ebede14847.value() == \"e4f4500bb8603947\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "94a59f47670de7e37d38f012128bef4e3ebd4e3b1198fef21769caa7afbc1439",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "d44f14ebede14847",
+        "new_value": "e4f4500bb8603947",
+        "path": "507cc9f142854c38",
+        "postimage": "f3a68231c136ddd2",
+        "preimage": "9b719ee75ff7cbdb",
+        "sentinel": "ffd6d5966b907206",
+        "value": "cba319d374c85e1c"
+      },
+      "ground_truth": {
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 1,
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "P07",
+      "operation_class": "patch",
+      "order_key": "b02175a55f7e1eba3fe36a98d077dfba637a96a4877b60a9f4630d4495f3785d",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "patch",
+            "tool_call_id": "exp003-p07",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "new_text": "  def helper, do: \"e4f4500bb8603947\"\n  def value, do: helper()",
+              "old_text": "  def value, do: \"cba319d374c85e1c\"",
+              "path": "lib/generated_507cc9f142854c38/corpus_case.ex",
+              "postimage_sha256": "2de02f8b6ba10ab9fd4df4bb2992c4109b04c33f0a238f3677324f4a050f5359",
+              "preimage_sha256": "5da01b386b7712c43a253ca4f31f0979ba733e75fbc613e2cecc38ebfe42ec14",
+              "replacement": "same_directory_temp_rename",
+              "schema": "elara.literal_patch.v1"
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "frozen_declarations": {
+              "postimage_content": "defmodule Corpusd44f14ebede14847 do\n  def helper, do: \"e4f4500bb8603947\"\n  def value, do: helper()\nend\n",
+              "preimage_content": "defmodule Corpusd44f14ebede14847 do\n  def value, do: \"cba319d374c85e1c\"\nend\n"
+            },
+            "id": "effect",
+            "operation_kind": "patch"
+          }
+        ]
+      },
+      "primary_fault": "F3",
+      "request": "Apply a bounded create-and-modify source transformation.",
+      "secondary_fault": "F4",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "c792813214176d61337cd773f20335d32f0068bd90e335b7c6ea7eee80b24de8",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "c792813214176d61337cd773f20335d32f0068bd90e335b7c6ea7eee80b24de8",
+        "initial_reset_workspace_sha256": "94a59f47670de7e37d38f012128bef4e3ebd4e3b1198fef21769caa7afbc1439",
+        "pre_effect_workspace_sha256": "94a59f47670de7e37d38f012128bef4e3ebd4e3b1198fef21769caa7afbc1439"
+      }
+    },
+    {
+      "brief": "Create a file and missing parent path without changing sibling files.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpusccca513241e8edd7Root do\n  def ready?, do: true\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_0a9868be6a6c9195/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpusccca513241e8edd7Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert true\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          },
+          {
+            "content": "sibling_3bb1a5bad2e7088f\n",
+            "mode": "0644",
+            "path": "lib/sibling_0d8b13dc01301460.txt"
+          },
+          {
+            "content": "defmodule Corpusccca513241e8edd7 do\n  def value, do: \"06173b70d33a1df1\"\nend\n",
+            "mode": "0644",
+            "path": "lib/nested_0a9868be6a6c9195/created.ex"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "fc002ff97acdcba57970ad0816892e82e1056b8b61ba5ed5e1fec937976e238d",
+        "fixture_commit": "sha256:3bd80cb4dd8cf5c694a6ee65e834af6dae5dc36ecd946227d0b5352d8e3171fc",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-W07",
+        "fixture_sha256": "3bd80cb4dd8cf5c694a6ee65e834af6dae5dc36ecd946227d0b5352d8e3171fc",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpusccca513241e8edd7Root do\n  def ready?, do: true\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_0a9868be6a6c9195/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpusccca513241e8edd7Test do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert true\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          },
+          {
+            "content": "sibling_3bb1a5bad2e7088f\n",
+            "mode": "0644",
+            "path": "lib/sibling_0d8b13dc01301460.txt"
+          }
+        ],
+        "initial_workspace_sha256": "539d0d798b94ca7fab62f82a9fee03ae2865288c901e4096664c9ec2171bc670",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "ccca513241e8edd7",
+        "new_value": "3242b5cc724e6ec1",
+        "path": "0a9868be6a6c9195",
+        "postimage": "441a03664be11eda",
+        "preimage": "59d79b0087781bf1",
+        "sentinel": "adb82981336807ce",
+        "value": "06173b70d33a1df1"
+      },
+      "ground_truth": {
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 1,
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "W07",
+      "operation_class": "write",
+      "order_key": "d968f17f9ff9651e91197ace34ace6aa8493b61e1a059f891422d9624e813d36",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "write",
+            "tool_call_id": "exp003-w07",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "desired": {
+                "content": "defmodule Corpusccca513241e8edd7 do\n  def value, do: \"06173b70d33a1df1\"\nend\n",
+                "sha256": "f2da1f4e31192bdee74c4ee6f2ab3b879cfda3572a833deecb27c874775e8f92"
+              },
+              "expected": {
+                "state": "absent"
+              },
+              "parent_policy": "create",
+              "path": "lib/nested_0a9868be6a6c9195/created.ex",
+              "replacement": "same_directory_temp_rename",
+              "schema": "elara.declarative_write.v1"
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "ok",
+            "frozen_declarations": {
+              "desired_postimage_content": "defmodule Corpusccca513241e8edd7 do\n  def value, do: \"06173b70d33a1df1\"\nend\n",
+              "expected_preimage_state": "absent"
+            },
+            "id": "effect",
+            "operation_kind": "write"
+          }
+        ]
+      },
+      "primary_fault": "F3",
+      "request": "Create a file and missing parent path without changing sibling files.",
+      "secondary_fault": "F4",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "fc002ff97acdcba57970ad0816892e82e1056b8b61ba5ed5e1fec937976e238d",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "fc002ff97acdcba57970ad0816892e82e1056b8b61ba5ed5e1fec937976e238d",
+        "initial_reset_workspace_sha256": "539d0d798b94ca7fab62f82a9fee03ae2865288c901e4096664c9ec2171bc670",
+        "pre_effect_workspace_sha256": "539d0d798b94ca7fab62f82a9fee03ae2865288c901e4096664c9ec2171bc670"
+      }
+    },
+    {
+      "brief": "Run an opaque command that mutates once and then exits nonzero.",
+      "exposure_split": "held_out_relative_to_target_implementation",
+      "fixture": {
+        "digest_algorithm": "elara.workspace.v1 sorted path/mode/byte-length/content; excludes only declared transient artifacts",
+        "expected_no_fault_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpus77f09d3c66774e3a do\n  def value, do: \"07f21b626f62c437\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_4b04ad8d7a46371f/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus77f09d3c66774e3aTest do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus77f09d3c66774e3a.value() == \"07f21b626f62c437\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          },
+          {
+            "content": "effect_07f21b626f62c437\n",
+            "mode": "0644",
+            "path": "data/effect.txt"
+          }
+        ],
+        "expected_no_fault_workspace_sha256": "584ec3aaa823e3ace35700de1ade4bcac2c865db6e151ea81c48f01691abe729",
+        "fixture_commit": "sha256:831d22a956301094410b5bfbcc0549e8694ccb1955975e507a4a1d6db9e7105e",
+        "fixture_ref": "test/fixtures/benchmark/exp003-v6/manifest.json#task-S03",
+        "fixture_sha256": "831d22a956301094410b5bfbcc0549e8694ccb1955975e507a4a1d6db9e7105e",
+        "initial_files": [
+          {
+            "content": "defmodule CorpusFixture.MixProject do\n  use Mix.Project\n\n  def project, do: [app: :corpus_fixture, version: \"0.1.0\", elixir: \"~> 1.20\", deps: []]\nend\n",
+            "mode": "0644",
+            "path": "mix.exs"
+          },
+          {
+            "content": "defmodule Corpus77f09d3c66774e3a do\n  def value, do: \"07f21b626f62c437\"\nend\n",
+            "mode": "0644",
+            "path": "lib/generated_4b04ad8d7a46371f/corpus_case.ex"
+          },
+          {
+            "content": "ExUnit.start()\n",
+            "mode": "0644",
+            "path": "test/test_helper.exs"
+          },
+          {
+            "content": "defmodule Corpus77f09d3c66774e3aTest do\n  use ExUnit.Case\n\n  test \"frozen outcome\" do\n    assert Corpus77f09d3c66774e3a.value() == \"07f21b626f62c437\"\n  end\nend\n",
+            "mode": "0644",
+            "path": "test/corpus_case_test.exs"
+          }
+        ],
+        "initial_workspace_sha256": "b2cd96ca89f02dfd43dca0ae29cb0d903740e527c648e6970b82861eebe3568f",
+        "schema": "elara.exp003.fixture.v6"
+      },
+      "generated_tokens": {
+        "module": "77f09d3c66774e3a",
+        "new_value": "b1ead9f48a4f63d8",
+        "path": "4b04ad8d7a46371f",
+        "postimage": "f937b60127cb4045",
+        "preimage": "31b6683c3bab7ab8",
+        "sentinel": "bf023eb7954fddd2",
+        "value": "07f21b626f62c437"
+      },
+      "ground_truth": {
+        "expected_no_fault_environmental_mutation_count": 0,
+        "expected_no_fault_job_external_mutation_count": 1,
+        "required_counts": [
+          "admission_count",
+          "callback_attempt_count",
+          "external_mutation_count",
+          "session_result_count"
+        ],
+        "source": "neutral adapter mutation hook plus exact fixture bytes; never subject-visible"
+      },
+      "id": "S03",
+      "operation_class": "shell",
+      "order_key": "dcbaee118cbdb3ea01f51cc07fe996411f305df60a21afd0ab82fc7129ef1b5f",
+      "plan": {
+        "fault_target_step": "effect",
+        "pre_operation_changes": [],
+        "schema": "elara.exp003.plan.v6",
+        "scripted_provider": [
+          {
+            "arguments_ref": "plan.steps[0].arguments",
+            "kind": "tool_call",
+            "operation_kind": "shell",
+            "tool_call_id": "exp003-s03",
+            "turn": 1
+          },
+          {
+            "content": "Task complete.",
+            "kind": "assistant_text",
+            "turn": 2
+          }
+        ],
+        "steps": [
+          {
+            "arguments": {
+              "command": "mkdir -p data; printf '%s\\n' 'effect_07f21b626f62c437' > data/effect.txt; exit 7",
+              "environment": {
+                "LANG": "C",
+                "LC_ALL": "C"
+              },
+              "postcondition": {
+                "files": [
+                  {
+                    "path": "data/effect.txt",
+                    "sha256": "f37a31231bb653ac56b5bdfbfb5ebf4b7d05e73865a427336c8f73c394413799"
+                  }
+                ],
+                "kind": "files_sha256"
+              },
+              "relative_cwd": ".",
+              "schema": "elara.opaque_shell.v1",
+              "timeout_ms": 5000
+            },
+            "expected_environmental_mutation_count": 0,
+            "expected_job_external_mutation_count": 1,
+            "expected_no_fault_outcome": "error_exit_7",
+            "id": "effect",
+            "operation_kind": "shell"
+          }
+        ]
+      },
+      "primary_fault": "F3",
+      "request": "Run an opaque command that mutates once and then exits nonzero.",
+      "secondary_fault": "F4",
+      "workspace_contract": {
+        "complete_task_workspace_sha256": "584ec3aaa823e3ace35700de1ade4bcac2c865db6e151ea81c48f01691abe729",
+        "environmental_mutations_before_dispatch": 0,
+        "fault_target_job_mutations": 1,
+        "fault_target_postcondition_sha256": "584ec3aaa823e3ace35700de1ade4bcac2c865db6e151ea81c48f01691abe729",
+        "initial_reset_workspace_sha256": "b2cd96ca89f02dfd43dca0ae29cb0d903740e527c648e6970b82861eebe3568f",
+        "pre_effect_workspace_sha256": "b2cd96ca89f02dfd43dca0ae29cb0d903740e527c648e6970b82861eebe3568f"
+      }
+    }
+  ],
+  "workspace_digest": {
+    "encoding": "prefix, then sorted path NUL mode NUL decimal byte length NUL bytes NUL",
+    "excluded_transient_prefixes": [
+      "_build/",
+      "deps/",
+      ".elara/"
+    ],
+    "schema": "elara.workspace.v1"
+  }
+}

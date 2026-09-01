@@ -8,6 +8,8 @@ defmodule Elara.Benchmark.NoFaultEquivalenceTest do
                  "../../fixtures/benchmark/exp003/internal-adapter-equivalence.json",
                  __DIR__
                )
+  @historical_adapter_sha256 "a49d4c91749a07c5fa8d511931928b69e64d1366d91fcdd27e6370abd235244b"
+  @current_adapter_sha256 "d95ba568b3b03ac15477e65596b3fece7023310ff3694e617ec1f50f3d472183"
 
   @tag timeout: 180_000
   test "both pinned targets are no-fault equivalent on all selected tasks" do
@@ -18,7 +20,13 @@ defmodule Elara.Benchmark.NoFaultEquivalenceTest do
     assert {:ok, report} =
              ElaraAdapter.prove_no_fault(manifest, config, Path.join(root, "workspace"))
 
-    assert report == @report_path |> File.read!() |> JSON.decode!()
+    historical_report = @report_path |> File.read!() |> JSON.decode!()
+
+    assert report["adapter"]["sha256"] == @current_adapter_sha256
+    assert historical_report["adapter"]["sha256"] == @historical_adapter_sha256
+
+    assert put_in(report, ["adapter", "sha256"], @historical_adapter_sha256) ==
+             historical_report
 
     assert report["summary"] == %{
              "adapter_failure" => 0,

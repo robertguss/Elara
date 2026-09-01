@@ -31,9 +31,12 @@ because it had no frozen top-level execution command. The separate
 and its
 [command-complete compatibility contract](003-effect-receipt-v4-compatibility.json)
 preserve that failure and require one checked-in qualification, execution, and
-replay entrypoint before held-out evidence. ER-1 v1 concluded Stop without a
-safety failure because row 1's frozen result counts were internally
-inconsistent. The separate
+replay entrypoint before held-out evidence. V4's complete development
+[qualification failure](003-effect-receipt-v4-qualification-failure.md) then
+proved that causal-terminal applicability was incorrectly represented as a
+row-level scalar rather than a condition-specific contract; v4 stopped with zero
+held-out exposure. ER-1 v1 concluded Stop without a safety failure because row
+1's frozen result counts were internally inconsistent. The separate
 [corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
 [fresh fixture manifest](003-effect-receipt-er1-v2-manifest.json) preserve that
 result. V2's first run aborted in harness mechanics before the conflicting

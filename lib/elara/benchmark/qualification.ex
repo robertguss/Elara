@@ -5,6 +5,10 @@ defmodule Elara.Benchmark.Qualification do
 
   @schema "elara.exp003.internal-adapter-qualification.v1"
   @version "ER-3/INTERNAL-ADAPTER-QUAL-v1"
+  @sources %{
+    "elara.exp003.corpus.v3" => "ER-3/FND-2-v3",
+    "elara.exp003.corpus.v4" => "ER-3/FND-2-v4"
+  }
   @fixture_by_class %{"write" => "W01", "patch" => "P01", "shell" => "S02"}
 
   @spec manifest(Manifest.t()) :: {:ok, Manifest.t()} | {:error, term()}
@@ -16,7 +20,7 @@ defmodule Elara.Benchmark.Qualification do
       data = %{
         "schema" => @schema,
         "preregistration_version" => @version,
-        "scope_id" => "EXP-003-v3-internal-adapter-qualification",
+        "scope_id" => qualification_scope(source),
         "source_manifest_sha256" => source.sha256,
         "selection" => %{
           "task_count" => length(tasks),
@@ -47,12 +51,16 @@ defmodule Elara.Benchmark.Qualification do
   def schema, do: @schema
 
   defp validate_source(%Manifest{data: data}) do
-    cond do
-      data["schema"] != "elara.exp003.corpus.v3" -> {:error, :not_v3_source}
-      data["preregistration_version"] != "ER-3/FND-2-v3" -> {:error, :not_v3_source}
-      true -> :ok
-    end
+    if @sources[data["schema"]] == data["preregistration_version"],
+      do: :ok,
+      else: {:error, :not_frozen_qualification_source}
   end
+
+  defp qualification_scope(%Manifest{data: %{"schema" => "elara.exp003.corpus.v3"}}),
+    do: "EXP-003-v3-internal-adapter-qualification"
+
+  defp qualification_scope(%Manifest{data: %{"schema" => "elara.exp003.corpus.v4"}}),
+    do: "EXP-003-v4-internal-adapter-qualification"
 
   defp qualification_tasks(source) do
     source.data["adapter_equivalence_fixtures"]

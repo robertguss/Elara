@@ -13,6 +13,7 @@ defmodule Elara.Benchmark.ElaraAdapter do
   @config_key {__MODULE__, :config}
   @conditions ~w(baseline receipts)
   @v3_manifest_sha256 "4129ae964daf35469499dc9506ace9fa89db0c9f00a20826dfc6790edd5b5491"
+  @v4_manifest_sha256 "14cc3a57763f0ab48f4b68a70317916d09ff4bee64ba18d150480dd1315820a2"
 
   @spec target_commits() :: %{String.t() => String.t()}
   def target_commits do
@@ -72,8 +73,27 @@ defmodule Elara.Benchmark.ElaraAdapter do
      })}
   end
 
+  def authorize_confirmatory(config, %Manifest{
+        sha256: @v4_manifest_sha256,
+        tasks: tasks,
+        rows: rows,
+        data: %{
+          "schema" => "elara.exp003.corpus.v4",
+          "preregistration_version" => "ER-3/FND-2-v4"
+        }
+      })
+      when is_map(config) do
+    {:ok,
+     Map.put(config, :fault_authorization, %{
+       mode: :confirmatory,
+       source_manifest_sha256: @v4_manifest_sha256,
+       tasks: tasks,
+       rows: rows
+     })}
+  end
+
   def authorize_confirmatory(_config, %Manifest{}),
-    do: {:error, :confirmatory_manifest_not_frozen_v3}
+    do: {:error, :confirmatory_manifest_not_frozen}
 
   @spec mapping(map()) :: {:ok, map()} | {:error, term()}
   def mapping(%{"plan" => %{"steps" => [step], "scripted_provider" => [call, final]}}) do
@@ -636,11 +656,12 @@ defmodule Elara.Benchmark.ElaraAdapter do
          row,
          %{
            mode: :confirmatory,
-           source_manifest_sha256: @v3_manifest_sha256,
+           source_manifest_sha256: source_manifest_sha256,
            tasks: tasks,
            rows: rows
          }
-       ) do
+       )
+       when source_manifest_sha256 in [@v3_manifest_sha256, @v4_manifest_sha256] do
     task_id = task["id"]
     row_id = row["row_id"]
 

@@ -5,6 +5,7 @@ defmodule Elara.Benchmark.ElaraAdapterTest do
 
   @manifest_path Path.expand("../../fixtures/benchmark/exp003/manifest.json", __DIR__)
   @v3_manifest_path Path.expand("../../fixtures/benchmark/exp003-v3/manifest.json", __DIR__)
+  @v4_manifest_path Path.expand("../../fixtures/benchmark/exp003-v4/manifest.json", __DIR__)
 
   setup do
     {:ok, manifest} = Manifest.load(@manifest_path)
@@ -58,7 +59,7 @@ defmodule Elara.Benchmark.ElaraAdapterTest do
              end)
   end
 
-  test "only the exact frozen v3 manifest authorizes later confirmatory execution" do
+  test "only exact frozen v3 or v4 manifests authorize later confirmatory execution" do
     {:ok, manifest} = Manifest.load(@v3_manifest_path)
     base = %{targets: %{}, fault_authorization: nil}
 
@@ -86,8 +87,20 @@ defmodule Elara.Benchmark.ElaraAdapterTest do
 
     altered = %{manifest | sha256: String.duplicate("0", 64)}
 
-    assert {:error, :confirmatory_manifest_not_frozen_v3} =
+    assert {:error, :confirmatory_manifest_not_frozen} =
              ElaraAdapter.authorize_confirmatory(base, altered)
+
+    {:ok, v4_manifest} = Manifest.load(@v4_manifest_path)
+    assert {:ok, v4_authorized} = ElaraAdapter.authorize_confirmatory(base, v4_manifest)
+
+    assert {:error, {:target_not_prepared, "receipts"}} =
+             ElaraAdapter.with_config(v4_authorized, fn ->
+               ElaraAdapter.execute(v4_manifest.tasks["W08"], "/tmp/not-used", %{
+                 kind: :fault,
+                 condition: "receipts",
+                 row: v4_manifest.rows["W08-F2"]
+               })
+             end)
   end
 
   test "pins both immutable target commits" do

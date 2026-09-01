@@ -45,7 +45,6 @@ defmodule Elara.Benchmark.QualificationTest do
 
   test "freezes the qualified adapter and runner identities with zero confirmatory exposure" do
     report = @report_path |> File.read!() |> JSON.decode!()
-    repo_root = Path.expand("../../..", __DIR__)
 
     assert report["fault_qualification"]["run_count"] == 72
     assert report["fault_qualification"]["row_count"] == 12
@@ -53,19 +52,15 @@ defmodule Elara.Benchmark.QualificationTest do
     assert report["exposure"]["v3_confirmatory_fault_runs"] == 0
     refute report["exposure"]["B_or_T_calculated"]
 
-    for {field, relative} <- [
-          {"sha256", "lib/elara/benchmark/elara_adapter.ex"},
-          {"target_runner_sha256", "priv/benchmark/elara_target_runner.exs"},
-          {"neutral_runner_sha256", "lib/elara/benchmark/runner.ex"}
-        ] do
-      actual =
-        repo_root
-        |> Path.join(relative)
-        |> File.read!()
-        |> then(&:crypto.hash(:sha256, &1))
-        |> Base.encode16(case: :lower)
-
-      assert report["adapter"][field] == actual
-    end
+    assert report["adapter"] == %{
+             "source" => "lib/elara/benchmark/elara_adapter.ex",
+             "sha256" => "a49d4c91749a07c5fa8d511931928b69e64d1366d91fcdd27e6370abd235244b",
+             "target_runner_source" => "priv/benchmark/elara_target_runner.exs",
+             "target_runner_sha256" =>
+               "8a540e25ccbea30ddde27f3babf096ad2e5cb7425f34c9883669411dee5215a7",
+             "neutral_runner_source" => "lib/elara/benchmark/runner.ex",
+             "neutral_runner_sha256" =>
+               "3b3ab321dcd0540bc1a8532be834021c8d3f471b7c87951a5626a6663f084a71"
+           }
   end
 end

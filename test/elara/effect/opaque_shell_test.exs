@@ -142,6 +142,7 @@ defmodule Elara.Effect.OpaqueShellTest do
   end
 
   for cut <- 1..8 do
+    @tag repeated_cross_class: cut in [2, 5, 6, 7]
     test "S-C#{cut} executes the frozen shared crash schedule", context do
       run_shared_cut(unquote(cut), context)
     end
@@ -174,6 +175,7 @@ defmodule Elara.Effect.OpaqueShellTest do
     close(reopened, journal)
   end
 
+  @tag repeated_cross_class: true
   test "S-EFFECT-LIVE separates a satisfied adapter from a still-running shell", context do
     {job, journal, executor, task, pid} = start_lifecycle(context)
     File.touch!(context.allow_effect)
@@ -238,6 +240,7 @@ defmodule Elara.Effect.OpaqueShellTest do
     close(reopened, journal)
   end
 
+  @tag repeated_cross_class: true
   test "S-TIMEOUT reports possible execution without blocking on the busy executor", context do
     {job, journal, executor, task, pid} = start_lifecycle(context, timeout: 300)
     File.touch!(context.allow_effect)
@@ -271,6 +274,7 @@ defmodule Elara.Effect.OpaqueShellTest do
     close(reopened, journal)
   end
 
+  @tag repeated_cross_class: true
   test "S-SAME-DIGEST, S-CONFLICT-DIGEST, and S-REPLACEMENT preserve one owner", context do
     parent = self()
 
@@ -332,6 +336,7 @@ defmodule Elara.Effect.OpaqueShellTest do
     close(executor, journal)
   end
 
+  @tag repeated_cross_class: true
   test "S-LEDGER-ADAPTER refines safe action without recreating causal completion", context do
     {job, journal, executor, task} = execute_until_primary(context, "s_success")
     kill_executor(executor)
@@ -350,6 +355,7 @@ defmodule Elara.Effect.OpaqueShellTest do
     assert :ok = ControllerJournal.close(journal)
   end
 
+  @tag repeated_cross_class: true
   test "S-LEDGER-OPAQUE remains manually indeterminate without a declared adapter", context do
     {job, journal, executor, task} = execute_until_primary(context, "s_success_no_adapter")
     kill_executor(executor)

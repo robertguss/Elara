@@ -268,6 +268,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
   end
 
   for cut <- 1..8 do
+    @tag repeated_cross_class: cut in [2, 5, 6, 7]
     test "P-C#{cut} executes the frozen shared crash schedule", context do
       run_shared_cut(unquote(cut), context)
     end
@@ -277,6 +278,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
     run_typed_cut(:after_typed_precondition_before_temp_create, :manual_investigation, 0, context)
   end
 
+  @tag repeated_cross_class: true
   test "P-T2 crash after temp completion permits only bound-temp cleanup", context do
     result =
       run_typed_cut(
@@ -292,6 +294,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
     assert result.safe_action == :cleanup_bound_temp_only_no_retry
   end
 
+  @tag repeated_cross_class: true
   test "P-SAME-DIGEST, P-CONFLICT-DIGEST, and P-REPLACEMENT preserve one owner", context do
     File.write!(context.target, preimage())
     parent = self()
@@ -355,6 +358,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
     close(executor, journal)
   end
 
+  @tag repeated_cross_class: true
   test "P-LEDGER-LOSS distinguishes a satisfied postcondition from causal completion", context do
     {job, journal, counter, initial_task} = execute_until_primary(context)
     assert File.read!(context.target) == postimage()
@@ -380,6 +384,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
     assert :ok = ControllerJournal.close(journal)
   end
 
+  @tag repeated_cross_class: true
   test "P-STALE refreshes a desired observation before reporting a concurrent conflict",
        context do
     {job, journal, counter, initial_task} = execute_until_primary(context)

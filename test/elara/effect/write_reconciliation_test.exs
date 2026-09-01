@@ -217,6 +217,7 @@ defmodule Elara.Effect.WriteReconciliationTest do
   end
 
   for cut <- 1..8 do
+    @tag repeated_cross_class: cut in [2, 5, 6, 7]
     test "W-C#{cut} executes the frozen shared crash schedule", context do
       run_shared_cut(unquote(cut), context)
     end
@@ -227,6 +228,7 @@ defmodule Elara.Effect.WriteReconciliationTest do
     run_typed_cut(:after_typed_precondition_before_temp_create, :manual_investigation, 0, context)
   end
 
+  @tag repeated_cross_class: true
   test "W-T2 crash after temp completion leaves one bound temp and permits cleanup only",
        context do
     result =
@@ -243,6 +245,7 @@ defmodule Elara.Effect.WriteReconciliationTest do
     assert result.safe_action == :cleanup_bound_temp_only_no_retry
   end
 
+  @tag repeated_cross_class: true
   test "identity controls admit once and reject changed digest fields and replacement owner",
        context do
     File.write!(context.target, expected_content())
@@ -307,6 +310,7 @@ defmodule Elara.Effect.WriteReconciliationTest do
     close(executor, journal)
   end
 
+  @tag repeated_cross_class: true
   test "W-LEDGER-LOSS reports exact desired state without recreating causal completion",
        context do
     {job, journal, counter, initial_task, _accepted} = execute_until_primary(context)
@@ -336,6 +340,7 @@ defmodule Elara.Effect.WriteReconciliationTest do
     assert :ok = ControllerJournal.close(journal)
   end
 
+  @tag repeated_cross_class: true
   test "W-STALE refreshes desired state before action and reports a concurrent conflict",
        context do
     {job, journal, counter, initial_task, _accepted} = execute_until_primary(context)

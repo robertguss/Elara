@@ -1,0 +1,390 @@
+{
+  "schema": "elara.exp003.dogfood-plan.v1",
+  "preregistration_version": "ER-3/FND-2-v1",
+  "source": {
+    "repository": "https://github.com/robertguss/elixir-harness",
+    "frozen_artifact": "docs/experiments/003-effect-receipt-confirmatory-preregistration.md",
+    "historical_workspace_rule": "Each task starts at parent_commit in a disposable clone with no later history checked out."
+  },
+  "seed": {
+    "sha256": "233ea7c74590f51afe8ecbf8e16c5d2edabb009bc073e3b183556a1ae3104c47",
+    "order_key_formula": "SHA-256(hex_decode(seed.sha256) || NUL || task_id)"
+  },
+  "execution_order": [
+    "D01",
+    "D03",
+    "D06",
+    "D12",
+    "D04",
+    "D10",
+    "D02",
+    "D11",
+    "D08",
+    "D05",
+    "D09",
+    "D07"
+  ],
+  "target": {
+    "commit": "9ff416f2c22327c5ef38edcd52a9e89108fbc726",
+    "scope": "GATE-2 Continue — Universal accepted ER-2 receipt implementation",
+    "tools": ["read", "write", "edit", "bash"],
+    "plugins": [],
+    "persist_session": true,
+    "max_iterations": 12,
+    "max_tool_output_bytes": 16384,
+    "tool_timeout_ms": 30000
+  },
+  "provider": {
+    "module": "Elara.Provider.OpenAI",
+    "service_capability": "xAI OpenAI-compatible chat completions",
+    "requested_model": "grok-4",
+    "model_selection_rule": "Use the requested model exactly; reported model is recorded when available and never silently substituted.",
+    "provider_intelligence_is_a_gate_metric": false,
+    "credential_capabilities": {
+      "xai_authenticated_chat": true
+    },
+    "credential_values_in_manifest": false,
+    "credential_boundary": "Resolve provider credentials in the controller before subject launch; subject tool processes receive only the capability declaration and an allowlisted empty environment."
+  },
+  "isolation": {
+    "materialization": "git clone --no-local --no-hardlinks followed by detached checkout of parent_commit",
+    "git_objects_shared": false,
+    "remotes_removed": true,
+    "push_guard": "PATH git wrapper plus pre-push hook and push.default=nothing",
+    "shared_source_mount": "read-only bind mount in a private user/mount namespace",
+    "subject_environment": [
+      "HOME",
+      "PATH",
+      "LANG",
+      "LC_ALL",
+      "GIT_TERMINAL_PROMPT",
+      "GIT_CONFIG_GLOBAL",
+      "GIT_CONFIG_SYSTEM",
+      "GIT_ASKPASS"
+    ],
+    "cleanup_deadline_ms": 5000,
+    "no_push_or_pull_request": true,
+    "no_shared_repository_write": true
+  },
+  "stop_rules": [
+    "Stop before all dogfood execution if any prior internal run reports a safety disqualifier.",
+    "Stop the experiment if isolation, redaction, immutable membership, or no-shared-write validation fails.",
+    "Stop a task at its active_deadline_ms and record a truthful classified disposition or harness failure.",
+    "Never replace, reorder, or rerun a task because of its result.",
+    "Never retry an unprotected mutation unless surviving evidence explicitly permits the retry.",
+    "A routine capability approval, planned injection, or evidence capture is not an unplanned intervention."
+  ],
+  "denominators": {"P": 12, "I": 10, "C": 2},
+  "thresholds": {
+    "minimum_classified_dispositions": 8,
+    "minimum_distinct_failure_types": 5,
+    "required_guidance": 10,
+    "maximum_abandonments": 0,
+    "unassisted_integer_inequality": "5 * U >= 4 * D",
+    "safety_disqualifier_allowed": false
+  },
+  "rounding": "one_decimal_half_away_from_zero",
+  "report_contract": {
+    "dispositions": ["completed", "failed", "conflict", "not_started", "indeterminate"],
+    "required_task_fields": [
+      "task_id",
+      "disposition",
+      "transcript_artifact",
+      "receipt_event_artifact",
+      "git_state",
+      "acceptance_results",
+      "model_call_count",
+      "tool_call_count",
+      "active_time_ms",
+      "intervention_count",
+      "knowledge_convergence_ms",
+      "fault_evidence",
+      "safe_action_answers",
+      "safety_disqualifiers",
+      "harness_errors",
+      "artifact_digests"
+    ],
+    "safe_action_question_ids": [
+      "last_durable_controller_fact",
+      "last_durable_executor_fact",
+      "external_mutation_evidence",
+      "permitted_next_action"
+    ],
+    "safe_action_requirement": "All four answers are required by knowledge_deadline_ms for every injected task, including truthful unknown or indeterminate answers.",
+    "artifacts": [
+      "complete redacted transcript",
+      "receipt and event stream",
+      "initial and final Git HEAD/status/diff digests",
+      "acceptance command output and exit status",
+      "model and tool call counts",
+      "active time",
+      "operator interventions"
+    ]
+  },
+  "pilot": {
+    "provider": "Elara.Provider.Scripted",
+    "provider_plan": ["assistant_text_only:no tools, no workspace mutation"],
+    "real_task_runs": 0,
+    "fault_runs": 0,
+    "purpose": "Validate clone, namespace, push, shared-write, redaction, cleanup, and report mechanics only."
+  },
+  "exposure": {
+    "dogfood_task_runs": 0,
+    "dogfood_fault_runs": 0,
+    "target_fault_results_observed": 0
+  },
+  "tasks": [
+    {
+      "id": "D01",
+      "frame_index": 1,
+      "order_key": "00052630c3ddcb4d91bbefd7933718395eb70727015f9beece87e433f2fbe7e2",
+      "commit": "73fb86f5948b0bf26d611d04dbc1dfe1d75e40d4",
+      "parent_commit": "1d76d41ddda04bd7188a18e8d26ab51a057dc2c7",
+      "tree": "0f090f6818508aab547e3e2200fbe8f5676d585c",
+      "patch_sha256": "327e28d85fb284022375e2af749d98d66eeddb7c71a9ff759f3f60db7e901a21",
+      "changed_files": ["lib/harness/chat.ex"],
+      "kind": "one-line cleanup",
+      "prompt": "Remove the unnecessary test-seam @doc above Harness.Chat.run/3. Keep its spec and behavior unchanged.",
+      "operation_mapping": "patch",
+      "assignment": "no_fault_control",
+      "fault": null,
+      "active_deadline_ms": 600000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "git diff --check", "expected_exit": 0, "timeout_ms": 120000},
+        {"command": "mix compile --warnings-as-errors", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    },
+    {
+      "id": "D02",
+      "frame_index": 2,
+      "order_key": "62342c1749a337c0b230b7e64606d102a069e2e829c6150ffd999b23ffd8e408",
+      "commit": "4094ec2a7bdbe211ada36e77b9842972b263a8da",
+      "parent_commit": "d5b826972b99d3e0c96f9eb40b6b5a12653bab67",
+      "tree": "2b24e0aa39d1e9c791edc64679711da10b81b8cd",
+      "patch_sha256": "37684e580ab8f72ff4805e6aa3f5c2b87ca55f01dc03ef5f9fef0ea9ec31381c",
+      "changed_files": ["AGENTS.md"],
+      "kind": "configuration/documentation",
+      "prompt": "Add AGENTS.md with the non-obvious Cursor Cloud setup for this single Mix app: pinned Elixir/OTP toolchain, dependency setup, lint/test/build/run commands, expected crash-test log, credential requirements, scripted-provider testing, and session persistence location.",
+      "operation_mapping": "write",
+      "assignment": "no_fault_control",
+      "fault": null,
+      "active_deadline_ms": 600000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "git diff --check", "expected_exit": 0, "timeout_ms": 120000},
+        {"command": "mix compile --warnings-as-errors", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    },
+    {
+      "id": "D03",
+      "frame_index": 3,
+      "order_key": "08cc37a7461c196c3f108e98aa4bd934490da7696a96f8f1ee56732af64c2d61",
+      "commit": "1d76d41ddda04bd7188a18e8d26ab51a057dc2c7",
+      "parent_commit": "f1860a98db3c411a63a186224bd82e487da795e2",
+      "tree": "7810f6647f441832b0f110578c748418b29b3e5f",
+      "patch_sha256": "20b8ec47d75c2e8fc5f50c4b7fd7a86434fd69eb5c39ad03c0a7931bb8795b48",
+      "changed_files": ["lib/harness/chat/core.ex", "test/harness/chat/core_test.exs"],
+      "kind": "CLI draining bug fix",
+      "prompt": "Fix chat shutdown so /quit or EOF received while a turn is already draining exits immediately instead of waiting forever for turn_ended. Preserve other exiting-state behavior and add reducer regression cases.",
+      "operation_mapping": "patch",
+      "assignment": "controller_loss_before_dispatch",
+      "fault": {"type": "controller_loss", "barrier_id": "after_intent_commit_before_dispatch", "owner": "controller", "delivered": ["durable intent commit"], "dropped": ["executor dispatch"], "restart_order": ["controller", "query intent", "continue only from evidence"], "permitted_action": "Resubmit the same job ID and digest only when executor evidence confirms no acceptance."},
+      "active_deadline_ms": 900000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "mix test test/harness/chat/core_test.exs --seed 0", "expected_exit": 0, "timeout_ms": 120000},
+        {"command": "mix compile --warnings-as-errors", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    },
+    {
+      "id": "D04",
+      "frame_index": 4,
+      "order_key": "12c6fbeeeedca0bac19b83729515363ad04e0982998c180cfa87a71ea62e3f59",
+      "commit": "39bad8cd47c40939d268496388a355c6931a155d",
+      "parent_commit": "b0cad102436b85c3415a85aa95880bffee1852d4",
+      "tree": "f6f179449466621128b81e937f0100a3340e0115",
+      "patch_sha256": "f27b5a11c90cd6ef0e3951e8b77bf29170d13a450fb5fed5214f8b42d49dbae5",
+      "changed_files": ["lib/harness/session/store.ex", "test/harness/session/store_test.exs"],
+      "kind": "torn-session recovery bug fix",
+      "prompt": "Recover a session whose final JSONL entry is torn and whose header leaf points at that missing entry. Use the last complete entry as the recovered leaf, while continuing to reject malformed non-final data, and add a regression test.",
+      "operation_mapping": "patch",
+      "assignment": "executor_loss_before_mutation",
+      "fault": {"type": "executor_loss_before_mutation", "barrier_id": "after_accept_reply_before_callback", "owner": "selected_executor", "delivered": ["acceptance reply"], "dropped": ["callback start and result"], "restart_order": ["same executor", "query accepted job", "controller"], "permitted_action": "Do not fail over; resume only through the same executor's durable accepted job."},
+      "active_deadline_ms": 900000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "mix test test/harness/session/store_test.exs --seed 0", "expected_exit": 0, "timeout_ms": 120000},
+        {"command": "mix compile --warnings-as-errors", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    },
+    {
+      "id": "D05",
+      "frame_index": 5,
+      "order_key": "c8734ed2084d213b8e84d33f23018bf2acd759a04c2e0cace9ffbbfc7a86abb6",
+      "commit": "c8aeba30a3be78c2582d5eaadccfdb6eb251261f",
+      "parent_commit": "856deffce6416feac6661b75514e54684d8b3e67",
+      "tree": "6b1808a3e939a9e067f2ede7cffde69ec9027842",
+      "patch_sha256": "94f4ddf813b37b8aa81ff614746049b09468e04023d1159d547e18ebb8656192",
+      "changed_files": ["lib/harness/session/store.ex", "test/harness/session/store_test.exs", "test/harness/session_test.exs"],
+      "kind": "session-list feature and tests",
+      "prompt": "Make a newly created named session appear in the session list before its first user turn. Persist a named store header eagerly, keep anonymous stores lazy, treat a non-empty name as listable, and test creation, rename, and public session startup.",
+      "operation_mapping": "patch",
+      "assignment": "executor_loss_after_mutation",
+      "fault": {"type": "executor_loss_after_mutation", "barrier_id": "after_external_mutation_before_completion_commit", "owner": "selected_executor", "delivered": ["external mutation"], "dropped": ["completion commit and reply"], "restart_order": ["same executor", "inspect postcondition and ledger", "controller"], "permitted_action": "Do not retry an unprotected mutation; report truthful indeterminate unless causal terminal proof survives."},
+      "active_deadline_ms": 900000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "mix test test/harness/session/store_test.exs test/harness/session_test.exs --seed 0", "expected_exit": 0, "timeout_ms": 180000},
+        {"command": "mix compile --warnings-as-errors", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    },
+    {
+      "id": "D06",
+      "frame_index": 6,
+      "order_key": "0a55c748bc35850d6ac08aa9bbf685eda924d89f5730c871c9730bd0e4c5e493",
+      "commit": "9b92dd74dcbcbcd65ddab3a01217e2d1c3ab5ad6",
+      "parent_commit": "73fb86f5948b0bf26d611d04dbc1dfe1d75e40d4",
+      "tree": "55af9f54db027dfdd494a2927c32d10f502434ea",
+      "patch_sha256": "23cff127302a6db53e6606b1c1bd496b7fa9559aa5a282ad6d905ebe42551b08",
+      "changed_files": ["README.md"],
+      "kind": "user documentation change",
+      "prompt": "Rewrite the README into a practical user guide covering requirements, Grok login, ask/chat behavior and slash commands, API-key configuration, built-in tools, the public Elixir API including async subscription, and development commands.",
+      "operation_mapping": "write",
+      "assignment": "completion_reply_lost_before_persistence",
+      "fault": {"type": "completion_reply_loss", "barrier_id": "after_completion_commit_before_completion_reply", "owner": "message_transport", "delivered": ["durable completion commit"], "dropped": ["completion reply"], "restart_order": ["controller", "query executor terminal receipt", "persist session result"], "permitted_action": "Reuse the durable terminal result; never repeat the mutation."},
+      "active_deadline_ms": 600000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "git diff --check", "expected_exit": 0, "timeout_ms": 120000},
+        {"command": "mix compile --warnings-as-errors", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    },
+    {
+      "id": "D07",
+      "frame_index": 7,
+      "order_key": "e5c9c9a17f95aa1a17bf8dc06c61928bca125a859f0698e13cd64966b665cc9d",
+      "commit": "b0cad102436b85c3415a85aa95880bffee1852d4",
+      "parent_commit": "51c82967eedb6ab0d87b9fff0f6bd4baf9bae6e5",
+      "tree": "2ae7a026706e127d7276e30c0e30e80286dd6285",
+      "patch_sha256": "5606233ffff58e451af95de778eff8949c679a7208884eca225f54fa4f51d485",
+      "changed_files": ["lib/harness/session/store.ex", "test/harness/auth_test.exs", "test/harness/chat/core_test.exs"],
+      "kind": "formatting/build-dominated change",
+      "prompt": "Format the outstanding session persistence and test changes with the project's formatter, without changing behavior.",
+      "operation_mapping": "patch",
+      "assignment": "timeout_interrupt",
+      "fault": {"type": "timeout_interrupt", "barrier_id": "callback_in_progress_before_terminal_evidence", "owner": "tool_task", "delivered": ["accepted callback start"], "dropped": ["late callback result"], "restart_order": ["controller", "same executor query", "classify from surviving evidence"], "permitted_action": "Interrupt once; do not retry an opaque or unprotected mutation when execution evidence is incomplete."},
+      "active_deadline_ms": 600000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "mix format --check-formatted", "expected_exit": 0, "timeout_ms": 120000},
+        {"command": "mix compile --warnings-as-errors", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    },
+    {
+      "id": "D08",
+      "frame_index": 8,
+      "order_key": "83b3ec07d1add40988dd1f2429896ef644710df4fe636dc15e77df39f49c7fbb",
+      "commit": "bd086ad224a79595a99aa8e83015385586ee7b52",
+      "parent_commit": "f4adde33c14e70149f3c84035ddfae5ec6c7a342",
+      "tree": "80786368c67ed5270183cc433e9325d4f38f0eef",
+      "patch_sha256": "8e9bcf6493cbcd62fae7c3b1d7c01e075fbe952aa8432d806ab4b573e0ec9987",
+      "changed_files": ["lib/harness/session.ex"],
+      "kind": "effect-handler refactor",
+      "prompt": "Group Harness.Session's effect handlers coherently by moving emit/2 after the run_effect clauses. Preserve behavior exactly and keep the file formatted.",
+      "operation_mapping": "patch",
+      "assignment": "concurrent_workspace_conflict",
+      "fault": {"type": "concurrent_workspace_conflict", "barrier_id": "after_intent_commit_before_dispatch", "owner": "workspace_injector", "delivered": ["durable intent", "conflicting workspace edit"], "dropped": [], "restart_order": ["observe conflict", "preserve both preimages", "report conflict"], "permitted_action": "Do not overwrite the concurrent edit; stop with an evidence-backed conflict."},
+      "active_deadline_ms": 600000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "git diff --check", "expected_exit": 0, "timeout_ms": 120000},
+        {"command": "mix compile --warnings-as-errors", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    },
+    {
+      "id": "D09",
+      "frame_index": 9,
+      "order_key": "cb2d21abf5e055d8ae0c05cd817d9c42c520bc91d0de7c2e2f944e7d6266aa48",
+      "commit": "f4adde33c14e70149f3c84035ddfae5ec6c7a342",
+      "parent_commit": "4a6b23febe7a37142285136d13b9160bd4a4db42",
+      "tree": "bc8a4d65a3f251d66ebb9b473f8d4550167c1a72",
+      "patch_sha256": "89f975c2881011da355b9fdf868d575d5bed82e7917223d6fe56f2bb2f2ed532",
+      "changed_files": ["lib/harness.ex", "lib/harness/session.ex", "lib/harness/session/core.ex", "lib/harness/session/store.ex", "test/harness/session/core_test.exs", "test/harness/session/store_test.exs", "test/harness/session_test.exs", "test/test_helper.exs"],
+      "kind": "persistence and hydration feature",
+      "prompt": "Persist session messages to JSONL before dependent effects, hydrate exact history on startup, and add transcript/resume/continue APIs plus usable-session listing. Keep the core reducer pure, derive interrupted tool results on reopen, isolate test session storage, and cover durability ordering and resume edge cases.",
+      "operation_mapping": "patch",
+      "assignment": "controller_loss_before_dispatch",
+      "fault": {"type": "controller_loss", "barrier_id": "after_intent_commit_before_dispatch", "owner": "controller", "delivered": ["durable intent commit"], "dropped": ["executor dispatch"], "restart_order": ["controller", "query intent", "continue only from evidence"], "permitted_action": "Resubmit the same job ID and digest only when executor evidence confirms no acceptance."},
+      "active_deadline_ms": 1200000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "mix test test/harness/session/core_test.exs test/harness/session/store_test.exs test/harness/session_test.exs --seed 0", "expected_exit": 0, "timeout_ms": 240000},
+        {"command": "mix compile", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    },
+    {
+      "id": "D10",
+      "frame_index": 10,
+      "order_key": "5f72dfb7bd570df0d4f9432c8953844ea0a59973930d920dee1d4ebf831aaefd",
+      "commit": "51c82967eedb6ab0d87b9fff0f6bd4baf9bae6e5",
+      "parent_commit": "bd086ad224a79595a99aa8e83015385586ee7b52",
+      "tree": "51c8ed73e9cdf0ab1ed6c0e8e1ff5da789d1f7d1",
+      "patch_sha256": "d876f2f491de36740d3186fbe9f9589eb0c6cb92440516ac92919f8f7abbf42c",
+      "changed_files": ["README.md", "lib/harness.ex", "lib/harness/chat.ex", "lib/harness/chat/core.ex", "lib/harness/session.ex", "lib/mix/tasks/harness.chat.ex", "test/harness/chat/core_test.exs", "test/harness/chat_test.exs", "test/harness/mix_harness_chat_test.exs"],
+      "kind": "resume/continue feature",
+      "prompt": "Add chat continuation and in-place /resume flows. Support --continue parsing, list saved sessions with stable UTC metadata, resume by index only while idle, recap restored history, preserve state on errors, update docs, and add reducer, integration, session, and Mix task tests.",
+      "operation_mapping": "patch",
+      "assignment": "executor_loss_after_mutation",
+      "fault": {"type": "executor_loss_after_mutation", "barrier_id": "after_external_mutation_before_completion_commit", "owner": "selected_executor", "delivered": ["external mutation"], "dropped": ["completion commit and reply"], "restart_order": ["same executor", "inspect postcondition and ledger", "controller"], "permitted_action": "Do not retry an unprotected mutation; report truthful indeterminate unless causal terminal proof survives."},
+      "active_deadline_ms": 1200000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "mix test test/harness/chat/core_test.exs test/harness/chat_test.exs test/harness/mix_harness_chat_test.exs test/harness/session_test.exs --seed 0", "expected_exit": 0, "timeout_ms": 240000},
+        {"command": "mix compile --warnings-as-errors", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    },
+    {
+      "id": "D11",
+      "frame_index": 11,
+      "order_key": "75326bddd1dc48e3ffa6fdd94ce8791464bec2a8d8f8f0baa5779464a58fca28",
+      "commit": "a77e4c89c0191246b5a3c5fdc71c17b8bceade6a",
+      "parent_commit": "275d029315fcb610a9b97f7f449b2ecad7c8299c",
+      "tree": "b199218af972638b407938c1ff5dfaf1284ca173",
+      "patch_sha256": "34ef68991b02192aa4d048194191524c6d8a2e5464d1cc545874d37f2487c833",
+      "changed_files": ["README.md", "lib/harness.ex", "lib/harness/auth.ex", "lib/harness/config.ex", "lib/harness/provider.ex", "lib/harness/provider/grok.ex", "lib/harness/provider/open_ai.ex", "lib/harness/session.ex", "lib/harness/session/core.ex", "test/harness/auth_test.exs", "test/harness/config_test.exs", "test/harness/provider/grok_test.exs", "test/harness/provider/open_ai_test.exs", "test/harness/session/core_test.exs"],
+      "kind": "provider/replay/UTF-8 fixes",
+      "prompt": "Fix Grok auth import, provider replay, and tool-output encoding: accept official nested auth files while preferring this client, default xAI key configuration, keep 403 entitlement classification at the Grok boundary, encode tool-only assistant content as an empty string, make provider state serializable, and truncate UTF-8 safely with a placeholder for binary output. Add focused tests.",
+      "operation_mapping": "patch",
+      "assignment": "completion_reply_lost_before_persistence",
+      "fault": {"type": "completion_reply_loss", "barrier_id": "after_completion_commit_before_completion_reply", "owner": "message_transport", "delivered": ["durable completion commit"], "dropped": ["completion reply"], "restart_order": ["controller", "query executor terminal receipt", "persist session result"], "permitted_action": "Reuse the durable terminal result; never repeat the mutation."},
+      "active_deadline_ms": 1200000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "mix test test/harness/auth_test.exs test/harness/config_test.exs test/harness/provider/grok_test.exs test/harness/provider/open_ai_test.exs test/harness/session/core_test.exs --seed 0", "expected_exit": 0, "timeout_ms": 240000},
+        {"command": "mix compile --warnings-as-errors", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    },
+    {
+      "id": "D12",
+      "frame_index": 12,
+      "order_key": "0ef206e8a687a1e5496f0df1e7ed1d5f63717ba14ebf96e504bd8e03d15078a3",
+      "commit": "eb20145d2f052aaa9971b30ddd2b5889a654db49",
+      "parent_commit": "a3db1060a99cb57f60355d1c1a6fbd7bf793e143",
+      "tree": "a7b1e39102c798a3f43d675c90edffae1a4f145b",
+      "patch_sha256": "e1ff522ddd25e8c23829944c1a42ba05a176fb951fe39a5fbfd4f2edbab16ec7",
+      "changed_files": ["lib/harness/cli/signal.ex", "lib/harness/executor/router.ex", "lib/harness/session.ex", "lib/mix/tasks/harness.server.ex", "lib/mix/tasks/harness.worker.ex", "test/harness/session_test.exs"],
+      "kind": "interrupt/load-release bug fix",
+      "prompt": "Make interrupt abort builtin and provider tasks immediately, retain plugin leases until in-flight calls finish, and release executor-router load when an execute process dies. Add SIGTERM waiting for server/worker Mix tasks and a regression test proving interrupted tool tasks cannot report late results.",
+      "operation_mapping": "patch",
+      "assignment": "concurrent_workspace_conflict",
+      "fault": {"type": "concurrent_workspace_conflict", "barrier_id": "after_intent_commit_before_dispatch", "owner": "workspace_injector", "delivered": ["durable intent", "conflicting workspace edit"], "dropped": [], "restart_order": ["observe conflict", "preserve both preimages", "report conflict"], "permitted_action": "Do not overwrite the concurrent edit; stop with an evidence-backed conflict."},
+      "active_deadline_ms": 1200000,
+      "knowledge_deadline_ms": 5000,
+      "acceptance": [
+        {"command": "mix test test/harness/session_test.exs --seed 0", "expected_exit": 0, "timeout_ms": 180000},
+        {"command": "mix compile --warnings-as-errors", "expected_exit": 0, "timeout_ms": 120000}
+      ]
+    }
+  ]
+}

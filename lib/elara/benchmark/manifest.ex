@@ -3,7 +3,10 @@ defmodule Elara.Benchmark.Manifest do
 
   alias Elara.Benchmark.Fixture
 
-  @schema "elara.exp003.corpus.v1"
+  @versions %{
+    "elara.exp003.corpus.v1" => "ER-3/FND-2-v1",
+    "elara.exp003.corpus.v2" => "ER-3/FND-2-v2"
+  }
 
   @enforce_keys [:path, :sha256, :data, :tasks, :rows, :adapter_fixtures]
   defstruct [:path, :sha256, :data, :tasks, :rows, :adapter_fixtures]
@@ -91,7 +94,10 @@ defmodule Elara.Benchmark.Manifest do
   defp validate(data, root) do
     errors =
       []
-      |> require(data["schema"] == @schema, {:schema, data["schema"]})
+      |> require(
+        @versions[data["schema"]] == data["preregistration_version"],
+        {:schema, data["schema"], data["preregistration_version"]}
+      )
       |> require(is_list(data["tasks"]), :tasks_not_a_list)
       |> require(is_list(data["fault_rows"]), :fault_rows_not_a_list)
       |> validate_collections(data)

@@ -1,7 +1,10 @@
 defmodule Elara.Benchmark.Dogfood.Plan do
   @moduledoc false
 
-  @schema "elara.exp003.dogfood-plan.v1"
+  @versions %{
+    "elara.exp003.dogfood-plan.v1" => "ER-3/FND-2-v1",
+    "elara.exp003.dogfood-plan.v2" => "ER-3/FND-2-v2"
+  }
   @task_ids Enum.map(1..12, &"D#{String.pad_leading(Integer.to_string(&1), 2, "0")}")
   @assignments ~w(
     no_fault_control
@@ -87,8 +90,10 @@ defmodule Elara.Benchmark.Dogfood.Plan do
 
     errors =
       []
-      |> require(data["schema"] == @schema, {:schema, data["schema"]})
-      |> require(data["preregistration_version"] == "ER-3/FND-2-v1", :preregistration_drift)
+      |> require(
+        @versions[data["schema"]] == data["preregistration_version"],
+        {:schema, data["schema"], data["preregistration_version"]}
+      )
       |> require(is_list(tasks), :tasks_not_a_list)
       |> validate_tasks(tasks, data, repo_root)
       |> validate_contract(data)

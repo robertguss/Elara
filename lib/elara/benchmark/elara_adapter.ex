@@ -3,7 +3,7 @@ defmodule Elara.Benchmark.ElaraAdapter do
 
   @behaviour Elara.Benchmark.Adapter
 
-  alias Elara.Benchmark.{Manifest, Runner}
+  alias Elara.Benchmark.{Fixture, Manifest, Qualification, Runner}
 
   @baseline_commit "23e603550253c69846795b13cc2f2670f1122e21"
   @receipts_commit "9ff416f2c22327c5ef38edcd52a9e89108fbc726"
@@ -75,7 +75,18 @@ defmodule Elara.Benchmark.ElaraAdapter do
   def mapping(_task), do: {:error, :invalid_frozen_plan}
 
   @impl true
-  def execute(_task, _cwd, %{kind: :fault}), do: {:error, :fault_execution_forbidden}
+  def execute(task, cwd, %{kind: :fault, condition: condition, row: row} = context)
+      when condition in @conditions do
+    with :ok <- authorize_qualification(task, row),
+         {:ok, config} <- fetch_config(),
+         {:ok, target} <- fetch_target(config, condition),
+         {:ok, mapped} <- mapping(task),
+         {:ok, observation} <- run_target(config, target, task, mapped, cwd, context),
+         {:ok, final_digest} <- Fixture.digest_directory(cwd) do
+      deliver_observation(config.evidence_sink, observation)
+      {:ok, fault_evidence(observation, task, row, condition, final_digest)}
+    end
+  end
 
   def execute(task, cwd, %{kind: :no_fault, condition: condition} = context)
       when condition in @conditions do
@@ -89,6 +100,228 @@ defmodule Elara.Benchmark.ElaraAdapter do
   end
 
   def execute(_task, _cwd, context), do: {:error, {:unsupported_context, context}}
+
+  @spec qualify_faults(Manifest.t(), map(), String.t()) :: {:ok, map()} | {:error, term()}
+  def qualify_faults(%Manifest{} = source, config, workspace_root)
+      when is_map(config) and is_binary(workspace_root) do
+    with {:ok, manifest} <- Qualification.manifest(source),
+         {:ok, no_fault_records} <-
+           execute_qualification_no_fault(manifest, config, workspace_root),
+         {:ok, records} <- execute_qualification_schedule(manifest, config, workspace_root),
+         :ok <- validate_qualification_records(manifest, no_fault_records, records) do
+      {:ok, qualification_report(source, manifest, config, no_fault_records, records)}
+    end
+  end
+
+  defp execute_qualification_no_fault(manifest, config, workspace_root) do
+    runs =
+      manifest.data["selection"]["selected_task_ids"]
+      |> Enum.flat_map(fn task_id ->
+        Enum.map(@conditions, fn condition ->
+          %{
+            "task_id" => task_id,
+            "condition" => condition,
+            "phase" => "measured",
+            "run_index" => 1
+          }
+        end)
+      end)
+      |> Enum.with_index(1)
+
+    with_config(config, fn ->
+      Enum.reduce_while(runs, {:ok, []}, fn {run, order_index}, {:ok, records} ->
+        run = Map.put(run, "order_index", order_index)
+
+        case Runner.run_no_fault(manifest, run, adapter: __MODULE__, root: workspace_root) do
+          {:ok, record} -> {:cont, {:ok, [record | records]}}
+          {:error, reason} -> {:halt, {:error, {:no_fault_qualification_failed, run, reason}}}
+        end
+      end)
+      |> then(fn
+        {:ok, records} -> {:ok, Enum.reverse(records)}
+        error -> error
+      end)
+    end)
+  end
+
+  defp execute_qualification_schedule(manifest, config, workspace_root) do
+    adapter_digest = file_sha256!(config.repo_root, @adapter_path)
+
+    with_config(config, fn ->
+      manifest
+      |> Runner.fault_schedule()
+      |> Enum.reduce_while({:ok, []}, fn run, {:ok, records} ->
+        opts = [
+          adapter: __MODULE__,
+          root: workspace_root,
+          target_commit: config.targets[run["condition"]].commit,
+          adapter_digest: adapter_digest
+        ]
+
+        case Runner.run_fault(manifest, run, opts) do
+          {:ok, record} -> {:cont, {:ok, [record | records]}}
+          {:error, reason} -> {:halt, {:error, {:fault_qualification_failed, run, reason}}}
+        end
+      end)
+      |> then(fn
+        {:ok, records} -> {:ok, Enum.reverse(records)}
+        error -> error
+      end)
+    end)
+  end
+
+  defp validate_qualification_records(manifest, no_fault_records, records) do
+    grouped = Enum.group_by(records, &{&1["row_id"], &1["condition"]})
+
+    invalid_records =
+      Enum.reject(records, &valid_qualification_record?(manifest, &1))
+
+    inconsistent_groups =
+      Enum.reject(grouped, fn {_key, repetitions} ->
+        length(repetitions) == 3 and
+          repetitions |> Enum.map(&semantic_projection/1) |> Enum.uniq() |> length() == 1
+      end)
+
+    errors =
+      []
+      |> require_qualification(length(no_fault_records) == 6, :incomplete_no_fault_qualification)
+      |> require_qualification(
+        Enum.all?(no_fault_records, &(&1["workspace_correct"] and &1["outcome_correct"])),
+        :no_fault_non_equivalence
+      )
+      |> require_qualification(length(records) == 72, :incomplete_fault_qualification)
+      |> require_qualification(
+        Enum.all?(records, &(&1["exposure_split"] == "development_adapter_fixture")),
+        :confirmatory_fault_exposure
+      )
+      |> require_qualification(
+        invalid_records == [],
+        {:invalid_fault_semantics, Enum.map(invalid_records, &qualification_failure/1)}
+      )
+      |> require_qualification(
+        inconsistent_groups == [],
+        {:inconsistent_repetitions, Enum.map(inconsistent_groups, &elem(&1, 0))}
+      )
+
+    if errors == [], do: :ok, else: {:error, Enum.reverse(errors)}
+  end
+
+  defp valid_qualification_record?(manifest, record) do
+    record["initial_reset_verified"] and record["harness_errors"] == [] and
+      record["safety_disqualifiers"] == [] and record["external_mutation_count"] <= 1 and
+      record["callback_attempt_count"] <= 1 and
+      record["primary_recovery_class"] ==
+        manifest.rows[record["row_id"]]["expected_primary_recovery_class"][record["condition"]] and
+      record["safe_next_action_observed"] ==
+        manifest.rows[record["row_id"]]["expected_safe_action"][record["condition"]] and
+      record["last_durable_fact"] ==
+        manifest.rows[record["row_id"]]["last_durable_fact"][record["condition"]] and
+      record["historical_execution_knowledge"] ==
+        manifest.rows[record["row_id"]]["historical_execution_knowledge"]
+  end
+
+  defp qualification_failure(record) do
+    Map.take(record, ~w(
+      row_id condition run_index initial_reset_verified harness_errors safety_disqualifiers
+      external_mutation_count callback_attempt_count primary_recovery_class
+      final_workspace_digest workspace_observations session_classification
+    ))
+  end
+
+  defp semantic_projection(record) do
+    Map.take(record, ~w(
+      condition
+      row_id
+      final_workspace_digest
+      workspace_observations
+      causal_terminal_evidence_observed
+      session_classification
+      safe_next_action_observed
+      admission_count
+      callback_attempt_count
+      external_mutation_count
+      session_result_count
+      primary_recovery_class
+      safety_disqualifiers
+      harness_errors
+    ))
+  end
+
+  defp qualification_report(source, manifest, config, no_fault_records, records) do
+    by_class_and_fault =
+      records
+      |> Enum.group_by(&{&1["operation_class"], &1["fault_type"]})
+      |> Map.new(fn {{class, fault}, entries} ->
+        {"#{class}:#{fault}",
+         %{
+           "run_count" => length(entries),
+           "conditions" => Enum.frequencies_by(entries, & &1["condition"]),
+           "classes" => Enum.frequencies_by(entries, & &1["primary_recovery_class"])
+         }}
+      end)
+
+    %{
+      "schema" => "elara.exp003.internal-adapter-qualification-report.v1",
+      "source_manifest_sha256" => source.sha256,
+      "qualification_manifest_sha256" => manifest.sha256,
+      "qualification_schema" => Qualification.schema(),
+      "targets" => target_report(config.targets),
+      "configuration" => configuration_report(),
+      "adapter" => %{
+        "source" => @adapter_path,
+        "sha256" => file_sha256!(config.repo_root, @adapter_path),
+        "target_runner_source" => @runner_path,
+        "target_runner_sha256" => file_sha256!(config.repo_root, @runner_path),
+        "neutral_runner_source" => @neutral_runner_path,
+        "neutral_runner_sha256" => file_sha256!(config.repo_root, @neutral_runner_path)
+      },
+      "command" =>
+        "mix run priv/benchmark/qualify_internal_adapter.exs -- <manifest> <state> <workspace> <output>",
+      "no_fault" => %{
+        "run_count" => length(no_fault_records),
+        "all_equivalent" =>
+          Enum.all?(no_fault_records, &(&1["workspace_correct"] and &1["outcome_correct"])),
+        "records_sha256" => sha256(JSON.encode!(no_fault_records))
+      },
+      "fault_qualification" => %{
+        "run_count" => length(records),
+        "row_count" => map_size(manifest.rows),
+        "repetitions_per_condition" => 3,
+        "matrix" => by_class_and_fault,
+        "records_sha256" => sha256(JSON.encode!(records)),
+        "convergence_ms" => %{
+          "knowledge_min" => records |> Enum.map(& &1["knowledge_convergence_ms"]) |> Enum.min(),
+          "knowledge_max" => records |> Enum.map(& &1["knowledge_convergence_ms"]) |> Enum.max(),
+          "terminal_min" =>
+            records
+            |> Enum.map(& &1["terminal_convergence_ms"])
+            |> Enum.reject(&is_nil/1)
+            |> Enum.min(),
+          "terminal_max" =>
+            records
+            |> Enum.map(& &1["terminal_convergence_ms"])
+            |> Enum.reject(&is_nil/1)
+            |> Enum.max()
+        }
+      },
+      "exposure" => %{
+        "development_fault_runs" => length(records),
+        "v3_confirmatory_fault_runs" => 0,
+        "B_or_T_calculated" => false,
+        "statement" =>
+          "All injected faults used non-scored development_adapter_fixture tasks. Held-out v3 task IDs were rejected by the adapter guard and never fault-executed."
+      },
+      "limitations" => [
+        "Baseline barriers are nearest-existing instrumented router seams and remain N/A/non-equivalent to receipt-native durable seams.",
+        "The adapter kills target-owned processes and requests native reopen/replacement APIs; it does not synthesize terminal evidence or retry callbacks.",
+        "Qualification proves deterministic capability on development fixtures, not confirmatory effect size.",
+        "The receipt target uses the research-only Elara.Effect.TestExecutor."
+      ]
+    }
+  end
+
+  defp require_qualification(errors, true, _reason), do: errors
+  defp require_qualification(errors, false, reason), do: [reason | errors]
 
   @spec prove_no_fault(Manifest.t(), map(), String.t()) :: {:ok, map()} | {:error, term()}
   def prove_no_fault(%Manifest{} = manifest, config, workspace_root)
@@ -204,17 +437,67 @@ defmodule Elara.Benchmark.ElaraAdapter do
       "tool_timeout_ms" => 5_000
     }
 
+    request = fault_request(request, context, run_root)
+
     with {:ok, _removed} <- File.rm_rf(run_root),
          :ok <- File.mkdir_p(run_root),
          :ok <- File.write(request_path, JSON.encode!(request)),
          {:ok, process_output} <-
-           execute_target(config, target, request_path, output_path),
+           execute_target(config, target, request_path, output_path, context),
          {:ok, observation} <- decode_target_output(output_path) do
       {:ok, Map.put(observation, "process_output_sha256", sha256(process_output))}
     end
   end
 
-  defp execute_target(config, target, request_path, output_path) do
+  defp fault_request(request, %{kind: :fault, row: row}, run_root) do
+    Map.merge(request, %{
+      "mode" => "fault_qualification",
+      "row" => row,
+      "session_root" => Path.join(run_root, "sessions"),
+      "barrier_event_path" => Path.join(run_root, "request.json.barrier.json"),
+      "injection_command_path" => Path.join(run_root, "request.json.command.json")
+    })
+  end
+
+  defp fault_request(request, _context, _run_root), do: request
+
+  defp execute_target(config, target, request_path, output_path, %{kind: :fault} = context) do
+    event_path = request_path <> ".barrier.json"
+    command_path = request_path <> ".command.json"
+
+    task =
+      Task.async(fn ->
+        target_command(config, target, request_path, output_path)
+      end)
+
+    convergence_deadline = context.row["observation_deadline_ms"]
+    startup_deadline = convergence_deadline + 5_000
+
+    result =
+      with {:ok, event} <- await_barrier(task, event_path, startup_deadline),
+           :ok <- validate_barrier_event(event, context.row),
+           {:inject, owner} <-
+             context.fault_hook.(event["barrier_id"], event["facts"]),
+           true <- owner == context.row["crash_target"],
+           :ok <-
+             write_atomic(command_path, JSON.encode!(%{"action" => "inject", "owner" => owner})),
+           {:ok, command_result} <- await_target(task, convergence_deadline + 3_000) do
+        {:ok, command_result}
+      else
+        false -> {:error, :fault_owner_mismatch}
+        {:error, _reason} = error -> error
+        other -> {:error, {:fault_protocol_failed, other}}
+      end
+
+    if Process.alive?(task.pid), do: Task.shutdown(task, :brutal_kill)
+    result
+  end
+
+  defp execute_target(config, target, request_path, output_path, _context) do
+    target_command(config, target, request_path, output_path)
+  end
+
+  defp target_command(config, target, request_path, output_path) do
     result =
       System.cmd(
         "mix",
@@ -236,6 +519,281 @@ defmodule Elara.Benchmark.ElaraAdapter do
       {output, status} -> {:error, {:target_run_failed, status, output}}
     end
   end
+
+  defp await_barrier(task, path, timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_await_barrier(task, path, deadline)
+  end
+
+  defp do_await_barrier(task, path, deadline) do
+    case File.read(path) do
+      {:ok, encoded} ->
+        case JSON.decode(encoded) do
+          {:ok, event} -> {:ok, event}
+          {:error, reason} -> {:error, {:invalid_barrier_event, reason}}
+        end
+
+      {:error, :enoent} ->
+        case Task.yield(task, 0) do
+          {:ok, result} ->
+            {:error, {:target_exited_before_barrier, result}}
+
+          {:exit, reason} ->
+            {:error, {:target_exited_before_barrier, reason}}
+
+          nil ->
+            if System.monotonic_time(:millisecond) < deadline do
+              Process.sleep(10)
+              do_await_barrier(task, path, deadline)
+            else
+              {:error, :fault_barrier_timeout}
+            end
+        end
+
+      {:error, reason} ->
+        {:error, {:barrier_read_failed, reason}}
+    end
+  end
+
+  defp await_target(task, timeout_ms) do
+    case Task.yield(task, timeout_ms) do
+      {:ok, result} -> result
+      {:exit, reason} -> {:error, {:target_task_exit, reason}}
+      nil -> {:error, :target_completion_timeout}
+    end
+  end
+
+  defp validate_barrier_event(
+         %{
+           "schema" => "elara.exp003.fault-barrier.v1",
+           "barrier_id" => barrier,
+           "facts" => facts
+         },
+         %{"barrier_id" => barrier}
+       )
+       when is_map(facts),
+       do: :ok
+
+  defp validate_barrier_event(event, row),
+    do: {:error, {:invalid_barrier_event, row["barrier_id"], event}}
+
+  defp write_atomic(path, contents) do
+    temporary = path <> ".tmp"
+
+    with :ok <- File.write(temporary, contents),
+         :ok <- File.rename(temporary, path) do
+      :ok
+    end
+  end
+
+  defp authorize_qualification(task, row) do
+    cond do
+      task["exposure_split"] != "development_adapter_fixture" ->
+        {:error, :confirmatory_fault_execution_forbidden}
+
+      row["exposure_split"] != "development_adapter_fixture" ->
+        {:error, :confirmatory_fault_execution_forbidden}
+
+      not String.starts_with?(row["row_id"] || "", "QUAL-") ->
+        {:error, :confirmatory_fault_execution_forbidden}
+
+      row["fault_role"] != "development_qualification" ->
+        {:error, :confirmatory_fault_execution_forbidden}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp fault_evidence(observation, task, row, condition, final_digest) do
+    fixture = task["fixture"]
+    pre_digest = fixture["initial_workspace_sha256"]
+    post_digest = fixture["expected_no_fault_workspace_sha256"]
+    expected_workspace = row["expected_converged_workspace_by_condition"][condition]
+
+    {workspace_observation, external_mutation_count} =
+      case final_digest do
+        ^pre_digest ->
+          {"pre_effect_workspace", 0}
+
+        ^post_digest
+        when expected_workspace in ~w(fault_target_postcondition complete_task_workspace) ->
+          {expected_workspace, 1}
+
+        ^post_digest ->
+          {"fault_target_postcondition", 1}
+
+        _other ->
+          {"unexpected_workspace", 0}
+      end
+
+    initial_disqualifiers =
+      []
+      |> maybe_add(workspace_observation == "unexpected_workspace", "unexpected_workspace_digest")
+      |> maybe_add(workspace_observation != expected_workspace, "unexpected_converged_workspace")
+      |> maybe_add(observation["barrier_call_count"] != 1, "barrier_call_count_not_1")
+
+    callback_attempt_count =
+      if condition == "baseline",
+        do: get_in(observation, ["barrier_facts", "local_executor_return_count"]),
+        else: observation["callback_attempt_count"]
+
+    primary_class =
+      classify_fault(
+        row,
+        condition,
+        observation,
+        external_mutation_count,
+        callback_attempt_count,
+        initial_disqualifiers
+      )
+
+    expected_class = row["expected_primary_recovery_class"][condition]
+
+    safety_disqualifiers =
+      maybe_add(initial_disqualifiers, primary_class != expected_class, "recovery_class_mismatch")
+
+    harness_errors =
+      maybe_add(
+        observation["harness_errors"],
+        primary_class == "harness_failure",
+        "unclassified_recovery"
+      )
+
+    safe_action =
+      if primary_class == expected_class and recovery_actions_valid?(row, condition, observation) do
+        observed_safe_action(condition, row["fault_type"])
+      else
+        "no validated safe action"
+      end
+
+    Map.merge(observation, %{
+      "workspace_observations" => workspace_observation,
+      "last_durable_fact" => observed_last_durable_fact(condition, row["fault_type"]),
+      "historical_execution_knowledge" => observed_historical_knowledge(row["fault_type"]),
+      "safe_next_action_expected" => row["expected_safe_action"][condition],
+      "safe_next_action_observed" => safe_action,
+      "callback_attempt_count" => callback_attempt_count,
+      "external_mutation_count" => external_mutation_count,
+      "primary_recovery_class" => primary_class,
+      "safety_disqualifiers" => safety_disqualifiers,
+      "harness_errors" => harness_errors,
+      "artifact_digests" => [observation["process_output_sha256"]]
+    })
+  end
+
+  defp classify_fault(row, condition, observation, external_count, callback_count, []) do
+    fault = row["fault_type"]
+    causal? = observation["causal_terminal_evidence_observed"]
+    executor = observation["executor_facts"]
+
+    cond do
+      condition == "baseline" and fault == "F3" and external_count == 1 and
+        callback_count == 1 and not causal? ->
+        "ambiguous_no_safe_action"
+
+      condition == "baseline" and fault in ~w(F1 F2) and external_count == 0 and
+        callback_count == 0 and not causal? ->
+        "manual_recovery"
+
+      condition == "baseline" and fault == "F4" and external_count == 1 and
+        callback_count == 1 and not causal? ->
+        "manual_recovery"
+
+      condition == "receipts" and fault == "F3" and external_count == 1 and
+        callback_count == 1 and not causal? and executor["status"] == "accepted" and
+        executor["terminal_count"] == 0 and
+          observation["session_classification"] == "indeterminate" ->
+        "automatic_safe_indeterminate"
+
+      condition == "receipts" and fault in ~w(F1 F2 F4) and external_count == 1 and
+        callback_count == 1 and causal? and executor["status"] in ~w(completed failed) and
+          executor["terminal_count"] == 1 ->
+        "automatic_terminal"
+
+      true ->
+        "harness_failure"
+    end
+  end
+
+  defp classify_fault(_row, _condition, _observation, _external_count, _callback_count, _errors),
+    do: "harness_failure"
+
+  defp recovery_actions_valid?(row, "baseline", observation) do
+    actions = observation["recovery_actions"]
+
+    case row["crash_target"] do
+      "controller" ->
+        actions == ~w(kill_controller reopen_persisted_session native_transcript_repair)
+
+      "selected_worker_or_tool_owner" ->
+        actions == ~w(kill_selected_tool_owner observe_native_session_failure)
+    end
+  end
+
+  defp recovery_actions_valid?(%{"fault_type" => "F1"}, "receipts", observation) do
+    observation["recovery_actions"] ==
+      ~w(kill_controller reopen_persisted_session native_same_identity_reconciliation)
+  end
+
+  defp recovery_actions_valid?(%{"fault_type" => fault}, "receipts", observation)
+       when fault in ~w(F2 F3) do
+    observation["recovery_actions"] ==
+      ~w(kill_original_executor_process reopen_same_logical_executor replace_effect_executor)
+  end
+
+  defp recovery_actions_valid?(%{"fault_type" => "F4"}, "receipts", observation) do
+    observation["recovery_actions"] ==
+      ~w(kill_controller reopen_persisted_session native_terminal_reconciliation)
+  end
+
+  defp observed_last_durable_fact("baseline", "F1"),
+    do: "nearest existing request evidence; target-only intent seam N/A"
+
+  defp observed_last_durable_fact("baseline", "F2"),
+    do: "dispatch observed; target acceptance seam N/A"
+
+  defp observed_last_durable_fact("baseline", "F3"),
+    do: "effect may have occurred; target receipt seam N/A"
+
+  defp observed_last_durable_fact("baseline", "F4"),
+    do: "terminal reached volatile controller boundary; target observation seam N/A"
+
+  defp observed_last_durable_fact("receipts", "F1"),
+    do: "controller intent committed; executor start unknown"
+
+  defp observed_last_durable_fact("receipts", "F2"),
+    do: "accepted on original executor with attempt 0"
+
+  defp observed_last_durable_fact("receipts", "F3"),
+    do: "attempt 1 without causal terminal proof"
+
+  defp observed_last_durable_fact("receipts", "F4"),
+    do: "causal terminal observation durably synchronized"
+
+  defp observed_historical_knowledge(fault) when fault in ~w(F1 F2), do: "not_invoked at barrier"
+  defp observed_historical_knowledge("F3"), do: "invoked; causal terminal outcome unknown"
+
+  defp observed_historical_knowledge("F4"),
+    do: "invoked with causal terminal evidence only for receipts condition"
+
+  defp observed_safe_action("baseline", "F3"), do: "no unique automatic safe action"
+  defp observed_safe_action("baseline", _fault), do: "manual recovery under baseline semantics"
+
+  defp observed_safe_action("receipts", "F1"),
+    do: "same ID/digest dispatch once to original owner, then no action"
+
+  defp observed_safe_action("receipts", "F2"),
+    do: "original owner continues callback once; never fail over"
+
+  defp observed_safe_action("receipts", "F3"),
+    do: "postcondition_satisfied_no_retry; never invoke/submit/fail over"
+
+  defp observed_safe_action("receipts", "F4"),
+    do: "persist exactly one session result; no callback"
+
+  defp maybe_add(items, true, item), do: [item | items]
+  defp maybe_add(items, false, _item), do: items
 
   defp decode_target_output(output_path) do
     with {:ok, encoded} <- File.read(output_path),
@@ -516,7 +1074,12 @@ defmodule Elara.Benchmark.ElaraAdapter do
   defp deliver_observation(sink, observation) when is_function(sink, 1), do: sink.(observation)
 
   defp run_root(state_root, task_id, context) do
-    phase = context |> Map.get(:phase, "direct") |> to_string()
+    phase =
+      case context do
+        %{kind: :fault, row: row} -> "fault/#{String.downcase(row["row_id"])}"
+        _other -> context |> Map.get(:phase, "direct") |> to_string()
+      end
+
     index = context |> Map.get(:run_index, 1) |> to_string()
 
     Path.join([

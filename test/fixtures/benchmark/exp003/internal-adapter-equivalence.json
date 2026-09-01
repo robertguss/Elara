@@ -2,9 +2,9 @@
   "adapter": {
     "neutral_runner_sha256": "3b3ab321dcd0540bc1a8532be834021c8d3f471b7c87951a5626a6663f084a71",
     "neutral_runner_source": "lib/elara/benchmark/runner.ex",
-    "sha256": "33035d945cb75005fb8b187eb43e3289cc12a49112de7c1661edbf2dd1b7415d",
+    "sha256": "e703b9e5265eae022538fc15447ad605bb3227f1df38cc731a5b3145c309eb5f",
     "source": "lib/elara/benchmark/elara_adapter.ex",
-    "target_runner_sha256": "693db801db101f67740fa61404f51c929720dfa91ec7b70e9ea0ed32af42e9fe",
+    "target_runner_sha256": "8a540e25ccbea30ddde27f3babf096ad2e5cb7425f34c9883669411dee5215a7",
     "target_runner_source": "priv/benchmark/elara_target_runner.exs"
   },
   "configuration": {

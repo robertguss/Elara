@@ -42,9 +42,16 @@ defmodule Elara.Benchmark.ElaraAdapterTest do
            }
   end
 
-  test "forbids fault execution before the immutable comparison" do
-    assert {:error, :fault_execution_forbidden} =
-             ElaraAdapter.execute(%{}, "/tmp/not-used", %{kind: :fault})
+  test "categorically forbids confirmatory fault execution" do
+    task = manifest_task("P01")
+    row = manifest_row("P01-F1")
+
+    assert {:error, :confirmatory_fault_execution_forbidden} =
+             ElaraAdapter.execute(task, "/tmp/not-used", %{
+               kind: :fault,
+               condition: "baseline",
+               row: row
+             })
   end
 
   test "pins both immutable target commits" do
@@ -55,4 +62,14 @@ defmodule Elara.Benchmark.ElaraAdapterTest do
   end
 
   defp unwrap({:ok, value}), do: value
+
+  defp manifest_task(id) do
+    {:ok, manifest} = Manifest.load(@manifest_path)
+    manifest.tasks[id]
+  end
+
+  defp manifest_row(id) do
+    {:ok, manifest} = Manifest.load(@manifest_path)
+    manifest.rows[id]
+  end
 end

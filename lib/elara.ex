@@ -157,6 +157,13 @@ defmodule Elara do
   end
 
   @doc false
+  @spec replace_effect_executor(session_ref(), GenServer.server()) ::
+          :ok | {:error, :session_not_found}
+  def replace_effect_executor(session, executor) when is_pid(session) or is_binary(session) do
+    call(session, {:replace_effect_executor, executor})
+  end
+
+  @doc false
   @spec child_config(session_ref()) :: map() | {:error, :session_not_found}
   def child_config(session) when is_pid(session) or is_binary(session),
     do: call(session, :child_config)

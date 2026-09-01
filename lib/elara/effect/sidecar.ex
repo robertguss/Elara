@@ -10,12 +10,13 @@ defmodule Elara.Effect.Sidecar do
 
   defmodule Result do
     @moduledoc false
-    @enforce_keys [:job, :outcome]
-    defstruct [:job, :outcome, :executor_record]
+    @enforce_keys [:job, :status]
+    defstruct [:job, :status, :outcome, :executor_record]
 
     @type t :: %__MODULE__{
             job: Job.t(),
-            outcome: Elara.Tool.outcome(),
+            status: :terminal | :awaiting_executor,
+            outcome: Elara.Tool.outcome() | nil,
             executor_record: Record.t() | nil
           }
   end
@@ -82,17 +83,23 @@ defmodule Elara.Effect.Sidecar do
          timeout,
          fault_hook
        ) do
-    with {:ok, _observation} <- ControllerJournal.observe(journal, record) do
+    with {:ok, _observation} <- ControllerJournal.observe(journal, record),
+         :ok <- invoke_hook(fault_hook, :after_accept_observation_before_continue) do
+      monitor = monitor_executor(executor)
+
       case TestExecutor.continue(executor, job.job_id, job.operation_digest, operation) do
         :ok ->
-          await_completion(executor, journal, job, operation, timeout, fault_hook)
+          await_completion(executor, journal, job, operation, timeout, fault_hook, monitor)
 
         {:error, reason} when reason in [:callback_already_attempted, :already_terminal] ->
+          demonitor(monitor)
+
           executor
           |> TestExecutor.query(job.job_id)
           |> resolve(executor, journal, job, operation, timeout, fault_hook)
 
         {:error, reason} ->
+          demonitor(monitor)
           indeterminate(job, record, {:continue_failed, reason})
       end
     else
@@ -150,10 +157,12 @@ defmodule Elara.Effect.Sidecar do
     rejected(job, nil, {:executor_rejected, reason})
   end
 
-  defp await_completion(executor, journal, job, operation, timeout, fault_hook) do
+  defp await_completion(executor, journal, job, operation, timeout, fault_hook, monitor) do
     receive do
       {:elara_test_executor, _executor_id, job_id, {state, %Record{state: state} = record}}
       when job_id == job.job_id and state in [:completed, :failed] ->
+        demonitor(monitor)
+
         with {:ok, _observation} <- ControllerJournal.observe(journal, record),
              :ok <- invoke_hook(fault_hook, :after_completion_reply_before_session_result_persist) do
           result(job, record)
@@ -161,8 +170,14 @@ defmodule Elara.Effect.Sidecar do
           {:error, reason} ->
             indeterminate(job, record, {:controller_observation_failed, reason})
         end
+
+      {:DOWN, reference, :process, _pid, reason}
+      when reference == monitor ->
+        unavailable(job, journal, Exception.format_exit(reason))
     after
       timeout ->
+        demonitor(monitor)
+
         executor
         |> TestExecutor.query(job.job_id)
         |> resolve(executor, journal, job, operation, timeout, fn _ -> :ok end)
@@ -179,11 +194,20 @@ defmodule Elara.Effect.Sidecar do
 
   defp unavailable(job, journal, reason) do
     case safe_observation(journal, job.job_id) do
-      %Observation{executor_record: record} ->
+      %Observation{executor_record: %Record{state: :accepted, callback_attempt_count: 0} = record} ->
+        awaiting_executor(job, record)
+
+      %Observation{executor_record: %Record{state: :accepted} = record} ->
         indeterminate(job, record, {:transport_lost, reason})
 
+      %Observation{executor_record: %Record{} = record} ->
+        result(job, record)
+
+      %Observation{executor_record: nil} ->
+        awaiting_executor(job, nil)
+
       nil ->
-        indeterminate(job, nil, {:transport_lost, reason})
+        awaiting_executor(job, nil)
     end
   end
 
@@ -198,7 +222,7 @@ defmodule Elara.Effect.Sidecar do
 
   defp result(job, %Record{result: {kind, text}} = record)
        when kind in [:ok, :error] and is_binary(text) do
-    %Result{job: job, outcome: {kind, text}, executor_record: record}
+    %Result{job: job, status: :terminal, outcome: {kind, text}, executor_record: record}
   end
 
   defp result(job, %Record{} = record) do
@@ -208,6 +232,7 @@ defmodule Elara.Effect.Sidecar do
   defp rejected(job, record, reason) do
     %Result{
       job: job,
+      status: :terminal,
       executor_record: record,
       outcome: {:error, "effect protocol failed: #{inspect(reason)}"}
     }
@@ -234,7 +259,28 @@ defmodule Elara.Effect.Sidecar do
         "missing=#{missing} " <>
         "reason=#{inspect(reason)} action=do_not_retry_or_fail_over"
 
-    %Result{job: job, outcome: {:indeterminate, message}, executor_record: record}
+    %Result{
+      job: job,
+      status: :terminal,
+      outcome: {:indeterminate, message},
+      executor_record: record
+    }
+  end
+
+  defp awaiting_executor(job, record) do
+    %Result{job: job, status: :awaiting_executor, executor_record: record}
+  end
+
+  defp monitor_executor(executor) do
+    case GenServer.whereis(executor) do
+      pid when is_pid(pid) -> Process.monitor(pid)
+      nil -> make_ref()
+    end
+  end
+
+  defp demonitor(reference) do
+    Process.demonitor(reference, [:flush])
+    :ok
   end
 
   defp invoke_hook(hook, point) do

@@ -36,6 +36,7 @@ defmodule Elara.Session do
             tasks: %{
               reference() => {:provider | :tool, Core.ref(), pid(), {pid(), reference()} | nil}
             },
+            pending_effects: %{Core.ref() => Job.t()},
             timers: %{Core.ref() => reference()}
           }
 
@@ -66,6 +67,7 @@ defmodule Elara.Session do
       effect_journal: nil,
       pending_reply: nil,
       tasks: %{},
+      pending_effects: %{},
       timers: %{}
     ]
   end
@@ -213,6 +215,11 @@ defmodule Elara.Session do
     {:reply, shell.cwd, shell}
   end
 
+  def handle_call({:replace_effect_executor, executor}, _from, shell) do
+    shell = %{shell | effect_executor: executor}
+    {:reply, :ok, resume_pending_effects(shell)}
+  end
+
   def handle_call(:child_config, _from, shell) do
     config = %{
       provider: shell.provider,
@@ -348,7 +355,8 @@ defmodule Elara.Session do
 
   @impl true
   def handle_cast(:interrupt, shell) do
-    {:noreply, feed(:interrupt, abort_running_tasks(shell))}
+    shell = %{abort_running_tasks(shell) | pending_effects: %{}}
+    {:noreply, feed(:interrupt, shell)}
   end
 
   @impl true
@@ -367,9 +375,14 @@ defmodule Elara.Session do
           shell = %{shell | provider: {elem(shell.provider, 0), new_cfg}}
           feed({:provider_result, core_ref, {:error, error}}, shell)
 
-        {:tool, %Sidecar.Result{} = result} ->
+        {:tool, %Sidecar.Result{status: :terminal} = result} ->
+          shell = %{shell | pending_effects: Map.delete(shell.pending_effects, core_ref)}
           shell = feed({:tool_result, core_ref, result.outcome}, shell)
           persist_effect_result(shell, result)
+
+        {:tool, %Sidecar.Result{status: :awaiting_executor, job: job}} ->
+          shell = %{shell | pending_effects: Map.put(shell.pending_effects, core_ref, job)}
+          resume_pending_effect(shell, core_ref, job)
 
         {:tool, result} ->
           outcome = settle_tool_result(plugin_lease, result)
@@ -499,7 +512,10 @@ defmodule Elara.Session do
       |> Enum.reduce_while({:ok, store}, fn call, {:ok, store} ->
         case Map.get(jobs_by_call, call.id) do
           nil ->
-            {:cont, {:ok, store}}
+            case persist_not_started(store, call, tools) do
+              {:ok, store} -> {:cont, {:ok, store}}
+              {:error, reason} -> {:halt, {:error, reason}}
+            end
 
           job ->
             case recover_tool_call(store, call, job, tools, journal, recovery) do
@@ -508,6 +524,24 @@ defmodule Elara.Session do
             end
         end
       end)
+    end
+  end
+
+  defp persist_not_started(store, call, tools) do
+    case {call.args, Map.get(tools, call.name)} do
+      {{:ok, _args}, %Tool{plugin: nil, mutating: true}} ->
+        Store.append(
+          store,
+          Message.tool_result(
+            call,
+            {:error,
+             "effect not_started: no durable controller intent; " <>
+               "action=do_not_reconcile_or_auto_retry"}
+          )
+        )
+
+      _other ->
+        {:ok, store}
     end
   end
 
@@ -558,9 +592,16 @@ defmodule Elara.Session do
           recovery.fault_hook
         )
 
-      with {:ok, store} <- Store.append(store, Message.tool_result(call, result.outcome)),
+      with %Sidecar.Result{status: :terminal} <- result,
+           {:ok, store} <- Store.append(store, Message.tool_result(call, result.outcome)),
            :ok <- mark_effect_result_persisted(journal, result) do
         {:ok, store}
+      else
+        %Sidecar.Result{status: :awaiting_executor} ->
+          {:error, {:effect_executor_unavailable, job.job_id}}
+
+        {:error, _reason} = error ->
+          error
       end
     else
       _reason -> {:error, {:unrecoverable_effect, job.job_id}}
@@ -605,6 +646,45 @@ defmodule Elara.Session do
       placement: tool.placement,
       mutating: true
     }
+  end
+
+  defp resume_pending_effects(shell) do
+    Enum.reduce(shell.pending_effects, shell, fn {core_ref, job}, shell ->
+      resume_pending_effect(shell, core_ref, job)
+    end)
+  end
+
+  defp resume_pending_effect(shell, core_ref, job) do
+    with true <- effect_executor_available?(shell.effect_executor),
+         %Tool{plugin: nil, mutating: true} = tool <-
+           Map.get(shell.core.config.tools, job.tool_name) do
+      request = request_from_job(shell.id, job, tool)
+      operation = fn -> Router.execute(shell.router, request, tool, shell.cwd) end
+
+      task =
+        Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
+          Sidecar.reconcile(
+            shell.effect_executor,
+            shell.effect_journal,
+            job,
+            operation,
+            @effect_recovery_timeout_ms,
+            shell.effect_fault_hook
+          )
+        end)
+
+      shell
+      |> Map.update!(:pending_effects, &Map.delete(&1, core_ref))
+      |> track_tool_task(task, core_ref, nil)
+    else
+      _unavailable_or_invalid -> shell
+    end
+  end
+
+  defp effect_executor_available?(nil), do: false
+
+  defp effect_executor_available?(executor) do
+    is_pid(GenServer.whereis(executor))
   end
 
   defp hydrate(store, config) do

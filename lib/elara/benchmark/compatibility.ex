@@ -4,7 +4,8 @@ defmodule Elara.Benchmark.Compatibility do
   @versions %{
     "elara.exp003.compatibility.v3" => "ER-3/FND-2-v3",
     "elara.exp003.compatibility.v4" => "ER-3/FND-2-v4",
-    "elara.exp003.compatibility.v5" => "ER-3/FND-2-v5"
+    "elara.exp003.compatibility.v5" => "ER-3/FND-2-v5",
+    "elara.exp003.compatibility.v6" => "ER-3/FND-2-v6"
   }
   @faults ~w(F1 F2 F3 F4)
 
@@ -63,8 +64,9 @@ defmodule Elara.Benchmark.Compatibility do
 
   defp valid_fault_contracts?(_contracts), do: false
 
-  defp valid_causal_terminal_contracts?("elara.exp003.compatibility.v5", contracts)
-       when is_map(contracts) do
+  defp valid_causal_terminal_contracts?(schema, contracts)
+       when schema in ~w(elara.exp003.compatibility.v5 elara.exp003.compatibility.v6) and
+              is_map(contracts) do
     Enum.all?(~w(F1 F2 F3), fn fault ->
       contracts[fault]["causal_terminal_evidence_expected_to_survive"] == %{
         "baseline" => false,
@@ -77,8 +79,9 @@ defmodule Elara.Benchmark.Compatibility do
       }
   end
 
-  defp valid_causal_terminal_contracts?("elara.exp003.compatibility.v5", _contracts),
-    do: false
+  defp valid_causal_terminal_contracts?(schema, _contracts)
+       when schema in ~w(elara.exp003.compatibility.v5 elara.exp003.compatibility.v6),
+       do: false
 
   defp valid_causal_terminal_contracts?(_schema, _contracts), do: true
 

@@ -1,0 +1,70 @@
+{
+  "schema": "elara.exp003.compatibility.v6",
+  "preregistration_version": "ER-3/FND-2-v6",
+  "frozen_against_commit": "ed9a2dbbdd2ba9ab743a9dc95d1f0ba08663891c",
+  "fault_contracts": {
+    "F1": {"barrier":"after request admission and before executor dispatch","job_mutations_at_barrier":0,"barrier_workspace":"pre_effect_workspace","converged_workspace":{"baseline":"pre_effect_workspace","receipts":"complete_task_workspace"},"causal_terminal_evidence_expected_to_survive":{"baseline":false,"receipts":false}},
+    "F2": {"barrier":"after executor acceptance and before callback invocation","job_mutations_at_barrier":0,"barrier_workspace":"pre_effect_workspace","converged_workspace":{"baseline":"pre_effect_workspace","receipts":"complete_task_workspace"},"causal_terminal_evidence_expected_to_survive":{"baseline":false,"receipts":false}},
+    "F3": {"barrier":"after one fault-target job mutation and before terminal delivery","job_mutations_at_barrier":1,"barrier_workspace":"fault_target_postcondition","converged_workspace":{"baseline":"fault_target_postcondition","receipts":"fault_target_postcondition"},"causal_terminal_evidence_expected_to_survive":{"baseline":false,"receipts":false}},
+    "F4": {"barrier":"after terminal delivery and before controller persistence","job_mutations_at_barrier":"task_defined","barrier_workspace":"complete_task_workspace","converged_workspace":{"baseline":"complete_task_workspace","receipts":"complete_task_workspace"},"causal_terminal_evidence_expected_to_survive":{"baseline":false,"receipts":true}}
+  },
+  "candidates": [
+    {"id":"W01","class":"write","primary_fault":"F1","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"W02","class":"write","primary_fault":"F2","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"W03","class":"write","primary_fault":"F4","secondary_fault":"F1","fault_target_job_mutations":0,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"W04","class":"write","primary_fault":"F4","secondary_fault":"F1","fault_target_job_mutations":0,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"W05","class":"write","primary_fault":"F1","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"W06","class":"write","primary_fault":"F2","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"W07","class":"write","primary_fault":"F3","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"W08","class":"write","primary_fault":"F2","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":1,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"P01","class":"patch","primary_fault":"F1","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"P02","class":"patch","primary_fault":"F2","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"P03","class":"patch","primary_fault":"F4","secondary_fault":"F1","fault_target_job_mutations":0,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"P04","class":"patch","primary_fault":"F4","secondary_fault":"F1","fault_target_job_mutations":0,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"P05","class":"patch","primary_fault":"F2","secondary_fault":"F4","fault_target_job_mutations":0,"environmental_mutations_before_dispatch":1,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"P06","class":"patch","primary_fault":"F1","secondary_fault":"F2","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":2,"complete_task_requires_live_continuation":true,"workspace_overrides":{"F1":{"baseline":"pre_effect_workspace","receipts":"fault_target_postcondition"},"F2":{"baseline":"pre_effect_workspace","receipts":"complete_task_workspace"}}},
+    {"id":"P07","class":"patch","primary_fault":"F3","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"P08","class":"patch","primary_fault":"F2","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"S01","class":"shell","primary_fault":"F1","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"S02","class":"shell","primary_fault":"F2","secondary_fault":"F3","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"S03","class":"shell","primary_fault":"F3","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false},
+    {"id":"S04","class":"shell","primary_fault":"F2","secondary_fault":"F4","fault_target_job_mutations":1,"environmental_mutations_before_dispatch":0,"step_count":1,"complete_task_requires_live_continuation":false}
+  ],
+  "command_contract": {
+    "record_expectation": "condition_specific_scalar",
+    "diagnostic_encoding": "canonical_json_values_only",
+    "qualification_authorization": {"valid":true,"status":"Pass"},
+    "interrupted_or_invalid_run": "stop_without_retry_or_replacement"
+  },
+  "preflight": {
+    "completed_before_beacon_commitment": true,
+    "candidate_count": 20,
+    "validated_assignment_count": 40,
+    "sampling_or_selection_performed": false,
+    "report_path": "docs/experiments/003-effect-receipt-v6-preflight.json",
+    "report_sha256": "8f69b8d15b2c7bb3ee782c87b778b0b32e536be1a548c207e7cd7664dd8b0216",
+    "source_path": "priv/benchmark/preflight_exp003_v6.exs",
+    "source_sha256": "48f36d9047138546e962ad636f18c8d936b0aa9cea8402ddff18ccdf6bb35121"
+  },
+  "v5_failure": {
+    "disposition": "materialization failed before outputs; v5 stopped without retry",
+    "round": 6428936,
+    "selected_first": "P02",
+    "reason": "frozen materializer constructed only 19 of 20 candidates before selection",
+    "held_out_target_or_timing_runs": 0,
+    "dogfood_runs": 0,
+    "B_or_T_calculated": false
+  },
+  "exposure": {"v6_target_fault_rows":0,"v6_no_fault_timing_runs":0,"v6_external_fault_rows":0,"v6_dogfood_runs":0,"v6_B_or_T_calculated":false},
+  "preserved_artifact_sha256": {
+    "docs/experiments/003-effect-receipt-confirmatory-preregistration-v5.md": "ddaff6f6b1007245df75aaed700ec131428e723c168a812ae8faada9e906c224",
+    "docs/experiments/003-effect-receipt-v5-compatibility.json": "256812afbb42f9c35f81a5c3a650dc59b34623acc88d48f44153033d01d8cfde",
+    "docs/experiments/003-effect-receipt-v5-materialization-failure.md": "7dc27af1d7acdebd72a241af54961f99ed88d5ed7345b9efd25a99a1d8fe293a",
+    "docs/experiments/003-effect-receipt-v6-preflight.json": "8f69b8d15b2c7bb3ee782c87b778b0b32e536be1a548c207e7cd7664dd8b0216",
+    "priv/benchmark/preflight_exp003_v6.exs": "48f36d9047138546e962ad636f18c8d936b0aa9cea8402ddff18ccdf6bb35121",
+    "test/fixtures/benchmark/exp003-v4/internal-confirmatory-qualification-failed.checkpoint.json": "e206f46325c420f5c664a0c185b223896e4a745ab598cc7091350769e5878a41",
+    "test/fixtures/benchmark/exp003-v5/beacon/api.drand.sh.json": "24898a55a44ab5b9146cd6e745db0d0a688ebca8261695180bcc55015dd98a04",
+    "test/fixtures/benchmark/exp003-v5/beacon/drand.cloudflare.com.json": "0ab8759a9caa6dabd507ae39d88bdc955ae935f63c21b8996a6436807ff0a60b",
+    "test/fixtures/benchmark/exp003-v5/beacon/verification.json": "26656c573f96abceb9a3b55eb0e933313b352974e42757ec5c0e5bcb37d2c1d1"
+  }
+}

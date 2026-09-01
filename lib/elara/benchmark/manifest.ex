@@ -5,15 +5,16 @@ defmodule Elara.Benchmark.Manifest do
 
   @schema "elara.exp003.corpus.v1"
 
-  @enforce_keys [:path, :sha256, :data, :tasks, :rows]
-  defstruct [:path, :sha256, :data, :tasks, :rows]
+  @enforce_keys [:path, :sha256, :data, :tasks, :rows, :adapter_fixtures]
+  defstruct [:path, :sha256, :data, :tasks, :rows, :adapter_fixtures]
 
   @type t :: %__MODULE__{
           path: String.t(),
           sha256: String.t(),
           data: map(),
           tasks: %{String.t() => map()},
-          rows: %{String.t() => map()}
+          rows: %{String.t() => map()},
+          adapter_fixtures: %{String.t() => map()}
         }
 
   @spec load(String.t(), keyword()) :: {:ok, t()} | {:error, [term()]}
@@ -29,7 +30,8 @@ defmodule Elara.Benchmark.Manifest do
          sha256: digest,
          data: data,
          tasks: Map.new(data["tasks"], &{&1["id"], &1}),
-         rows: Map.new(data["fault_rows"], &{&1["row_id"], &1})
+         rows: Map.new(data["fault_rows"], &{&1["row_id"], &1}),
+         adapter_fixtures: Map.new(data["adapter_equivalence_fixtures"], &{&1["id"], &1})
        }}
     else
       {:error, reasons} when is_list(reasons) -> {:error, reasons}
@@ -42,6 +44,14 @@ defmodule Elara.Benchmark.Manifest do
     case Map.fetch(tasks, id) do
       {:ok, task} -> {:ok, task}
       :error -> {:error, :unknown_task}
+    end
+  end
+
+  @spec adapter_fixture(t(), String.t()) :: {:ok, map()} | {:error, :unknown_adapter_fixture}
+  def adapter_fixture(%__MODULE__{adapter_fixtures: fixtures}, id) do
+    case Map.fetch(fixtures, id) do
+      {:ok, fixture} -> {:ok, fixture}
+      :error -> {:error, :unknown_adapter_fixture}
     end
   end
 

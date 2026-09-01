@@ -1,4 +1,4 @@
-defmodule Elara.Effect.DeclarativeWrite do
+defmodule Elara.Effect.LiteralPatch do
   @moduledoc false
 
   alias Elara.Effect.AtomicFile
@@ -7,8 +7,8 @@ defmodule Elara.Effect.DeclarativeWrite do
   alias Elara.Effect.Job
   alias Elara.Effect.Sidecar
 
-  @schema "elara.declarative_write.v1"
-  @tool_name "declarative_write"
+  @schema "elara.literal_patch.v1"
+  @tool_name "literal_patch"
   @tool_version "1"
   @required_capabilities ["filesystem:write"]
   @default_timeout 2_000
@@ -82,21 +82,22 @@ defmodule Elara.Effect.DeclarativeWrite do
           }
   end
 
-  @type expected :: :absent | {:regular, String.t()}
-  @type hook :: (atom() -> :ok)
-
   @spec schema() :: String.t()
   def schema, do: @schema
 
-  @spec arguments(String.t(), expected(), String.t()) :: map()
-  def arguments(path, expected, content) when is_binary(path) and is_binary(content) do
+  @spec arguments(String.t(), binary(), String.t(), String.t()) :: map()
+  def arguments(path, preimage, old_text, new_text)
+      when is_binary(path) and is_binary(preimage) and is_binary(old_text) and is_binary(new_text) do
+    postimage = String.replace(preimage, old_text, new_text, global: false)
+
     %{
       "schema" => @schema,
       "path" => path,
-      "expected" => encode_expected(expected),
-      "desired" => %{"content" => content, "sha256" => sha256(content)},
-      "parent_policy" => "create",
-      "replacement" => "same_directory_temp_rename"
+      "preimage_sha256" => sha256(preimage),
+      "old_text" => old_text,
+      "new_text" => new_text,
+      "postimage_sha256" => sha256(postimage),
+      "replacement" => "single_literal_once"
     }
   end
 
@@ -136,18 +137,18 @@ defmodule Elara.Effect.DeclarativeWrite do
       case observe_spec(spec) do
         %Observation{state: :exact_postimage} ->
           {:ok,
-           "declarative write postcondition_satisfied: path=#{spec.path} " <>
-             "sha256=#{spec.desired_sha256} no_write=true"}
+           "literal patch postcondition_satisfied: path=#{spec.path} " <>
+             "sha256=#{spec.postimage_sha256} no_write=true"}
 
         %Observation{state: :expected_preimage} ->
-          replace(spec, job, operation_hook, effect_observer)
+          apply_patch(spec, job, operation_hook, effect_observer)
 
         %Observation{} = observation ->
           observation_error(observation)
       end
     else
       {:error, reason} ->
-        {:error, "declarative write rejected: #{inspect(reason)} action=report_rejection"}
+        {:error, "literal patch rejected: #{inspect(reason)} action=report_rejection"}
     end
   end
 
@@ -227,39 +228,76 @@ defmodule Elara.Effect.DeclarativeWrite do
     end
   end
 
-  defp replace(spec, job, operation_hook, effect_observer) do
-    opts = [operation_hook: operation_hook, effect_observer: effect_observer]
+  defp apply_patch(spec, job, operation_hook, effect_observer) do
+    with {:ok, postimage} <- transform(spec) do
+      opts = [operation_hook: operation_hook, effect_observer: effect_observer]
 
-    case AtomicFile.replace(
-           spec.target,
-           spec.expected,
-           spec.content,
-           spec.desired_sha256,
-           job.job_id,
-           job.operation_digest,
-           opts
-         ) do
-      {:ok, :committed} ->
-        {:ok,
-         "declarative write committed: path=#{spec.path} " <>
-           "sha256=#{spec.desired_sha256}"}
+      case AtomicFile.replace(
+             spec.target,
+             {:regular, spec.preimage_sha256},
+             postimage,
+             spec.postimage_sha256,
+             job.job_id,
+             job.operation_digest,
+             opts
+           ) do
+        {:ok, :committed} ->
+          {:ok, "literal patch committed: path=#{spec.path} sha256=#{spec.postimage_sha256}"}
 
-      {:ok, :already_satisfied} ->
-        {:ok,
-         "declarative write postcondition_satisfied: path=#{spec.path} " <>
-           "sha256=#{spec.desired_sha256} no_write=true"}
+        {:ok, :already_satisfied} ->
+          {:ok,
+           "literal patch postcondition_satisfied: path=#{spec.path} " <>
+             "sha256=#{spec.postimage_sha256} no_write=true"}
 
-      {:error, {:observation, observation}} ->
-        observation |> local_observation() |> observation_error()
+        {:error, {:observation, observation}} ->
+          observation |> local_observation() |> observation_error()
 
+        {:error, reason} ->
+          {:error,
+           "literal patch failed: path=#{spec.path} reason=#{inspect(reason)} " <>
+             "action=report_rejection"}
+      end
+    else
       {:error, reason} ->
-        {:error, write_error(spec.path, reason)}
+        {:error,
+         "literal patch rejected: path=#{spec.path} reason=#{inspect(reason)} " <>
+           "action=report_rejection"}
+    end
+  end
+
+  defp transform(spec) do
+    case AtomicFile.snapshot(spec.target) do
+      {:regular, content, digest} when digest == spec.preimage_sha256 ->
+        if String.valid?(content) do
+          case :binary.matches(content, spec.old_text) do
+            [_match] ->
+              postimage = String.replace(content, spec.old_text, spec.new_text, global: false)
+
+              if sha256(postimage) == spec.postimage_sha256,
+                do: {:ok, postimage},
+                else: {:error, :postimage_digest_mismatch}
+
+            [] ->
+              {:error, :old_text_not_found}
+
+            matches ->
+              {:error, {:old_text_match_count, length(matches)}}
+          end
+        else
+          {:error, :invalid_utf8_preimage}
+        end
+
+      {:regular, _content, digest} ->
+        {:error, {:preimage_changed, digest}}
+
+      snapshot ->
+        {:error, {:preimage_unavailable, snapshot}}
     end
   end
 
   defp observe_spec(spec) do
     spec.target
-    |> AtomicFile.observe(spec.expected, spec.desired_sha256)
+    |> AtomicFile.observe({:regular, spec.preimage_sha256}, spec.postimage_sha256)
     |> local_observation()
   end
 
@@ -271,16 +309,17 @@ defmodule Elara.Effect.DeclarativeWrite do
        %{
          target: target,
          path: args["path"],
-         expected: decode_expected(args["expected"]),
-         content: args["desired"]["content"],
-         desired_sha256: args["desired"]["sha256"]
+         preimage_sha256: args["preimage_sha256"],
+         old_text: args["old_text"],
+         new_text: args["new_text"],
+         postimage_sha256: args["postimage_sha256"]
        }}
     end
   end
 
   defp validate_job_identity(%Job{} = job) do
     cond do
-      job.operation_kind != :declarative_write -> {:error, :invalid_operation_kind}
+      job.operation_kind != :literal_patch -> {:error, :invalid_operation_kind}
       job.tool_name != @tool_name -> {:error, :invalid_tool_name}
       job.tool_version != @tool_version -> {:error, :invalid_tool_version}
       job.required_capabilities != @required_capabilities -> {:error, :invalid_capabilities}
@@ -291,15 +330,26 @@ defmodule Elara.Effect.DeclarativeWrite do
   end
 
   defp validate_arguments(args) when is_map(args) do
-    keys = ["desired", "expected", "parent_policy", "path", "replacement", "schema"]
+    keys = [
+      "new_text",
+      "old_text",
+      "path",
+      "postimage_sha256",
+      "preimage_sha256",
+      "replacement",
+      "schema"
+    ]
 
     with true <- Enum.sort(Map.keys(args)) == keys,
          true <- args["schema"] == @schema,
          true <- is_binary(args["path"]) and args["path"] != "",
-         :ok <- validate_expected(args["expected"]),
-         :ok <- validate_desired(args["desired"]),
-         true <- args["parent_policy"] == "create",
-         true <- args["replacement"] == "same_directory_temp_rename" do
+         :ok <- validate_digest(args["preimage_sha256"]),
+         true <- is_binary(args["old_text"]) and args["old_text"] != "",
+         true <- String.valid?(args["old_text"]),
+         true <- is_binary(args["new_text"]),
+         true <- String.valid?(args["new_text"]),
+         :ok <- validate_digest(args["postimage_sha256"]),
+         true <- args["replacement"] == "single_literal_once" do
       {:ok, args}
     else
       false -> {:error, :invalid_arguments}
@@ -308,30 +358,6 @@ defmodule Elara.Effect.DeclarativeWrite do
   end
 
   defp validate_arguments(_args), do: {:error, :invalid_arguments}
-
-  defp validate_expected(%{"state" => "absent"} = expected)
-       when map_size(expected) == 1,
-       do: :ok
-
-  defp validate_expected(%{"state" => "regular", "sha256" => digest} = expected)
-       when map_size(expected) == 2,
-       do: validate_digest(digest)
-
-  defp validate_expected(_expected), do: {:error, :invalid_expected_state}
-
-  defp validate_desired(%{"content" => content, "sha256" => digest} = desired)
-       when map_size(desired) == 2 and is_binary(content) and is_binary(digest) do
-    with true <- String.valid?(content),
-         :ok <- validate_digest(digest),
-         true <- sha256(content) == digest do
-      :ok
-    else
-      false -> {:error, :desired_digest_mismatch}
-      {:error, _reason} = error -> error
-    end
-  end
-
-  defp validate_desired(_desired), do: {:error, :invalid_desired_state}
 
   defp validate_digest(digest) when is_binary(digest) do
     if Regex.match?(~r/\A[0-9a-f]{64}\z/, digest), do: :ok, else: {:error, :invalid_digest}
@@ -456,7 +482,7 @@ defmodule Elara.Effect.DeclarativeWrite do
     %Result{
       job: job,
       status: :terminal,
-      outcome: {:error, "declarative write protocol failed: #{inspect(reason)}"},
+      outcome: {:error, "literal patch protocol failed: #{inspect(reason)}"},
       workspace: workspace,
       causal: :not_started,
       historical: :not_invoked,
@@ -465,12 +491,7 @@ defmodule Elara.Effect.DeclarativeWrite do
   end
 
   defp terminal_safe_action(%Observation{state: :conflict}), do: :report_conflict
-
-  defp terminal_safe_action(%Observation{state: state})
-       when state in [:non_file, :symlink_rejected, :unavailable, :absent],
-       do: :report_rejection
-
-  defp terminal_safe_action(_workspace), do: :none
+  defp terminal_safe_action(_workspace), do: :report_rejection
 
   defp indeterminate_safe_action(%Observation{state: :exact_postimage}, _job, _cwd),
     do: :postcondition_satisfied_no_retry
@@ -505,29 +526,19 @@ defmodule Elara.Effect.DeclarativeWrite do
 
   defp observation_error(%Observation{state: :conflict, path: path, sha256: digest}) do
     {:error,
-     "declarative write conflict: path=#{path} observed_sha256=#{digest} " <>
+     "literal patch conflict: path=#{path} observed_sha256=#{digest} " <>
        "action=report_conflict"}
   end
 
   defp observation_error(%Observation{state: state, path: path, reason: reason}) do
     {:error,
-     "declarative write rejected: path=#{path} state=#{state} reason=#{inspect(reason)} " <>
+     "literal patch rejected: path=#{path} state=#{state} reason=#{inspect(reason)} " <>
        "action=report_rejection"}
-  end
-
-  defp write_error(path, reason) do
-    "declarative write failed: path=#{path} reason=#{inspect(reason)} action=report_rejection"
   end
 
   defp local_observation(%AtomicFile.Observation{} = observation) do
     struct(Observation, Map.from_struct(observation))
   end
-
-  defp encode_expected(:absent), do: %{"state" => "absent"}
-  defp encode_expected({:regular, digest}), do: %{"state" => "regular", "sha256" => digest}
-
-  defp decode_expected(%{"state" => "absent"}), do: :absent
-  defp decode_expected(%{"state" => "regular", "sha256" => digest}), do: {:regular, digest}
 
   defp authority_allows_write?(%{allowed_capabilities: :all, placement: :local}), do: true
 

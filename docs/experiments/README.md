@@ -18,10 +18,16 @@ The v1 confirmatory execution stopped before target fault exposure because its
 frozen internal adapter could not execute fault contexts. The separate
 [ER-3/FND-2-v2 amendment](003-effect-receipt-confirmatory-preregistration-v2.md)
 preserves that failure and commits fresh inputs plus a pre-exposure adapter
-qualification boundary; it does not rewrite v1 evidence. ER-1 v1 concluded Stop
-without a safety failure because row 1's frozen result counts were internally
-inconsistent. The separate
-[corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
+qualification boundary; it does not rewrite v1 evidence. V2 stopped before
+target fault exposure because two frozen task/fault assignments were
+semantically impossible. The separate
+[ER-3/FND-2-v3 amendment](003-effect-receipt-confirmatory-preregistration-v3.md)
+and its
+[machine-readable compatibility contract](003-effect-receipt-v3-compatibility.json)
+preserve that failure, distinguish environmental and job mutations, and require
+pre-seed compatibility validation. ER-1 v1 concluded Stop without a safety
+failure because row 1's frozen result counts were internally inconsistent. The
+separate [corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
 [fresh fixture manifest](003-effect-receipt-er1-v2-manifest.json) preserve that
 result. V2's first run aborted in harness mechanics before the conflicting
 digest target call and produced no gate outcome. The separately versioned

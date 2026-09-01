@@ -22,7 +22,10 @@ result. V2's first run aborted in harness mechanics before the conflicting
 digest target call and produced no gate outcome. The separately versioned
 [ER-1 v3 contract](003-effect-receipt-er1-v3-contract.md) and
 [fresh v3 manifest](003-effect-receipt-er1-v3-manifest.json) preregister a
-complete revalidation without rewriting either result.
+complete revalidation without rewriting either result. The next phase is
+governed by the frozen
+[ER-2 real-mutation contract](004-real-mutations-er2-contract.md) and its
+[machine-readable fixture and matrix manifest](004-real-mutations-er2-manifest.json).
 
 ## Research posture
 

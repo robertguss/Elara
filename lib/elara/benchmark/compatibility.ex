@@ -1,8 +1,10 @@
 defmodule Elara.Benchmark.Compatibility do
   @moduledoc false
 
-  @schema "elara.exp003.compatibility.v3"
-  @version "ER-3/FND-2-v3"
+  @versions %{
+    "elara.exp003.compatibility.v3" => "ER-3/FND-2-v3",
+    "elara.exp003.compatibility.v4" => "ER-3/FND-2-v4"
+  }
   @faults ~w(F1 F2 F3 F4)
 
   @spec load(String.t()) :: {:ok, map()} | {:error, [term()]}
@@ -25,10 +27,9 @@ defmodule Elara.Benchmark.Compatibility do
 
     errors =
       []
-      |> require(data["schema"] == @schema, {:invalid_schema, data["schema"]})
       |> require(
-        data["preregistration_version"] == @version,
-        {:invalid_version, data["preregistration_version"]}
+        @versions[data["schema"]] == data["preregistration_version"],
+        {:invalid_version, data["schema"], data["preregistration_version"]}
       )
       |> require(is_list(candidates), :candidates_not_a_list)
       |> require(valid_fault_contracts?(fault_contracts), :invalid_fault_contracts)

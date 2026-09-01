@@ -25,9 +25,16 @@ semantically impossible. The separate
 and its
 [machine-readable compatibility contract](003-effect-receipt-v3-compatibility.json)
 preserve that failure, distinguish environmental and job mutations, and require
-pre-seed compatibility validation. ER-1 v1 concluded Stop without a safety
-failure because row 1's frozen result counts were internally inconsistent. The
-separate [corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
+pre-seed compatibility validation. V3 then stopped before confirmatory exposure
+because it had no frozen top-level execution command. The separate
+[ER-3/FND-2-v4 amendment](003-effect-receipt-confirmatory-preregistration-v4.md)
+and its
+[command-complete compatibility contract](003-effect-receipt-v4-compatibility.json)
+preserve that failure and require one checked-in qualification, execution, and
+replay entrypoint before held-out evidence. ER-1 v1 concluded Stop without a
+safety failure because row 1's frozen result counts were internally
+inconsistent. The separate
+[corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
 [fresh fixture manifest](003-effect-receipt-er1-v2-manifest.json) preserve that
 result. V2's first run aborted in harness mechanics before the conflicting
 digest target call and produced no gate outcome. The separately versioned

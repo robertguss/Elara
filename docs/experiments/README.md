@@ -35,8 +35,14 @@ replay entrypoint before held-out evidence. V4's complete development
 [qualification failure](003-effect-receipt-v4-qualification-failure.md) then
 proved that causal-terminal applicability was incorrectly represented as a
 row-level scalar rather than a condition-specific contract; v4 stopped with zero
-held-out exposure. ER-1 v1 concluded Stop without a safety failure because row
-1's frozen result counts were internally inconsistent. The separate
+held-out exposure. The separate
+[ER-3/FND-2-v5 amendment](003-effect-receipt-confirmatory-preregistration-v5.md)
+and its
+[condition-correct compatibility contract](003-effect-receipt-v5-compatibility.json)
+preserve that failure and preregister condition-specific causal evidence,
+canonical diagnostics, and Pass-only qualification authorization before a new
+future seed. ER-1 v1 concluded Stop without a safety failure because row 1's
+frozen result counts were internally inconsistent. The separate
 [corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
 [fresh fixture manifest](003-effect-receipt-er1-v2-manifest.json) preserve that
 result. V2's first run aborted in harness mechanics before the conflicting

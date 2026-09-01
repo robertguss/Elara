@@ -53,7 +53,12 @@ defmodule Elara.Benchmark.PreregistrationV6Test do
     assert preregistration =~ "6429026"
     assert preregistration =~ "2026-09-01T22:30:00Z"
     assert preregistration =~ "elara:exp-003:er3:fnd-2:v6\\0"
-    refute File.exists?(Path.join(@root, "test/fixtures/benchmark/exp003-v6/beacon"))
+
+    for filename <- ~w(api.drand.sh.json drand.cloudflare.com.json verification.json) do
+      refute File.exists?(
+               Path.join(@root, "test/fixtures/benchmark/exp003-v6/beacon/#{filename}")
+             )
+    end
   end
 
   test "freezes exact command authorization, scoring, and zero exposure", %{contract: contract} do

@@ -15,7 +15,7 @@ defmodule Elara.Effect.CrashMatrixTest do
 
   @bound_ms 1_000
   @manifest_path Path.expand(
-                   "../../../docs/experiments/003-effect-receipt-er1-v2-manifest.json",
+                   "../../../docs/experiments/003-effect-receipt-er1-v3-manifest.json",
                    __DIR__
                  )
   @external_resource @manifest_path
@@ -42,7 +42,7 @@ defmodule Elara.Effect.CrashMatrixTest do
 
   setup do
     root =
-      Path.join(System.tmp_dir!(), "elara-er1-v2-#{System.unique_integer([:positive])}")
+      Path.join(System.tmp_dir!(), "elara-er1-v3-#{System.unique_integer([:positive])}")
 
     cwd = Path.join(root, "workspace")
     File.mkdir_p!(cwd)
@@ -67,7 +67,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path)
-    fixture = fixture("row_1")
+    fixture = fixture("v3_row_1")
     call = marker_call(context.marker_path, fixture)
 
     session =
@@ -122,7 +122,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path)
-    fixture = fixture("row_2")
+    fixture = fixture("v3_row_2")
     call = marker_call(context.marker_path, fixture)
 
     session =
@@ -163,7 +163,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path, executor_hook)
-    fixture = fixture("row_3")
+    fixture = fixture("v3_row_3")
     call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
     call_ask_unlinked(session)
@@ -197,7 +197,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path, executor_hook)
-    fixture = fixture("row_4")
+    fixture = fixture("v3_row_4")
     call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
     call_ask_unlinked(session)
@@ -235,7 +235,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path, executor_hook)
-    fixture = fixture("row_5")
+    fixture = fixture("v3_row_5")
     call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
     call_ask_unlinked(session)
@@ -276,7 +276,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path, executor_hook)
-    fixture = fixture("row_6")
+    fixture = fixture("v3_row_6")
     call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
     call_ask_unlinked(session)
@@ -348,7 +348,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path, executor_hook)
-    fixture = fixture("row_7")
+    fixture = fixture("v3_row_7")
     call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
     call_ask_unlinked(session)
@@ -389,7 +389,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path)
-    fixture = fixture("row_8")
+    fixture = fixture("v3_row_8")
     call = marker_call(context.marker_path, fixture)
 
     session =
@@ -436,7 +436,7 @@ defmodule Elara.Effect.CrashMatrixTest do
   test "control: no fault produces one intent, admission, attempt, mutation, and result",
        context do
     executor = start_executor(context.executor_path)
-    fixture = fixture("control_no_fault")
+    fixture = fixture("v3_control_no_fault")
     call = marker_call(context.marker_path, fixture)
     session = live_marker_session(context, executor, call)
 
@@ -464,7 +464,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path)
-    fixture = fixture("control_same_digest")
+    fixture = fixture("v3_control_same_digest")
     call = marker_call(context.marker_path, fixture)
     session = start_marker_session(context, executor, live_script(call), controller_hook)
     call_ask_unlinked(session)
@@ -519,7 +519,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     end
 
     executor = start_executor(context.executor_path)
-    fixture = fixture("control_conflicting_digest")
+    fixture = fixture("v3_control_conflicting_digest")
     call = marker_call(context.marker_path, fixture)
     session = start_marker_session(context, executor, live_script(call), controller_hook)
     call_ask_unlinked(session)
@@ -782,16 +782,21 @@ defmodule Elara.Effect.CrashMatrixTest do
 
   defp conflicting_job(job, fixture) do
     args =
-      Map.update!(job.args, "fixture_variant", fn variant ->
+      Map.update!(job.arguments, "fixture_variant", fn variant ->
         Map.put(variant, "conflict_nonce", fixture["variant"]["nonce"] <> "-conflict")
       end)
 
     Job.new(job.effect_id,
-      executor_id: job.executor_id,
+      operation_kind: job.operation_kind,
+      tool_call_id: job.tool_call_id,
       tool_name: job.tool_name,
       tool_version: job.tool_version,
-      args: args,
-      metadata: job.metadata
+      arguments: args,
+      workspace_id: job.workspace_id,
+      required_capabilities: job.required_capabilities,
+      allowed_capabilities: job.authority_scope.allowed_capabilities,
+      placement: job.authority_scope.placement,
+      marker_schema_version: job.marker_schema_version
     )
   end
 

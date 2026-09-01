@@ -1,0 +1,37 @@
+{
+  "experiment_id": "EXP-003-ER1-V3",
+  "contract_version": "ER-1/FND-V3-1",
+  "schema_version": 1,
+  "production_baseline_commit": "a1ee8b39924de38ee08eb0d222d873d3f4061767",
+  "predecessor_exposure_commit": "a1f3f094f956121578b6dedb66a0559c000bfbb1",
+  "storage_policy": {
+    "workspace": "fresh_per_case_and_run",
+    "controller_journal": "fresh_per_case_and_run",
+    "executor_ledger": "fresh_per_case_and_run",
+    "job_identity": "fresh_recording_identity_per_case_and_run"
+  },
+  "seeds": [196613, 262147, 327673],
+  "repeat": {"seed": 196613, "repeat_until_failure": 25},
+  "commands": [
+    "mix test test/elara/effect/crash_matrix_test.exs --seed 196613",
+    "mix test test/elara/effect/crash_matrix_test.exs --seed 262147",
+    "mix test test/elara/effect/crash_matrix_test.exs --seed 327673",
+    "mix test test/elara/effect/crash_matrix_test.exs --seed 196613 --repeat-until-failure 25",
+    "mix test",
+    "mix format --check-formatted",
+    "mix compile --warnings-as-errors"
+  ],
+  "cases": [
+    {"id": "v3_row_1", "kind": "fault", "token": "v3-r1-europa-18c4a7", "variant": {"nonce": "18c4a7d9", "ordinal": 1, "schedule": "before_intent"}, "expected_counts": {"controller_intent_count": 0, "executor_admission_count": 0, "executor_callback_attempt_count": 0, "external_mutation_count": 0, "executor_terminal_result_count": 0, "session_tool_result_count": 1}, "session_classification": "not_started"},
+    {"id": "v3_row_2", "kind": "fault", "token": "v3-r2-lyra-2f6b81", "variant": {"nonce": "2f6b81ea", "ordinal": 2, "schedule": "intent_before_dispatch"}, "expected_counts": {"controller_intent_count": 1, "executor_admission_count": 1, "executor_callback_attempt_count": 1, "external_mutation_count": 1, "executor_terminal_result_count": 1, "session_tool_result_count": 1}, "session_classification": "success"},
+    {"id": "v3_row_3", "kind": "fault", "token": "v3-r3-coral-36e95c", "variant": {"nonce": "36e95cfb", "ordinal": 3, "schedule": "receipt_before_accept"}, "expected_counts": {"controller_intent_count": 1, "executor_admission_count": 1, "executor_callback_attempt_count": 1, "external_mutation_count": 1, "executor_terminal_result_count": 1, "session_tool_result_count": 1}, "session_classification": "success"},
+    {"id": "v3_row_4", "kind": "fault", "token": "v3-r4-nova-47ad20", "variant": {"nonce": "47ad200c", "ordinal": 4, "schedule": "accept_before_reply"}, "expected_counts": {"controller_intent_count": 1, "executor_admission_count": 1, "executor_callback_attempt_count": 1, "external_mutation_count": 1, "executor_terminal_result_count": 1, "session_tool_result_count": 1}, "session_classification": "success"},
+    {"id": "v3_row_5", "kind": "fault", "token": "v3-r5-rhythm-58bc31", "variant": {"nonce": "58bc311d", "ordinal": 5, "schedule": "reply_before_callback"}, "expected_counts": {"controller_intent_count": 1, "executor_admission_count": 1, "executor_callback_attempt_count": 1, "external_mutation_count": 1, "executor_terminal_result_count": 1, "session_tool_result_count": 1}, "session_classification": "success"},
+    {"id": "v3_row_6", "kind": "fault", "token": "v3-r6-pelagic-69cd42", "variant": {"nonce": "69cd422e", "ordinal": 6, "schedule": "mutation_before_completion"}, "expected_counts": {"controller_intent_count": 1, "executor_admission_count": 1, "executor_callback_attempt_count": 1, "external_mutation_count": 1, "executor_terminal_result_count": 0, "session_tool_result_count": 1}, "session_classification": "indeterminate"},
+    {"id": "v3_row_7", "kind": "fault", "token": "v3-r7-celeste-7ade53", "variant": {"nonce": "7ade533f", "ordinal": 7, "schedule": "completion_before_reply"}, "expected_counts": {"controller_intent_count": 1, "executor_admission_count": 1, "executor_callback_attempt_count": 1, "external_mutation_count": 1, "executor_terminal_result_count": 1, "session_tool_result_count": 1}, "session_classification": "success"},
+    {"id": "v3_row_8", "kind": "fault", "token": "v3-r8-tempo-8bef64", "variant": {"nonce": "8bef6450", "ordinal": 8, "schedule": "observation_before_session_result"}, "expected_counts": {"controller_intent_count": 1, "executor_admission_count": 1, "executor_callback_attempt_count": 1, "external_mutation_count": 1, "executor_terminal_result_count": 1, "session_tool_result_count": 1}, "session_classification": "success"},
+    {"id": "v3_control_no_fault", "kind": "control", "token": "v3-c1-orbit-9cf075", "variant": {"nonce": "9cf07561", "ordinal": 9, "schedule": "no_fault"}, "expected_counts": {"controller_intent_count": 1, "executor_admission_count": 1, "executor_callback_attempt_count": 1, "external_mutation_count": 1, "executor_terminal_result_count": 1, "session_tool_result_count": 1}, "session_classification": "success"},
+    {"id": "v3_control_same_digest", "kind": "control", "token": "v3-c2-nerida-ad0186", "variant": {"nonce": "ad018672", "ordinal": 10, "schedule": "same_digest_replay"}, "expected_counts": {"controller_intent_count": 1, "executor_admission_count": 1, "executor_callback_attempt_count": 1, "external_mutation_count": 1, "executor_terminal_result_count": 1, "session_tool_result_count": 1}, "session_classification": "success"},
+    {"id": "v3_control_conflicting_digest", "kind": "control", "token": "v3-c3-sonata-be1297", "variant": {"nonce": "be129783", "ordinal": 11, "schedule": "conflicting_digest"}, "expected_counts": {"controller_intent_count": 1, "executor_admission_count": 1, "executor_callback_attempt_count": 1, "external_mutation_count": 1, "executor_terminal_result_count": 1, "session_tool_result_count": 1}, "session_classification": "success"}
+  ]
+}

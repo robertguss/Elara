@@ -18,7 +18,11 @@ ER-1 v1 concluded Stop without a safety failure because row 1's frozen result
 counts were internally inconsistent. The separate
 [corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
 [fresh fixture manifest](003-effect-receipt-er1-v2-manifest.json) preserve that
-result while preregistering a new revalidation.
+result. V2's first run aborted in harness mechanics before the conflicting
+digest target call and produced no gate outcome. The separately versioned
+[ER-1 v3 contract](003-effect-receipt-er1-v3-contract.md) and
+[fresh v3 manifest](003-effect-receipt-er1-v3-manifest.json) preregister a
+complete revalidation without rewriting either result.
 
 ## Research posture
 

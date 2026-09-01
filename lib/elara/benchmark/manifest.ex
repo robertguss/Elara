@@ -7,7 +7,8 @@ defmodule Elara.Benchmark.Manifest do
     "elara.exp003.corpus.v1" => "ER-3/FND-2-v1",
     "elara.exp003.corpus.v2" => "ER-3/FND-2-v2",
     "elara.exp003.corpus.v3" => "ER-3/FND-2-v3",
-    "elara.exp003.corpus.v4" => "ER-3/FND-2-v4"
+    "elara.exp003.corpus.v4" => "ER-3/FND-2-v4",
+    "elara.exp003.corpus.v5" => "ER-3/FND-2-v5"
   }
 
   @enforce_keys [:path, :sha256, :data, :tasks, :rows, :adapter_fixtures]

@@ -41,8 +41,12 @@ and its
 [condition-correct compatibility contract](003-effect-receipt-v5-compatibility.json)
 preserve that failure and preregister condition-specific causal evidence,
 canonical diagnostics, and Pass-only qualification authorization before a new
-future seed. ER-1 v1 concluded Stop without a safety failure because row 1's
-frozen result counts were internally inconsistent. The separate
+future seed. V5's verified
+[materialization failure](003-effect-receipt-v5-materialization-failure.md) then
+showed that the frozen generator could instantiate only 19 of 20 candidates; the
+selected P02 task had no constructor, so v5 stopped before producing a corpus or
+confirmatory output. ER-1 v1 concluded Stop without a safety failure because row
+1's frozen result counts were internally inconsistent. The separate
 [corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
 [fresh fixture manifest](003-effect-receipt-er1-v2-manifest.json) preserve that
 result. V2's first run aborted in harness mechanics before the conflicting

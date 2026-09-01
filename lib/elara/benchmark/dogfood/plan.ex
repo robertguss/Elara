@@ -5,7 +5,8 @@ defmodule Elara.Benchmark.Dogfood.Plan do
     "elara.exp003.dogfood-plan.v1" => "ER-3/FND-2-v1",
     "elara.exp003.dogfood-plan.v2" => "ER-3/FND-2-v2",
     "elara.exp003.dogfood-plan.v3" => "ER-3/FND-2-v3",
-    "elara.exp003.dogfood-plan.v4" => "ER-3/FND-2-v4"
+    "elara.exp003.dogfood-plan.v4" => "ER-3/FND-2-v4",
+    "elara.exp003.dogfood-plan.v5" => "ER-3/FND-2-v5"
   }
   @task_ids Enum.map(1..12, &"D#{String.pad_leading(Integer.to_string(&1), 2, "0")}")
   @assignments ~w(

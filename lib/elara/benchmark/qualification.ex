@@ -7,7 +7,8 @@ defmodule Elara.Benchmark.Qualification do
   @version "ER-3/INTERNAL-ADAPTER-QUAL-v1"
   @sources %{
     "elara.exp003.corpus.v3" => "ER-3/FND-2-v3",
-    "elara.exp003.corpus.v4" => "ER-3/FND-2-v4"
+    "elara.exp003.corpus.v4" => "ER-3/FND-2-v4",
+    "elara.exp003.corpus.v6" => "ER-3/FND-2-v6"
   }
   @fixture_by_class %{"write" => "W01", "patch" => "P01", "shell" => "S02"}
 
@@ -61,6 +62,9 @@ defmodule Elara.Benchmark.Qualification do
 
   defp qualification_scope(%Manifest{data: %{"schema" => "elara.exp003.corpus.v4"}}),
     do: "EXP-003-v4-internal-adapter-qualification"
+
+  defp qualification_scope(%Manifest{data: %{"schema" => "elara.exp003.corpus.v6"}}),
+    do: "EXP-003-v6-internal-adapter-qualification"
 
   defp qualification_tasks(source) do
     source.data["adapter_equivalence_fixtures"]

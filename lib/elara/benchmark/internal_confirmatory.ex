@@ -3,10 +3,10 @@ defmodule Elara.Benchmark.InternalConfirmatory do
 
   alias Elara.Benchmark.{ElaraAdapter, Manifest, Qualification, Runner, Scorer}
 
-  @protocol "ER-3/FND-2-v4"
+  @protocol "ER-3/FND-2-v6"
   @report_schema "elara.exp003.internal-confirmatory-report.v1"
   @checkpoint_schema "elara.exp003.internal-confirmatory-checkpoint.v1"
-  @manifest_sha256 "14cc3a57763f0ab48f4b68a70317916d09ff4bee64ba18d150480dd1315820a2"
+  @manifest_sha256 "b415272e106db54087edbd54500c3544c94ca13b2d42950c0a63b82a38c0973c"
   @entrypoint "priv/benchmark/run_internal_confirmatory.exs"
   @checkpoint_filename "internal-confirmatory-checkpoint.json"
   @source_paths [
@@ -20,17 +20,17 @@ defmodule Elara.Benchmark.InternalConfirmatory do
     "lib/elara/benchmark/manifest.ex",
     "priv/benchmark/elara_target_runner.exs",
     @entrypoint,
-    "docs/experiments/003-effect-receipt-v4-compatibility.json",
+    "docs/experiments/003-effect-receipt-v6-compatibility.json",
     "mix.lock"
   ]
 
   @commands %{
     "qualify" =>
-      "mix run priv/benchmark/run_internal_confirmatory.exs -- qualify <v4-manifest> <state-root> <workspace-root> <output.json>",
+      "mix run priv/benchmark/run_internal_confirmatory.exs -- qualify <v6-manifest> <state-root> <workspace-root> <output.json>",
     "execute" =>
-      "mix run priv/benchmark/run_internal_confirmatory.exs -- execute <v4-manifest> <qualification.json> <state-root> <workspace-root> <output.json>",
+      "mix run priv/benchmark/run_internal_confirmatory.exs -- execute <v6-manifest> <qualification.json> <state-root> <workspace-root> <output.json>",
     "replay" =>
-      "mix run priv/benchmark/run_internal_confirmatory.exs -- replay <v4-manifest> <execution.json> <score-output.json>"
+      "mix run priv/benchmark/run_internal_confirmatory.exs -- replay <v6-manifest> <execution.json> <score-output.json>"
   }
 
   @spec qualify(String.t(), String.t(), String.t(), String.t()) ::
@@ -63,7 +63,7 @@ defmodule Elara.Benchmark.InternalConfirmatory do
              report["fault_records"],
              report["no_fault_records"]
            ),
-         :ok <- require_valid_score(score),
+         :ok <- validate_authorizing_score(score),
          :ok <- require_score_match(score, report["score"]),
          :ok <- write_atomic(output_path, canonical_json(score), :new) do
       {:ok,
@@ -106,6 +106,14 @@ defmodule Elara.Benchmark.InternalConfirmatory do
     end)
   end
 
+  @spec validate_authorizing_score(map()) :: :ok | {:error, term()}
+  def validate_authorizing_score(%{"valid" => true, "status" => "Pass"}), do: :ok
+
+  def validate_authorizing_score(%{"valid" => true, "status" => status}),
+    do: {:error, {:non_passing_score, status}}
+
+  def validate_authorizing_score(score), do: {:error, {:invalid_score, score["errors"]}}
+
   defp run(mode, manifest_path, qualification_path, state_root, workspace_root, output_path) do
     repo_root = File.cwd!()
     state_root = Path.expand(state_root)
@@ -133,7 +141,7 @@ defmodule Elara.Benchmark.InternalConfirmatory do
          {:ok, fault_records, no_fault_records, checkpoint} <-
            orchestrate(execution_manifest, config, workspace_root, checkpoint_path, checkpoint),
          score <- Scorer.score(execution_manifest, fault_records, no_fault_records),
-         :ok <- require_valid_score(score),
+         :ok <- validate_authorizing_score(score),
          {:ok, checkpoint_bytes} <- File.read(checkpoint_path),
          report <-
            report(
@@ -349,12 +357,12 @@ defmodule Elara.Benchmark.InternalConfirmatory do
     %{
       "development_fault_runs" => length(fault_records),
       "development_no_fault_runs" => length(no_fault_records),
-      "v4_confirmatory_fault_runs" => 0,
-      "v4_confirmatory_no_fault_timing_runs" => 0,
+      "v6_confirmatory_fault_runs" => 0,
+      "v6_confirmatory_no_fault_timing_runs" => 0,
       "confirmatory_B_or_T_calculated" => false,
       "development_score_only" => true,
       "statement" =>
-        "Every run used non-scored development_adapter_fixture tasks; no held-out v4 row or timing result was exposed."
+        "Every run used non-scored development_adapter_fixture tasks; no held-out v6 row or timing result was exposed."
     }
   end
 
@@ -362,11 +370,11 @@ defmodule Elara.Benchmark.InternalConfirmatory do
     %{
       "development_fault_runs" => 0,
       "development_no_fault_runs" => 0,
-      "v4_confirmatory_fault_runs" => length(fault_records),
-      "v4_confirmatory_no_fault_timing_runs" => length(no_fault_records),
+      "v6_confirmatory_fault_runs" => length(fault_records),
+      "v6_confirmatory_no_fault_timing_runs" => length(no_fault_records),
       "confirmatory_B_or_T_calculated" => true,
       "development_score_only" => false,
-      "statement" => "Complete immutable v4 internal execution; no row was retried or replaced."
+      "statement" => "Complete immutable v6 internal execution; no row was retried or replaced."
     }
   end
 
@@ -412,8 +420,8 @@ defmodule Elara.Benchmark.InternalConfirmatory do
          {:ok, manifest} <- Qualification.manifest(source),
          :ok <- validate_report(report, source, manifest, identities),
          true <- report["mode"] == "qualify",
-         true <- report["exposure"]["v4_confirmatory_fault_runs"] == 0,
-         true <- report["exposure"]["v4_confirmatory_no_fault_timing_runs"] == 0,
+         true <- report["exposure"]["v6_confirmatory_fault_runs"] == 0,
+         true <- report["exposure"]["v6_confirmatory_no_fault_timing_runs"] == 0,
          true <- report["exposure"]["confirmatory_B_or_T_calculated"] == false do
       {:ok,
        %{
@@ -468,7 +476,7 @@ defmodule Elara.Benchmark.InternalConfirmatory do
         replayed =
           Scorer.score(execution_manifest, report["fault_records"], report["no_fault_records"])
 
-        with :ok <- require_valid_score(replayed),
+        with :ok <- validate_authorizing_score(replayed),
              :ok <- require_score_match(replayed, report["score"]) do
           :ok
         end
@@ -477,11 +485,11 @@ defmodule Elara.Benchmark.InternalConfirmatory do
 
   defp load_source(path) do
     with {:ok, manifest} <- Manifest.load(Path.expand(path), sha256: @manifest_sha256),
-         true <- manifest.data["schema"] == "elara.exp003.corpus.v4",
+         true <- manifest.data["schema"] == "elara.exp003.corpus.v6",
          true <- manifest.data["preregistration_version"] == @protocol do
       {:ok, manifest}
     else
-      false -> {:error, :not_frozen_v4_manifest}
+      false -> {:error, :not_frozen_v6_manifest}
       {:error, _reason} = error -> error
     end
   end
@@ -537,9 +545,6 @@ defmodule Elara.Benchmark.InternalConfirmatory do
       {:error, reason} -> {:error, {:json_read_failed, path, reason}}
     end
   end
-
-  defp require_valid_score(%{"valid" => true}), do: :ok
-  defp require_valid_score(score), do: {:error, {:invalid_score, score["errors"]}}
 
   defp require_score_match(left, right) do
     if canonical_json(left) == canonical_json(right),

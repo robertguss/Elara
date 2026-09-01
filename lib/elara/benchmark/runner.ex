@@ -212,11 +212,18 @@ defmodule Elara.Benchmark.Runner do
       "observation_deadline_ms" => row["observation_deadline_ms"],
       "final_workspace_digest" => final_digest,
       "expected_workspace_digest" => task["fixture"]["expected_no_fault_workspace_sha256"],
-      "causal_terminal_evidence_expected" => row["causal_terminal_evidence_expected_to_survive"],
+      "causal_terminal_evidence_expected" => causal_terminal_expectation(row, run["condition"]),
       "elapsed_ms" => div(elapsed_us, 1_000),
       "cpu_ms" => div(cpu_us, 1_000),
       "storage_bytes" => storage_bytes
     }
+  end
+
+  defp causal_terminal_expectation(row, condition) do
+    case row["causal_terminal_evidence_expected_to_survive"] do
+      expectations when is_map(expectations) -> Map.fetch!(expectations, condition)
+      expectation when is_boolean(expectation) -> expectation
+    end
   end
 
   defp collect_fault_hook(reference, expected_barrier) do

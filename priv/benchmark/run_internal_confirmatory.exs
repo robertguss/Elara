@@ -20,9 +20,9 @@ result =
     _other ->
       {:error,
        "usage: mix run priv/benchmark/run_internal_confirmatory.exs -- " <>
-         "qualify <v4-manifest> <state-root> <workspace-root> <output.json> | " <>
-         "execute <v4-manifest> <qualification.json> <state-root> <workspace-root> " <>
-         "<output.json> | replay <v4-manifest> <execution.json> <score-output.json>"}
+         "qualify <v6-manifest> <state-root> <workspace-root> <output.json> | " <>
+         "execute <v6-manifest> <qualification.json> <state-root> <workspace-root> " <>
+         "<output.json> | replay <v6-manifest> <execution.json> <score-output.json>"}
   end
 
 case result do

@@ -327,17 +327,18 @@ defmodule Elara.Benchmark.Scorer do
   defp terminal_result(manifest, records) do
     applicable =
       Enum.filter(records, fn record ->
-        manifest.rows[record["row_id"]]["causal_terminal_evidence_expected_to_survive"]
+        manifest.rows[record["row_id"]]
+        |> causal_terminal_expectation(record["condition"])
       end)
 
     failures =
       Enum.flat_map(applicable, fn record ->
         row = manifest.rows[record["row_id"]]
         bound = row["terminal_convergence_bound_ms"]
+        expected = causal_terminal_expectation(row, record["condition"])
 
         cond do
-          record["causal_terminal_evidence_expected"] !=
-              row["causal_terminal_evidence_expected_to_survive"] ->
+          record["causal_terminal_evidence_expected"] != expected ->
             [{record["row_id"], record["condition"], :expectation_drift}]
 
           not record["causal_terminal_evidence_observed"] ->
@@ -466,9 +467,38 @@ defmodule Elara.Benchmark.Scorer do
       "schema" => "elara.exp003.score.v1",
       "status" => "Invalid",
       "valid" => false,
-      "errors" => errors
+      "errors" => Enum.map(errors, &diagnostic/1)
     }
   end
+
+  defp diagnostic(value) when is_atom(value), do: Atom.to_string(value)
+
+  defp diagnostic(value) when is_tuple(value) do
+    [code | details] = Tuple.to_list(value)
+    %{"code" => diagnostic_code(code), "details" => Enum.map(details, &diagnostic_value/1)}
+  end
+
+  defp diagnostic(value), do: diagnostic_value(value)
+
+  defp diagnostic_value(value) when is_atom(value), do: Atom.to_string(value)
+
+  defp diagnostic_value(value) when is_tuple(value),
+    do: value |> Tuple.to_list() |> Enum.map(&diagnostic_value/1)
+
+  defp diagnostic_value(value) when is_list(value), do: Enum.map(value, &diagnostic_value/1)
+
+  defp diagnostic_value(value) when is_map(value) do
+    Map.new(value, fn {key, item} -> {diagnostic_key(key), diagnostic_value(item)} end)
+  end
+
+  defp diagnostic_value(value), do: value
+
+  defp diagnostic_key(key) when is_atom(key), do: Atom.to_string(key)
+  defp diagnostic_key(key) when is_binary(key), do: key
+  defp diagnostic_key(key), do: diagnostic_value(key)
+
+  defp diagnostic_code(code) when is_atom(code), do: Atom.to_string(code)
+  defp diagnostic_code(code) when is_binary(code), do: code
 
   defp add_if(errors, true, reason), do: [reason | errors]
   defp add_if(errors, false, _reason), do: errors
@@ -502,8 +532,7 @@ defmodule Elara.Benchmark.Scorer do
           "restart_order" => row["restart_order"],
           "observation_deadline_ms" => row["observation_deadline_ms"],
           "expected_workspace_digest" => task["fixture"]["expected_no_fault_workspace_sha256"],
-          "causal_terminal_evidence_expected" =>
-            row["causal_terminal_evidence_expected_to_survive"],
+          "causal_terminal_evidence_expected" => causal_terminal_expectation(row, condition),
           "safe_next_action_expected" => row["expected_safe_action"][condition],
           "initial_reset_verified" => true
         }
@@ -546,4 +575,11 @@ defmodule Elara.Benchmark.Scorer do
   defp fault_order_index("receipts", 1), do: 2
   defp fault_order_index("receipts", 2), do: 3
   defp fault_order_index("receipts", 3), do: 6
+
+  defp causal_terminal_expectation(row, condition) do
+    case row["causal_terminal_evidence_expected_to_survive"] do
+      expectations when is_map(expectations) -> Map.fetch!(expectations, condition)
+      expectation when is_boolean(expectation) -> expectation
+    end
+  end
 end

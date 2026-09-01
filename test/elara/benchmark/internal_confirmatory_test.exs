@@ -3,11 +3,19 @@ defmodule Elara.Benchmark.InternalConfirmatoryTest do
 
   alias Elara.Benchmark.{InternalConfirmatory, Manifest, Qualification, Runner}
 
-  @manifest_path Path.expand("../../fixtures/benchmark/exp003-v4/manifest.json", __DIR__)
+  @manifest_path Path.expand("../../fixtures/benchmark/exp003-v6/manifest.json", __DIR__)
   @failed_checkpoint_path Path.expand(
                             "../../fixtures/benchmark/exp003-v4/internal-confirmatory-qualification-failed.checkpoint.json",
                             __DIR__
                           )
+  @qualification_path Path.expand(
+                        "../../fixtures/benchmark/exp003-v6/internal-confirmatory-qualification.json",
+                        __DIR__
+                      )
+  @qualification_checkpoint_path Path.expand(
+                                   "../../fixtures/benchmark/exp003-v6/internal-confirmatory-qualification.checkpoint.json",
+                                   __DIR__
+                                 )
 
   setup do
     root =
@@ -26,11 +34,11 @@ defmodule Elara.Benchmark.InternalConfirmatoryTest do
     }
   end
 
-  test "v4 qualification derives the complete development schedule" do
+  test "v6 qualification derives the complete development schedule" do
     assert {:ok, source} = Manifest.load(@manifest_path)
     assert {:ok, qualification} = Qualification.manifest(source)
 
-    assert qualification.data["scope_id"] == "EXP-003-v4-internal-adapter-qualification"
+    assert qualification.data["scope_id"] == "EXP-003-v6-internal-adapter-qualification"
     assert map_size(qualification.tasks) == 3
     assert map_size(qualification.rows) == 12
     assert length(Runner.fault_schedule(qualification)) == 72
@@ -80,7 +88,7 @@ defmodule Elara.Benchmark.InternalConfirmatoryTest do
   test "an unmatched started checkpoint is retained as an invalid interruption", context do
     checkpoint = %{
       "schema" => "elara.exp003.internal-confirmatory-checkpoint.v1",
-      "protocol" => "ER-3/FND-2-v4",
+      "protocol" => "ER-3/FND-2-v6",
       "mode" => "qualify",
       "source_manifest_sha256" => String.duplicate("a", 64),
       "execution_manifest_sha256" => String.duplicate("b", 64),
@@ -118,7 +126,7 @@ defmodule Elara.Benchmark.InternalConfirmatoryTest do
     refute File.exists?(context.output)
   end
 
-  test "an altered v4 manifest is rejected before paths are created", context do
+  test "an altered v6 manifest is rejected before paths are created", context do
     altered_path = Path.join(context.root, "altered-manifest.json")
     manifest = @manifest_path |> File.read!() |> JSON.decode!() |> Map.put("tampered", true)
     File.mkdir_p!(context.root)
@@ -147,6 +155,96 @@ defmodule Elara.Benchmark.InternalConfirmatoryTest do
     assert identities["lib/elara/benchmark/elara_adapter.ex"]
     assert identities["lib/elara/benchmark/scorer.ex"]
     assert identities["priv/benchmark/elara_target_runner.exs"]
+  end
+
+  test "only an exact valid Pass score authorizes qualification or execution" do
+    assert :ok =
+             InternalConfirmatory.validate_authorizing_score(%{
+               "valid" => true,
+               "status" => "Pass",
+               "errors" => []
+             })
+
+    assert {:error, {:non_passing_score, "Mixed"}} =
+             InternalConfirmatory.validate_authorizing_score(%{
+               "valid" => true,
+               "status" => "Mixed",
+               "errors" => []
+             })
+
+    assert {:error, {:non_passing_score, "Fail"}} =
+             InternalConfirmatory.validate_authorizing_score(%{
+               "valid" => true,
+               "status" => "Fail",
+               "errors" => []
+             })
+
+    assert {:error, {:invalid_score, [%{"code" => "malformed"}]}} =
+             InternalConfirmatory.validate_authorizing_score(%{
+               "valid" => false,
+               "status" => "Invalid",
+               "errors" => [%{"code" => "malformed"}]
+             })
+  end
+
+  test "freezes a complete valid Pass V6 development qualification and checkpoint" do
+    report_bytes = File.read!(@qualification_path)
+    report = JSON.decode!(report_bytes)
+    checkpoint_bytes = File.read!(@qualification_checkpoint_path)
+    checkpoint = JSON.decode!(checkpoint_bytes)
+
+    assert sha256(report_bytes) ==
+             "8ef12be71c61bded368bca509d9b2d3ea6ef2e2aa44b24a698d641843576ed23"
+
+    assert sha256(checkpoint_bytes) ==
+             "4091b776e865bcd0c29dbcbb68d8eb33bf3b355d9d03f9fb6406d6b0db49ea34"
+
+    assert InternalConfirmatory.canonical_json(report) == report_bytes
+    assert InternalConfirmatory.canonical_json(checkpoint) == checkpoint_bytes
+    assert report["protocol"] == "ER-3/FND-2-v6"
+    assert report["score"]["valid"]
+    assert report["score"]["status"] == "Pass"
+    assert report["score"]["causal_terminal_convergence"]["applicable_repetitions"] == 9
+    assert report["execution"]["fault_run_count"] == 72
+    assert report["execution"]["no_fault_run_count"] == 72
+    assert report["execution"]["checkpoint_event_count"] == 288
+    assert report["execution"]["checkpoint_sha256"] == sha256(checkpoint_bytes)
+    assert report["exposure"]["v6_confirmatory_fault_runs"] == 0
+    assert report["exposure"]["v6_confirmatory_no_fault_timing_runs"] == 0
+    refute report["exposure"]["confirmatory_B_or_T_calculated"]
+
+    assert Enum.frequencies_by(checkpoint["events"], &{&1["kind"], &1["status"]}) == %{
+             {"fault", "started"} => 72,
+             {"fault", "completed"} => 72,
+             {"no_fault", "started"} => 72,
+             {"no_fault", "completed"} => 72
+           }
+  end
+
+  test "replay fails closed on source hash drift and malformed score diagnostics", context do
+    report = @qualification_path |> File.read!() |> JSON.decode!()
+    scorer_path = "lib/elara/benchmark/scorer.ex"
+
+    drifted =
+      put_in(report, ["identities", scorer_path], String.duplicate("0", 64))
+
+    drifted_path = Path.join(context.root, "drifted.json")
+    File.mkdir_p!(context.root)
+    File.write!(drifted_path, InternalConfirmatory.canonical_json(drifted))
+
+    assert {:error, :report_source_identity_mismatch} =
+             InternalConfirmatory.replay(@manifest_path, drifted_path, context.output)
+
+    malformed =
+      put_in(report, ["score", "errors"], [%{"malformed" => ["diagnostic"]}])
+
+    malformed_path = Path.join(context.root, "malformed-diagnostic.json")
+    File.write!(malformed_path, InternalConfirmatory.canonical_json(malformed))
+
+    assert {:error, :score_replay_mismatch} =
+             InternalConfirmatory.replay(@manifest_path, malformed_path, context.output)
+
+    refute File.exists?(context.output)
   end
 
   test "retains the complete failed v4 development qualification checkpoint" do

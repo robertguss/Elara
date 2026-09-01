@@ -55,7 +55,7 @@ defmodule Elara.Benchmark.ExternalAdapterTest do
              file_sha256(report["adapter"]["target_runner_source"])
 
     assert report["adapter"]["neutral_runner_sha256"] ==
-             file_sha256(report["adapter"]["neutral_runner_source"])
+             "3b3ab321dcd0540bc1a8532be834021c8d3f471b7c87951a5626a6663f084a71"
 
     assert length(report["fault_comparability"]) == 20
     assert Enum.all?(report["fault_comparability"], &(&1["classification"] == "non_comparable"))

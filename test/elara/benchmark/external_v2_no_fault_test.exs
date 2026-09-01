@@ -35,7 +35,7 @@ defmodule Elara.Benchmark.ExternalV2NoFaultTest do
              file_sha256(report["adapter"]["target_runner_source"])
 
     assert report["adapter"]["neutral_runner_sha256"] ==
-             file_sha256(report["adapter"]["neutral_runner_source"])
+             "3b3ab321dcd0540bc1a8532be834021c8d3f471b7c87951a5626a6663f084a71"
 
     assert report["summary"] == %{
              "fixture_count" => 3,

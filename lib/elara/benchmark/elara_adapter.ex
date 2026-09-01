@@ -14,6 +14,7 @@ defmodule Elara.Benchmark.ElaraAdapter do
   @conditions ~w(baseline receipts)
   @v3_manifest_sha256 "4129ae964daf35469499dc9506ace9fa89db0c9f00a20826dfc6790edd5b5491"
   @v4_manifest_sha256 "14cc3a57763f0ab48f4b68a70317916d09ff4bee64ba18d150480dd1315820a2"
+  @v6_manifest_sha256 "b415272e106db54087edbd54500c3544c94ca13b2d42950c0a63b82a38c0973c"
 
   @spec target_commits() :: %{String.t() => String.t()}
   def target_commits do
@@ -87,6 +88,25 @@ defmodule Elara.Benchmark.ElaraAdapter do
      Map.put(config, :fault_authorization, %{
        mode: :confirmatory,
        source_manifest_sha256: @v4_manifest_sha256,
+       tasks: tasks,
+       rows: rows
+     })}
+  end
+
+  def authorize_confirmatory(config, %Manifest{
+        sha256: @v6_manifest_sha256,
+        tasks: tasks,
+        rows: rows,
+        data: %{
+          "schema" => "elara.exp003.corpus.v6",
+          "preregistration_version" => "ER-3/FND-2-v6"
+        }
+      })
+      when is_map(config) do
+    {:ok,
+     Map.put(config, :fault_authorization, %{
+       mode: :confirmatory,
+       source_manifest_sha256: @v6_manifest_sha256,
        tasks: tasks,
        rows: rows
      })}
@@ -661,7 +681,11 @@ defmodule Elara.Benchmark.ElaraAdapter do
            rows: rows
          }
        )
-       when source_manifest_sha256 in [@v3_manifest_sha256, @v4_manifest_sha256] do
+       when source_manifest_sha256 in [
+              @v3_manifest_sha256,
+              @v4_manifest_sha256,
+              @v6_manifest_sha256
+            ] do
     task_id = task["id"]
     row_id = row["row_id"]
 

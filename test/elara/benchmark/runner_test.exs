@@ -4,6 +4,7 @@ defmodule Elara.Benchmark.RunnerTest do
   alias Elara.Benchmark.{Fixture, Manifest, Runner}
 
   @manifest_path Path.expand("../../fixtures/benchmark/exp003/manifest.json", __DIR__)
+  @v6_manifest_path Path.expand("../../fixtures/benchmark/exp003-v6/manifest.json", __DIR__)
 
   defmodule GoodFaultAdapter do
     @behaviour Elara.Benchmark.Adapter
@@ -13,7 +14,7 @@ defmodule Elara.Benchmark.RunnerTest do
       assert_injection!(hook.(row["barrier_id"], %{"durable_fact" => "synthetic"}), row)
       {:ok, _digest} = Fixture.reset(task, cwd, :expected_no_fault)
 
-      expected_terminal = row["causal_terminal_evidence_expected_to_survive"]
+      expected_terminal = expected_terminal(row, condition)
 
       {:ok,
        %{
@@ -42,6 +43,13 @@ defmodule Elara.Benchmark.RunnerTest do
     end
 
     defp assert_injection!({:inject, owner}, %{"crash_target" => owner}), do: :ok
+
+    defp expected_terminal(row, condition) do
+      case row["causal_terminal_evidence_expected_to_survive"] do
+        expectations when is_map(expectations) -> Map.fetch!(expectations, condition)
+        expectation -> expectation
+      end
+    end
   end
 
   defmodule MissingHookAdapter do
@@ -146,6 +154,30 @@ defmodule Elara.Benchmark.RunnerTest do
     assert record["initial_reset_verified"]
     assert record["final_workspace_digest"] == record["expected_workspace_digest"]
     assert record["fault_hook_facts"] == %{"durable_fact" => "synthetic"}
+  end
+
+  test "emits the condition-specific V6 causal-terminal expectation", %{root: root} do
+    assert {:ok, source} = Manifest.load(@v6_manifest_path)
+    assert {:ok, manifest} = Elara.Benchmark.Qualification.manifest(source)
+
+    for {condition, expected} <- [{"baseline", false}, {"receipts", true}] do
+      run = %{
+        "row_id" => "QUAL-W01-F4",
+        "condition" => condition,
+        "run_index" => 1,
+        "order_index" => if(condition == "baseline", do: 1, else: 2)
+      }
+
+      assert {:ok, record} =
+               Runner.run_fault(manifest, run,
+                 adapter: GoodFaultAdapter,
+                 root: root,
+                 target_commit: "synthetic-target",
+                 adapter_digest: "synthetic-adapter"
+               )
+
+      assert record["causal_terminal_evidence_expected"] == expected
+    end
   end
 
   test "a missing fault barrier is a harness failure", %{manifest: manifest, root: root} do

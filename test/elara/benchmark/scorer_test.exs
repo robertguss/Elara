@@ -4,6 +4,7 @@ defmodule Elara.Benchmark.ScorerTest do
   alias Elara.Benchmark.{Evidence, Manifest, Runner, Scorer}
 
   @manifest_path Path.expand("../../fixtures/benchmark/exp003/manifest.json", __DIR__)
+  @v6_manifest_path Path.expand("../../fixtures/benchmark/exp003-v6/manifest.json", __DIR__)
 
   setup do
     {:ok, manifest} = Manifest.load(@manifest_path)
@@ -74,14 +75,14 @@ defmodule Elara.Benchmark.ScorerTest do
   } do
     missing = Scorer.score(manifest, rest, no_fault_records)
     refute missing["valid"]
-    assert Enum.any?(missing["errors"], &match?({:missing_fault_run, _key}, &1))
+    assert error?(missing, "missing_fault_run")
 
     skipped_records =
       replace_record(fault_records, first, Map.put(first, "record_status", "skipped"))
 
     skipped = Scorer.score(manifest, skipped_records, no_fault_records)
     refute skipped["valid"]
-    assert Enum.any?(skipped["errors"], &match?({:skipped_fault_run, _key}, &1))
+    assert error?(skipped, "skipped_fault_run")
 
     non_comparable_record =
       first
@@ -96,7 +97,7 @@ defmodule Elara.Benchmark.ScorerTest do
       )
 
     refute non_comparable["valid"]
-    assert Enum.any?(non_comparable["errors"], &match?({:non_comparable_fault_run, _key}, &1))
+    assert error?(non_comparable, "non_comparable_fault_run")
 
     harness_record =
       first
@@ -112,7 +113,7 @@ defmodule Elara.Benchmark.ScorerTest do
       )
 
     refute harness["valid"]
-    assert Enum.any?(harness["errors"], &match?({:harness_failure, _key}, &1))
+    assert error?(harness, "harness_failure")
   end
 
   test "inconsistent repetitions and missing no-fault runs invalidate the report", %{
@@ -127,14 +128,11 @@ defmodule Elara.Benchmark.ScorerTest do
 
     refute report["valid"]
 
-    assert Enum.any?(
-             report["errors"],
-             &match?({:inconsistent_recovery_class, _row, _condition, _classes}, &1)
-           )
+    assert error?(report, "inconsistent_recovery_class")
 
     report = Scorer.score(manifest, fault_records, remaining_no_fault)
     refute report["valid"]
-    assert Enum.any?(report["errors"], &match?({:missing_no_fault_run, _key}, &1))
+    assert error?(report, "missing_no_fault_run")
   end
 
   test "correct but too-slow evidence is Mixed rather than silently passing", %{
@@ -196,7 +194,7 @@ defmodule Elara.Benchmark.ScorerTest do
       )
 
     refute report["valid"]
-    assert Enum.any?(report["errors"], &match?({:fault_order_mismatch, _key, _expected, 99}, &1))
+    assert error?(report, "fault_order_mismatch", fn details -> List.last(details) == 99 end)
 
     measured = Enum.find(no_fault_records, &(&1["phase"] == "measured"))
     zero = Map.put(measured, "elapsed_wall_us", 0)
@@ -205,7 +203,7 @@ defmodule Elara.Benchmark.ScorerTest do
       Scorer.score(manifest, fault_records, replace_record(no_fault_records, measured, zero))
 
     refute report["valid"]
-    assert Enum.any?(report["errors"], &match?({:zero_no_fault_timing, _key}, &1))
+    assert error?(report, "zero_no_fault_timing")
 
     wrong_no_fault_order = Map.put(no_fault, "order_index", 99)
 
@@ -218,10 +216,25 @@ defmodule Elara.Benchmark.ScorerTest do
 
     refute report["valid"]
 
-    assert Enum.any?(
-             report["errors"],
-             &match?({:no_fault_order_mismatch, _key, _expected, 99}, &1)
-           )
+    assert error?(report, "no_fault_order_mismatch", fn details -> List.last(details) == 99 end)
+  end
+
+  test "condition-specific V6 F4 terminal applicability and diagnostics are canonical JSON" do
+    assert {:ok, source} = Manifest.load(@v6_manifest_path)
+    assert {:ok, manifest} = Elara.Benchmark.Qualification.manifest(source)
+    fault_records = good_fault_records(manifest)
+    no_fault_records = good_no_fault_records(manifest)
+
+    report = Scorer.score(manifest, fault_records, no_fault_records)
+
+    assert report["valid"]
+    assert report["status"] == "Pass"
+    assert report["causal_terminal_convergence"]["applicable_repetitions"] == 9
+
+    invalid = Scorer.score(manifest, tl(fault_records), no_fault_records)
+    encoded = Elara.Benchmark.InternalConfirmatory.canonical_json(invalid)
+    assert JSON.decode!(encoded) == invalid
+    assert error?(invalid, "missing_fault_run")
   end
 
   defp good_fault_records(manifest) do
@@ -229,7 +242,7 @@ defmodule Elara.Benchmark.ScorerTest do
       row = manifest.rows[run["row_id"]]
       task = manifest.tasks[row["task_id"]]
       condition = run["condition"]
-      expected_terminal = row["causal_terminal_evidence_expected_to_survive"]
+      expected_terminal = expected_terminal(row, condition)
 
       manifest
       |> Manifest.required_evidence_fields()
@@ -315,5 +328,19 @@ defmodule Elara.Benchmark.ScorerTest do
 
   defp replace_record(records, original, replacement) do
     Enum.map(records, fn record -> if record == original, do: replacement, else: record end)
+  end
+
+  defp expected_terminal(row, condition) do
+    case row["causal_terminal_evidence_expected_to_survive"] do
+      expectations when is_map(expectations) -> Map.fetch!(expectations, condition)
+      expectation -> expectation
+    end
+  end
+
+  defp error?(report, code, predicate \\ fn _details -> true end) do
+    Enum.any?(report["errors"], fn
+      %{"code" => ^code, "details" => details} -> predicate.(details)
+      _other -> false
+    end)
   end
 end

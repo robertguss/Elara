@@ -46,6 +46,27 @@ defmodule Elara.Provider.Grok do
     end
   end
 
+  @impl true
+  def stream(%__MODULE__{} = config, %Provider.Request{} = request, sink)
+      when is_function(sink, 1) do
+    case maybe_refresh(config) do
+      {:ok, config} ->
+        openai = %OpenAI{
+          api_key: config.tokens.access_token,
+          base_url: config.base_url,
+          model: config.model
+        }
+
+        case OpenAI.stream(openai, request, sink) do
+          {:ok, assistant, _} -> {:ok, assistant, config}
+          {:error, %Error{} = err, _} -> {:error, classify_error(err), config}
+        end
+
+      {:error, err, config} ->
+        {:error, err, config}
+    end
+  end
+
   @doc "Map xAI HTTP 403 to a named entitlement error. Re-login will not help."
   @spec classify_error(Error.t()) :: Error.t()
   def classify_error(%Error{kind: :http, status: 403}) do

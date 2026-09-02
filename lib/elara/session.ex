@@ -435,6 +435,17 @@ defmodule Elara.Session do
     {:noreply, shell}
   end
 
+  def handle_info({:provider_delta, pid, core_ref, text}, shell)
+      when is_pid(pid) and is_binary(text) do
+    case find_task_by_core_ref(shell, core_ref, :provider) do
+      {_task_ref, ^pid, _plugin_lease} ->
+        {:noreply, feed({:provider_delta, core_ref, text}, shell)}
+
+      _stale_or_unknown_provider ->
+        {:noreply, shell}
+    end
+  end
+
   def handle_info({:DOWN, task_ref, :process, _pid, reason}, shell)
       when is_map_key(shell.tasks, task_ref) do
     {kind, core_ref, _pid, plugin_lease} = Map.fetch!(shell.tasks, task_ref)
@@ -932,10 +943,16 @@ defmodule Elara.Session do
   defp feed(fact, shell) do
     {recorder, begin} = FlightRecorder.begin_transition(shell.recorder, shell.core, fact)
     message_offset = length(shell.core.history)
+    previous_streaming = shell.core.streaming
     {core, effects} = Core.step(shell.core, fact)
     {recorder, transition} = FlightRecorder.complete_transition(recorder, begin, core, effects)
     shell = %{shell | core: core, recorder: recorder}
-    patch_context = {message_offset, Enum.drop(core.history, message_offset)}
+
+    patch_context = %{
+      message_offset: message_offset,
+      messages: Enum.drop(core.history, message_offset),
+      supersedes: superseded_content(previous_streaming, core.streaming)
+    }
 
     effects
     |> Enum.with_index()
@@ -960,13 +977,35 @@ defmodule Elara.Session do
     end
   end
 
+  defp run_effect(
+         {:emit, {:message_appended, message, :streamed} = event},
+         effect_id,
+         shell,
+         patch_context
+       ) do
+    case Store.append(shell.store, message) do
+      {:ok, store} ->
+        emit(event, effect_id, %{shell | store: store}, patch_context)
+
+      {:error, reason} ->
+        raise "session persistence failed: #{inspect(reason)}"
+    end
+  end
+
   defp run_effect({:emit, event}, effect_id, shell, patch_context) do
     emit(event, effect_id, shell, patch_context)
   end
 
   defp run_effect({:call_provider, core_ref, request}, _effect_id, shell, _patch_context) do
     {mod, cfg} = shell.provider
-    task = Task.Supervisor.async_nolink(Elara.TaskSup, mod, :chat, [cfg, request])
+
+    owner = self()
+
+    task =
+      Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
+        call_provider(mod, cfg, request, owner, core_ref)
+      end)
+
     track_task(shell, task, :provider, core_ref)
   end
 
@@ -1019,6 +1058,22 @@ defmodule Elara.Session do
       )
     end
   end
+
+  defp call_provider(mod, cfg, request, owner, core_ref) do
+    if Code.ensure_loaded?(mod) and function_exported?(mod, :stream, 3) do
+      sink = fn text ->
+        send(owner, {:provider_delta, self(), core_ref, text})
+        :ok
+      end
+
+      mod.stream(cfg, request, sink)
+    else
+      mod.chat(cfg, request)
+    end
+  end
+
+  defp superseded_content(%{id: id}, nil), do: id
+  defp superseded_content(_previous, _current), do: nil
 
   defp run_declarative_write(shell, effect_id, core_ref, call, args) do
     case DeclarativeWrite.prepare_arguments(args, shell.cwd) do
@@ -1108,6 +1163,10 @@ defmodule Elara.Session do
     case {event, shell.pending_reply} do
       {{:turn_ended, {:completed, text}}, from} when from != nil ->
         GenServer.reply(from, {:ok, text})
+        %{shell | pending_reply: nil}
+
+      {{:turn_ended, outcome, :streamed}, from} when from != nil ->
+        GenServer.reply(from, {:error, outcome})
         %{shell | pending_reply: nil}
 
       {{:turn_ended, outcome}, from} when from != nil ->

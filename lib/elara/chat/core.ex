@@ -163,6 +163,10 @@ defmodule Elara.Chat.Core do
     {phase, end_prints(outcome, event) ++ [{:halt, code}]}
   end
 
+  def step({:exiting, code} = phase, {:event, {:turn_ended, outcome, :streamed} = event}) do
+    {phase, end_prints(outcome, event) ++ [{:halt, code}]}
+  end
+
   def step({:exiting, _code} = phase, {:event, event}) do
     {phase, event_prints(event)}
   end
@@ -232,13 +236,25 @@ defmodule Elara.Chat.Core do
     {:idle, end_prints(outcome, event) ++ print(@idle_prompt)}
   end
 
+  defp in_turn_event(_prompt, {:turn_ended, outcome, :streamed} = event) do
+    {:idle, end_prints(outcome, event) ++ print(@idle_prompt)}
+  end
+
   defp in_turn_event(prompt, event) do
     {{:in_turn, prompt}, event_prints(event)}
   end
 
   defp end_prints({:completed, _}, _event), do: []
+
+  defp end_prints(:interrupted, {:turn_ended, :interrupted, :streamed}),
+    do: print("\n    interrupted\n")
+
   defp end_prints(:interrupted, _event), do: print("    interrupted\n")
   defp end_prints(:turn_limit, _event), do: print("    turn limit\n")
+
+  defp end_prints({:provider_error, err}, {:turn_ended, {:provider_error, err}, :streamed}) do
+    print(["\n    error · ", err.message, "\n"])
+  end
 
   defp end_prints({:provider_error, err}, _event) do
     print(["    error · ", err.message, "\n"])

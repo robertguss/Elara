@@ -10,6 +10,9 @@ defmodule Elara.Event do
   @type t ::
           {:turn_started, String.t()}
           | {:message_appended, Elara.Message.t()}
+          | {:message_appended, Elara.Message.Assistant.t(), :streamed}
+          | {:content_delta, String.t(), String.t()}
           | {:tool_started, Elara.Message.ToolCall.t()}
           | {:turn_ended, turn_outcome()}
+          | {:turn_ended, turn_outcome(), :streamed}
 end

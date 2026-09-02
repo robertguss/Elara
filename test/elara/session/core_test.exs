@@ -126,6 +126,62 @@ defmodule Elara.Session.CoreTest do
            ] = effects
   end
 
+  test "provider deltas accumulate transiently and final assistant supersedes them" do
+    {streamed, _effects} = ask(new())
+    {streamed, effects} = Core.step(streamed, {:provider_delta, 1, "hel"})
+
+    assert streamed.streaming == %{id: "assistant-1", text: "hel"}
+    assert effects == [{:emit, {:content_delta, "assistant-1", "hel"}}]
+
+    {streamed, effects} = Core.step(streamed, {:provider_delta, 1, "lo"})
+    assert streamed.streaming.text == "hello"
+    assert effects == [{:emit, {:content_delta, "assistant-1", "lo"}}]
+
+    {streamed, effects} =
+      Core.step(streamed, {:provider_result, 1, {:ok, asst("hello")}})
+
+    assert streamed.streaming == nil
+
+    assert [
+             {:emit, {:message_appended, %Message.Assistant{text: "hello"}, :streamed}},
+             {:emit, {:turn_ended, {:completed, "hello"}}}
+           ] = effects
+
+    {plain, _effects} = ask(new())
+    {plain, _effects} = Core.step(plain, {:provider_result, 1, {:ok, asst("hello")}})
+    assert streamed == plain
+  end
+
+  test "interrupt discards transient provider text without completing a message" do
+    {state, _effects} = ask(new())
+    {state, _effects} = Core.step(state, {:provider_delta, 1, "partial"})
+    {state, effects} = Core.step(state, :interrupt)
+
+    assert Core.idle?(state)
+    assert state.streaming == nil
+    assert state.history == [Message.user("hi")]
+    assert effects == [{:emit, {:turn_ended, :interrupted, :streamed}}]
+  end
+
+  test "a final assistant that disagrees with emitted deltas fails closed" do
+    {state, _effects} = ask(new())
+    {state, _effects} = Core.step(state, {:provider_delta, 1, "shown"})
+    {state, effects} = Core.step(state, {:provider_result, 1, {:ok, asst("different")}})
+
+    assert Core.idle?(state)
+    assert state.history == [Message.user("hi")]
+
+    assert [
+             {:emit,
+              {:turn_ended,
+               {:provider_error,
+                %Provider.Error{
+                  kind: :bad_response,
+                  message: "final assistant did not match streamed content"
+                }}, :streamed}}
+           ] = effects
+  end
+
   test "row 4a: provider tool calls dispatch first valid tool" do
     {state, _} = ask(new())
     calls = [call("c1", "echo", {:ok, %{"x" => 1}}), call("c2", "other", {:ok, %{}})]

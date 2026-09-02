@@ -88,15 +88,46 @@ defmodule Elara.ProtocolV2Test do
     end
   end
 
+  defp ingest_render_until_idle(socket, projector, events \\ [], output \\ []) do
+    case recv_json(socket, 5_000) do
+      %{"type" => "patch", "incarnation" => incarnation, "seq" => seq, "ops" => ops} ->
+        assert {:applied, projector} = Projector.ingest_patch(projector, incarnation, seq, ops)
+        assert {:ok, patch_events} = Protocol.patch_events(ops)
+        output = [output, Enum.map(patch_events, &Elara.CLI.render/1)]
+        events = events ++ patch_events
+
+        if projector.view["turn"]["state"] == "idle" and
+             Enum.any?(events, &match?({:turn_ended, _outcome}, &1)) do
+          {projector, events, IO.iodata_to_binary(output)}
+        else
+          ingest_render_until_idle(socket, projector, events, output)
+        end
+
+      %{"type" => type} when type in ["ok", "error", "status"] ->
+        ingest_render_until_idle(socket, projector, events, output)
+    end
+  end
+
   defp project_transition(core, view, seq, fact) do
     offset = length(core.history)
+    previous_streaming = core.streaming
     {core, effects} = Core.step(core, fact)
     messages = Enum.drop(core.history, offset)
+
+    context = %{
+      message_offset: offset,
+      messages: messages,
+      supersedes:
+        case {previous_streaming, core.streaming} do
+          {%{id: id}, nil} -> id
+          _other -> nil
+        end
+    }
 
     {view, seq} =
       Enum.reduce(effects, {view, seq}, fn
         {:emit, event}, {view, seq} ->
-          ops = Protocol.patch_ops(event, core, {offset, messages})
+          ops = Protocol.patch_ops(event, core, context)
           assert {:ok, view} = Protocol.apply_patch(view, ops)
           assert view == Protocol.snapshot("property-session", "property-incarnation", core)
           {view, seq + 1}
@@ -212,6 +243,14 @@ defmodule Elara.ProtocolV2Test do
     {core, view, seq} = project_transition(core, view, 1, {:ask, "exercise tools"})
     {:calling_provider, provider_ref, 1} = core.phase
 
+    {core, view, seq} =
+      project_transition(core, view, seq, {:provider_delta, provider_ref, "working "})
+
+    {core, view, seq} =
+      project_transition(core, view, seq, {:provider_delta, provider_ref, "now"})
+
+    assert view["content_deltas"] == %{"assistant-1" => "working now"}
+
     calls = [
       %ToolCall{id: "valid", name: "bash", args: {:ok, %{"command" => "true"}}},
       %ToolCall{id: "malformed", name: "bash", args: {:malformed, "{"}},
@@ -223,8 +262,10 @@ defmodule Elara.ProtocolV2Test do
         core,
         view,
         seq,
-        {:provider_result, provider_ref, {:ok, asst(nil, calls)}}
+        {:provider_result, provider_ref, {:ok, asst("working now", calls)}}
       )
+
+    assert view["content_deltas"] == %{}
 
     {:running_tool, tool_ref, %ToolCall{id: "valid"}, _remaining, 1} = core.phase
     {core, view, seq} = project_transition(core, view, seq, {:tool_result, tool_ref, {:ok, "ok"}})
@@ -287,6 +328,18 @@ defmodule Elara.ProtocolV2Test do
     assert {:ignored, ^invalid} = Projector.ingest_patch(invalid, incarnation, 11, [%{}])
   end
 
+  test "v1 event encoding remains explicit for streamed deltas and finals" do
+    delta = {:content_delta, "assistant-1", "hel"}
+    assistant = asst("hello")
+    final = {:message_appended, assistant, :streamed}
+
+    for event <- [delta, final] do
+      encoded = Protocol.event(7, event)
+      assert encoded["version"] == 1
+      assert {:ok, ^event} = Protocol.decode_event(encoded["event"])
+    end
+  end
+
   test "mix elara.attach negotiates v2 and renders the current snapshot" do
     {:ok, session} =
       Elara.start_session(
@@ -311,6 +364,38 @@ defmodule Elara.ProtocolV2Test do
 
     assert output =~ "already happened"
     assert output =~ "snapshot head 4"
+  end
+
+  test "v2 attach patches render each content delta before the superseding final" do
+    {:ok, session} =
+      Elara.start_session(
+        provider:
+          script([
+            {:stream, ["hel", {:sleep, 50}, "lo"], {:ok, asst("hello")}}
+          ]),
+        tools: [],
+        persist: false
+      )
+
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+    socket = connect(Elara.Server.port(server))
+    projector = socket |> attach_v2(session, "control", 0, nil) |> projector()
+
+    :ok = send_json(socket, %{"version" => 2, "command" => "ask", "prompt" => "stream"})
+    assert %{"type" => "ok", "version" => 2} = recv_json(socket)
+
+    {projector, events, output} = ingest_render_until_idle(socket, projector)
+
+    assert Enum.filter(events, &match?({:content_delta, _, _}, &1)) == [
+             {:content_delta, "assistant-1", "hel"},
+             {:content_delta, "assistant-1", "lo"}
+           ]
+
+    assert output =~ "hello\n"
+    refute output =~ "hello\nhello\n"
+    assert projector.view["content_deltas"] == %{}
+    assert projector.view == Elara.materialized_view(session)
+    :gen_tcp.close(socket)
   end
 
   test "controller interrupt is visible to an observer and both projections converge" do

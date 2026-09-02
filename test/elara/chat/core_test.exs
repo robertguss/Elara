@@ -137,6 +137,19 @@ defmodule Elara.Chat.CoreTest do
              step({:in_turn, "hi"}, {:event, {:message_appended, asst}})
   end
 
+  test "content deltas print immediately and the streamed final only terminates the line" do
+    asst = %Assistant{text: "hello", tool_calls: []}
+
+    assert {{:in_turn, "hi"}, [{:print, "hel"}]} =
+             step({:in_turn, "hi"}, {:event, {:content_delta, "assistant-1", "hel"}})
+
+    assert {{:in_turn, "hi"}, [{:print, "\n"}]} =
+             step({:in_turn, "hi"}, {:event, {:message_appended, asst, :streamed}})
+
+    assert {:idle, [{:print, "\n    interrupted\n"}, {:print, "\n> "}]} =
+             step({:in_turn, "hi"}, {:event, {:turn_ended, :interrupted, :streamed}})
+  end
+
   test "provider error prints via CLI.render" do
     err = %Error{kind: :http, message: "nope"}
 

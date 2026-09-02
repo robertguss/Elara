@@ -444,6 +444,9 @@ defmodule Elara.FlightRecorder do
   defp cause(recorder, {:provider_result, ref, _}),
     do: Map.get(recorder.causes, {:provider, ref}, :external)
 
+  defp cause(recorder, {:provider_delta, ref, _}),
+    do: Map.get(recorder.causes, {:provider, ref}, :external)
+
   defp cause(recorder, {:tool_result, ref, _}),
     do: Map.get(recorder.causes, {:tool, ref}, :external)
 
@@ -477,7 +480,7 @@ defmodule Elara.FlightRecorder do
       end)
       |> Enum.sort_by(& &1.name)
 
-    %{
+    normalized = %{
       config: %{
         system: state.config.system,
         tools: tools,
@@ -488,6 +491,12 @@ defmodule Elara.FlightRecorder do
       phase: normalize_phase(state.phase),
       next_ref: state.next_ref
     }
+
+    case state.streaming do
+      nil -> normalized
+      %{text: ""} -> normalized
+      streaming -> Map.put(normalized, :streaming, streaming)
+    end
   end
 
   defp denormalize_state(state) do
@@ -502,11 +511,15 @@ defmodule Elara.FlightRecorder do
       },
       history: Enum.map(state.history, &denormalize_message/1),
       phase: denormalize_phase(state.phase),
+      streaming: Map.get(state, :streaming),
       next_ref: state.next_ref
     }
   end
 
   defp normalize_fact({:ask, prompt}), do: %{kind: :ask, prompt: prompt}
+
+  defp normalize_fact({:provider_delta, ref, text}),
+    do: %{kind: :provider_delta, ref: ref, text: text}
 
   defp normalize_fact({:provider_result, ref, {:ok, message}}),
     do: %{kind: :provider_result, ref: ref, outcome: :ok, message: normalize_message(message)}
@@ -524,6 +537,9 @@ defmodule Elara.FlightRecorder do
   defp normalize_fact(:interrupt), do: %{kind: :interrupt}
 
   defp denormalize_fact(%{kind: :ask, prompt: prompt}), do: {:ask, prompt}
+
+  defp denormalize_fact(%{kind: :provider_delta, ref: ref, text: text}),
+    do: {:provider_delta, ref, text}
 
   defp denormalize_fact(%{kind: :provider_result, ref: ref, outcome: :ok, message: message}),
     do: {:provider_result, ref, {:ok, denormalize_message(message)}}
@@ -639,11 +655,20 @@ defmodule Elara.FlightRecorder do
   defp normalize_event({:message_appended, message}),
     do: %{kind: :message_appended, message: normalize_message(message)}
 
+  defp normalize_event({:message_appended, message, :streamed}),
+    do: %{kind: :message_appended, message: normalize_message(message), streamed: true}
+
+  defp normalize_event({:content_delta, id, text}),
+    do: %{kind: :content_delta, message_id: id, text: text}
+
   defp normalize_event({:tool_started, call}),
     do: %{kind: :tool_started, call: normalize_call(call)}
 
   defp normalize_event({:turn_ended, outcome}),
     do: %{kind: :turn_ended, outcome: normalize_turn_outcome(outcome)}
+
+  defp normalize_event({:turn_ended, outcome, :streamed}),
+    do: %{kind: :turn_ended, outcome: normalize_turn_outcome(outcome), streamed: true}
 
   defp normalize_turn_outcome({:completed, text}), do: %{status: :completed, text: text}
 

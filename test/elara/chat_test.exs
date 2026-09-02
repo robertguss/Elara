@@ -87,6 +87,56 @@ defmodule Elara.ChatTest do
     refute body =~ "\e["
   end
 
+  test "prints scripted content deltas before the final assistant is available" do
+    provider =
+      script([
+        {:stream, ["hel", {:sleep, 150}, "lo", {:sleep, 150}], {:ok, asst("hello")}}
+      ])
+
+    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
+    {:ok, out} = StringIO.open("")
+    task = Task.async(fn -> Elara.Chat.run(session, out) end)
+    chat = task.pid
+
+    assert await_output(out, "> ")
+    send(chat, {:stdin, "stream\n"})
+
+    partial = await_output(out, "hel")
+    refute partial =~ "hello\n"
+
+    complete = await_idle_after(out, "hello\n")
+    assert complete =~ "hello\n\n> "
+    assert Elara.transcript(session) == [Message.user("stream"), asst("hello")]
+
+    send(chat, {:stdin, "/quit\n"})
+    assert 0 = Task.await(task, 5_000)
+  end
+
+  test "interrupt marks streamed partial text and never presents it as complete" do
+    provider =
+      script([
+        {:stream, ["partial", {:sleep, 5_000}, " stale"], {:ok, asst("partial stale")}}
+      ])
+
+    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
+    {:ok, out} = StringIO.open("")
+    task = Task.async(fn -> Elara.Chat.run(session, out) end)
+    chat = task.pid
+
+    assert await_output(out, "> ")
+    send(chat, {:stdin, "stop\n"})
+    assert await_output(out, "partial")
+    send(chat, {:stdin, "/interrupt\n"})
+
+    interrupted = await_idle_after(out, "interrupted")
+    assert interrupted =~ "partial\n    interrupted\n"
+    refute interrupted =~ "partial stale"
+    assert Elara.transcript(session) == [Message.user("stop")]
+
+    send(chat, {:stdin, "/quit\n"})
+    assert 0 = Task.await(task, 5_000)
+  end
+
   test "/reload reports when no plugins are loaded" do
     {:ok, session} = Elara.start_session(provider: script([]), tools: [], plugins: [])
     {:ok, out} = StringIO.open("")

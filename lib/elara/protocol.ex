@@ -66,7 +66,7 @@ defmodule Elara.Protocol do
       "tool_calls" => tool_views(core),
       "turn" => encode_phase(core.phase),
       "usage" => nil,
-      "content_deltas" => %{}
+      "content_deltas" => content_deltas(core)
     }
   end
 
@@ -75,13 +75,38 @@ defmodule Elara.Protocol do
     %{"type" => "patch", "version" => 2, "seq" => seq, "ops" => ops}
   end
 
-  @spec patch_ops(Elara.Event.t(), Core.State.t(), {non_neg_integer(), [Elara.Message.t()]}) ::
-          [map()]
+  @spec patch_ops(
+          Elara.Event.t(),
+          Core.State.t(),
+          {non_neg_integer(), [Elara.Message.t()]}
+          | %{
+              message_offset: non_neg_integer(),
+              messages: [Elara.Message.t()],
+              supersedes: String.t() | nil
+            }
+        ) :: [map()]
   def patch_ops(event, %Core.State{} = core, {message_offset, messages}) do
-    reconcile_messages(message_offset, messages) ++
+    patch_ops(event, core, %{
+      message_offset: message_offset,
+      messages: messages,
+      supersedes: nil
+    })
+  end
+
+  def patch_ops(event, %Core.State{} = core, %{
+        message_offset: message_offset,
+        messages: messages,
+        supersedes: supersedes
+      }) do
+    reconcile_messages(message_offset, messages, supersedes) ++
       reconcile_tool_statuses(messages, core) ++
-      event_ops(event, message_offset, messages) ++
-      [%{"op" => "set_turn_state", "turn" => event_turn(event, core.phase)}]
+      event_ops(event, message_offset, messages, supersedes) ++
+      [
+        maybe_supersedes(
+          %{"op" => "set_turn_state", "turn" => event_turn(event, core.phase)},
+          supersedes
+        )
+      ]
   end
 
   @spec apply_patch(map(), [map()]) :: {:ok, map()} | {:error, :invalid_patch}
@@ -97,7 +122,7 @@ defmodule Elara.Protocol do
   def apply_patch(_view, _ops), do: {:error, :invalid_patch}
 
   @spec snapshot_events(map()) :: {:ok, [Elara.Event.t()]} | {:error, :invalid_snapshot}
-  def snapshot_events(%{"messages" => messages, "tool_calls" => tool_calls})
+  def snapshot_events(%{"messages" => messages, "tool_calls" => tool_calls} = snapshot)
       when is_list(messages) and is_list(tool_calls) do
     statuses = Map.new(tool_calls, &{&1["id"], &1})
 
@@ -119,8 +144,13 @@ defmodule Elara.Protocol do
                {:halt, :error}
            end
          end) do
-      :error -> {:error, :invalid_snapshot}
-      events -> {:ok, Enum.reverse(events)}
+      :error ->
+        {:error, :invalid_snapshot}
+
+      events ->
+        with {:ok, deltas} <- snapshot_delta_events(Map.get(snapshot, "content_deltas", %{})) do
+          {:ok, Enum.reverse(events) ++ deltas}
+        end
     end
   end
 
@@ -148,8 +178,34 @@ defmodule Elara.Protocol do
     with {:ok, call} <- decode_call(call), do: {:ok, {:tool_started, call}}
   end
 
+  def decode_event(%{
+        "kind" => "message_appended",
+        "message" => message,
+        "streamed" => true
+      }) do
+    with {:ok, %Assistant{} = message} <- decode_message(message) do
+      {:ok, {:message_appended, message, :streamed}}
+    else
+      _error -> {:error, :invalid_event}
+    end
+  end
+
   def decode_event(%{"kind" => "message_appended", "message" => message}) do
     with {:ok, message} <- decode_message(message), do: {:ok, {:message_appended, message}}
+  end
+
+  def decode_event(%{
+        "kind" => "content_delta",
+        "message_id" => id,
+        "text" => text
+      })
+      when is_binary(id) and is_binary(text),
+      do: {:ok, {:content_delta, id, text}}
+
+  def decode_event(%{"kind" => "turn_ended", "outcome" => outcome, "streamed" => true}) do
+    with {:ok, outcome} <- decode_turn_outcome(outcome) do
+      {:ok, {:turn_ended, outcome, :streamed}}
+    end
   end
 
   def decode_event(%{"kind" => "turn_ended", "outcome" => outcome}) do
@@ -166,18 +222,32 @@ defmodule Elara.Protocol do
   defp encode_event({:message_appended, message}),
     do: %{"kind" => "message_appended", "message" => encode_message(message)}
 
+  defp encode_event({:message_appended, %Assistant{} = message, :streamed}) do
+    %{"kind" => "message_appended", "message" => encode_message(message), "streamed" => true}
+  end
+
+  defp encode_event({:content_delta, id, text}),
+    do: %{"kind" => "content_delta", "message_id" => id, "text" => text}
+
+  defp encode_event({:turn_ended, outcome, :streamed}) do
+    %{"kind" => "turn_ended", "outcome" => encode_turn_outcome(outcome), "streamed" => true}
+  end
+
   defp encode_event({:turn_ended, outcome}),
     do: %{"kind" => "turn_ended", "outcome" => encode_turn_outcome(outcome)}
 
-  defp reconcile_messages(offset, messages) do
+  defp reconcile_messages(offset, messages, supersedes) do
     messages
     |> Enum.with_index(offset)
     |> Enum.map(fn {message, index} ->
-      %{
-        "op" => "append_message",
-        "index" => index,
-        "message" => encode_message(message)
-      }
+      maybe_supersedes(
+        %{
+          "op" => "append_message",
+          "index" => index,
+          "message" => encode_message(message)
+        },
+        supersedes
+      )
     end)
   end
 
@@ -218,9 +288,9 @@ defmodule Elara.Protocol do
     end)
   end
 
-  defp event_ops({:turn_started, _prompt}, _offset, _messages), do: []
+  defp event_ops({:turn_started, _prompt}, _offset, _messages, _supersedes), do: []
 
-  defp event_ops({:tool_started, call}, _offset, _messages) do
+  defp event_ops({:tool_started, call}, _offset, _messages, _supersedes) do
     [
       %{
         "op" => "set_tool_status",
@@ -232,7 +302,29 @@ defmodule Elara.Protocol do
     ]
   end
 
-  defp event_ops({:message_appended, message}, offset, messages) do
+  defp event_ops({:message_appended, message}, offset, messages, supersedes) do
+    message_op(message, offset, messages, supersedes, false)
+  end
+
+  defp event_ops(
+         {:message_appended, %Assistant{} = message, :streamed},
+         offset,
+         messages,
+         supersedes
+       ) do
+    message_op(message, offset, messages, supersedes, true)
+  end
+
+  defp event_ops({:content_delta, id, text}, _offset, _messages, _supersedes) do
+    [%{"op" => "append_content_delta", "message_id" => id, "text" => text}]
+  end
+
+  defp event_ops({:turn_ended, _outcome, :streamed}, _offset, _messages, _supersedes),
+    do: []
+
+  defp event_ops({:turn_ended, _outcome}, _offset, _messages, _supersedes), do: []
+
+  defp message_op(message, offset, messages, supersedes, streamed?) do
     index =
       case Enum.find_index(messages, &(&1 == message)) do
         nil -> raise ArgumentError, "emitted message is absent from its Core transition"
@@ -240,22 +332,31 @@ defmodule Elara.Protocol do
       end
 
     [
-      %{
-        "op" => "append_message",
-        "index" => index,
-        "message" => encode_message(message),
-        "render" => true
-      }
+      maybe_supersedes(
+        %{
+          "op" => "append_message",
+          "index" => index,
+          "message" => encode_message(message),
+          "render" => true,
+          "streamed" => streamed?
+        },
+        supersedes
+      )
     ]
   end
-
-  defp event_ops({:turn_ended, _outcome}, _offset, _messages), do: []
 
   defp event_turn({:turn_started, prompt}, phase),
     do: Map.put(encode_phase(phase), "prompt", prompt)
 
   defp event_turn({:turn_ended, outcome}, phase),
     do: Map.put(encode_phase(phase), "outcome", encode_turn_outcome(outcome))
+
+  defp event_turn({:turn_ended, outcome, :streamed}, phase) do
+    phase
+    |> encode_phase()
+    |> Map.put("outcome", encode_turn_outcome(outcome))
+    |> Map.put("streamed", true)
+  end
 
   defp event_turn(_event, phase), do: encode_phase(phase)
 
@@ -306,21 +407,44 @@ defmodule Elara.Protocol do
   defp tool_status({:error, _text}), do: "failed"
   defp tool_status({:indeterminate, _text}), do: "indeterminate"
 
+  defp snapshot_delta_events(deltas) when is_map(deltas) do
+    if Enum.all?(deltas, fn {id, text} -> is_binary(id) and is_binary(text) end) do
+      {:ok, Enum.map(deltas, fn {id, text} -> {:content_delta, id, text} end)}
+    else
+      {:error, :invalid_snapshot}
+    end
+  end
+
+  defp snapshot_delta_events(_deltas), do: {:error, :invalid_snapshot}
+
+  defp content_deltas(%Core.State{streaming: %{id: id, text: text}}) when text != "",
+    do: %{id => text}
+
+  defp content_deltas(%Core.State{}), do: %{}
+
+  defp maybe_supersedes(op, nil), do: op
+  defp maybe_supersedes(op, id) when is_binary(id), do: Map.put(op, "supersedes", id)
+
   defp apply_op(
          %{"messages" => messages, "tool_calls" => tool_calls} = view,
-         %{"op" => "append_message", "index" => index, "message" => message}
+         %{"op" => "append_message", "index" => index, "message" => message} = op
        )
        when is_list(messages) and is_list(tool_calls) and is_integer(index) and index >= 0 and
               is_map(message) do
-    cond do
-      index < length(messages) and Enum.at(messages, index) == message ->
-        {:ok, view}
+    result =
+      cond do
+        index < length(messages) and Enum.at(messages, index) == message ->
+          {:ok, view}
 
-      index == length(messages) ->
-        append_message(view, messages, tool_calls, message)
+        index == length(messages) ->
+          append_message(view, messages, tool_calls, message)
 
-      true ->
-        {:error, :invalid_patch}
+        true ->
+          {:error, :invalid_patch}
+      end
+
+    with {:ok, view} <- result do
+      clear_superseded(view, Map.get(op, "supersedes"))
     end
   end
 
@@ -343,9 +467,10 @@ defmodule Elara.Protocol do
     end
   end
 
-  defp apply_op(view, %{"op" => "set_turn_state", "turn" => %{"state" => state} = turn})
+  defp apply_op(view, %{"op" => "set_turn_state", "turn" => %{"state" => state} = turn} = op)
        when state in ["idle", "calling_provider", "running_tool"] do
-    {:ok, Map.put(view, "turn", Map.drop(turn, ["prompt", "outcome"]))}
+    view = Map.put(view, "turn", Map.drop(turn, ["prompt", "outcome", "streamed"]))
+    clear_superseded(view, Map.get(op, "supersedes"))
   end
 
   defp apply_op(view, %{"op" => "set_usage", "usage" => usage})
@@ -362,6 +487,15 @@ defmodule Elara.Protocol do
 
   defp apply_op(_view, _op), do: {:error, :invalid_patch}
 
+  defp clear_superseded(view, nil), do: {:ok, view}
+
+  defp clear_superseded(%{"content_deltas" => deltas} = view, id)
+       when is_map(deltas) and is_binary(id) do
+    {:ok, %{view | "content_deltas" => Map.delete(deltas, id)}}
+  end
+
+  defp clear_superseded(_view, _id), do: {:error, :invalid_patch}
+
   defp append_message(view, messages, tool_calls, message) do
     case decode_message(message) do
       {:ok, %Assistant{tool_calls: calls}} ->
@@ -377,6 +511,21 @@ defmodule Elara.Protocol do
         {:ok, %{view | "messages" => messages ++ [message]}}
 
       {:error, _reason} ->
+        {:error, :invalid_patch}
+    end
+  end
+
+  defp event_from_op(%{
+         "op" => "append_message",
+         "message" => message,
+         "render" => true,
+         "streamed" => true
+       }) do
+    case decode_message(message) do
+      {:ok, %Assistant{} = message} ->
+        {:ok, {:message_appended, message, :streamed}}
+
+      _error ->
         {:error, :invalid_patch}
     end
   end
@@ -404,6 +553,24 @@ defmodule Elara.Protocol do
   defp event_from_op(%{"op" => "set_tool_status"}), do: {:ok, nil}
 
   defp event_from_op(%{
+         "op" => "append_content_delta",
+         "message_id" => id,
+         "text" => text
+       })
+       when is_binary(id) and is_binary(text),
+       do: {:ok, {:content_delta, id, text}}
+
+  defp event_from_op(%{
+         "op" => "set_turn_state",
+         "turn" => %{"outcome" => outcome, "streamed" => true}
+       }) do
+    case decode_turn_outcome(outcome) do
+      {:ok, outcome} -> {:ok, {:turn_ended, outcome, :streamed}}
+      {:error, _reason} -> {:error, :invalid_patch}
+    end
+  end
+
+  defp event_from_op(%{
          "op" => "set_turn_state",
          "turn" => %{"prompt" => prompt}
        })
@@ -420,9 +587,8 @@ defmodule Elara.Protocol do
     end
   end
 
-  defp event_from_op(%{"op" => op})
-       when op in ["set_turn_state", "set_usage", "append_content_delta"],
-       do: {:ok, nil}
+  defp event_from_op(%{"op" => op}) when op in ["set_turn_state", "set_usage"],
+    do: {:ok, nil}
 
   defp event_from_op(_op), do: {:error, :invalid_patch}
 

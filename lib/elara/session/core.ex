@@ -26,18 +26,22 @@ defmodule Elara.Session.Core do
           | {:running_tool, ref(), current :: ToolCall.t(), remaining :: [ToolCall.t()],
              iteration :: pos_integer()}
 
+  @type streaming :: %{id: String.t(), text: String.t()}
+
   defmodule State do
     @type t :: %__MODULE__{
             config: Config.t(),
             history: [Message.t()],
             phase: Elara.Session.Core.phase(),
+            streaming: Elara.Session.Core.streaming() | nil,
             next_ref: pos_integer()
           }
-    defstruct [:config, history: [], phase: :idle, next_ref: 1]
+    defstruct [:config, history: [], phase: :idle, streaming: nil, next_ref: 1]
   end
 
   @type fact ::
           {:ask, String.t()}
+          | {:provider_delta, ref(), String.t()}
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
           | {:tool_result, ref(), Tool.outcome()}
           | {:tool_crashed, ref(), reason :: String.t()}
@@ -111,40 +115,51 @@ defmodule Elara.Session.Core do
       call_provider_effect(state, ref)
     ]
 
-    {%{state | phase: {:calling_provider, ref, 1}}, effects}
+    {%{state | phase: {:calling_provider, ref, 1}, streaming: new_stream(ref)}, effects}
   end
 
   def step(%State{phase: :idle} = state, _fact), do: {state, []}
 
   def step(
-        %State{phase: {:calling_provider, r, _it}} = state,
+        %State{phase: {:calling_provider, r, _it}, streaming: streaming} = state,
+        {:provider_delta, r, text}
+      )
+      when is_binary(text) and text != "" do
+    streaming = %{streaming | text: streaming.text <> text}
+    {%{state | streaming: streaming}, [{:emit, {:content_delta, streaming.id, text}}]}
+  end
+
+  def step(
+        %State{phase: {:calling_provider, r, _it}, streaming: streaming} = state,
         {:provider_result, r, {:ok, %Assistant{} = asst}}
       ) do
-    history = state.history ++ [asst]
-    state = %{state | history: history}
-    base = [{:emit, {:message_appended, asst}}]
+    if streaming.text != "" and asst.text != streaming.text do
+      error = %Provider.Error{
+        kind: :bad_response,
+        message: "final assistant did not match streamed content"
+      }
 
-    case asst.tool_calls do
-      [] ->
-        text = asst.text || ""
-        effects = base ++ [{:emit, {:turn_ended, {:completed, text}}}]
-        {%{state | phase: :idle}, effects}
-
-      calls ->
-        {state, more} = dispatch_next(%{state | phase: :idle}, calls, elem(state.phase, 2))
-        {state, base ++ more}
+      {%{state | phase: :idle, streaming: nil},
+       [{:emit, streamed_turn_ended({:provider_error, error}, streaming)}]}
+    else
+      finish_provider(state, asst, streaming)
     end
   end
 
   def step(
-        %State{phase: {:calling_provider, r, _}} = state,
+        %State{phase: {:calling_provider, r, _}, streaming: streaming} = state,
         {:provider_result, r, {:error, error}}
       ) do
-    {%{state | phase: :idle}, [{:emit, {:turn_ended, {:provider_error, error}}}]}
+    {%{state | phase: :idle, streaming: nil},
+     [{:emit, streamed_turn_ended({:provider_error, error}, streaming)}]}
   end
 
-  def step(%State{phase: {:calling_provider, _, _}} = state, :interrupt) do
-    {%{state | phase: :idle}, [{:emit, {:turn_ended, :interrupted}}]}
+  def step(
+        %State{phase: {:calling_provider, _, _}, streaming: streaming} = state,
+        :interrupt
+      ) do
+    {%{state | phase: :idle, streaming: nil},
+     [{:emit, streamed_turn_ended(:interrupted, streaming)}]}
   end
 
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_result, r, outcome}) do
@@ -180,6 +195,31 @@ defmodule Elara.Session.Core do
   end
 
   def step(%State{} = state, _fact), do: {state, []}
+
+  defp finish_provider(state, asst, streaming) do
+    history = state.history ++ [asst]
+    state = %{state | history: history, streaming: nil}
+
+    appended =
+      if streaming.text == "" do
+        {:message_appended, asst}
+      else
+        {:message_appended, asst, :streamed}
+      end
+
+    base = [{:emit, appended}]
+
+    case asst.tool_calls do
+      [] ->
+        text = asst.text || ""
+        effects = base ++ [{:emit, {:turn_ended, {:completed, text}}}]
+        {%{state | phase: :idle}, effects}
+
+      calls ->
+        {state, more} = dispatch_next(%{state | phase: :idle}, calls, elem(state.phase, 2))
+        {state, base ++ more}
+    end
+  end
 
   defp finish_tool(state, call, rest, it, outcome) do
     result = Message.tool_result(call, outcome)
@@ -230,7 +270,9 @@ defmodule Elara.Session.Core do
     else
       {ref, state} = take_ref(state)
       effect = call_provider_effect(state, ref)
-      {%{state | phase: {:calling_provider, ref, iteration}}, [effect]}
+
+      {%{state | phase: {:calling_provider, ref, iteration}, streaming: new_stream(ref)},
+       [effect]}
     end
   end
 
@@ -248,6 +290,11 @@ defmodule Elara.Session.Core do
     ref = state.next_ref
     {ref, %{state | next_ref: ref + 1}}
   end
+
+  defp new_stream(ref), do: %{id: "assistant-#{ref}", text: ""}
+
+  defp streamed_turn_ended(outcome, %{text: ""}), do: {:turn_ended, outcome}
+  defp streamed_turn_ended(outcome, %{text: _text}), do: {:turn_ended, outcome, :streamed}
 
   defp truncate_outcome({:ok, text}, max), do: {:ok, truncate(text, max)}
   defp truncate_outcome({:error, text}, max), do: {:error, truncate(text, max)}

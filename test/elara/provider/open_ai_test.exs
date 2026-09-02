@@ -120,4 +120,80 @@ defmodule Elara.Provider.OpenAITest do
     assert {:error, %Error{kind: :bad_response}} =
              OpenAI.parse_response({:ok, %Req.Response{status: 200, body: empty}})
   end
+
+  test "stream parser reassembles arbitrary chunks, content deltas, and tool calls" do
+    frames = [
+      %{"choices" => [%{"delta" => %{"role" => "assistant", "content" => "Hel"}}]},
+      %{
+        "choices" => [
+          %{
+            "delta" => %{
+              "content" => "lo ",
+              "tool_calls" => [
+                %{
+                  "index" => 1,
+                  "id" => "second",
+                  "function" => %{"name" => "bash", "arguments" => ~s({"co)}
+                },
+                %{
+                  "index" => 0,
+                  "id" => "first",
+                  "function" => %{"name" => "read", "arguments" => ~s({"pa)}
+                }
+              ]
+            }
+          }
+        ]
+      },
+      %{
+        "choices" => [
+          %{
+            "delta" => %{
+              "content" => "é",
+              "tool_calls" => [
+                %{"index" => 0, "function" => %{"arguments" => ~s(th":"x"})}},
+                %{"index" => 1, "function" => %{"arguments" => ~s(mmand":"true"})}}
+              ]
+            }
+          }
+        ]
+      }
+    ]
+
+    wire =
+      Enum.map_join(frames, fn frame -> "data: #{JSON.encode!(frame)}\r\n\r\n" end) <>
+        "data: [DONE]\r\n\r\n"
+
+    chunks = for <<byte <- wire>>, do: <<byte>>
+    parent = self()
+
+    assert {:ok, %Message.Assistant{text: "Hello é", tool_calls: [first, second]}} =
+             OpenAI.parse_stream_chunks(chunks, fn text ->
+               send(parent, {:delta, text})
+               :ok
+             end)
+
+    assert first == %ToolCall{id: "first", name: "read", args: {:ok, %{"path" => "x"}}}
+
+    assert second ==
+             %ToolCall{id: "second", name: "bash", args: {:ok, %{"command" => "true"}}}
+
+    assert_receive {:delta, "Hel"}
+    assert_receive {:delta, "lo "}
+    assert_receive {:delta, "é"}
+  end
+
+  test "stream parser fails malformed or truncated streams closed" do
+    assert {:error, %Error{kind: :bad_response, message: malformed}} =
+             OpenAI.parse_stream_chunks(["data: {nope}\n\n"], fn _ -> :ok end)
+
+    assert malformed =~ "invalid SSE JSON"
+
+    event = JSON.encode!(%{"choices" => [%{"delta" => %{"content" => "partial"}}]})
+
+    assert {:error, %Error{kind: :bad_response, message: truncated}} =
+             OpenAI.parse_stream_chunks(["data: #{event}\n\n"], fn _ -> :ok end)
+
+    assert truncated =~ "before [DONE]"
+  end
 end

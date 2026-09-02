@@ -60,6 +60,8 @@ defmodule Elara.CLI do
     [text, "\n"]
   end
 
+  def render({:message_appended, %Assistant{}, :streamed}), do: ["\n"]
+  def render({:content_delta, _message_id, text}), do: [text]
   def render({:message_appended, %Assistant{}}), do: []
   def render({:message_appended, %User{}}), do: []
 
@@ -70,6 +72,8 @@ defmodule Elara.CLI do
   def render({:turn_ended, {:provider_error, err}}) do
     ["[done] provider error: ", err.message, "\n"]
   end
+
+  def render({:turn_ended, outcome, :streamed}), do: ["\n", render({:turn_ended, outcome})]
 
   defp run_ask(prompt, provider) do
     {:ok, session} = Elara.start_session(provider: provider, persist: false)
@@ -90,6 +94,9 @@ defmodule Elara.CLI do
             :ok
 
           {:turn_ended, _} ->
+            exit({:shutdown, 1})
+
+          {:turn_ended, _outcome, :streamed} ->
             exit({:shutdown, 1})
 
           _ ->

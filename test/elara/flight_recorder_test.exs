@@ -72,6 +72,44 @@ defmodule Elara.FlightRecorderTest do
     assert Enum.map(explanation.chain, & &1.transition_id.sequence) == [1, 2, 3, 4]
   end
 
+  test "stream deltas replay while the persisted final state matches a non-streamed turn" do
+    root =
+      Path.join(System.tmp_dir!(), "elara-stream-replay-#{System.unique_integer([:positive])}")
+
+    {:ok, streamed} =
+      Elara.start_session(
+        provider: script([{:stream, ["ans", "wer"], {:ok, asst("answer")}}]),
+        tools: [],
+        cwd: Path.join(root, "streamed")
+      )
+
+    {:ok, plain} =
+      Elara.start_session(
+        provider: script([{:ok, asst("answer")}]),
+        tools: [],
+        cwd: Path.join(root, "plain")
+      )
+
+    assert {:ok, "answer"} = Elara.ask(streamed, "question")
+    assert {:ok, "answer"} = Elara.ask(plain, "question")
+    assert Elara.transcript(streamed) == Elara.transcript(plain)
+
+    assert {:ok, recording} =
+             streamed |> Elara.status() |> Map.fetch!(:recording_path) |> FlightRecorder.load()
+
+    assert length(recording.transitions) == 4
+
+    assert Enum.map(recording.transitions, & &1.fact.kind) == [
+             :ask,
+             :provider_delta,
+             :provider_delta,
+             :provider_result
+           ]
+
+    assert {:ok, %FlightRecorder.Report{status: :match, transitions: 4}} =
+             Elara.replay(recording)
+  end
+
   test "detects core behavior changes and supports transition fault injection" do
     {:ok, session} =
       Elara.start_session(

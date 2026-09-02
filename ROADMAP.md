@@ -51,15 +51,15 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status   | Item                                                          | Depends on       |
-| ------- | -------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | TODO     | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | BLOCKED  | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| SPLIT-5 | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
+| ID      | Status      | Item                                                          | Depends on       |
+| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | IN PROGRESS | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | BLOCKED     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -476,7 +476,7 @@ without moving session authority into a client.
 
 ## SPLIT-3 — Streaming provider contract and content deltas
 
-**Status:** TODO
+**Status:** IN PROGRESS
 
 ### Outcome
 

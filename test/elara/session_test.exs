@@ -113,6 +113,51 @@ defmodule Elara.SessionTest do
     assert {:ok, "hello"} = Task.await(task)
   end
 
+  test "scripted streaming emits ordered deltas before one durable final assistant" do
+    provider = script([{:stream, ["hel", "lo"], {:ok, asst("hello")}}])
+    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
+    :ok = Elara.subscribe(session)
+
+    assert :ok = Elara.ask_async(session, "hi")
+    assert_receive {:elara, ^session, {:turn_started, "hi"}}
+    assert_receive {:elara, ^session, {:message_appended, %Message.User{}}}
+    assert_receive {:elara, ^session, {:content_delta, "assistant-1", "hel"}}
+    assert_receive {:elara, ^session, {:content_delta, "assistant-1", "lo"}}
+
+    assert_receive {:elara, ^session,
+                    {:message_appended, %Message.Assistant{text: "hello"}, :streamed}}
+
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, "hello"}}}
+    assert Elara.transcript(session) == [Message.user("hi"), asst("hello")]
+  end
+
+  test "interrupt midstream reports partial text as interrupted and drops stale deltas" do
+    provider =
+      script([
+        {:stream, ["partial", {:sleep, 5_000}, " stale"], {:ok, asst("partial stale")}}
+      ])
+
+    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
+    :ok = Elara.subscribe(session)
+
+    assert :ok = Elara.ask_async(session, "stop it")
+    assert_receive {:elara, ^session, {:turn_started, "stop it"}}
+    assert_receive {:elara, ^session, {:message_appended, %Message.User{}}}
+    assert_receive {:elara, ^session, {:content_delta, "assistant-1", "partial"}}
+
+    assert Elara.materialized_view(session)["content_deltas"] == %{
+             "assistant-1" => "partial"
+           }
+
+    Elara.interrupt(session)
+    assert_receive {:elara, ^session, {:turn_ended, :interrupted, :streamed}}
+    assert Elara.transcript(session) == [Message.user("stop it")]
+    assert Elara.materialized_view(session)["content_deltas"] == %{}
+
+    refute_receive {:elara, ^session, {:content_delta, _, " stale"}}, 100
+    refute_receive {:elara, ^session, {:message_appended, %Message.Assistant{}, :streamed}}, 100
+  end
+
   test "busy rejection" do
     provider =
       script([
@@ -514,5 +559,62 @@ defmodule Elara.SessionTest do
     assert fork.parent_session == source_info.path
     assert Store.history(fork) == copied_history
     assert source_after.entries == source_before.entries
+  end
+
+  test "persisted transcripts and fork history are identical with or without deltas" do
+    streamed_cwd = unique_cwd()
+    plain_cwd = unique_cwd()
+
+    {:ok, streamed} =
+      Elara.start_session(
+        provider:
+          script([
+            {:stream, ["a", "1"], {:ok, asst("a1")}},
+            {:stream, ["a", "2"], {:ok, asst("a2")}}
+          ]),
+        tools: [],
+        cwd: streamed_cwd
+      )
+
+    {:ok, plain} =
+      Elara.start_session(
+        provider: script([{:ok, asst("a1")}, {:ok, asst("a2")}]),
+        tools: [],
+        cwd: plain_cwd
+      )
+
+    for session <- [streamed, plain] do
+      assert {:ok, "a1"} = Elara.ask(session, "q1")
+      assert {:ok, "a2"} = Elara.ask(session, "q2")
+    end
+
+    assert Elara.transcript(streamed) == Elara.transcript(plain)
+    [%{id: _}, %{id: streamed_second}] = Elara.user_entries(streamed)
+    [%{id: _}, %{id: plain_second}] = Elara.user_entries(plain)
+
+    assert {:ok, "q2", streamed_history} = Elara.fork(streamed, streamed_second)
+    assert {:ok, "q2", plain_history} = Elara.fork(plain, plain_second)
+    assert streamed_history == plain_history
+    assert streamed_history == [Message.user("q1"), asst("a1")]
+
+    streamed_store =
+      streamed_cwd
+      |> Store.list()
+      |> Enum.map(fn info ->
+        {:ok, store} = Store.open(info.path, streamed_cwd)
+        store
+      end)
+      |> Enum.find(& &1.parent_session)
+
+    plain_store =
+      plain_cwd
+      |> Store.list()
+      |> Enum.map(fn info ->
+        {:ok, store} = Store.open(info.path, plain_cwd)
+        store
+      end)
+      |> Enum.find(& &1.parent_session)
+
+    assert Store.history(streamed_store) == Store.history(plain_store)
   end
 end

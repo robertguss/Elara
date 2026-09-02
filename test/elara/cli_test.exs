@@ -27,10 +27,15 @@ defmodule Elara.CLITest do
   test "render assistant text and turn endings" do
     asst = %Assistant{text: "hello", tool_calls: []}
     assert IO.iodata_to_binary(CLI.render({:message_appended, asst})) == "hello\n"
+    assert IO.iodata_to_binary(CLI.render({:content_delta, "assistant-1", "hel"})) == "hel"
+    assert IO.iodata_to_binary(CLI.render({:message_appended, asst, :streamed})) == "\n"
 
     assert IO.iodata_to_binary(CLI.render({:turn_ended, {:completed, "x"}})) == "[done]\n"
     assert IO.iodata_to_binary(CLI.render({:turn_ended, :turn_limit})) == "[done] turn limit\n"
     assert IO.iodata_to_binary(CLI.render({:turn_ended, :interrupted})) == "[done] interrupted\n"
+
+    assert IO.iodata_to_binary(CLI.render({:turn_ended, :interrupted, :streamed})) ==
+             "\n[done] interrupted\n"
 
     err = %Error{kind: :http, message: "nope"}
     assert IO.iodata_to_binary(CLI.render({:turn_ended, {:provider_error, err}})) =~ "nope"

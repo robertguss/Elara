@@ -51,15 +51,15 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status      | Item                                                          | Depends on       |
-| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | IN PROGRESS | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | BLOCKED     | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | BLOCKED     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
+| ID      | Status   | Item                                                          | Depends on       |
+| ------- | -------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | TODO     | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | BLOCKED  | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| SPLIT-5 | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -362,7 +362,7 @@ widening durable effects.
 
 ## SPLIT-2 — Protocol v2: snapshot-on-attach and sequenced patches
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -408,9 +408,75 @@ No TUI, no streaming deltas yet, no change to session persistence or the
 - Protocol schema is versioned and documented in `docs/detached-and-remote.md`.
   Format, warnings-as-errors compile, and full `mix test` pass.
 
+### Result
+
+**DONE (2026-09-02).** Pushed implementation commits
+[`ef43018`](https://github.com/robertguss/elixir-harness/commit/ef430184348005581844a5a6d0d01f832b1c596b)
+and
+[`54ea404`](https://github.com/robertguss/elixir-harness/commit/54ea404f62c8506365d56bd098f671c867066224)
+to `origin/main`.
+
+Protocol v2 now attaches with an atomic materialized snapshot derived directly
+from `Core`, then sends incarnation-scoped, contiguous patches over a closed op
+set. The snapshot carries session identity, complete messages, tool-call status
+and outcome, turn state, usage, and the content-delta slot reserved for SPLIT-3.
+`Session` stores only attachment protocol metadata, not a second projection.
+Each patch idempotently reconciles all changes from its owning Core transition,
+so applying any emitted sequence yields that sequence's complete Core-derived
+view even when one transition emits several causal events. V1 retains cursor
+validation, 1,000-event replay, event messages, and versioned command replies.
+
+`mix elara.attach` now negotiates v2, renders the current snapshot, applies
+patches blindly, ignores stale sequences, and asks for exactly one resnapshot
+while a gap, malformed patch, or incarnation change is unresolved. Resnapshot
+heads and snapshots come from one Session call, so queued patches at or below
+the returned head are safely stale. A large-snapshot test exposed OTP line-mode
+chunking at the socket buffer boundary; gateway and client now reassemble JSON
+lines with a documented 16 MiB fail-closed limit.
+
+Exact verification:
+
+- `mix test test/elara/server_test.exs test/elara/protocol_v2_test.exs` — 9
+  passed, including the real `Mix.Tasks.Elara.Attach` product path, a cold
+  1,004-event attach with only 1,000 events retained, every-sequence Core-view
+  equality across normal/rejected/interrupted tool transitions, v1 replay,
+  one-shot resnapshot behavior, and two-client interrupt convergence.
+- `mix format --check-formatted` — exit 0.
+- `mix compile --warnings-as-errors` — exit 0; Cargo finished incrementally in
+  0.01 s.
+- `cargo fmt --check --manifest-path native/exec-stub/Cargo.toml` — exit 0.
+- `cargo clippy --manifest-path native/exec-stub/Cargo.toml` — exit 0, finished
+  in 0.04 s.
+- `cargo test --manifest-path native/exec-stub/Cargo.toml` — 2 passed.
+- `mix test` — 302 passed. The documented `CrashTool` `RuntimeError: boom` line
+  was the only expected error log.
+- `rg 'System\.shell' lib/` — no matches; `git diff --check` — exit 0; no
+  `spike-*` files remain in the repository root.
+
+Deviations: the wire keeps the existing `version` field (`2`) rather than
+renaming the v1 handshake field to `protocol`, avoiding a second version
+selector. `usage` is `null` because the current Provider contract does not
+expose usage; `append_content_delta` is accepted and projected but is not
+emitted before SPLIT-3. The explicit line-size bound and segmented line
+reassembly were added when the required >1,000-event snapshot proved that a
+single JSON line can exceed OTP's socket buffer. The follow-up implementation
+commit tightened the initial settled-head convergence check to assert exact
+Core-view equality after every emitted sequence.
+
+Remaining uncertainty: a materialized snapshot over 16 MiB fails closed instead
+of attaching; chunked snapshots or pagination remain future protocol work if
+real sessions approach that size. Usage stays unknown until provider support
+lands. The v2 line client is covered in captured-I/O integration tests; broader
+interactive terminal behavior remains for SPLIT-4's TUI parity work.
+
+Decision: proceed to SPLIT-3. Snapshot recovery no longer depends on the bounded
+event ring, both attachment modes converge on one Elixir-owned view, and the
+reserved content-delta op gives provider streaming a versioned product path
+without moving session authority into a client.
+
 ## SPLIT-3 — Streaming provider contract and content deltas
 
-**Status:** BLOCKED (SPLIT-2)
+**Status:** TODO
 
 ### Outcome
 

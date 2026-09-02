@@ -58,19 +58,19 @@ rather than a chain of textual transforms.
 
 ## Execution queue
 
-| ID       | Status  | Item                                                 | Depends on                |
-| -------- | ------- | ---------------------------------------------------- | ------------------------- |
-| ER3-V8-1 | TODO    | Build and freeze an explicit pre-beacon materializer | V7 immutable failure      |
-| ER3-V8-2 | BLOCKED | Freeze the V8 protocol and genuinely future beacon   | ER3-V8-1                  |
-| ER3-V8-3 | BLOCKED | Fetch and materialize the fresh V8 corpus            | ER3-V8-2 + committed time |
-| ER3-V8-4 | BLOCKED | Run qualification through the frozen command stack   | ER3-V8-3                  |
-| ER3-V8-5 | BLOCKED | Execute the sole internal comparison                 | ER3-V8-4                  |
-| ER3-V8-6 | BLOCKED | Execute dogfood or record required non-execution     | ER3-V8-5                  |
-| ER3-V8-7 | BLOCKED | Apply Gate 3 and record the thesis decision          | ER3-V8-5 + ER3-V8-6       |
+| ID       | Status      | Item                                                 | Depends on                |
+| -------- | ----------- | ---------------------------------------------------- | ------------------------- |
+| ER3-V8-1 | IN PROGRESS | Build and freeze an explicit pre-beacon materializer | V7 immutable failure      |
+| ER3-V8-2 | BLOCKED     | Freeze the V8 protocol and genuinely future beacon   | ER3-V8-1                  |
+| ER3-V8-3 | BLOCKED     | Fetch and materialize the fresh V8 corpus            | ER3-V8-2 + committed time |
+| ER3-V8-4 | BLOCKED     | Run qualification through the frozen command stack   | ER3-V8-3                  |
+| ER3-V8-5 | BLOCKED     | Execute the sole internal comparison                 | ER3-V8-4                  |
+| ER3-V8-6 | BLOCKED     | Execute dogfood or record required non-execution     | ER3-V8-5                  |
+| ER3-V8-7 | BLOCKED     | Apply Gate 3 and record the thesis decision          | ER3-V8-5 + ER3-V8-6       |
 
 ## ER3-V8-1 — Build and freeze an explicit pre-beacon materializer
 
-**Status:** TODO
+**Status:** IN PROGRESS
 
 ### Outcome
 

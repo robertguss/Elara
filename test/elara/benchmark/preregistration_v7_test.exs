@@ -47,7 +47,7 @@ defmodule Elara.Benchmark.PreregistrationV7Test do
           {"candidate_source_path", "candidate_source_sha256"},
           {"compatibility_source_path", "compatibility_source_sha256"}
         ] do
-      assert file_sha256(proof[path_key]) == proof[digest_key]
+      assert file_sha256_at(proof["commit"], proof[path_key]) == proof[digest_key]
     end
 
     source = @root |> Path.join(proof["candidate_source_path"]) |> File.read!() |> JSON.decode!()
@@ -194,7 +194,14 @@ defmodule Elara.Benchmark.PreregistrationV7Test do
     contract: contract
   } do
     for {path, expected} <- contract["preserved_artifact_sha256"] do
-      assert file_sha256(path) == expected
+      actual =
+        if String.starts_with?(path, ["docs/", "test/fixtures/"]) do
+          file_sha256(path)
+        else
+          file_sha256_at(contract["frozen_against_commit"], path)
+        end
+
+      assert actual == expected
     end
 
     bytes = File.read!(@contract_path)
@@ -229,5 +236,12 @@ defmodule Elara.Benchmark.PreregistrationV7Test do
     |> File.read!()
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
+  end
+
+  defp file_sha256_at(commit, path) do
+    {bytes, 0} =
+      System.cmd("git", ["show", "#{commit}:#{path}"], cd: @root, stderr_to_stdout: true)
+
+    bytes |> then(&:crypto.hash(:sha256, &1)) |> Base.encode16(case: :lower)
   end
 end

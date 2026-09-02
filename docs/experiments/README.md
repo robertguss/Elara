@@ -59,7 +59,13 @@ frame and a new future beacon before selection. V7's immutable
 [materialization failure](003-effect-receipt-v7-materialization-failure.md) then
 stopped at its first source-identity guard after the beacon was exposed but
 before seed derivation, selection, literals, or output writes; the failed
-materializer accidentally retained the V6 preflight path. ER-1 v1 concluded Stop
+materializer accidentally retained the V6 preflight path. The development-only
+[V8 pre-beacon qualification](003-effect-receipt-v8-pre-beacon-qualification.json)
+now freezes an explicit 20-candidate materializer and the complete generic
+qualification/execution/replay command stack before any new beacon commitment;
+its pinned
+[development protocol](../../test/fixtures/benchmark/exp003-v8-development/protocol.json)
+and beacon contain no held-out or confirmatory evidence. ER-1 v1 concluded Stop
 without a safety failure because row 1's frozen result counts were internally
 inconsistent. The separate
 [corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and

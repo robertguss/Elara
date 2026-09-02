@@ -4,6 +4,7 @@ defmodule Elara.Benchmark.PreflightV7Test do
   alias Elara.Benchmark.InternalConfirmatory
 
   @root Path.expand("../../..", __DIR__)
+  @source_commit "98cf40a03b68a943f75342ac9704257bbb083885"
   @report_path Path.join(
                  @root,
                  "docs/experiments/003-effect-receipt-v7-command-path-preflight.json"
@@ -214,7 +215,8 @@ defmodule Elara.Benchmark.PreflightV7Test do
           {"candidate_source", "candidate_source_sha256"},
           {"compatibility", "compatibility_sha256"}
         ] do
-      assert file_sha256(report["inputs"][source_key]) == report["inputs"][digest_key]
+      assert file_sha256_at(@source_commit, report["inputs"][source_key]) ==
+               report["inputs"][digest_key]
     end
 
     forbidden_keys =
@@ -257,5 +259,13 @@ defmodule Elara.Benchmark.PreflightV7Test do
   defp collect_strings(_value, strings), do: strings
 
   defp file_sha256(path), do: @root |> Path.join(path) |> File.read!() |> sha256()
+
+  defp file_sha256_at(commit, path) do
+    {bytes, 0} =
+      System.cmd("git", ["show", "#{commit}:#{path}"], cd: @root, stderr_to_stdout: true)
+
+    sha256(bytes)
+  end
+
   defp sha256(value), do: value |> then(&:crypto.hash(:sha256, &1)) |> Base.encode16(case: :lower)
 end

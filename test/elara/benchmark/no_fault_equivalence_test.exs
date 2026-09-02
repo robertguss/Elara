@@ -9,7 +9,7 @@ defmodule Elara.Benchmark.NoFaultEquivalenceTest do
                  __DIR__
                )
   @historical_adapter_sha256 "a49d4c91749a07c5fa8d511931928b69e64d1366d91fcdd27e6370abd235244b"
-  @current_adapter_sha256 "6b712b2865e4cd3d10fbd3362e8ecc68aa7293cb3c8154c90c1074cfc00a395a"
+  @current_adapter_sha256 "7b183595ecfbafa7e708adb6e87b0a709bb9d002e5f4b3e6aebaae0556176f0b"
   @historical_runner_sha256 "3b3ab321dcd0540bc1a8532be834021c8d3f471b7c87951a5626a6663f084a71"
   @current_runner_sha256 "87ee7cb29ea9d0c2a4a7381bc7fcbb13cbc63226b09573907db0ac5862b533dc"
   @historical_target_runner_sha256 "8a540e25ccbea30ddde27f3babf096ad2e5cb7425f34c9883669411dee5215a7"

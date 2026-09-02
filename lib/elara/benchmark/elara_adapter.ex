@@ -125,6 +125,47 @@ defmodule Elara.Benchmark.ElaraAdapter do
   def authorize_confirmatory(_config, %Manifest{}),
     do: {:error, :confirmatory_manifest_not_frozen}
 
+  @spec authorize_confirmatory(map(), Manifest.t(), String.t()) ::
+          {:ok, map()} | {:error, term()}
+  def authorize_confirmatory(
+        config,
+        %Manifest{sha256: digest, tasks: tasks, rows: rows},
+        digest
+      )
+      when is_map(config) do
+    {:ok,
+     Map.put(config, :fault_authorization, %{
+       mode: :confirmatory,
+       source_manifest_sha256: digest,
+       tasks: tasks,
+       rows: rows
+     })}
+  end
+
+  def authorize_confirmatory(_config, %Manifest{}, _expected_digest),
+    do: {:error, :confirmatory_manifest_not_frozen}
+
+  @doc false
+  @spec confirmatory_binding_matches?(map(), map(), map()) :: boolean()
+  def confirmatory_binding_matches?(
+        task,
+        row,
+        %{
+          mode: :confirmatory,
+          source_manifest_sha256: source_manifest_sha256,
+          tasks: tasks,
+          rows: rows
+        }
+      )
+      when is_binary(source_manifest_sha256) and is_map(tasks) and is_map(rows) do
+    task_id = task["id"]
+    row_id = row["row_id"]
+
+    row["task_id"] == task_id and Map.get(tasks, task_id) == task and Map.get(rows, row_id) == row
+  end
+
+  def confirmatory_binding_matches?(_task, _row, _authorization), do: false
+
   @spec mapping(map()) :: {:ok, map()} | {:error, term()}
   def mapping(%{
         "plan" =>
@@ -697,27 +738,12 @@ defmodule Elara.Benchmark.ElaraAdapter do
   defp confirmatory_fault?(
          task,
          row,
-         %{
-           mode: :confirmatory,
-           source_manifest_sha256: source_manifest_sha256,
-           tasks: tasks,
-           rows: rows
-         }
-       )
-       when source_manifest_sha256 in [
-              @v3_manifest_sha256,
-              @v4_manifest_sha256,
-              @v6_manifest_sha256
-            ] do
-    task_id = task["id"]
-    row_id = row["row_id"]
-
+         %{mode: :confirmatory} = authorization
+       ) do
     task["exposure_split"] == "held_out_relative_to_target_implementation" and
-      row["task_id"] == task_id and
       not String.starts_with?(row["row_id"] || "", "QUAL-") and
       row["fault_role"] in ~w(primary secondary) and
-      Map.get(tasks, task_id) == task and
-      Map.get(rows, row_id) == row
+      confirmatory_binding_matches?(task, row, authorization)
   end
 
   defp confirmatory_fault?(_task, _row, _authorization), do: false

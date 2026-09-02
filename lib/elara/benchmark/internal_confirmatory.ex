@@ -36,27 +36,69 @@ defmodule Elara.Benchmark.InternalConfirmatory do
   @spec qualify(String.t(), String.t(), String.t(), String.t()) ::
           {:ok, map()} | {:error, term()}
   def qualify(manifest_path, state_root, workspace_root, output_path) do
-    run(:qualify, manifest_path, nil, state_root, workspace_root, output_path)
+    run(:qualify, manifest_path, nil, state_root, workspace_root, output_path, default_contract())
   end
 
   @spec execute(String.t(), String.t(), String.t(), String.t(), String.t()) ::
           {:ok, map()} | {:error, term()}
   def execute(manifest_path, qualification_path, state_root, workspace_root, output_path) do
-    run(:execute, manifest_path, qualification_path, state_root, workspace_root, output_path)
+    run(
+      :execute,
+      manifest_path,
+      qualification_path,
+      state_root,
+      workspace_root,
+      output_path,
+      default_contract()
+    )
   end
 
   @spec replay(String.t(), String.t(), String.t()) :: {:ok, map()} | {:error, term()}
   def replay(manifest_path, report_path, output_path) do
+    replay_contract(default_contract(), manifest_path, report_path, output_path)
+  end
+
+  @spec qualify_contract(map(), String.t(), String.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, term()}
+  def qualify_contract(contract, manifest_path, state_root, workspace_root, output_path) do
+    run(:qualify, manifest_path, nil, state_root, workspace_root, output_path, contract)
+  end
+
+  @spec execute_contract(map(), String.t(), String.t(), String.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, term()}
+  def execute_contract(
+        contract,
+        manifest_path,
+        qualification_path,
+        state_root,
+        workspace_root,
+        output_path
+      ) do
+    run(
+      :execute,
+      manifest_path,
+      qualification_path,
+      state_root,
+      workspace_root,
+      output_path,
+      contract
+    )
+  end
+
+  @spec replay_contract(map(), String.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, term()}
+  def replay_contract(contract, manifest_path, report_path, output_path) do
     repo_root = File.cwd!()
     output_path = Path.expand(output_path)
 
-    with {:ok, source} <- load_source(manifest_path),
-         {:ok, identities} <- source_identities(repo_root),
+    with :ok <- validate_contract(contract),
+         {:ok, source} <- load_source(manifest_path, contract),
+         {:ok, identities} <- source_identities(repo_root, contract),
          :ok <- require_absent(output_path, :output_path),
          :ok <- require_absent(output_path <> ".tmp", :output_temporary_path),
          {:ok, report, report_bytes} <- read_canonical_json(report_path),
          {:ok, execution_manifest} <- report_manifest(source, report),
-         :ok <- validate_report(report, source, execution_manifest, identities),
+         :ok <- validate_report(report, source, execution_manifest, identities, contract),
          score <-
            Scorer.score(
              execution_manifest,
@@ -92,8 +134,11 @@ defmodule Elara.Benchmark.InternalConfirmatory do
   def canonical_json(value), do: JSON.encode!(value)
 
   @spec source_identities(String.t()) :: {:ok, map()} | {:error, term()}
-  def source_identities(repo_root) do
-    Enum.reduce_while(@source_paths, {:ok, %{}}, fn relative, {:ok, identities} ->
+  def source_identities(repo_root), do: source_identities(repo_root, default_contract())
+
+  @spec source_identities(String.t(), map()) :: {:ok, map()} | {:error, term()}
+  def source_identities(repo_root, contract) do
+    Enum.reduce_while(contract.source_paths, {:ok, %{}}, fn relative, {:ok, identities} ->
       path = Path.join(repo_root, relative)
 
       case File.read(path) do
@@ -114,18 +159,27 @@ defmodule Elara.Benchmark.InternalConfirmatory do
 
   def validate_authorizing_score(score), do: {:error, {:invalid_score, score["errors"]}}
 
-  defp run(mode, manifest_path, qualification_path, state_root, workspace_root, output_path) do
+  defp run(
+         mode,
+         manifest_path,
+         qualification_path,
+         state_root,
+         workspace_root,
+         output_path,
+         contract
+       ) do
     repo_root = File.cwd!()
     state_root = Path.expand(state_root)
     workspace_root = Path.expand(workspace_root)
     output_path = Path.expand(output_path)
     checkpoint_path = Path.join(state_root, @checkpoint_filename)
 
-    with {:ok, source} <- load_source(manifest_path),
-         {:ok, identities} <- source_identities(repo_root),
+    with :ok <- validate_contract(contract),
+         {:ok, source} <- load_source(manifest_path, contract),
+         {:ok, identities} <- source_identities(repo_root, contract),
          {:ok, execution_manifest} <- execution_manifest(mode, source),
          {:ok, qualification_identity} <-
-           qualification_identity(mode, qualification_path, source, identities),
+           qualification_identity(mode, qualification_path, source, identities, contract),
          :ok <-
            preflight_paths(
              repo_root,
@@ -135,9 +189,9 @@ defmodule Elara.Benchmark.InternalConfirmatory do
              checkpoint_path
            ),
          {:ok, config} <- ElaraAdapter.prepare(repo_root, state_root),
-         {:ok, config} <- authorize(mode, config, source),
+         {:ok, config} <- authorize(mode, config, source, contract),
          :ok <- File.mkdir_p(workspace_root),
-         checkpoint = checkpoint(mode, source, execution_manifest),
+         checkpoint = checkpoint(mode, source, execution_manifest, contract),
          {:ok, fault_records, no_fault_records, checkpoint} <-
            orchestrate(execution_manifest, config, workspace_root, checkpoint_path, checkpoint),
          score <- Scorer.score(execution_manifest, fault_records, no_fault_records),
@@ -154,7 +208,8 @@ defmodule Elara.Benchmark.InternalConfirmatory do
              no_fault_records,
              score,
              checkpoint,
-             sha256(checkpoint_bytes)
+             sha256(checkpoint_bytes),
+             contract
            ),
          :ok <- write_atomic(output_path, canonical_json(report), :new) do
       {:ok, report}
@@ -241,10 +296,10 @@ defmodule Elara.Benchmark.InternalConfirmatory do
     Runner.run_no_fault(manifest, run, adapter: ElaraAdapter, root: workspace_root)
   end
 
-  defp checkpoint(mode, source, execution_manifest) do
+  defp checkpoint(mode, source, execution_manifest, contract) do
     %{
-      "schema" => @checkpoint_schema,
-      "protocol" => @protocol,
+      "schema" => contract.checkpoint_schema,
+      "protocol" => contract.protocol,
       "mode" => Atom.to_string(mode),
       "source_manifest_sha256" => source.sha256,
       "execution_manifest_sha256" => execution_manifest.sha256,
@@ -284,11 +339,12 @@ defmodule Elara.Benchmark.InternalConfirmatory do
          no_fault_records,
          score,
          checkpoint,
-         checkpoint_digest
+         checkpoint_digest,
+         contract
        ) do
     %{
-      "schema" => @report_schema,
-      "protocol" => @protocol,
+      "schema" => contract.report_schema,
+      "protocol" => contract.protocol,
       "mode" => Atom.to_string(mode),
       "source_manifest" => %{
         "path" => Path.relative_to_cwd(source.path),
@@ -302,7 +358,7 @@ defmodule Elara.Benchmark.InternalConfirmatory do
       },
       "qualification" => qualification_identity,
       "identities" => identities,
-      "commands" => @commands,
+      "commands" => contract.commands,
       "configuration" => configuration(execution_manifest),
       "runtime" => %{
         "elixir" => System.version(),
@@ -317,7 +373,7 @@ defmodule Elara.Benchmark.InternalConfirmatory do
         "checkpoint_event_count" => length(checkpoint["events"]),
         "checkpoint_sha256" => checkpoint_digest
       },
-      "exposure" => exposure(mode, fault_records, no_fault_records),
+      "exposure" => exposure(mode, fault_records, no_fault_records, contract),
       "fault_records" => fault_records,
       "no_fault_records" => no_fault_records,
       "score" => score,
@@ -353,7 +409,7 @@ defmodule Elara.Benchmark.InternalConfirmatory do
     }
   end
 
-  defp exposure(:qualify, fault_records, no_fault_records) do
+  defp exposure(:qualify, fault_records, no_fault_records, %{exposure_version: "v6"}) do
     %{
       "development_fault_runs" => length(fault_records),
       "development_no_fault_runs" => length(no_fault_records),
@@ -366,7 +422,7 @@ defmodule Elara.Benchmark.InternalConfirmatory do
     }
   end
 
-  defp exposure(:execute, fault_records, no_fault_records) do
+  defp exposure(:execute, fault_records, no_fault_records, %{exposure_version: "v6"}) do
     %{
       "development_fault_runs" => 0,
       "development_no_fault_runs" => 0,
@@ -375,6 +431,33 @@ defmodule Elara.Benchmark.InternalConfirmatory do
       "confirmatory_B_or_T_calculated" => true,
       "development_score_only" => false,
       "statement" => "Complete immutable v6 internal execution; no row was retried or replaced."
+    }
+  end
+
+  defp exposure(:qualify, fault_records, no_fault_records, contract) do
+    %{
+      "development_fault_runs" => length(fault_records),
+      "development_no_fault_runs" => length(no_fault_records),
+      "#{contract.exposure_version}_confirmatory_fault_runs" => 0,
+      "#{contract.exposure_version}_confirmatory_no_fault_timing_runs" => 0,
+      "confirmatory_B_or_T_calculated" => false,
+      "development_score_only" => true,
+      "statement" =>
+        "Every run used non-scored development_adapter_fixture tasks; no held-out #{contract.exposure_version} row or timing result was exposed."
+    }
+  end
+
+  defp exposure(:execute, fault_records, no_fault_records, contract) do
+    %{
+      "development_fault_runs" => 0,
+      "development_no_fault_runs" => 0,
+      "#{contract.exposure_version}_confirmatory_fault_runs" => length(fault_records),
+      "#{contract.exposure_version}_confirmatory_no_fault_timing_runs" =>
+        length(no_fault_records),
+      "confirmatory_B_or_T_calculated" => true,
+      "development_score_only" => false,
+      "statement" =>
+        "Complete immutable #{contract.exposure_version} internal execution; no row was retried or replaced."
     }
   end
 
@@ -406,22 +489,32 @@ defmodule Elara.Benchmark.InternalConfirmatory do
   defp execution_manifest(:qualify, source), do: Qualification.manifest(source)
   defp execution_manifest(:execute, source), do: {:ok, source}
 
-  defp authorize(:qualify, config, _source), do: {:ok, config}
+  defp authorize(:qualify, config, _source, _contract), do: {:ok, config}
 
-  defp authorize(:execute, config, source),
+  defp authorize(:execute, config, source, %{execute_authorization: :elara_adapter}),
     do: ElaraAdapter.authorize_confirmatory(config, source)
 
-  defp qualification_identity(:qualify, nil, _source, _identities),
+  defp authorize(:execute, config, source, %{execute_authorization: :contract} = contract) do
+    if ElaraAdapter.target_commits() == contract.target_commits,
+      do: ElaraAdapter.authorize_confirmatory(config, source, contract.manifest_sha256),
+      else: {:error, :contract_target_commit_mismatch}
+  end
+
+  defp qualification_identity(:qualify, nil, _source, _identities, _contract),
     do: {:ok, %{"required" => false}}
 
-  defp qualification_identity(:execute, qualification_path, source, identities)
+  defp qualification_identity(:execute, qualification_path, source, identities, contract)
        when is_binary(qualification_path) do
     with {:ok, report, bytes} <- read_canonical_json(qualification_path),
          {:ok, manifest} <- Qualification.manifest(source),
-         :ok <- validate_report(report, source, manifest, identities),
+         :ok <- validate_report(report, source, manifest, identities, contract),
          true <- report["mode"] == "qualify",
-         true <- report["exposure"]["v6_confirmatory_fault_runs"] == 0,
-         true <- report["exposure"]["v6_confirmatory_no_fault_timing_runs"] == 0,
+         true <-
+           report["exposure"]["#{contract.exposure_version}_confirmatory_fault_runs"] == 0,
+         true <-
+           report["exposure"][
+             "#{contract.exposure_version}_confirmatory_no_fault_timing_runs"
+           ] == 0,
          true <- report["exposure"]["confirmatory_B_or_T_calculated"] == false do
       {:ok,
        %{
@@ -437,21 +530,21 @@ defmodule Elara.Benchmark.InternalConfirmatory do
     end
   end
 
-  defp qualification_identity(:execute, _qualification_path, _source, _identities),
+  defp qualification_identity(:execute, _qualification_path, _source, _identities, _contract),
     do: {:error, :qualification_path_required}
 
   defp report_manifest(source, %{"mode" => "qualify"}), do: Qualification.manifest(source)
   defp report_manifest(source, %{"mode" => "execute"}), do: {:ok, source}
   defp report_manifest(_source, report), do: {:error, {:invalid_report_mode, report["mode"]}}
 
-  defp validate_report(report, source, execution_manifest, identities) do
+  defp validate_report(report, source, execution_manifest, identities, contract) do
     expected_configuration = configuration(execution_manifest)
 
     cond do
-      report["schema"] != @report_schema ->
+      report["schema"] != contract.report_schema ->
         {:error, {:invalid_report_schema, report["schema"]}}
 
-      report["protocol"] != @protocol ->
+      report["protocol"] != contract.protocol ->
         {:error, {:invalid_report_protocol, report["protocol"]}}
 
       get_in(report, ["source_manifest", "sha256"]) != source.sha256 ->
@@ -463,7 +556,7 @@ defmodule Elara.Benchmark.InternalConfirmatory do
       report["identities"] != identities ->
         {:error, :report_source_identity_mismatch}
 
-      report["commands"] != @commands ->
+      report["commands"] != contract.commands ->
         {:error, :report_command_mismatch}
 
       report["configuration"] != expected_configuration ->
@@ -483,13 +576,13 @@ defmodule Elara.Benchmark.InternalConfirmatory do
     end
   end
 
-  defp load_source(path) do
-    with {:ok, manifest} <- Manifest.load(Path.expand(path), sha256: @manifest_sha256),
-         true <- manifest.data["schema"] == "elara.exp003.corpus.v6",
-         true <- manifest.data["preregistration_version"] == @protocol do
+  defp load_source(path, contract) do
+    with {:ok, manifest} <- Manifest.load(Path.expand(path), sha256: contract.manifest_sha256),
+         true <- manifest.data["schema"] == contract.manifest_schema,
+         true <- manifest.data["preregistration_version"] == contract.manifest_version do
       {:ok, manifest}
     else
-      false -> {:error, :not_frozen_v6_manifest}
+      false -> {:error, :not_frozen_contract_manifest}
       {:error, _reason} = error -> error
     end
   end
@@ -576,6 +669,59 @@ defmodule Elara.Benchmark.InternalConfirmatory do
 
   defp require_new_target(:new, path), do: require_absent(path, :atomic_target_path)
   defp require_new_target(:replace, _path), do: :ok
+
+  defp default_contract do
+    %{
+      protocol: @protocol,
+      report_schema: @report_schema,
+      checkpoint_schema: @checkpoint_schema,
+      manifest_sha256: @manifest_sha256,
+      manifest_schema: "elara.exp003.corpus.v6",
+      manifest_version: @protocol,
+      source_paths: @source_paths,
+      commands: @commands,
+      exposure_version: "v6",
+      execute_authorization: :elara_adapter,
+      target_commits: ElaraAdapter.target_commits()
+    }
+  end
+
+  defp validate_contract(contract) when is_map(contract) do
+    required = ~w(
+      protocol report_schema checkpoint_schema manifest_sha256 manifest_schema manifest_version
+      source_paths commands exposure_version execute_authorization target_commits
+    )a
+
+    cond do
+      Enum.any?(required, &(not Map.has_key?(contract, &1))) ->
+        {:error, :incomplete_command_contract}
+
+      not is_binary(contract.protocol) or contract.protocol == "" ->
+        {:error, :invalid_command_protocol}
+
+      not is_binary(contract.manifest_sha256) or
+          not String.match?(contract.manifest_sha256, ~r/\A[0-9a-f]{64}\z/) ->
+        {:error, :invalid_contract_manifest_digest}
+
+      not is_list(contract.source_paths) or contract.source_paths == [] or
+          Enum.any?(contract.source_paths, &(not is_binary(&1) or Path.type(&1) != :relative)) ->
+        {:error, :invalid_contract_source_paths}
+
+      not is_map(contract.commands) or map_size(contract.commands) != 3 ->
+        {:error, :invalid_contract_commands}
+
+      contract.execute_authorization not in [:elara_adapter, :contract] ->
+        {:error, :invalid_execute_authorization}
+
+      contract.target_commits != ElaraAdapter.target_commits() ->
+        {:error, :contract_target_commit_mismatch}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_contract(_contract), do: {:error, :invalid_command_contract}
 
   defp inside?(path, root) do
     relative = Path.relative_to(path, root)

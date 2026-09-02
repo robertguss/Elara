@@ -52,9 +52,12 @@ adapter. The development-only V7
 [command-path preflight](003-effect-receipt-v7-command-path-preflight.json)
 preserves that failure and qualifies a new conditional 17-candidate frame across
 112 exact command-path runs; it excludes P03, P05, and W04 rather than changing
-their semantics, and commits no beacon or held-out evidence. ER-1 v1 concluded
-Stop without a safety failure because row 1's frozen result counts were
-internally inconsistent. The separate
+their semantics, and commits no beacon or held-out evidence. The subsequent
+[V7 preregistration](003-effect-receipt-confirmatory-preregistration-v7.md) and
+[machine contract](003-effect-receipt-v7-protocol.json) freeze that conditional
+frame and a new future beacon before selection. ER-1 v1 concluded Stop without a
+safety failure because row 1's frozen result counts were internally
+inconsistent. The separate
 [corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
 [fresh fixture manifest](003-effect-receipt-er1-v2-manifest.json) preserve that
 result. V2's first run aborted in harness mechanics before the conflicting

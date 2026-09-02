@@ -58,19 +58,19 @@ rather than a chain of textual transforms.
 
 ## Execution queue
 
-| ID       | Status      | Item                                                 | Depends on                |
-| -------- | ----------- | ---------------------------------------------------- | ------------------------- |
-| ER3-V8-1 | IN PROGRESS | Build and freeze an explicit pre-beacon materializer | V7 immutable failure      |
-| ER3-V8-2 | BLOCKED     | Freeze the V8 protocol and genuinely future beacon   | ER3-V8-1                  |
-| ER3-V8-3 | BLOCKED     | Fetch and materialize the fresh V8 corpus            | ER3-V8-2 + committed time |
-| ER3-V8-4 | BLOCKED     | Run qualification through the frozen command stack   | ER3-V8-3                  |
-| ER3-V8-5 | BLOCKED     | Execute the sole internal comparison                 | ER3-V8-4                  |
-| ER3-V8-6 | BLOCKED     | Execute dogfood or record required non-execution     | ER3-V8-5                  |
-| ER3-V8-7 | BLOCKED     | Apply Gate 3 and record the thesis decision          | ER3-V8-5 + ER3-V8-6       |
+| ID       | Status  | Item                                                 | Depends on                |
+| -------- | ------- | ---------------------------------------------------- | ------------------------- |
+| ER3-V8-1 | DONE    | Build and freeze an explicit pre-beacon materializer | V7 immutable failure      |
+| ER3-V8-2 | TODO    | Freeze the V8 protocol and genuinely future beacon   | ER3-V8-1                  |
+| ER3-V8-3 | BLOCKED | Fetch and materialize the fresh V8 corpus            | ER3-V8-2 + committed time |
+| ER3-V8-4 | BLOCKED | Run qualification through the frozen command stack   | ER3-V8-3                  |
+| ER3-V8-5 | BLOCKED | Execute the sole internal comparison                 | ER3-V8-4                  |
+| ER3-V8-6 | BLOCKED | Execute dogfood or record required non-execution     | ER3-V8-5                  |
+| ER3-V8-7 | BLOCKED | Apply Gate 3 and record the thesis decision          | ER3-V8-5 + ER3-V8-6       |
 
 ## ER3-V8-1 — Build and freeze an explicit pre-beacon materializer
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -136,11 +136,48 @@ development runs; JSON/schema/hash/link/preserved-artifact audits;
 
 ### Result
 
-Pending.
+Implemented and pushed in
+[`35be301`](https://github.com/robertguss/elixir-harness/commit/35be3015c56a01350bcb08ba6dde464fda3be3bf).
+
+- The explicit materializer constructed all 20 candidates and validated the 17
+  eligible candidates before selection. Two clean materializations produced the
+  same five-file bundle byte-for-byte.
+- The frozen development qualification selected 12 tasks and 20 rows, then ran
+  72 fault and 72 no-fault qualifications with 288 checkpoint events. Scoring
+  and replay both returned `Pass`, with zero harness errors and zero safety
+  disqualifiers.
+- The exact materialize, qualify, and replay CLI paths were exercised. Every
+  command rematerializes and byte-compares the full bundle; execution is
+  confirmatory-only and guarded by an exclusive, fsynced global claim keyed by
+  the verified receipt digest. Authorization probes accepted only the correct
+  manifest/task/row binding and did not execute held-out faults.
+- Evidence:
+  [`003-effect-receipt-v8-pre-beacon-qualification.json`](experiments/003-effect-receipt-v8-pre-beacon-qualification.json)
+  (`ce31ac3a940fca7e14c1722c4a4a4c3c8e9813cc78fba856d59e3f920bfb309f`),
+  development protocol
+  (`db67d7e876ceeb0a58ca7f03cb372eda91ccd670400e2b1feb9e73158a061e4a`), and
+  development beacon
+  (`dd88b7282d1fdb42d29ed1c9624f46a185193b908cd55764d538c1c70e0ac285`).
+- Verification passed: exact clean-checkout preflight reproduction,
+  `mix format --check-formatted`, `mix compile --warnings-as-errors`, and full
+  `mix test` with 429 passing tests. The expected `CrashTool`
+  `RuntimeError: boom` recovery log remained non-failing. All V1–V7 evidence
+  artifacts stayed byte-identical.
+- Independent Oracle review initially found source substitution, caller-bound
+  bundle identity, incomplete CLI proof, and execution-claim gaps. The final
+  review returned **GO** after explicit construction, pre-beacon shape
+  validation, exact CLI coverage, full byte rebinding, and the global one-shot
+  claim were added.
+- Deviations: none. The implementation validates all 20 candidates rather than
+  only the 17 eligible candidates required by acceptance.
+- Remaining uncertainty: the development entropy proves command-stack coherence
+  only. Selecting and committing a genuinely future drand round, including
+  official response/signature verification, belongs to ER3-V8-2; no V8 held-out
+  selection or confirmatory evidence has been exposed.
 
 ## ER3-V8-2 — Freeze the protocol and future beacon
 
-**Status:** BLOCKED by ER3-V8-1
+**Status:** TODO
 
 ### Outcome
 
@@ -174,7 +211,7 @@ checks pass without fetching the round.
 
 ### Result
 
-Blocked.
+Pending.
 
 ## ER3-V8-3 — Fetch and materialize fresh inputs
 

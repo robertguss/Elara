@@ -7,6 +7,8 @@ defmodule Elara.ProtocolV2Test do
   alias Elara.Message
   alias Elara.Message.ToolCall
   alias Elara.Protocol
+  alias Elara.Session.Core
+  alias Elara.Tool
 
   defp asst(text, calls \\ []) do
     {:ok, assistant} = Message.assistant(text, calls)
@@ -84,6 +86,26 @@ defmodule Elara.ProtocolV2Test do
       %{"type" => type} when type in ["ok", "error", "status"] ->
         ingest_until(socket, projector, predicate)
     end
+  end
+
+  defp project_transition(core, view, seq, fact) do
+    offset = length(core.history)
+    {core, effects} = Core.step(core, fact)
+    messages = Enum.drop(core.history, offset)
+
+    {view, seq} =
+      Enum.reduce(effects, {view, seq}, fn
+        {:emit, event}, {view, seq} ->
+          ops = Protocol.patch_ops(event, core, {offset, messages})
+          assert {:ok, view} = Protocol.apply_patch(view, ops)
+          assert view == Protocol.snapshot("property-session", "property-incarnation", core)
+          {view, seq + 1}
+
+        _effect, state ->
+          state
+      end)
+
+    {core, view, seq}
   end
 
   test "cold v2 attach materializes history beyond the v1 replay window" do
@@ -175,6 +197,69 @@ defmodule Elara.ProtocolV2Test do
     :gen_tcp.close(socket)
   end
 
+  test "every emitted sequence materializes its complete Core transition" do
+    bash = Enum.find(Tool.builtins(), &(&1.name == "bash"))
+
+    config = %Core.Config{
+      system: "property test",
+      tools: %{"bash" => bash},
+      max_iterations: 4,
+      max_tool_output_bytes: 1_024
+    }
+
+    core = Core.new(config)
+    view = Protocol.snapshot("property-session", "property-incarnation", core)
+    {core, view, seq} = project_transition(core, view, 1, {:ask, "exercise tools"})
+    {:calling_provider, provider_ref, 1} = core.phase
+
+    calls = [
+      %ToolCall{id: "valid", name: "bash", args: {:ok, %{"command" => "true"}}},
+      %ToolCall{id: "malformed", name: "bash", args: {:malformed, "{"}},
+      %ToolCall{id: "unknown", name: "missing", args: {:ok, %{}}}
+    ]
+
+    {core, view, seq} =
+      project_transition(
+        core,
+        view,
+        seq,
+        {:provider_result, provider_ref, {:ok, asst(nil, calls)}}
+      )
+
+    {:running_tool, tool_ref, %ToolCall{id: "valid"}, _remaining, 1} = core.phase
+    {core, view, seq} = project_transition(core, view, seq, {:tool_result, tool_ref, {:ok, "ok"}})
+    {:calling_provider, provider_ref, 2} = core.phase
+
+    {core, view, seq} =
+      project_transition(
+        core,
+        view,
+        seq,
+        {:provider_result, provider_ref, {:ok, asst("complete")}}
+      )
+
+    {core, view, seq} = project_transition(core, view, seq, {:ask, "interrupt all"})
+    {:calling_provider, provider_ref, 1} = core.phase
+
+    pending_calls = [
+      %ToolCall{id: "first", name: "bash", args: {:ok, %{"command" => "sleep 1"}}},
+      %ToolCall{id: "second", name: "bash", args: {:ok, %{"command" => "sleep 1"}}}
+    ]
+
+    {core, view, seq} =
+      project_transition(
+        core,
+        view,
+        seq,
+        {:provider_result, provider_ref, {:ok, asst(nil, pending_calls)}}
+      )
+
+    {core, view, _seq} = project_transition(core, view, seq, :interrupt)
+    assert core.phase == :idle
+    assert view == Protocol.snapshot("property-session", "property-incarnation", core)
+    assert Enum.all?(view["tool_calls"], &(&1["status"] in ["succeeded", "failed"]))
+  end
+
   test "gap, incarnation change, and invalid patch request only one snapshot while pending" do
     {:ok, session} =
       Elara.start_session(provider: script([]), tools: [], persist: false)
@@ -254,7 +339,8 @@ defmodule Elara.ProtocolV2Test do
     assert %{"type" => "ok"} = recv_json(controller)
 
     running? = fn projection ->
-      Enum.any?(projection.view["tool_calls"], &(&1["status"] == "running"))
+      Enum.any?(projection.view["tool_calls"], &(&1["status"] == "running")) and
+        projection.head == Elara.status(session).event_head
     end
 
     controller_projection = ingest_until(controller, controller_projection, running?)

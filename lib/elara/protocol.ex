@@ -75,9 +75,13 @@ defmodule Elara.Protocol do
     %{"type" => "patch", "version" => 2, "seq" => seq, "ops" => ops}
   end
 
-  @spec patch_ops(Elara.Event.t(), Core.State.t()) :: [map()]
-  def patch_ops(event, %Core.State{} = core) do
-    event_ops(event) ++ [%{"op" => "set_turn_state", "turn" => event_turn(event, core.phase)}]
+  @spec patch_ops(Elara.Event.t(), Core.State.t(), {non_neg_integer(), [Elara.Message.t()]}) ::
+          [map()]
+  def patch_ops(event, %Core.State{} = core, {message_offset, messages}) do
+    reconcile_messages(message_offset, messages) ++
+      reconcile_tool_statuses(messages, core) ++
+      event_ops(event, message_offset, messages) ++
+      [%{"op" => "set_turn_state", "turn" => event_turn(event, core.phase)}]
   end
 
   @spec apply_patch(map(), [map()]) :: {:ok, map()} | {:error, :invalid_patch}
@@ -165,9 +169,58 @@ defmodule Elara.Protocol do
   defp encode_event({:turn_ended, outcome}),
     do: %{"kind" => "turn_ended", "outcome" => encode_turn_outcome(outcome)}
 
-  defp event_ops({:turn_started, _prompt}), do: []
+  defp reconcile_messages(offset, messages) do
+    messages
+    |> Enum.with_index(offset)
+    |> Enum.map(fn {message, index} ->
+      %{
+        "op" => "append_message",
+        "index" => index,
+        "message" => encode_message(message)
+      }
+    end)
+  end
 
-  defp event_ops({:tool_started, call}) do
+  defp reconcile_tool_statuses(messages, core) do
+    running_id =
+      case core.phase do
+        {:running_tool, _ref, call, _remaining, _iteration} -> call.id
+        _phase -> nil
+      end
+
+    ids =
+      messages
+      |> Enum.flat_map(fn
+        %Assistant{tool_calls: calls} -> Enum.map(calls, & &1.id)
+        %ToolResult{call_id: id} -> [id]
+        _message -> []
+      end)
+      |> then(&if(running_id, do: [running_id | &1], else: &1))
+      |> Enum.uniq()
+
+    views = Map.new(tool_views(core), &{&1["id"], &1})
+
+    Enum.flat_map(ids, fn id ->
+      case Map.fetch(views, id) do
+        {:ok, view} ->
+          [
+            %{
+              "op" => "set_tool_status",
+              "id" => id,
+              "status" => view["status"],
+              "outcome" => view["outcome"]
+            }
+          ]
+
+        :error ->
+          []
+      end
+    end)
+  end
+
+  defp event_ops({:turn_started, _prompt}, _offset, _messages), do: []
+
+  defp event_ops({:tool_started, call}, _offset, _messages) do
     [
       %{
         "op" => "set_tool_status",
@@ -179,23 +232,24 @@ defmodule Elara.Protocol do
     ]
   end
 
-  defp event_ops({:message_appended, %ToolResult{} = result}) do
+  defp event_ops({:message_appended, message}, offset, messages) do
+    index =
+      case Enum.find_index(messages, &(&1 == message)) do
+        nil -> raise ArgumentError, "emitted message is absent from its Core transition"
+        index -> offset + index
+      end
+
     [
-      %{"op" => "append_message", "message" => encode_message(result)},
       %{
-        "op" => "set_tool_status",
-        "id" => result.call_id,
-        "status" => tool_status(result.outcome),
-        "outcome" => encode_tool_outcome(result.outcome)
+        "op" => "append_message",
+        "index" => index,
+        "message" => encode_message(message),
+        "render" => true
       }
     ]
   end
 
-  defp event_ops({:message_appended, message}) do
-    [%{"op" => "append_message", "message" => encode_message(message)}]
-  end
-
-  defp event_ops({:turn_ended, _outcome}), do: []
+  defp event_ops({:turn_ended, _outcome}, _offset, _messages), do: []
 
   defp event_turn({:turn_started, prompt}, phase),
     do: Map.put(encode_phase(phase), "prompt", prompt)
@@ -254,23 +308,18 @@ defmodule Elara.Protocol do
 
   defp apply_op(
          %{"messages" => messages, "tool_calls" => tool_calls} = view,
-         %{"op" => "append_message", "message" => message}
+         %{"op" => "append_message", "index" => index, "message" => message}
        )
-       when is_list(messages) and is_list(tool_calls) and is_map(message) do
-    case decode_message(message) do
-      {:ok, %Assistant{tool_calls: calls}} ->
-        new_calls =
-          Enum.map(calls, fn call ->
-            call |> encode_call() |> Map.merge(%{"status" => "pending", "outcome" => nil})
-          end)
+       when is_list(messages) and is_list(tool_calls) and is_integer(index) and index >= 0 and
+              is_map(message) do
+    cond do
+      index < length(messages) and Enum.at(messages, index) == message ->
+        {:ok, view}
 
-        {:ok,
-         %{view | "messages" => messages ++ [message], "tool_calls" => tool_calls ++ new_calls}}
+      index == length(messages) ->
+        append_message(view, messages, tool_calls, message)
 
-      {:ok, _message} ->
-        {:ok, %{view | "messages" => messages ++ [message]}}
-
-      {:error, _reason} ->
+      true ->
         {:error, :invalid_patch}
     end
   end
@@ -313,12 +362,33 @@ defmodule Elara.Protocol do
 
   defp apply_op(_view, _op), do: {:error, :invalid_patch}
 
-  defp event_from_op(%{"op" => "append_message", "message" => message}) do
+  defp append_message(view, messages, tool_calls, message) do
+    case decode_message(message) do
+      {:ok, %Assistant{tool_calls: calls}} ->
+        new_calls =
+          Enum.map(calls, fn call ->
+            call |> encode_call() |> Map.merge(%{"status" => "pending", "outcome" => nil})
+          end)
+
+        {:ok,
+         %{view | "messages" => messages ++ [message], "tool_calls" => tool_calls ++ new_calls}}
+
+      {:ok, _message} ->
+        {:ok, %{view | "messages" => messages ++ [message]}}
+
+      {:error, _reason} ->
+        {:error, :invalid_patch}
+    end
+  end
+
+  defp event_from_op(%{"op" => "append_message", "message" => message, "render" => true}) do
     case decode_message(message) do
       {:ok, message} -> {:ok, {:message_appended, message}}
       {:error, _reason} -> {:error, :invalid_patch}
     end
   end
+
+  defp event_from_op(%{"op" => "append_message"}), do: {:ok, nil}
 
   defp event_from_op(%{
          "op" => "set_tool_status",

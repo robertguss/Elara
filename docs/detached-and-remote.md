@@ -90,6 +90,24 @@ while a snapshot is pending. The server replies with a fresh `snapshot` message
 and atomic `head`; queued patches at or below that head are stale and safe to
 ignore.
 
+The operation payloads are:
+
+```text
+{"op":"append_message","index":N,"message":MESSAGE}
+{"op":"set_tool_status","id":ID,"status":STATUS,"outcome":OUTCOME_OR_NULL}
+{"op":"set_turn_state","turn":TURN}
+{"op":"set_usage","usage":USAGE_OR_NULL}
+{"op":"append_content_delta","message_id":ID,"text":TEXT}
+```
+
+`append_message` is idempotent at its zero-based `index`: an exact message
+already present there is unchanged, the next index appends, and a gap or
+different existing message is invalid. This lets every sequence fully reconcile
+its atomic Core transition without duplicating messages. `set_tool_status`
+updates the matching snapshot `tool_calls` entry. The current Elixir line client
+also consumes optional rendering hints on operations; projection clients do not
+need them to build state.
+
 The v1 and v2 command set otherwise remains `create`, `attach`, `ask`,
 `interrupt`, and `inspect`. Only a controlling attachment may mutate session
 state; observers receive the same events or patches but control commands fail

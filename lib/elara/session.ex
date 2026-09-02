@@ -931,33 +931,40 @@ defmodule Elara.Session do
 
   defp feed(fact, shell) do
     {recorder, begin} = FlightRecorder.begin_transition(shell.recorder, shell.core, fact)
+    message_offset = length(shell.core.history)
     {core, effects} = Core.step(shell.core, fact)
     {recorder, transition} = FlightRecorder.complete_transition(recorder, begin, core, effects)
     shell = %{shell | core: core, recorder: recorder}
+    patch_context = {message_offset, Enum.drop(core.history, message_offset)}
 
     effects
     |> Enum.with_index()
     |> Enum.reduce(shell, fn {effect, index}, shell ->
       effect_id = Map.merge(transition.id, %{effect_index: index})
-      run_effect(effect, effect_id, shell)
+      run_effect(effect, effect_id, shell, patch_context)
     end)
   end
 
-  defp run_effect({:emit, {:message_appended, message} = event}, effect_id, shell) do
+  defp run_effect(
+         {:emit, {:message_appended, message} = event},
+         effect_id,
+         shell,
+         patch_context
+       ) do
     case Store.append(shell.store, message) do
       {:ok, store} ->
-        emit(event, effect_id, %{shell | store: store})
+        emit(event, effect_id, %{shell | store: store}, patch_context)
 
       {:error, reason} ->
         raise "session persistence failed: #{inspect(reason)}"
     end
   end
 
-  defp run_effect({:emit, event}, effect_id, shell) do
-    emit(event, effect_id, shell)
+  defp run_effect({:emit, event}, effect_id, shell, patch_context) do
+    emit(event, effect_id, shell, patch_context)
   end
 
-  defp run_effect({:call_provider, core_ref, request}, _effect_id, shell) do
+  defp run_effect({:call_provider, core_ref, request}, _effect_id, shell, _patch_context) do
     {mod, cfg} = shell.provider
     task = Task.Supervisor.async_nolink(Elara.TaskSup, mod, :chat, [cfg, request])
     track_task(shell, task, :provider, core_ref)
@@ -966,7 +973,8 @@ defmodule Elara.Session do
   defp run_effect(
          {:run_tool, core_ref, call, %Tool{plugin: %PluginRef{} = plugin} = tool},
          effect_id,
-         shell
+         shell,
+         _patch_context
        ) do
     {:ok, args} = call.args
 
@@ -995,7 +1003,7 @@ defmodule Elara.Session do
     end
   end
 
-  defp run_effect({:run_tool, core_ref, call, tool}, effect_id, shell) do
+  defp run_effect({:run_tool, core_ref, call, tool}, effect_id, shell, _patch_context) do
     {:ok, args} = call.args
 
     if capabilities_allowed?(tool.capabilities, shell.allowed_capabilities) do
@@ -1069,7 +1077,7 @@ defmodule Elara.Session do
     track_tool_task(shell, task, core_ref, nil)
   end
 
-  defp emit(event, effect_id, shell) do
+  defp emit(event, effect_id, shell, patch_context) do
     seq = shell.next_event_seq
     event_log = :queue.in({seq, event}, shell.event_log)
     event_log_size = shell.event_log_size + 1
@@ -1087,7 +1095,7 @@ defmodule Elara.Session do
       send(pid, {:elara, shell.id, event})
     end)
 
-    patch_ops = Protocol.patch_ops(event, shell.core)
+    patch_ops = Protocol.patch_ops(event, shell.core, patch_context)
 
     Enum.each(shell.attachments, fn
       {pid, %{protocol: 2}} ->

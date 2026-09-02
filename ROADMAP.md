@@ -51,15 +51,15 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status      | Item                                                          | Depends on       |
-| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | DONE        | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | IN PROGRESS | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
+| ID      | Status   | Item                                                          | Depends on       |
+| ------- | -------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | DONE     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| SPLIT-5 | TODO     | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -585,7 +585,7 @@ the Rust client can remain a blind snapshot/patch projection.
 
 ## SPLIT-4 — Rust TUI as a protocol v2 projection client
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -618,9 +618,86 @@ access from the TUI, no RichText pipeline or theming system yet.
 - `cargo fmt --check`, `cargo clippy`, `cargo test`, and full `mix test` pass;
   Elixir line UI removed only after parity is demonstrated in the Result.
 
+### Result
+
+**DONE (2026-09-02).** Pushed implementation commit
+[`80a65cd`](https://github.com/robertguss/elixir-harness/commit/80a65cd49abfff5c81d306f87d4b9acbabecefae)
+to `origin/main`.
+
+`native/elara-tui/` now contains a `ratatui` protocol-v2 projection client. It
+creates or attaches to server-owned sessions, sends asks and explicit
+interrupts, detaches without cancellation, observes read-only, lists live
+sessions, and redraws streaming content deltas from the materialized view. The
+closed Rust patch applier atomically handles all five v2 operations, ignores
+already-applied sequences, and requests exactly one resnapshot while a gap,
+incarnation change, or malformed patch remains unresolved. Snapshot and frame
+session identities must agree before installation, and the JSON-lines reader
+reassembles arbitrary socket chunks under the protocol's 16 MiB fail-closed
+bound.
+
+The TUI saves each session's incarnation and head under
+`~/.elara/tui/cursors.json`. `--headless` renders deterministic off-screen
+frames, `--event-dump` records timestamped raw protocol frames, and optional
+headless ask/interrupt controls exercise complete turns without a terminal.
+`mix elara.tui` hashes the crate sources, builds a locked debug or production
+binary only when needed, installs it under the Mix application, and launches it
+with inherited terminal file descriptors. Protocol v2 gained a read-only initial
+`list` request backed by a dedicated lightweight Session listing call; it does
+not invoke worker health or other failure-prone status dependencies.
+
+Parity is demonstrated through the shipped Rust binary: a cold snapshot renders
+prior history; create and live-list commands work; a client hard-killed after
+its first streamed delta releases control while the Elixir session finishes;
+reattachment loads the saved cursor and installs the exact completed snapshot
+once; a subsequent streamed turn records ask-to-active and ask-to-first-delta
+latency; and an explicit client interrupt terminates a running tool turn as
+interrupted. `TestBackend` goldens cover idle, streaming, tool-running,
+interrupted, and detached frames. On that evidence, `mix elara.attach` and its
+Elixir line renderer were removed. The policy-free `Elara.Protocol.Projector`
+remains as the Elixir protocol-convergence oracle in contract tests; the Rust
+TUI is the only attachment UI.
+
+Exact verification:
+
+- `mix test test/elara/protocol_v2_test.exs test/elara/tui_test.exs` — 10
+  passed, including cold attach, create/list, killed-client continuation,
+  saved-cursor reattach, live latency, explicit interrupt, sequence convergence,
+  and one-shot resnapshot behavior.
+- `mix format --check-formatted` — exit 0.
+- `mix compile --warnings-as-errors` — exit 0; Cargo finished incrementally in
+  0.01 s.
+- `cd native/exec-stub && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test`
+  — exit 0; 2 tests passed.
+- `cd native/elara-tui && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test`
+  — exit 0; 5 tests passed plus empty binary/doc test targets.
+- `mix test` — 318 passed in 18.5 s. The documented `CrashTool`
+  `RuntimeError: boom` line was the only expected error log.
+- `rg 'System\.shell' lib/` — no matches; `git diff --check` — exit 0; no
+  `spike-*` files are present in the repository root.
+
+Deviations: because protocol v2 deliberately starts every attachment from an
+atomic current snapshot, killed-client reattachment does not replay missed
+patches over the wire as the Spike A wording implied. The test instead proves
+the stronger settled contract: the client sends its saved cursor, installs the
+completed head exactly once, and renders neither missing nor duplicate content.
+Session listing required one new read-only initial v2 command; it returns only
+live server-owned sessions because persisted chat files are not attachable until
+an Elixir session owns them. Latency evidence uses the offline `Scripted`
+provider and loopback server rather than a credential-backed xAI request.
+
+Remaining uncertainty: automated coverage exercises the real Rust binary and all
+rendered states through `TestBackend`, but it does not synthesize keystrokes
+inside a real alternate-screen terminal; terminal-specific input/display quirks
+remain daily-driver evidence for SPLIT-5. The TUI is built from source on first
+use rather than distributed as a prebuilt release artifact. Sessions whose
+atomic snapshot exceeds 16 MiB still fail closed as established in SPLIT-2.
+
+Decision: unblock SPLIT-5, but do not make its go/no-go decision. The owner must
+use this TUI for the stated period and record the reversal-signal measurements.
+
 ## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
 
-**Status:** BLOCKED (SPLIT-4)
+**Status:** TODO (owner checkpoint)
 
 ### Outcome
 

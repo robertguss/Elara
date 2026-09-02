@@ -45,13 +45,14 @@ The next work is the smallest production vertical slice.
 
 ## Execution queue
 
-| ID     | Status      | Item                                                    | Depends on       |
-| ------ | ----------- | ------------------------------------------------------- | ---------------- |
-| PROD-1 | IN PROGRESS | Ship receipt-backed local declarative writes end-to-end | ER-3 METHOD STOP |
+| ID     | Status | Item                                                    | Depends on       |
+| ------ | ------ | ------------------------------------------------------- | ---------------- |
+| PROD-1 | DONE   | Ship receipt-backed local declarative writes end-to-end | ER-3 METHOD STOP |
+| PROD-2 | TODO   | Ship receipt-backed local literal edits end-to-end      | PROD-1           |
 
 ## PROD-1 — Ship receipt-backed local declarative writes end-to-end
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -115,3 +116,85 @@ decisions after this local write slice is running through the product path.
   effect/session/CLI tests, and full `mix test` pass.
 - The Result records the pushed commit, exact checks, deviations, remaining
   uncertainty, and the evidence-based decision for the next product slice.
+
+### Result
+
+**DONE (2026-09-02).** Pushed implementation commit
+[`4d87900`](https://github.com/robertguss/elixir-harness/commit/4d879006d1795001b8b1282116ee6bf5227e0c7e)
+to `origin/main` from a checkout synchronized at
+`bd56cd9611da4f8c305ad5e4114da8d3540e03ea`.
+
+The exact built-in local `write` now provisions a stable workspace executor,
+commits a typed declarative-write intent, records acceptance and callback
+attempt before mutation, performs same-directory atomic replacement, records a
+terminal receipt, and preserves the existing successful `wrote N bytes to path`
+tool result. `Elara.Effect.Sidecar` depends on the shared
+`Elara.Effect.Executor` contract rather than `TestExecutor`; production and test
+facades use the same ledger-owning server. The supervised production executor
+reopens one ledger and executor identity for the same cwd/workspace pair.
+
+Public `Elara.start_session/1` tests proved the write path without a usable
+router, terminal continuation without rewriting, accepted/unattempted
+continuation exactly once under the original identity, and attempted/nonterminal
+continuation as `indeterminate` without retry. Contract tests proved durable
+terminal and callback-attempt state across executor restart and
+same-ID/different-digest rejection. A separate product-path test proved the
+default production executor does not receipt `edit`.
+
+Exact verification:
+
+- `mix test test/elara/effect/production_write_test.exs` — 6 passed.
+- `mix test test/elara/effect/production_write_test.exs test/elara/executor/protocol_test.exs test/elara/effect/job_test.exs test/elara/effect/marker_integration_test.exs test/elara/effect/write_reconciliation_test.exs test/elara/effect/crash_matrix_test.exs test/elara/session_test.exs test/elara/chat_test.exs`
+  — 87 passed.
+- `mix format --check-formatted` — exit 0.
+- `mix compile --warnings-as-errors` — exit 0.
+- `mix test` — 290 passed. The documented `CrashTool` `RuntimeError: boom` line
+  was the only expected error log.
+- `git diff --check` — exit 0 before commit; `git push origin main` advanced
+  `origin/main` from `bd56cd9` to `4d87900`.
+
+Deviations: the successful argument and result shapes are unchanged, but local
+`write` is now intentionally workspace-confined: it rejects absolute/traversal
+paths, symlink components, and non-file targets so the declarative preimage is
+meaningful. This is a product safety change required by the frozen write
+protocol, and is documented. No `edit`, `bash`, plugin, or remote receipt wiring
+was added. The shared executor implementation was extracted rather than
+duplicated behind two wrappers.
+
+Remaining uncertainty: this establishes the local built-in write path and
+process/owner restart behavior, not power-loss guarantees beyond SQLite's
+configured WAL/FULL durability, generic exactly-once effects, remote durability,
+or receipt-backed edit/shell behavior. One-shot `mix elara.ask` uses the durable
+executor but intentionally has no persisted conversation to continue after its
+process exits.
+
+Decision: proceed to PROD-2 for the exact built-in local `edit`, using the
+existing operation-aware literal-patch protocol and the same production
+executor. It is the next smallest user-visible mutation slice and tests whether
+the production boundary generalizes beyond whole-file replacement. Opaque shell
+and remote-worker durability remain blocked on separate designs.
+
+## PROD-2 — Ship receipt-backed local literal edits end-to-end
+
+**Status:** TODO
+
+### Outcome
+
+Route the exact built-in local `edit` tool through `Elara.Effect.LiteralPatch`
+and the production executor by default. Preserve its public arguments and normal
+result shape while removing unreceipted fallback and reconciling unresolved
+edits through normal persisted-session continuation.
+
+### Scope and acceptance
+
+- Derive and durably bind the expected preimage, exact one-match replacement,
+  and postimage before dispatch; fail closed on invalid, missing, ambiguous,
+  symlinked, or concurrently changed targets.
+- Reuse the PROD-1 executor contract, stable local executor, controller journal,
+  and truthful terminal/indeterminate rendering. Do not add shell, plugin, or
+  remote receipt behavior.
+- Drive no-fault and continuation states through `Elara.start_session/1`, prove
+  the exact built-in edit cannot reach the router fallback, and prove `bash`
+  remains outside production receipts.
+- Update user documentation and pass targeted tests, format, warnings-as-errors
+  compile, and the full test suite before recording and pushing the Result.

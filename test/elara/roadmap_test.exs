@@ -25,8 +25,7 @@ defmodule Elara.RoadmapTest do
     assert Enum.count(rows, fn {_id, status} -> status in ["IN PROGRESS", "TODO"] end) <=
              1
 
-    assert [{"PROD-1", status}] = rows
-    assert status in ["TODO", "IN PROGRESS", "DONE"]
+    assert [{"PROD-1", "DONE"}, {"PROD-2", "TODO"}] = rows
   end
 
   test "repository documentation points to the repository roadmap" do

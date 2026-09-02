@@ -12,6 +12,16 @@ defmodule Elara.Benchmark.ElaraAdapter do
   @neutral_runner_path "lib/elara/benchmark/runner.ex"
   @config_key {__MODULE__, :config}
   @conditions ~w(baseline receipts)
+  @non_ok_halt_text "Task halted after non-ok target result."
+  @continuation_policy %{
+    "after_target_error" => "halt without continuation",
+    "after_target_indeterminate" => "halt without retry or continuation",
+    "after_target_ok_live_controller" => "execute continuation exactly once",
+    "after_target_ok_recovered_controller" =>
+      "do not invent model-loop continuation; report partial task workspace",
+    "fault_injection" => "effect only; continuation is never faulted",
+    "parallelism" => "forbidden"
+  }
   @v3_manifest_sha256 "4129ae964daf35469499dc9506ace9fa89db0c9f00a20826dfc6790edd5b5491"
   @v4_manifest_sha256 "14cc3a57763f0ab48f4b68a70317916d09ff4bee64ba18d150480dd1315820a2"
   @v6_manifest_sha256 "b415272e106db54087edbd54500c3544c94ca13b2d42950c0a63b82a38c0973c"
@@ -116,21 +126,33 @@ defmodule Elara.Benchmark.ElaraAdapter do
     do: {:error, :confirmatory_manifest_not_frozen}
 
   @spec mapping(map()) :: {:ok, map()} | {:error, term()}
-  def mapping(%{"plan" => %{"steps" => [step], "scripted_provider" => [call, final]}}) do
-    with {:ok, tool_name, tool_arguments, constraints} <- map_step(step),
-         "tool_call" <- call["kind"],
-         ^tool_name <- tool_name(call["operation_kind"]),
-         "assistant_text" <- final["kind"],
-         tool_call_id when is_binary(tool_call_id) <- call["tool_call_id"],
-         final_text when is_binary(final_text) <- final["content"] do
+  def mapping(%{
+        "plan" =>
+          %{
+            "steps" => [_ | _] = steps,
+            "scripted_provider" => [_ | _] = provider,
+            "fault_target_step" => fault_target_step
+          } = plan
+      }) do
+    call_count = length(steps)
+    {calls, final_turns} = Enum.split(provider, call_count)
+
+    with true <- length(calls) == call_count,
+         [final] <- final_turns,
+         {:ok, mapped_calls} <- map_calls(steps, calls),
+         :ok <- validate_call_ids(mapped_calls),
+         {:ok, final_text} <- map_final(final, call_count + 1),
+         :ok <- validate_continuation_policy(plan, call_count),
+         {:ok, fault_target_call} <- unique_fault_target(mapped_calls, fault_target_step) do
       {:ok,
        %{
-         "operation_kind" => step["operation_kind"],
-         "tool_name" => tool_name,
-         "tool_call_id" => tool_call_id,
-         "tool_arguments" => tool_arguments,
-         "execution_constraints" => constraints,
-         "final_assistant_text" => final_text
+         "tool_calls" => mapped_calls,
+         "fault_target_step" => fault_target_step,
+         "fault_target_tool_call_id" => fault_target_call["tool_call_id"],
+         "final_assistant_text" => final_text,
+         "non_ok_halt_assistant_text" => @non_ok_halt_text,
+         "continuation_policy" =>
+           if(call_count > 1, do: @continuation_policy, else: "not_applicable")
        }}
     else
       value -> {:error, {:invalid_frozen_plan, value}}
@@ -146,6 +168,7 @@ defmodule Elara.Benchmark.ElaraAdapter do
          :ok <- authorize_fault(task, row, config),
          {:ok, target} <- fetch_target(config, condition),
          {:ok, mapped} <- mapping(task),
+         :ok <- validate_fault_target(mapped, row),
          {:ok, observation} <- run_target(config, target, task, mapped, cwd, context),
          {:ok, final_digest} <- Fixture.digest_directory(cwd) do
       deliver_observation(config.evidence_sink, observation)
@@ -700,37 +723,34 @@ defmodule Elara.Benchmark.ElaraAdapter do
   defp confirmatory_fault?(_task, _row, _authorization), do: false
 
   defp fault_evidence(observation, task, row, condition, final_digest) do
-    fixture = task["fixture"]
-    pre_digest = fixture["initial_workspace_sha256"]
-    post_digest = fixture["expected_no_fault_workspace_sha256"]
     expected_workspace = row["expected_converged_workspace_by_condition"][condition]
+    workspace_aliases = workspace_aliases(task, row, final_digest)
+    expected_external_mutation_count = target_mutation_count(task, row)
 
-    {workspace_observation, external_mutation_count} =
-      case final_digest do
-        ^pre_digest ->
-          {"pre_effect_workspace", 0}
-
-        ^post_digest
-        when expected_workspace in ~w(fault_target_postcondition complete_task_workspace) ->
-          {expected_workspace, 1}
-
-        ^post_digest ->
-          {"fault_target_postcondition", 1}
-
-        _other ->
-          {"unexpected_workspace", 0}
+    workspace_observation =
+      cond do
+        expected_workspace in workspace_aliases -> expected_workspace
+        workspace_aliases == [] -> "unexpected_workspace"
+        true -> hd(workspace_aliases)
       end
-
-    initial_disqualifiers =
-      []
-      |> maybe_add(workspace_observation == "unexpected_workspace", "unexpected_workspace_digest")
-      |> maybe_add(workspace_observation != expected_workspace, "unexpected_converged_workspace")
-      |> maybe_add(observation["barrier_call_count"] != 1, "barrier_call_count_not_1")
 
     callback_attempt_count =
       if condition == "baseline",
         do: get_in(observation, ["barrier_facts", "local_executor_return_count"]),
         else: observation["callback_attempt_count"]
+
+    external_mutation_count = callback_attempt_count * expected_external_mutation_count
+
+    initial_disqualifiers =
+      []
+      |> maybe_add(workspace_observation == "unexpected_workspace", "unexpected_workspace_digest")
+      |> maybe_add(expected_workspace not in workspace_aliases, "unexpected_converged_workspace")
+      |> maybe_add(observation["barrier_call_count"] != 1, "barrier_call_count_not_1")
+      |> maybe_add(observation["injection_count"] != 1, "injection_count_not_1")
+      |> maybe_add(
+        get_in(observation, ["barrier_facts", "fault_target_identity_matches"]) == false,
+        "fault_barrier_target_identity_mismatch"
+      )
 
     primary_class =
       classify_fault(
@@ -738,6 +758,7 @@ defmodule Elara.Benchmark.ElaraAdapter do
         condition,
         observation,
         external_mutation_count,
+        expected_external_mutation_count,
         callback_attempt_count,
         initial_disqualifiers
       )
@@ -763,6 +784,8 @@ defmodule Elara.Benchmark.ElaraAdapter do
 
     Map.merge(observation, %{
       "workspace_observations" => workspace_observation,
+      "workspace_digest_aliases" => workspace_aliases,
+      "workspace_digest_proves_causal_completion" => false,
       "last_durable_fact" => observed_last_durable_fact(condition, row["fault_type"]),
       "historical_execution_knowledge" => observed_historical_knowledge(row["fault_type"]),
       "safe_next_action_expected" => row["expected_safe_action"][condition],
@@ -776,7 +799,51 @@ defmodule Elara.Benchmark.ElaraAdapter do
     })
   end
 
-  defp classify_fault(row, condition, observation, external_count, callback_count, []) do
+  defp workspace_aliases(task, row, final_digest) do
+    fixture = task["fixture"]
+
+    contract =
+      Map.merge(
+        %{
+          "initial_reset_workspace_sha256" => fixture["initial_workspace_sha256"],
+          "pre_effect_workspace_sha256" => fixture["initial_workspace_sha256"],
+          "fault_target_postcondition_sha256" => fixture["expected_no_fault_workspace_sha256"],
+          "complete_task_workspace_sha256" => fixture["expected_no_fault_workspace_sha256"]
+        },
+        row["workspace_contract"] || %{}
+      )
+
+    [
+      {"initial_reset_workspace", contract["initial_reset_workspace_sha256"]},
+      {"pre_effect_workspace", contract["pre_effect_workspace_sha256"]},
+      {"fault_target_postcondition", contract["fault_target_postcondition_sha256"]},
+      {"complete_task_workspace", contract["complete_task_workspace_sha256"]}
+    ]
+    |> Enum.filter(fn {_name, digest} -> digest == final_digest end)
+    |> Enum.map(&elem(&1, 0))
+  end
+
+  defp target_mutation_count(task, row) do
+    step =
+      Enum.find(task["plan"]["steps"], fn step ->
+        step["id"] == row["fault_target_step"]
+      end)
+
+    case step do
+      %{"expected_job_external_mutation_count" => count} when count in [0, 1] -> count
+      _other -> raise "invalid fault target mutation declaration"
+    end
+  end
+
+  defp classify_fault(
+         row,
+         condition,
+         observation,
+         external_count,
+         expected_external_count,
+         callback_count,
+         []
+       ) do
     fault = row["fault_type"]
     causal? = observation["causal_terminal_evidence_observed"]
     executor = observation["executor_facts"]
@@ -790,7 +857,8 @@ defmodule Elara.Benchmark.ElaraAdapter do
         callback_count == 0 and not causal? ->
         "manual_recovery"
 
-      condition == "baseline" and fault == "F4" and external_count == 1 and
+      condition == "baseline" and fault == "F4" and
+        external_count == expected_external_count and
         callback_count == 1 and not causal? ->
         "manual_recovery"
 
@@ -800,8 +868,9 @@ defmodule Elara.Benchmark.ElaraAdapter do
           observation["session_classification"] == "indeterminate" ->
         "automatic_safe_indeterminate"
 
-      condition == "receipts" and fault in ~w(F1 F2 F4) and external_count == 1 and
-        callback_count == 1 and causal? and executor["status"] in ~w(completed failed) and
+      condition == "receipts" and fault in ~w(F1 F2 F4) and
+        external_count == expected_external_count and callback_count == 1 and causal? and
+        executor["status"] in ~w(completed failed) and
           executor["terminal_count"] == 1 ->
         "automatic_terminal"
 
@@ -810,8 +879,16 @@ defmodule Elara.Benchmark.ElaraAdapter do
     end
   end
 
-  defp classify_fault(_row, _condition, _observation, _external_count, _callback_count, _errors),
-    do: "harness_failure"
+  defp classify_fault(
+         _row,
+         _condition,
+         _observation,
+         _external_count,
+         _expected_external_count,
+         _callback_count,
+         _errors
+       ),
+       do: "harness_failure"
 
   defp recovery_actions_valid?(row, "baseline", observation) do
     actions = observation["recovery_actions"]
@@ -1001,6 +1078,7 @@ defmodule Elara.Benchmark.ElaraAdapter do
       "outcome_correct" => record["outcome_correct"],
       "provider_plan_consumed" => observation["provider_plan_consumed"],
       "provider_call_count" => observation["provider_call_count"],
+      "provider_state" => observation["provider_state"],
       "tool_call_count" => observation["tool_call_count"],
       "session_result_count" => observation["session_result_count"],
       "session_result" => observation["session_result"],
@@ -1014,23 +1092,39 @@ defmodule Elara.Benchmark.ElaraAdapter do
 
   defp classify(task, baseline, receipts) do
     expected = expected_outcome(task)
-    expected_shape = ~w(user assistant_tool_call tool_result assistant_text)
+    step_count = length(task["plan"]["steps"])
+
+    expected_shape =
+      ["user"] ++
+        Enum.flat_map(1..step_count, fn _step -> ~w(assistant_tool_call tool_result) end) ++
+        ["assistant_text"]
+
+    expected_tool_call_ids =
+      task["plan"]["scripted_provider"]
+      |> Enum.filter(&(&1["kind"] == "tool_call"))
+      |> Enum.map(& &1["tool_call_id"])
+      |> Enum.sort()
 
     common? =
       Enum.all?([baseline, receipts], fn evidence ->
         evidence["workspace_correct"] and evidence["outcome_correct"] and
           evidence["observed_outcome"] == expected and evidence["provider_plan_consumed"] and
-          evidence["provider_call_count"] == 2 and evidence["tool_call_count"] == 1 and
-          evidence["session_result_count"] == 1 and evidence["session_result"] == "Task complete." and
-          evidence["session_idle"] and evidence["transcript_shape"] == expected_shape
+          evidence["provider_call_count"] == step_count + 1 and
+          evidence["tool_call_count"] == step_count and
+          evidence["session_result_count"] == step_count and
+          evidence["session_result"] == "Task complete." and evidence["session_idle"] and
+          evidence["transcript_shape"] == expected_shape
       end)
 
     receipt? =
-      receipts["receipt_evidence"]["admission_count"] == 1 and
-        receipts["receipt_evidence"]["callback_attempt_count"] == 1 and
-        receipts["receipt_evidence"]["terminal_count"] == 1 and
+      receipts["receipt_evidence"]["job_count"] == step_count and
+        receipts["receipt_evidence"]["admission_count"] == step_count and
+        receipts["receipt_evidence"]["callback_attempt_count"] == step_count and
+        receipts["receipt_evidence"]["terminal_count"] == step_count and
         receipts["receipt_evidence"]["result_persisted"] and
-        receipts["receipt_evidence"]["identity_consistent"]
+        receipts["receipt_evidence"]["identity_consistent"] and
+        Enum.sort(receipts["receipt_evidence"]["tool_call_ids"]) ==
+          expected_tool_call_ids
 
     baseline? = baseline["receipt_evidence"] == "not_applicable"
 
@@ -1039,7 +1133,9 @@ defmodule Elara.Benchmark.ElaraAdapter do
 
   defp configuration_report do
     %{
-      "provider" => "Elara.Provider.Scripted: exactly one tool-call turn then Task complete.",
+      "provider" =>
+        "Plan-aware deterministic provider: ordered tool turns continue only after target :ok; " <>
+          "non-ok targets emit the frozen no-tools halt turn.",
       "persist" => false,
       "plugins" => [],
       "tools" => ~w(read write edit bash),
@@ -1091,6 +1187,93 @@ defmodule Elara.Benchmark.ElaraAdapter do
          "execution_boundary" => "separate OS BEAM with isolated MIX_BUILD_PATH"
        }}
     end)
+  end
+
+  defp map_calls(steps, calls) do
+    steps
+    |> Enum.zip(calls)
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {{step, call}, index}, {:ok, mapped} ->
+      case map_call(step, call, index) do
+        {:ok, result} -> {:cont, {:ok, [result | mapped]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> then(fn
+      {:ok, mapped} -> {:ok, Enum.reverse(mapped)}
+      error -> error
+    end)
+  end
+
+  defp map_call(step, call, index) do
+    expected_keys = ~w(arguments_ref kind operation_kind tool_call_id turn)
+    expected_ref = "plan.steps[#{index}].arguments"
+    expected_turn = index + 1
+
+    with true <- Enum.sort(Map.keys(call)) == expected_keys,
+         {:ok, tool_name, tool_arguments, constraints} <- map_step(step),
+         "tool_call" <- call["kind"],
+         ^tool_name <- tool_name(call["operation_kind"]),
+         ^expected_ref <- call["arguments_ref"],
+         ^expected_turn <- call["turn"],
+         tool_call_id when is_binary(tool_call_id) and tool_call_id != "" <-
+           call["tool_call_id"],
+         step_id when is_binary(step_id) and step_id != "" <- step["id"] do
+      {:ok,
+       %{
+         "step_index" => index,
+         "step_id" => step_id,
+         "operation_kind" => step["operation_kind"],
+         "tool_name" => tool_name,
+         "tool_call_id" => tool_call_id,
+         "tool_arguments" => tool_arguments,
+         "execution_constraints" => constraints
+       }}
+    else
+      value -> {:error, {:invalid_tool_call, index, value}}
+    end
+  end
+
+  defp map_final(final, expected_turn) do
+    with true <- Enum.sort(Map.keys(final)) == ~w(content kind turn),
+         "assistant_text" <- final["kind"],
+         ^expected_turn <- final["turn"],
+         final_text when is_binary(final_text) and final_text != "" <- final["content"] do
+      {:ok, final_text}
+    else
+      value -> {:error, {:invalid_final_turn, value}}
+    end
+  end
+
+  defp validate_call_ids(calls) do
+    ids = Enum.map(calls, & &1["tool_call_id"])
+    if Enum.uniq(ids) == ids, do: :ok, else: {:error, :duplicate_tool_call_id}
+  end
+
+  defp validate_continuation_policy(_plan, 1), do: :ok
+
+  defp validate_continuation_policy(%{"continuation_policy" => @continuation_policy}, count)
+       when count > 1,
+       do: :ok
+
+  defp validate_continuation_policy(_plan, _count),
+    do: {:error, :invalid_continuation_policy}
+
+  defp unique_fault_target(calls, fault_target_step) do
+    case Enum.filter(calls, &(&1["step_id"] == fault_target_step)) do
+      [call] -> {:ok, call}
+      matches -> {:error, {:fault_target_match_count, length(matches)}}
+    end
+  end
+
+  defp validate_fault_target(mapped, row) do
+    if mapped["fault_target_tool_call_id"] == row["fault_target_tool_call_id"] do
+      :ok
+    else
+      {:error,
+       {:fault_target_tool_call_mismatch, mapped["fault_target_tool_call_id"],
+        row["fault_target_tool_call_id"]}}
+    end
   end
 
   defp map_step(%{"operation_kind" => "write", "arguments" => args}) do

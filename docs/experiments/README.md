@@ -45,8 +45,16 @@ future seed. V5's verified
 [materialization failure](003-effect-receipt-v5-materialization-failure.md) then
 showed that the frozen generator could instantiate only 19 of 20 candidates; the
 selected P02 task had no constructor, so v5 stopped before producing a corpus or
-confirmatory output. ER-1 v1 concluded Stop without a safety failure because row
-1's frozen result counts were internally inconsistent. The separate
+confirmatory output. V6's immutable
+[execution failure](003-effect-receipt-v6-execution-failure.md) then stopped on
+P06 because the selected two-step task could not traverse the frozen single-step
+adapter. The development-only V7
+[command-path preflight](003-effect-receipt-v7-command-path-preflight.json)
+preserves that failure and qualifies a new conditional 17-candidate frame across
+112 exact command-path runs; it excludes P03, P05, and W04 rather than changing
+their semantics, and commits no beacon or held-out evidence. ER-1 v1 concluded
+Stop without a safety failure because row 1's frozen result counts were
+internally inconsistent. The separate
 [corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
 [fresh fixture manifest](003-effect-receipt-er1-v2-manifest.json) preserve that
 result. V2's first run aborted in harness mechanics before the conflicting

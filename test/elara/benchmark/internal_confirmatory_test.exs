@@ -235,8 +235,12 @@ defmodule Elara.Benchmark.InternalConfirmatoryTest do
     assert {:error, :report_source_identity_mismatch} =
              InternalConfirmatory.replay(@manifest_path, drifted_path, context.output)
 
+    assert {:ok, current_identities} = InternalConfirmatory.source_identities(File.cwd!())
+
     malformed =
-      put_in(report, ["score", "errors"], [%{"malformed" => ["diagnostic"]}])
+      report
+      |> Map.put("identities", current_identities)
+      |> put_in(["score", "errors"], [%{"malformed" => ["diagnostic"]}])
 
     malformed_path = Path.join(context.root, "malformed-diagnostic.json")
     File.write!(malformed_path, InternalConfirmatory.canonical_json(malformed))

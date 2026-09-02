@@ -83,6 +83,75 @@ defmodule Elara.Benchmark.TargetRunner do
     end
   end
 
+  defmodule PlanProvider do
+    @moduledoc false
+    @behaviour Elara.Provider
+
+    alias Elara.Message.ToolResult
+    alias Elara.Provider.Request
+
+    @impl true
+    def chat(agent, %Request{messages: messages}) when is_pid(agent) do
+      {assistant, _state} =
+        Agent.get_and_update(agent, fn state ->
+          {assistant, updated} = next_turn(state, messages)
+          {{assistant, updated}, updated}
+        end)
+
+      {:ok, assistant, agent}
+    end
+
+    defp next_turn(%{turns: [%{kind: :tool_call} = turn | rest]} = state, messages) do
+      case last_tool_outcome(messages) do
+        nil ->
+          emit_tool(state, turn, rest)
+
+        {:ok, _payload} ->
+          emit_tool(state, turn, rest)
+
+        {_kind, _payload} ->
+          {state.halt_turn,
+           %{
+             state
+             | turns: [],
+               call_count: state.call_count + 1,
+               disposition: :skipped_non_ok,
+               skipped_tool_call_ids:
+                 Enum.map(state.turns, fn
+                   %{kind: :tool_call, tool_call_id: id} -> id
+                   _turn -> nil
+                 end)
+                 |> Enum.reject(&is_nil/1)
+           }}
+      end
+    end
+
+    defp next_turn(%{turns: [%{kind: :assistant_text, assistant: assistant}]} = state, _messages) do
+      {assistant, %{state | turns: [], call_count: state.call_count + 1, disposition: :completed}}
+    end
+
+    defp next_turn(%{turns: []}, _messages), do: raise("provider plan exhausted")
+
+    defp emit_tool(state, turn, rest) do
+      {turn.assistant,
+       %{
+         state
+         | turns: rest,
+           call_count: state.call_count + 1,
+           emitted_tool_call_ids: state.emitted_tool_call_ids ++ [turn.tool_call_id]
+       }}
+    end
+
+    defp last_tool_outcome(messages) do
+      messages
+      |> Enum.reverse()
+      |> Enum.find_value(fn
+        %ToolResult{outcome: outcome} -> outcome
+        _message -> nil
+      end)
+    end
+  end
+
   @spec run(map()) :: map()
   def run(request) do
     remove_adapter_mix_environment()
@@ -105,7 +174,7 @@ defmodule Elara.Benchmark.TargetRunner do
     ask_result = Elara.ask(session, request["prompt"])
     transcript = Elara.transcript(session)
     status = Elara.status(session)
-    remaining_plan = Agent.get(provider, & &1)
+    provider_state = provider_state(provider)
     {:ok, session_pid} = Elara.session_pid(session)
     GenServer.stop(session_pid)
 
@@ -114,7 +183,7 @@ defmodule Elara.Benchmark.TargetRunner do
     stop_executor(executor)
 
     tool_results = Enum.filter(transcript, &is_struct(&1, ToolResult))
-    [tool_result] = tool_results
+    tool_result = List.last(tool_results)
 
     %{
       "status" => "ok",
@@ -125,10 +194,13 @@ defmodule Elara.Benchmark.TargetRunner do
       "runtime" => runtime(),
       "observed_outcome" => normalize_outcome(tool_result.outcome),
       "tool_result_kind" => tool_result.outcome |> elem(0) |> Atom.to_string(),
-      "provider_plan_consumed" => remaining_plan == [],
-      "provider_call_count" => 2 - length(remaining_plan),
+      "provider_plan_consumed" =>
+        provider_state["remaining_turn_count"] == 0 and
+          provider_state["disposition"] == "completed",
+      "provider_call_count" => provider_state["call_count"],
+      "provider_state" => provider_state,
       "tool_call_count" => length(tool_results),
-      "session_result_count" => 1,
+      "session_result_count" => length(tool_results),
       "session_result" => normalize_ask_result(ask_result),
       "session_idle" =>
         status.phase == :idle and status.current_effect == nil and status.task_count == 0,
@@ -141,14 +213,26 @@ defmodule Elara.Benchmark.TargetRunner do
   defp run_fault(request) do
     Application.put_env(:elara, :sessions_root, request["session_root"])
     {:ok, hooks} = Agent.start_link(fn -> [] end)
+    {:ok, barrier} = Agent.start_link(fn -> :armed end)
+    {:ok, provider} = start_provider(request)
     coordinator = self()
     selected_point = native_point(request["row"]["fault_type"])
 
     hook = fn point ->
       Agent.update(hooks, &[Atom.to_string(point) | &1])
 
-      if point == selected_point do
-        send(coordinator, {:native_barrier, point, self(), native_facts(request, point)})
+      armed? =
+        point == selected_point and
+          Agent.get_and_update(barrier, fn
+            :armed -> {true, :disarmed}
+            :disarmed -> {false, :disarmed}
+          end)
+
+      if armed? do
+        send(
+          coordinator,
+          {:native_barrier, point, self(), native_facts(request, point, provider)}
+        )
 
         receive do
           {:continue_native, ^point} -> :ok
@@ -158,7 +242,6 @@ defmodule Elara.Benchmark.TargetRunner do
       end
     end
 
-    {:ok, provider} = start_provider(request)
     {router, executor, executor_config} = start_fault_owners(request, hook)
 
     {:ok, session} =
@@ -179,7 +262,7 @@ defmodule Elara.Benchmark.TargetRunner do
     convergence_ms = max(System.monotonic_time(:millisecond) - started, 0)
     transcript = safe_transcript(final_session)
     status = safe_status(final_session)
-    remaining_plan = Agent.get(provider, & &1)
+    provider_state = provider_state(provider)
     receipt_evidence = fault_receipt_evidence(request, final_executor, executor_config)
     controller_facts = controller_facts(request)
     hooks_observed = hooks |> Agent.get(&Enum.reverse/1)
@@ -188,6 +271,10 @@ defmodule Elara.Benchmark.TargetRunner do
     stop_router(router)
 
     tool_results = Enum.filter(transcript, &is_struct(&1, ToolResult))
+
+    target_results =
+      Enum.filter(tool_results, &(&1.call_id == request["row"]["fault_target_tool_call_id"]))
+
     causal_terminal = causal_terminal?(receipt_evidence)
 
     %{
@@ -200,21 +287,25 @@ defmodule Elara.Benchmark.TargetRunner do
       "barrier_source_point" => Atom.to_string(source_point),
       "barrier_facts" => facts,
       "barrier_call_count" => 1,
+      "injection_count" => 1,
       "injection_acknowledged" => true,
       "killed_owner" => request["row"]["crash_target"],
       "recovery_actions" => recovery_actions,
       "controller_facts" => controller_facts,
       "executor_facts" => receipt_evidence,
       "causal_terminal_evidence_observed" => causal_terminal,
-      "session_classification" => session_classification(tool_results, ask_result),
+      "session_classification" => session_classification(target_results, ask_result),
       "knowledge_convergence_ms" => convergence_ms,
       "terminal_convergence_ms" => if(causal_terminal, do: convergence_ms, else: nil),
       "admission_count" => evidence_count(receipt_evidence, "admission_count"),
       "callback_attempt_count" => evidence_count(receipt_evidence, "callback_attempt_count"),
-      "session_result_count" => length(tool_results),
-      "model_call_count" => 2 - length(remaining_plan),
-      "tool_call_count" => 1,
-      "provider_plan_remaining" => length(remaining_plan),
+      "session_result_count" => length(target_results),
+      "task_session_result_count" => length(tool_results),
+      "model_call_count" => provider_state["call_count"],
+      "tool_call_count" => length(target_results),
+      "task_tool_call_count" => length(tool_results),
+      "provider_plan_remaining" => provider_state["remaining_turn_count"],
+      "provider_state" => provider_state,
       "hooks_observed" => hooks_observed,
       "final_status" => status_evidence(status),
       "transcript_shape" => Enum.map(transcript, &message_shape/1),
@@ -236,7 +327,7 @@ defmodule Elara.Benchmark.TargetRunner do
 
   defp session_options(request, provider, executor, hook, persist?, router \\ nil) do
     options = [
-      provider: {Elara.Provider.Scripted, provider},
+      provider: {Elara.Benchmark.TargetRunner.PlanProvider, provider},
       cwd: request["workspace_root"],
       persist: persist?,
       plugins: [],
@@ -251,15 +342,36 @@ defmodule Elara.Benchmark.TargetRunner do
   defp start_provider(request) do
     mapping = request["mapping"]
 
-    call = %ToolCall{
-      id: mapping["tool_call_id"],
-      name: mapping["tool_name"],
-      args: {:ok, mapping["tool_arguments"]}
-    }
+    tool_turns =
+      Enum.map(mapping["tool_calls"], fn mapped ->
+        call = %ToolCall{
+          id: mapped["tool_call_id"],
+          name: mapped["tool_name"],
+          args: {:ok, mapped["tool_arguments"]}
+        }
 
-    {:ok, tool_turn} = Message.assistant(nil, [call])
+        {:ok, assistant} = Message.assistant(nil, [call])
+
+        %{
+          kind: :tool_call,
+          tool_call_id: mapped["tool_call_id"],
+          assistant: assistant
+        }
+      end)
+
     {:ok, final_turn} = Message.assistant(mapping["final_assistant_text"], [])
-    Agent.start_link(fn -> [{:ok, tool_turn}, {:ok, final_turn}] end)
+    {:ok, halt_turn} = Message.assistant(mapping["non_ok_halt_assistant_text"], [])
+
+    Agent.start_link(fn ->
+      %{
+        turns: tool_turns ++ [%{kind: :assistant_text, assistant: final_turn}],
+        halt_turn: halt_turn,
+        call_count: 0,
+        disposition: :active,
+        emitted_tool_call_ids: [],
+        skipped_tool_call_ids: []
+      }
+    end)
   end
 
   defp await_selected_barrier(%{"condition" => "receipts"} = request) do
@@ -286,7 +398,18 @@ defmodule Elara.Benchmark.TargetRunner do
         await_baseline_barrier(request, expected)
 
       {:baseline_barrier, ^expected, owner_pid, facts} ->
-        {expected, owner_pid, Map.put(facts, "semantic_seam", "N/A/non-equivalent")}
+        expected_tool_call_id = request["row"]["fault_target_tool_call_id"]
+
+        facts =
+          facts
+          |> Map.put("semantic_seam", "N/A/non-equivalent")
+          |> Map.put("expected_fault_target_tool_call_id", expected_tool_call_id)
+          |> Map.put(
+            "fault_target_identity_matches",
+            facts["tool_call_id"] == expected_tool_call_id
+          )
+
+        {expected, owner_pid, facts}
 
       {:baseline_barrier, other, owner_pid, _facts} ->
         send(owner_pid, {:continue_baseline, other})
@@ -482,12 +605,19 @@ defmodule Elara.Benchmark.TargetRunner do
   defp native_point("F3"), do: :after_external_mutation_before_completion_commit
   defp native_point("F4"), do: :after_completion_reply_before_session_result_persist
 
-  defp native_facts(request, point) do
+  defp native_facts(request, point, provider) do
+    provider_state = Agent.get(provider, & &1)
+    actual_tool_call_id = List.last(provider_state.emitted_tool_call_ids)
+    expected_tool_call_id = request["row"]["fault_target_tool_call_id"]
+
     %{
       "source" => "native_receipt_hook",
       "point" => Atom.to_string(point),
       "controller_journal_path" => request["controller_journal_path"],
-      "executor_ledger_path" => request["executor_ledger_path"]
+      "executor_ledger_path" => request["executor_ledger_path"],
+      "tool_call_id" => actual_tool_call_id,
+      "expected_fault_target_tool_call_id" => expected_tool_call_id,
+      "fault_target_identity_matches" => actual_tool_call_id == expected_tool_call_id
     }
   end
 
@@ -500,20 +630,21 @@ defmodule Elara.Benchmark.TargetRunner do
     }
 
   defp fault_receipt_evidence(%{"condition" => "receipts"} = request, executor, executor_config) do
-    case only_job_id_safe(request) do
-      {:ok, job_id} ->
-        record = TestExecutor.query(executor, job_id)
-        record_evidence(record, executor_config)
+    jobs = controller_jobs(request)
+    target = unique_target_job!(request, jobs)
+    task_records = Enum.map(jobs, &TestExecutor.query(executor, &1.job_id))
 
-      :none ->
-        %{
-          "status" => "unknown",
-          "admission_count" => 0,
-          "callback_attempt_count" => 0,
-          "terminal_count" => 0,
-          "executor_configuration" => stringify(executor_config)
-        }
-    end
+    target
+    |> then(&TestExecutor.query(executor, &1.job_id))
+    |> record_evidence(executor_config)
+    |> Map.merge(%{
+      "target_match_count" => 1,
+      "task_job_count" => length(jobs),
+      "task_admission_count" => sum_record_count(task_records, :admission_count),
+      "task_callback_attempt_count" => sum_record_count(task_records, :callback_attempt_count),
+      "task_terminal_count" => sum_record_count(task_records, :terminal_count),
+      "task_tool_call_ids" => Enum.map(jobs, & &1.tool_call_id)
+    })
   end
 
   defp record_evidence({state, record}, executor_config) do
@@ -536,37 +667,47 @@ defmodule Elara.Benchmark.TargetRunner do
   defp controller_facts(%{"condition" => "receipts"} = request) do
     journal = start_journal(request["controller_journal_path"])
     {:ok, jobs} = ControllerJournal.all(journal)
+    target = unique_target_job!(request, jobs)
+    {:ok, observation} = ControllerJournal.observation(journal, target.job_id)
 
-    facts =
-      case jobs do
-        [job] ->
-          {:ok, observation} = ControllerJournal.observation(journal, job.job_id)
-
-          %{
-            "status" => "available",
-            "job_count" => 1,
-            "job_id" => job.job_id,
-            "operation_digest" => job.operation_digest,
-            "result_persisted" => observation.result_persisted?
-          }
-
-        [] ->
-          %{"status" => "available", "job_count" => 0, "result_persisted" => false}
-      end
+    facts = %{
+      "status" => "available",
+      "job_count" => length(jobs),
+      "target_match_count" => 1,
+      "job_id" => target.job_id,
+      "operation_digest" => target.operation_digest,
+      "tool_call_id" => target.tool_call_id,
+      "result_persisted" => observation != nil and observation.result_persisted?,
+      "task_tool_call_ids" => Enum.map(jobs, & &1.tool_call_id)
+    }
 
     :ok = ControllerJournal.close(journal)
     facts
   end
 
-  defp only_job_id_safe(request) do
+  defp controller_jobs(request) do
     journal = start_journal(request["controller_journal_path"])
     {:ok, jobs} = ControllerJournal.all(journal)
     :ok = ControllerJournal.close(journal)
+    jobs
+  end
 
-    case jobs do
-      [job] -> {:ok, job.job_id}
-      [] -> :none
+  defp unique_target_job!(request, jobs) do
+    tool_call_id = request["row"]["fault_target_tool_call_id"]
+
+    case Enum.filter(jobs, &(&1.tool_call_id == tool_call_id)) do
+      [job] -> job
+      matches -> raise "fault target durable job match count #{length(matches)}"
     end
+  end
+
+  defp sum_record_count(records, field) do
+    Enum.sum(
+      Enum.map(records, fn
+        {_state, record} -> Map.fetch!(record, field)
+        other -> raise "invalid task receipt record: #{inspect(other)}"
+      end)
+    )
   end
 
   defp causal_terminal?(%{"status" => state, "terminal_count" => 1})
@@ -586,6 +727,23 @@ defmodule Elara.Benchmark.TargetRunner do
 
   defp session_classification([], {:exit, :controller_loss}), do: "interrupted_on_reopen"
   defp session_classification(_results, ask_result), do: normalize_ask_result(ask_result)
+
+  defp provider_state(provider) do
+    Agent.get(provider, fn state ->
+      %{
+        "call_count" => state.call_count,
+        "disposition" => Atom.to_string(state.disposition),
+        "remaining_turn_count" => length(state.turns),
+        "remaining_tool_call_ids" =>
+          Enum.flat_map(state.turns, fn
+            %{kind: :tool_call, tool_call_id: id} -> [id]
+            _turn -> []
+          end),
+        "emitted_tool_call_ids" => state.emitted_tool_call_ids,
+        "skipped_tool_call_ids" => state.skipped_tool_call_ids
+      }
+    end)
+  end
 
   defp classify_tool_result({:error, message}) do
     cond do
@@ -678,40 +836,55 @@ defmodule Elara.Benchmark.TargetRunner do
   defp receipt_evidence(%{"condition" => "baseline"}, nil, nil), do: "not_applicable"
 
   defp receipt_evidence(%{"condition" => "receipts"} = request, executor, executor_config) do
-    {:completed, record} = terminal_record(TestExecutor.query(executor, only_job_id(request)))
     journal = start_journal(request["controller_journal_path"])
-    {:ok, [job]} = ControllerJournal.all(journal)
-    {:ok, observation} = ControllerJournal.observation(journal, job.job_id)
+    {:ok, jobs} = ControllerJournal.all(journal)
+
+    evidence =
+      Enum.map(jobs, fn job ->
+        record = terminal_record!(TestExecutor.query(executor, job.job_id))
+        {:ok, observation} = ControllerJournal.observation(journal, job.job_id)
+
+        %{
+          "job_id" => record.job_id,
+          "tool_call_id" => job.tool_call_id,
+          "operation_digest" => record.operation_digest,
+          "state" => Atom.to_string(record.state),
+          "result_kind" => record.result |> elem(0) |> Atom.to_string(),
+          "admission_count" => record.admission_count,
+          "callback_attempt_count" => record.callback_attempt_count,
+          "terminal_count" => record.terminal_count,
+          "result_persisted" => observation.result_persisted?,
+          "identity_consistent" =>
+            job.job_id == record.job_id and job.operation_digest == record.operation_digest and
+              observation.job_id == record.job_id and
+              observation.operation_digest == record.operation_digest
+        }
+      end)
+
     journal_config = ControllerJournal.configuration(journal)
     :ok = ControllerJournal.close(journal)
 
     %{
-      "state" => Atom.to_string(record.state),
-      "result_kind" => record.result |> elem(0) |> Atom.to_string(),
-      "admission_count" => record.admission_count,
-      "callback_attempt_count" => record.callback_attempt_count,
-      "terminal_count" => record.terminal_count,
-      "result_persisted" => observation.result_persisted?,
-      "identity_consistent" =>
-        job.job_id == record.job_id and job.operation_digest == record.operation_digest and
-          observation.job_id == record.job_id and
-          observation.operation_digest == record.operation_digest,
-      "job_id_format_valid" => String.starts_with?(record.job_id, "er1j_v1_"),
-      "operation_digest_format_valid" => byte_size(record.operation_digest) == 64,
+      "state" => "terminal",
+      "job_count" => length(evidence),
+      "admission_count" => Enum.sum(Enum.map(evidence, & &1["admission_count"])),
+      "callback_attempt_count" => Enum.sum(Enum.map(evidence, & &1["callback_attempt_count"])),
+      "terminal_count" => Enum.sum(Enum.map(evidence, & &1["terminal_count"])),
+      "result_persisted" => Enum.all?(evidence, & &1["result_persisted"]),
+      "identity_consistent" => Enum.all?(evidence, & &1["identity_consistent"]),
+      "job_id_format_valid" =>
+        Enum.all?(evidence, &String.starts_with?(&1["job_id"], "er1j_v1_")),
+      "operation_digest_format_valid" =>
+        Enum.all?(evidence, &(byte_size(&1["operation_digest"]) == 64)),
+      "tool_call_ids" => Enum.map(evidence, & &1["tool_call_id"]),
+      "jobs" => evidence,
       "executor_configuration" => stringify(executor_config),
       "controller_configuration" => stringify(journal_config)
     }
   end
 
-  defp terminal_record({state, record}) when state in [:completed, :failed],
-    do: {:completed, record}
-
-  defp only_job_id(request) do
-    journal = start_journal(request["controller_journal_path"])
-    {:ok, [job]} = ControllerJournal.all(journal)
-    :ok = ControllerJournal.close(journal)
-    job.job_id
-  end
+  defp terminal_record!({state, record}) when state in [:completed, :failed], do: record
+  defp terminal_record!(other), do: raise("nonterminal no-fault receipt: #{inspect(other)}")
 
   defp start_journal(path) do
     {:ok, journal} = ControllerJournal.start_link(path: path)

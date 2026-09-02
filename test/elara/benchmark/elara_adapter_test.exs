@@ -17,32 +17,88 @@ defmodule Elara.Benchmark.ElaraAdapterTest do
     mappings =
       Map.new(manifest.tasks, fn {id, task} -> {id, unwrap(ElaraAdapter.mapping(task))} end)
 
-    assert Enum.frequencies_by(mappings, fn {_id, mapping} -> mapping["tool_name"] end) == %{
-             "bash" => 4,
-             "edit" => 4,
-             "write" => 4
-           }
+    calls = Map.new(mappings, fn {id, mapping} -> {id, hd(mapping["tool_calls"])} end)
+
+    assert Enum.frequencies_by(calls, fn {_id, call} -> call["tool_name"] end) ==
+             %{"bash" => 4, "edit" => 4, "write" => 4}
 
     for {task_id, mapping} <- mappings do
-      assert mapping["tool_call_id"] == "exp003-#{String.downcase(task_id)}"
+      [call] = mapping["tool_calls"]
+      assert call["tool_call_id"] == "exp003-#{String.downcase(task_id)}"
+      assert mapping["fault_target_tool_call_id"] == call["tool_call_id"]
       assert mapping["final_assistant_text"] == "Task complete."
-      assert is_map(mapping["tool_arguments"])
-      assert is_map(mapping["execution_constraints"])
+
+      assert mapping["non_ok_halt_assistant_text"] ==
+               "Task halted after non-ok target result."
+
+      assert mapping["continuation_policy"] == "not_applicable"
+      assert is_map(call["tool_arguments"])
+      assert is_map(call["execution_constraints"])
     end
 
-    assert mappings["W07"]["tool_arguments"] |> Map.keys() |> Enum.sort() ==
+    assert calls["W07"]["tool_arguments"] |> Map.keys() |> Enum.sort() ==
              ~w(content path)
 
-    assert mappings["P07"]["tool_arguments"] |> Map.keys() |> Enum.sort() ==
+    assert calls["P07"]["tool_arguments"] |> Map.keys() |> Enum.sort() ==
              ~w(new_text old_text path)
 
-    assert mappings["S01"]["tool_arguments"] |> Map.keys() == ["command"]
-    assert mappings["S01"]["execution_constraints"]["requested_timeout_ms"] == 5_000
+    assert calls["S01"]["tool_arguments"] |> Map.keys() == ["command"]
+    assert calls["S01"]["execution_constraints"]["requested_timeout_ms"] == 5_000
 
-    assert mappings["S01"]["execution_constraints"]["environment"] == %{
+    assert calls["S01"]["execution_constraints"]["environment"] == %{
              "LANG" => "C",
              "LC_ALL" => "C"
            }
+  end
+
+  test "maps P06 as two ordered unique calls with the frozen continuation policy" do
+    {:ok, manifest} = Manifest.load(@v6_manifest_path)
+    task = manifest.tasks["P06"]
+
+    assert {:ok, mapping} = ElaraAdapter.mapping(task)
+
+    assert Enum.map(mapping["tool_calls"], & &1["step_id"]) == ~w(effect continuation)
+
+    assert Enum.map(mapping["tool_calls"], & &1["tool_call_id"]) ==
+             ~w(exp003-p06 exp003-p06-continuation)
+
+    assert Enum.map(mapping["tool_calls"], & &1["step_index"]) == [0, 1]
+    assert mapping["fault_target_step"] == "effect"
+    assert mapping["fault_target_tool_call_id"] == "exp003-p06"
+    assert mapping["continuation_policy"] == task["plan"]["continuation_policy"]
+  end
+
+  test "fails closed on malformed multi-step provider and identity shapes" do
+    {:ok, manifest} = Manifest.load(@v6_manifest_path)
+    task = manifest.tasks["P06"]
+    [target, continuation, final] = task["plan"]["scripted_provider"]
+
+    duplicate =
+      put_in(
+        task,
+        ["plan", "scripted_provider"],
+        [target, Map.put(continuation, "tool_call_id", target["tool_call_id"]), final]
+      )
+
+    bad_ref =
+      put_in(
+        task,
+        ["plan", "scripted_provider"],
+        [target, Map.put(continuation, "arguments_ref", "plan.steps[0].arguments"), final]
+      )
+
+    extra_turn_key =
+      put_in(
+        task,
+        ["plan", "scripted_provider"],
+        [Map.put(target, "unexpected", true), continuation, final]
+      )
+
+    missing_policy = update_in(task, ["plan"], &Map.delete(&1, "continuation_policy"))
+
+    for malformed <- [duplicate, bad_ref, extra_turn_key, missing_policy] do
+      assert {:error, {:invalid_frozen_plan, _reason}} = ElaraAdapter.mapping(malformed)
+    end
   end
 
   test "categorically forbids confirmatory fault execution" do

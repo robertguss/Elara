@@ -101,7 +101,8 @@ defmodule Elara.Benchmark.PreflightV8Test do
            }
   end
 
-  test "the report is canonical, byte-stable, and bound to every source identity", context do
+  test "the report is canonical, byte-stable, and preserves its historical source identities",
+       context do
     %{bytes: bytes, report: report} = context
 
     assert sha256(bytes) == @report_sha256
@@ -119,7 +120,12 @@ defmodule Elara.Benchmark.PreflightV8Test do
       assert read_json(identity["path"])["schema"] == identity["schema"], name
     end
 
-    for {path, expected} <- report["source_identities"] do
+    superseded_by_v8_boundary = [
+      "lib/elara/benchmark/exp003/materializer.ex",
+      "priv/benchmark/materialize_exp003_v8.exs"
+    ]
+
+    for {path, expected} <- Map.drop(report["source_identities"], superseded_by_v8_boundary) do
       assert file_sha256(path) == expected, path
     end
   end

@@ -15,6 +15,13 @@ defmodule Elara.Benchmark.Exp003.Materializer do
       external_schema: "elara.exp003.external-adapter-equivalence.v8-development",
       receipt_schema: "elara.exp003.materialization-receipt.v8-development",
       exposure_split: "development_materialization_fixture",
+      output_paths: %{
+        "manifest" => "manifest.json",
+        "dogfood" => "dogfood-plan.json",
+        "external" => "external-adapter-equivalence.json",
+        "beacon" => "beacon/verified.json",
+        "receipt" => "materialization-receipt.json"
+      },
       confirmatory: false
     },
     {"elara.exp003.materialization-protocol.v8", "ER-3/FND-2-v8", "confirmatory"} => %{
@@ -26,9 +33,28 @@ defmodule Elara.Benchmark.Exp003.Materializer do
       external_schema: "elara.exp003.external-adapter-equivalence.v8",
       receipt_schema: "elara.exp003.materialization-receipt.v8",
       exposure_split: "held_out_relative_to_target_implementation",
+      output_paths: %{
+        "manifest" => "manifest.json",
+        "dogfood" => "dogfood-plan.json",
+        "external" => "external-adapter-equivalence.json",
+        "beacon" => "beacon/verified.json",
+        "beacon_api_drand" => "beacon/api.drand.sh.json",
+        "beacon_cloudflare" => "beacon/drand.cloudflare.com.json",
+        "beacon_verification" => "beacon/verification.json",
+        "receipt" => "materialization-receipt.json"
+      },
       confirmatory: true
     }
   }
+  @confirmatory_contract_commitment "03b64a144c6de26adea8a9bf0258a6d47537849e6551e665e4302d27971717db"
+  @confirmatory_verifier_sha256 "fa736434d73bf5551b95014e3d4c07607c06c3124f90e5d760e24ae1a187d93d"
+  @confirmatory_verifier_path "priv/benchmark/exp003-v8-beacon/fetch-and-verify.cjs"
+  @beacon_bundle_files ~w(
+    api.drand.sh.json
+    drand.cloudflare.com.json
+    verification.json
+    verified.json
+  )
   @eligible_ids ~w(P01 P02 P04 P06 P07 P08 S01 S02 S03 S04 W01 W02 W03 W05 W06 W07 W08)
   @excluded_ids ~w(P03 P05 W04)
   @shell_ids ~w(S01 S02 S03 S04)
@@ -52,20 +78,39 @@ defmodule Elara.Benchmark.Exp003.Materializer do
     priv/benchmark/preflight_exp003_v8.exs
     priv/benchmark/run_exp003_v8.exs
   )
-  @output_paths %{
-    "manifest" => "manifest.json",
-    "dogfood" => "dogfood-plan.json",
-    "external" => "external-adapter-equivalence.json",
-    "beacon" => "beacon/verified.json",
-    "receipt" => "materialization-receipt.json"
-  }
-
   @spec run(String.t(), String.t(), String.t(), String.t(), String.t(), String.t()) ::
           {:ok, map()} | {:error, term()}
-  def run(repo_root, protocol_path, protocol_sha256, beacon_path, beacon_sha256, output_root) do
+  def run(
+        repo_root,
+        protocol_path,
+        protocol_sha256,
+        beacon_input,
+        beacon_input_sha256,
+        output_root
+      ) do
+    do_run(
+      repo_root,
+      protocol_path,
+      protocol_sha256,
+      beacon_input,
+      beacon_input_sha256,
+      output_root,
+      :initial
+    )
+  end
+
+  defp do_run(
+         repo_root,
+         protocol_path,
+         protocol_sha256,
+         beacon_input,
+         beacon_input_sha256,
+         output_root,
+         beacon_authority
+       ) do
     repo_root = Path.expand(repo_root)
     protocol_path = Path.expand(protocol_path)
-    beacon_path = Path.expand(beacon_path)
+    beacon_input = Path.expand(beacon_input)
     output_root = Path.expand(output_root)
 
     try do
@@ -81,7 +126,18 @@ defmodule Elara.Benchmark.Exp003.Materializer do
 
       CandidateFactory.validate_blueprints!(source, inputs["compatibility"])
 
-      {beacon, beacon_bytes} = verified_json!(beacon_path, beacon_sha256, :beacon)
+      {beacon, beacon_artifacts, verified_beacon_sha256} =
+        load_beacon!(
+          repo_root,
+          protocol_path,
+          protocol_sha256,
+          protocol,
+          contract,
+          beacon_input,
+          beacon_input_sha256,
+          beacon_authority
+        )
+
       validate_beacon!(protocol, beacon, contract)
 
       materialization =
@@ -89,7 +145,7 @@ defmodule Elara.Benchmark.Exp003.Materializer do
           protocol,
           inputs,
           beacon,
-          beacon_sha256,
+          verified_beacon_sha256,
           protocol_sha256,
           contract
         )
@@ -97,11 +153,10 @@ defmodule Elara.Benchmark.Exp003.Materializer do
       write_outputs!(
         output_root,
         materialization,
-        beacon_bytes,
+        beacon_artifacts,
         protocol_path,
         protocol_bytes,
-        beacon_path,
-        beacon_sha256,
+        verified_beacon_sha256,
         contract
       )
     rescue
@@ -123,28 +178,45 @@ defmodule Elara.Benchmark.Exp003.Materializer do
         ".verify-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
 
     try do
+      {protocol, _protocol_bytes} = verified_json!(protocol_path, protocol_sha256, :protocol)
+      contract = contract!(protocol)
       {receipt, receipt_bytes} = verified_json!(receipt_path, receipt_sha256, :receipt)
       require!(canonical_json(receipt) == receipt_bytes, :noncanonical_receipt)
 
       require!(
-        Path.basename(receipt_path) == @output_paths["receipt"],
+        Path.basename(receipt_path) == contract.output_paths["receipt"],
         {:receipt_path, receipt_path}
       )
 
-      beacon_path = Path.join(bundle_root, @output_paths["beacon"])
-      beacon_sha256 = get_in(receipt, ["outputs", @output_paths["beacon"]])
-      require!(valid_digest?(beacon_sha256), :receipt_beacon_digest)
+      {beacon_input, beacon_input_sha256} =
+        if contract.confirmatory do
+          verification_path = contract.output_paths["beacon_verification"]
+          digest = get_in(receipt, ["outputs", verification_path])
+          require!(valid_digest?(digest), :receipt_beacon_verification_digest)
+          {Path.join(bundle_root, "beacon"), digest}
+        else
+          beacon_path = contract.output_paths["beacon"]
+          digest = get_in(receipt, ["outputs", beacon_path])
+          require!(valid_digest?(digest), :receipt_beacon_digest)
+          {Path.join(bundle_root, beacon_path), digest}
+        end
 
-      case run(
+      case do_run(
              repo_root,
              protocol_path,
              protocol_sha256,
-             beacon_path,
-             beacon_sha256,
-             verification_root
+             beacon_input,
+             beacon_input_sha256,
+             verification_root,
+             :copy
            ) do
         {:ok, _result} ->
-          Enum.each(Map.values(@output_paths), fn relative ->
+          expected_paths =
+            receipt["outputs"]
+            |> Map.keys()
+            |> Kernel.++([contract.output_paths["receipt"]])
+
+          Enum.each(expected_paths, fn relative ->
             expected = File.read!(Path.join(verification_root, relative))
             actual = File.read!(Path.join(bundle_root, relative))
             require!(actual == expected, {:bundle_identity_mismatch, relative})
@@ -285,6 +357,142 @@ defmodule Elara.Benchmark.Exp003.Materializer do
     end
   end
 
+  defp load_beacon!(
+         _repo_root,
+         _protocol_path,
+         _protocol_sha256,
+         _protocol,
+         %{confirmatory: false} = contract,
+         beacon_path,
+         beacon_sha256,
+         _beacon_authority
+       ) do
+    {beacon, beacon_bytes} = verified_json!(beacon_path, beacon_sha256, :beacon)
+
+    {beacon, %{contract.output_paths["beacon"] => beacon_bytes}, beacon_sha256}
+  end
+
+  defp load_beacon!(
+         repo_root,
+         protocol_path,
+         protocol_sha256,
+         protocol,
+         %{confirmatory: true} = contract,
+         bundle_root,
+         verification_sha256,
+         beacon_authority
+       ) do
+    require!(File.dir?(bundle_root), {:beacon_bundle_root, bundle_root})
+
+    if beacon_authority == :initial do
+      require!(
+        bundle_root == Path.join(repo_root, get_in(protocol, ["beacon", "canonical_output_root"])),
+        {:noncanonical_initial_beacon_root, bundle_root}
+      )
+    end
+
+    require!(beacon_authority in [:initial, :copy], {:beacon_authority, beacon_authority})
+
+    entries =
+      bundle_root
+      |> File.ls!()
+      |> Enum.sort()
+
+    require!(entries == Enum.sort(@beacon_bundle_files), {:beacon_bundle_frame, entries})
+
+    verification_path = Path.join(bundle_root, "verification.json")
+
+    {_verification, _verification_bytes} =
+      verified_json!(verification_path, verification_sha256, :beacon_verification)
+
+    verifier_result =
+      verify_confirmatory_beacon_bundle!(
+        repo_root,
+        protocol_path,
+        protocol_sha256,
+        protocol,
+        bundle_root,
+        verification_sha256,
+        beacon_authority
+      )
+
+    verified_path = Path.join(bundle_root, "verified.json")
+    verified_sha256 = verifier_result["verified_sha256"]
+    {beacon, _verified_bytes} = verified_json!(verified_path, verified_sha256, :beacon)
+
+    artifacts =
+      Map.new(@beacon_bundle_files, fn relative ->
+        {Path.join("beacon", relative), File.read!(Path.join(bundle_root, relative))}
+      end)
+
+    require!(
+      Map.keys(artifacts) |> Enum.sort() ==
+        contract.output_paths
+        |> Map.take(~w(beacon beacon_api_drand beacon_cloudflare beacon_verification))
+        |> Map.values()
+        |> Enum.sort(),
+      :beacon_output_frame
+    )
+
+    {beacon, artifacts, verified_sha256}
+  end
+
+  defp verify_confirmatory_beacon_bundle!(
+         repo_root,
+         protocol_path,
+         protocol_sha256,
+         protocol,
+         bundle_root,
+         verification_sha256,
+         beacon_authority
+       ) do
+    verifier = Path.join(repo_root, @confirmatory_verifier_path)
+
+    require!(
+      get_in(protocol, ["beacon", "verification_source", "path"]) ==
+        @confirmatory_verifier_path,
+      :beacon_verifier_path
+    )
+
+    require!(
+      get_in(protocol, ["beacon", "verification_source", "sha256"]) ==
+        @confirmatory_verifier_sha256,
+      :beacon_verifier_identity
+    )
+
+    require!(
+      sha256(File.read!(verifier)) == @confirmatory_verifier_sha256,
+      :beacon_verifier_source
+    )
+
+    {output, status} =
+      System.cmd(
+        "node",
+        [
+          verifier,
+          if(beacon_authority == :initial, do: "verify", else: "verify-copy"),
+          protocol_path,
+          protocol_sha256,
+          bundle_root,
+          verification_sha256
+        ],
+        cd: repo_root,
+        env: [{"NODE_OPTIONS", nil}, {"NODE_PATH", nil}],
+        stderr_to_stdout: true
+      )
+
+    require!(status == 0, {:beacon_offline_verification, status, output})
+
+    case JSON.decode(output) do
+      {:ok, %{"verification_sha256" => ^verification_sha256} = result} ->
+        require!(valid_digest?(result["verified_sha256"]), :verified_beacon_digest)
+        result
+
+      _other ->
+        raise ArgumentError, "materialization rejected: :invalid_beacon_verifier_output"
+    end
+  end
+
   defp validate_protocol!(repo_root, protocol, contract) do
     require!(
       get_in(protocol, ["exposure", "future_beacon_committed"]) == contract.confirmatory,
@@ -293,7 +501,11 @@ defmodule Elara.Benchmark.Exp003.Materializer do
 
     require!(get_in(protocol, ["exposure", "held_out_selection_performed"]) == false, :held_out)
     require!(Enum.sort(Map.keys(protocol["inputs"] || %{})) == @input_keys, :input_frame)
-    require!(protocol["outputs"] == @output_paths, :output_paths)
+    require!(protocol["outputs"] == contract.output_paths, :output_paths)
+
+    if contract.confirmatory do
+      validate_confirmatory_contract!(protocol)
+    end
 
     require!(
       get_in(protocol, ["candidate_frame", "eligible_ids"]) == @eligible_ids,
@@ -330,6 +542,38 @@ defmodule Elara.Benchmark.Exp003.Materializer do
     require!(
       String.ends_with?(command_report["path"], "-v7-command-path-preflight.json"),
       :report_path
+    )
+
+    :ok
+  end
+
+  defp validate_confirmatory_contract!(protocol) do
+    commitment =
+      protocol
+      |> Map.drop(
+        ~w(contract_commitment pre_beacon_qualification preserved_artifact_sha256 source_identities)
+      )
+      |> update_in(["beacon", "verification_source"], &Map.delete(&1, "sha256"))
+      |> update_in(
+        ["beacon", "verification_package"],
+        &Map.drop(&1, ~w(sha256 lock_sha256))
+      )
+      |> update_in(["beacon", "runtime_dependencies"], &Map.delete(&1, "sha256"))
+      |> canonical_json()
+      |> sha256()
+
+    require!(commitment == @confirmatory_contract_commitment, :protocol_semantic_commitment)
+
+    require!(
+      get_in(protocol, ["contract_commitment", "sha256"]) ==
+        @confirmatory_contract_commitment,
+      :declared_protocol_semantic_commitment
+    )
+
+    require!(
+      get_in(protocol, ["beacon", "verification_source", "sha256"]) ==
+        @confirmatory_verifier_sha256,
+      :protocol_verifier_commitment
     )
 
     :ok
@@ -390,6 +634,20 @@ defmodule Elara.Benchmark.Exp003.Materializer do
     require!(beacon["round"] == expected["round"], :beacon_round)
     require!(beacon["client"] == expected["client"], :beacon_client)
     require!(valid_digest?(beacon["randomness"]), :beacon_randomness)
+
+    if contract.confirmatory do
+      require!(beacon["public_key"] == expected["public_key"], :beacon_public_key)
+      require!(beacon["scheme"] == expected["scheme"], :beacon_scheme)
+      require!(beacon["relay_count"] == 2, :beacon_relay_count)
+
+      require!(
+        beacon["contract_commitment"] == @confirmatory_contract_commitment,
+        :beacon_contract_commitment
+      )
+
+      require!(valid_digest?(beacon["verification_sha256"]), :beacon_verification_digest)
+    end
+
     :ok
   end
 
@@ -742,10 +1000,9 @@ defmodule Elara.Benchmark.Exp003.Materializer do
   defp write_outputs!(
          output_root,
          materialization,
-         beacon_bytes,
+         beacon_artifacts,
          protocol_path,
          protocol_bytes,
-         _beacon_path,
          beacon_sha256,
          contract
        ) do
@@ -753,12 +1010,31 @@ defmodule Elara.Benchmark.Exp003.Materializer do
     dogfood_bytes = canonical_json(materialization.dogfood)
     external_bytes = canonical_json(materialization.external)
 
-    output_sha256 = %{
-      "manifest.json" => sha256(manifest_bytes),
-      "dogfood-plan.json" => sha256(dogfood_bytes),
-      "external-adapter-equivalence.json" => sha256(external_bytes),
-      "beacon/verified.json" => sha256(beacon_bytes)
-    }
+    output_sha256 =
+      %{
+        "manifest.json" => sha256(manifest_bytes),
+        "dogfood-plan.json" => sha256(dogfood_bytes),
+        "external-adapter-equivalence.json" => sha256(external_bytes)
+      }
+      |> Map.merge(Map.new(beacon_artifacts, fn {path, bytes} -> {path, sha256(bytes)} end))
+
+    beacon_receipt =
+      %{
+        "path" => contract.output_paths["beacon"],
+        "sha256" => beacon_sha256,
+        "confirmatory" => contract.confirmatory
+      }
+      |> then(fn value ->
+        if contract.confirmatory do
+          Map.put(
+            value,
+            "verification_sha256",
+            output_sha256[contract.output_paths["beacon_verification"]]
+          )
+        else
+          value
+        end
+      end)
 
     receipt = %{
       "schema" => contract.receipt_schema,
@@ -768,11 +1044,7 @@ defmodule Elara.Benchmark.Exp003.Materializer do
         "path" => Path.relative_to_cwd(protocol_path),
         "sha256" => sha256(protocol_bytes)
       },
-      "beacon" => %{
-        "path" => @output_paths["beacon"],
-        "sha256" => beacon_sha256,
-        "confirmatory" => contract.confirmatory
-      },
+      "beacon" => beacon_receipt,
       "seed_sha256" => materialization.seed,
       "candidate_construction_count" => length(materialization.construction_proofs),
       "eligible_candidate_count" => length(@eligible_ids),
@@ -794,11 +1066,10 @@ defmodule Elara.Benchmark.Exp003.Materializer do
     }
 
     output_bytes =
-      Map.merge(output_sha256, %{
+      Map.merge(beacon_artifacts, %{
         "manifest.json" => manifest_bytes,
         "dogfood-plan.json" => dogfood_bytes,
         "external-adapter-equivalence.json" => external_bytes,
-        "beacon/verified.json" => beacon_bytes,
         "materialization-receipt.json" => canonical_json(receipt)
       })
 

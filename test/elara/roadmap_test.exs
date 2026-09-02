@@ -40,7 +40,10 @@ defmodule Elara.RoadmapTest do
     assert Enum.count(rows, &(&1 == "IN PROGRESS")) <= 1
     assert Enum.count(rows, &(&1 == "TODO")) <= 1
     assert Enum.count(rows, &(&1 in ["IN PROGRESS", "TODO"])) == 1
-    assert Enum.count(rows, &(&1 == "BLOCKED")) == 6
+
+    active_index = Enum.find_index(rows, &(&1 in ["IN PROGRESS", "TODO"]))
+    assert Enum.all?(Enum.take(rows, active_index), &(&1 == "DONE"))
+    assert Enum.all?(Enum.drop(rows, active_index + 1), &(&1 == "BLOCKED"))
   end
 
   test "repository documentation points to the repository roadmap" do

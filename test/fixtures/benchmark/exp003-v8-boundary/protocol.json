@@ -1,0 +1,136 @@
+{
+  "beacon": {
+    "chain_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "client": "none-development-only",
+    "network": "fixed-development-test-vector",
+    "round": 0,
+    "round_formula": "fixed development entropy; no drand round",
+    "verification_method": "fixed_nonconfirmatory_test_vector"
+  },
+  "candidate_frame": {
+    "eligible_count": 17,
+    "eligible_ids": [
+      "P01",
+      "P02",
+      "P04",
+      "P06",
+      "P07",
+      "P08",
+      "S01",
+      "S02",
+      "S03",
+      "S04",
+      "W01",
+      "W02",
+      "W03",
+      "W05",
+      "W06",
+      "W07",
+      "W08"
+    ],
+    "excluded_ids": [
+      "P03",
+      "P05",
+      "W04"
+    ],
+    "source_count": 20
+  },
+  "command_stack": {
+    "commands": {
+      "execute": "mix run priv/benchmark/run_exp003_v8.exs -- execute <protocol> <protocol-sha256> <receipt> <receipt-sha256> <qualification.json> <state-root> <workspace-root> <output.json>",
+      "qualify": "mix run priv/benchmark/run_exp003_v8.exs -- qualify <protocol> <protocol-sha256> <receipt> <receipt-sha256> <state-root> <workspace-root> <output.json>",
+      "replay": "mix run priv/benchmark/run_exp003_v8.exs -- replay <protocol> <protocol-sha256> <receipt> <receipt-sha256> <report.json> <score-output.json>"
+    },
+    "source_paths": [
+      "lib/elara/benchmark/exp003/command.ex",
+      "lib/elara/benchmark/internal_confirmatory.ex",
+      "lib/elara/benchmark/elara_adapter.ex",
+      "lib/elara/benchmark/runner.ex",
+      "lib/elara/benchmark/qualification.ex",
+      "lib/elara/benchmark/scorer.ex",
+      "lib/elara/benchmark/evidence.ex",
+      "lib/elara/benchmark/fixture.ex",
+      "lib/elara/benchmark/manifest.ex",
+      "priv/benchmark/elara_target_runner.exs",
+      "priv/benchmark/run_exp003_v8.exs",
+      "mix.lock"
+    ],
+    "target_commits": {
+      "baseline": "23e603550253c69846795b13cc2f2670f1122e21",
+      "receipts": "9ff416f2c22327c5ef38edcd52a9e89108fbc726"
+    }
+  },
+  "exposure": {
+    "B_or_T_calculated": false,
+    "dogfood_runs": 0,
+    "future_beacon_committed": false,
+    "held_out_selection_performed": false,
+    "target_fault_runs": 0
+  },
+  "inputs": {
+    "candidate_source": {
+      "path": "test/fixtures/benchmark/exp003/manifest.json",
+      "schema": "elara.exp003.corpus.v1",
+      "sha256": "a40fa18d3ea00eee5c6b8963055cff49ca7f94388f42325c793e0460be98a5b7"
+    },
+    "command_path_report": {
+      "path": "docs/experiments/003-effect-receipt-v7-command-path-preflight.json",
+      "schema": "elara.exp003.command-path-preflight.v7",
+      "sha256": "c7522da0fd1730b61241898450893b7761d59ea8dab0721cb01d0e4e7eabf435"
+    },
+    "compatibility": {
+      "path": "docs/experiments/003-effect-receipt-v5-compatibility.json",
+      "schema": "elara.exp003.compatibility.v5",
+      "sha256": "256812afbb42f9c35f81a5c3a650dc59b34623acc88d48f44153033d01d8cfde"
+    },
+    "dogfood_source": {
+      "path": "test/fixtures/benchmark/exp003/dogfood-plan.json",
+      "schema": "elara.exp003.dogfood-plan.v1",
+      "sha256": "b936fcc1e00e50d3a9390d6fed27b22a84134b13a9ae1b3ce88a7c627edad59b"
+    },
+    "external_source": {
+      "path": "test/fixtures/benchmark/exp003-v6/external-adapter-equivalence.json",
+      "schema": "elara.exp003.external-adapter-equivalence.v6",
+      "sha256": "f2ee5d0e52051d7675953bc09cf80674e3c420e6093c7497fe45513ad286561e"
+    }
+  },
+  "mode": "development",
+  "outputs": {
+    "beacon": "beacon/verified.json",
+    "dogfood": "dogfood-plan.json",
+    "external": "external-adapter-equivalence.json",
+    "manifest": "manifest.json",
+    "receipt": "materialization-receipt.json"
+  },
+  "path": "test/fixtures/benchmark/exp003-v8-boundary/protocol.json",
+  "preregistration_version": "ER-3/FND-2-v8-development",
+  "purpose": "fixed non-confirmatory requalification of the V8 materializer after adding the cryptographic beacon boundary and before any future beacon fetch",
+  "schema": "elara.exp003.materialization-protocol.v8-development",
+  "seed": {
+    "commitment": "ER3-V8-1-explicit-materializer-development",
+    "domain_separator": "elara:exp-003:er3:fnd-2:v8:development:no-beacon\\0"
+  },
+  "selection": {
+    "row_count": 20,
+    "task_count": 12
+  },
+  "source_identities": {
+    "lib/elara/benchmark/elara_adapter.ex": "7b183595ecfbafa7e708adb6e87b0a709bb9d002e5f4b3e6aebaae0556176f0b",
+    "lib/elara/benchmark/evidence.ex": "cd15aadbc3064bcb4a9b3d93123f529c69f4acf32a06c761e1b44d6a97e5d3c8",
+    "lib/elara/benchmark/exp003/candidate_factory.ex": "9b021cb54f27cef4ea54e7d15347dbbffc34326d8ae18004023ed40ab9dbbd97",
+    "lib/elara/benchmark/exp003/command.ex": "c09aa9e80c9c340c918d0b43a76286378e078ea69ded6c8528d5931f028d56ea",
+    "lib/elara/benchmark/exp003/materializer.ex": "735e58487072543715d9508c3fd35fb9a62b8c881fa2c8c549716fa9e9b17c9a",
+    "lib/elara/benchmark/external_adapter.ex": "f10a53d9edacd820fcd99ad08dde6c359c30352423ab447963b01b15b143f913",
+    "lib/elara/benchmark/fixture.ex": "e9fdae8fb0d446cd137f06fb75c86e8077ec9ca28de50a33d3b879f4acee5f47",
+    "lib/elara/benchmark/internal_confirmatory.ex": "c05e81f0774b5b6ed4700ea812fa3d5f455b95cf574d2d71a834278e56832825",
+    "lib/elara/benchmark/manifest.ex": "5bdfb6a7460f09bee57748543de74b210f09c2642d9e3066f1d5bea47da707e7",
+    "lib/elara/benchmark/qualification.ex": "a13cf5a76089b26348b6717a66451450c17f6a1ce46a70bd8ceabc5f2e5f1933",
+    "lib/elara/benchmark/runner.ex": "87ee7cb29ea9d0c2a4a7381bc7fcbb13cbc63226b09573907db0ac5862b533dc",
+    "lib/elara/benchmark/scorer.ex": "ced443d427bf842c8135707c8caaed81130d09b0543e8407ea90e4139f7b70fa",
+    "mix.lock": "108fd4ad0cc4fe2e6b3c6dd03c8142a3bf10ae9225e364a1bdea2a18dc59126b",
+    "priv/benchmark/elara_target_runner.exs": "61acaf06d8f0157be11d13cee858c6213f90a612a8f8106417ccbce27ebcaae2",
+    "priv/benchmark/materialize_exp003_v8.exs": "987d80b249c35bd3c79dd7b8661312f8c8ac1bb15735c0a693271373cd304ba8",
+    "priv/benchmark/preflight_exp003_v8.exs": "0fab1e4d2c24e79df27178d5bc5e9d9f43e06b45e804e08cfc10c316298b15e5",
+    "priv/benchmark/run_exp003_v8.exs": "f92b10affb39a8952c71b95f4f2dc1dc73036c3f9ecfa3c14087d1ed801e99e7"
+  }
+}

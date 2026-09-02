@@ -7,7 +7,7 @@ defmodule Elara.Benchmark.MaterializationV8Test do
   @root Path.expand("../../..", __DIR__)
   @protocol_path Path.join(
                    @root,
-                   "test/fixtures/benchmark/exp003-v8-development/protocol.json"
+                   "test/fixtures/benchmark/exp003-v8-boundary/protocol.json"
                  )
   @beacon_path Path.join(
                  @root,

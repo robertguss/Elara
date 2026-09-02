@@ -7,13 +7,13 @@ args =
   end
 
 case args do
-  [protocol_path, protocol_sha256, beacon_path, beacon_sha256, output_root] ->
+  [protocol_path, protocol_sha256, beacon_input, beacon_input_sha256, output_root] ->
     case Materializer.run(
            File.cwd!(),
            protocol_path,
            protocol_sha256,
-           beacon_path,
-           beacon_sha256,
+           beacon_input,
+           beacon_input_sha256,
            output_root
          ) do
       {:ok, result} ->
@@ -29,6 +29,6 @@ case args do
 
   _other ->
     raise "usage: mix run priv/benchmark/materialize_exp003_v8.exs -- " <>
-            "<protocol.json> <protocol-sha256> <verified-beacon.json> " <>
-            "<beacon-sha256> <absent-output-root>"
+            "<protocol.json> <protocol-sha256> <development-beacon.json|confirmatory-beacon-bundle-root> " <>
+            "<beacon-sha256|verification-sha256> <absent-output-root>"
 end

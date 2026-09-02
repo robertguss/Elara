@@ -65,9 +65,12 @@ now freezes an explicit 20-candidate materializer and the complete generic
 qualification/execution/replay command stack before any new beacon commitment;
 its pinned
 [development protocol](../../test/fixtures/benchmark/exp003-v8-development/protocol.json)
-and beacon contain no held-out or confirmatory evidence. ER-1 v1 concluded Stop
-without a safety failure because row 1's frozen result counts were internally
-inconsistent. The separate
+and beacon contain no held-out or confirmatory evidence. The fresh
+[V8 preregistration](003-effect-receipt-confirmatory-preregistration-v8.md) and
+[machine protocol](003-effect-receipt-v8-protocol.json) commit that exact proven
+stack and a genuinely future drand round without fetching it. ER-1 v1 concluded
+Stop without a safety failure because row 1's frozen result counts were
+internally inconsistent. The separate
 [corrected ER-1 v2 contract](003-effect-receipt-er1-v2-contract.md) and
 [fresh fixture manifest](003-effect-receipt-er1-v2-manifest.json) preserve that
 result. V2's first run aborted in harness mechanics before the conflicting

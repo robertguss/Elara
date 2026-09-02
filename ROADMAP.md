@@ -51,16 +51,16 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status      | Item                                                          | Depends on       |
-| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | DONE        | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | DONE        | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| PROV-1  | IN PROGRESS | ChatGPT/Codex subscription provider                           | SPLIT-4          |
-| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | PROV-1           |
+| ID      | Status   | Item                                                          | Depends on       |
+| ------- | -------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | DONE     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| PROV-1  | DONE     | ChatGPT/Codex subscription provider                           | SPLIT-4          |
+| SPLIT-5 | TODO     | Daily-driver checkpoint and recorded go/no-go                 | PROV-1           |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -698,7 +698,7 @@ use this TUI for the stated period and record the reversal-signal measurements.
 
 ## PROV-1 — ChatGPT/Codex subscription provider
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -733,9 +733,66 @@ transport, model catalog, hosted tools, connector scopes, Codex runtime, or
 change to Elara's session/tool authority. A credential-backed request remains
 owner validation because automated tests do not use network credentials.
 
+### Result
+
+**DONE (2026-09-02).** Pushed implementation commit
+[`b440861`](https://github.com/robertguss/elixir-harness/commit/b4408614284df3bcf102566c3ad78cec768391fb)
+to `origin/main`.
+
+Elara now has an explicit ChatGPT/Codex subscription path.
+`mix elara.login openai` performs OpenAI's device-code flow and saves private,
+atomically replaced credentials under `~/.elara/openai-codex-auth.json`;
+refreshes serialize within the BEAM and retain rotated refresh tokens.
+`ELARA_PROVIDER=openai-codex` selects a dedicated streamed Responses adapter
+that sends truthful `originator: elara` and the ChatGPT account claim while
+leaving Elara's reducer, tool loop, execution, and persistence authoritative.
+Existing API-key and Grok resolution remain the default when that explicit
+selector is absent.
+
+The adapter maps Elara's tools to flat Responses function definitions, streams
+arbitrarily chunked SSE text, rejects malformed or non-terminal responses, and
+threads refreshed provider configuration back through the session. Complete
+native output items—including encrypted reasoning, assistant message IDs, and
+both function item and call IDs—are stored with assistant history and replayed
+for `store: false` continuation. Session JSONL and flight recordings preserve
+that state; protocol snapshots deliberately omit it so it never crosses the Rust
+TUI boundary. A loopback HTTP test exercises the actual Req/Finch and public
+`Elara.start_session`/`Elara.ask` path through a tool call, a second model turn,
+process shutdown, persisted reopen, and another model turn.
+
+Exact verification:
+
+- `mix test test/elara/auth/open_ai_codex_test.exs test/elara/provider/open_ai_codex_test.exs test/elara/provider/open_ai_codex_integration_test.exs test/elara/config_test.exs test/elara/session/store_test.exs test/elara/protocol_v2_test.exs test/elara/flight_recorder_test.exs`
+  — 47 passed in 1.6 s.
+- `mix format --check-formatted` — exit 0.
+- `mix compile --warnings-as-errors` — exit 0; Cargo finished incrementally in
+  0.01 s.
+- `cd native/exec-stub && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test`
+  — exit 0; 2 tests passed.
+- `cd native/elara-tui && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test`
+  — exit 0; 5 tests passed plus empty binary/doc test targets.
+- `mix test` — 334 passed in 15.6 s. The documented `CrashTool`
+  `RuntimeError: boom` line was the only expected error log.
+- `rg 'System\.shell' lib/` — no matches; `git diff --check` — exit 0.
+
+Deviations: PROV-1 was inserted after SPLIT-4 when the owner requested
+subscription support, temporarily blocking the already-unblocked owner
+checkpoint. The credential-free product-path test uses a protocol-faithful
+loopback endpoint rather than another provider abstraction. No non-goal was
+added.
+
+Remaining uncertainty: automated tests cannot establish this owner's ChatGPT
+plan entitlement or catch a future private-backend contract change. The current
+`gpt-5.3-codex` default may also age; `ELARA_MODEL` is the explicit override.
+The owner must complete device login and one credential-backed turn during the
+daily-driver checkpoint.
+
+Decision: unblock SPLIT-5. Provider work does not make the split go/no-go
+decision; the owner must now collect the stated daily-use evidence.
+
 ## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
 
-**Status:** BLOCKED (owner checkpoint; unblocks after PROV-1)
+**Status:** TODO (owner checkpoint)
 
 ### Outcome
 

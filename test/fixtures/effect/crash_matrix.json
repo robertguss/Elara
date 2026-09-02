@@ -1,0 +1,147 @@
+{
+  "cases": [
+    {
+      "id": "v3_row_1",
+      "token": "v3-r1-europa-18c4a7",
+      "variant": {"nonce": "18c4a7d9", "ordinal": 1, "schedule": "before_intent"},
+      "expected_counts": {
+        "controller_intent_count": 0,
+        "executor_admission_count": 0,
+        "executor_callback_attempt_count": 0,
+        "external_mutation_count": 0,
+        "executor_terminal_result_count": 0,
+        "session_tool_result_count": 1
+      }
+    },
+    {
+      "id": "v3_row_2",
+      "token": "v3-r2-lyra-2f6b81",
+      "variant": {"nonce": "2f6b81ea", "ordinal": 2, "schedule": "intent_before_dispatch"},
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      }
+    },
+    {
+      "id": "v3_row_3",
+      "token": "v3-r3-coral-36e95c",
+      "variant": {"nonce": "36e95cfb", "ordinal": 3, "schedule": "receipt_before_accept"},
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      }
+    },
+    {
+      "id": "v3_row_4",
+      "token": "v3-r4-nova-47ad20",
+      "variant": {"nonce": "47ad200c", "ordinal": 4, "schedule": "accept_before_reply"},
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      }
+    },
+    {
+      "id": "v3_row_5",
+      "token": "v3-r5-rhythm-58bc31",
+      "variant": {"nonce": "58bc311d", "ordinal": 5, "schedule": "reply_before_callback"},
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      }
+    },
+    {
+      "id": "v3_row_6",
+      "token": "v3-r6-pelagic-69cd42",
+      "variant": {"nonce": "69cd422e", "ordinal": 6, "schedule": "mutation_before_completion"},
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 0,
+        "session_tool_result_count": 1
+      }
+    },
+    {
+      "id": "v3_row_7",
+      "token": "v3-r7-celeste-7ade53",
+      "variant": {"nonce": "7ade533f", "ordinal": 7, "schedule": "completion_before_reply"},
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      }
+    },
+    {
+      "id": "v3_row_8",
+      "token": "v3-r8-tempo-8bef64",
+      "variant": {"nonce": "8bef6450", "ordinal": 8, "schedule": "observation_before_session_result"},
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      }
+    },
+    {
+      "id": "v3_control_no_fault",
+      "token": "v3-c1-orbit-9cf075",
+      "variant": {"nonce": "9cf07561", "ordinal": 9, "schedule": "no_fault"},
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      }
+    },
+    {
+      "id": "v3_control_same_digest",
+      "token": "v3-c2-nerida-ad0186",
+      "variant": {"nonce": "ad018672", "ordinal": 10, "schedule": "same_digest_replay"},
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      }
+    },
+    {
+      "id": "v3_control_conflicting_digest",
+      "token": "v3-c3-sonata-be1297",
+      "variant": {"nonce": "be129783", "ordinal": 11, "schedule": "conflicting_digest"},
+      "expected_counts": {
+        "controller_intent_count": 1,
+        "executor_admission_count": 1,
+        "executor_callback_attempt_count": 1,
+        "external_mutation_count": 1,
+        "executor_terminal_result_count": 1,
+        "session_tool_result_count": 1
+      }
+    }
+  ]
+}

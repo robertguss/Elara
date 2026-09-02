@@ -14,10 +14,7 @@ defmodule Elara.Effect.CrashMatrixTest do
   alias Exqlite.Sqlite3
 
   @bound_ms 1_000
-  @manifest_path Path.expand(
-                   "../../../docs/experiments/003-effect-receipt-er1-v3-manifest.json",
-                   __DIR__
-                 )
+  @manifest_path Path.expand("../../fixtures/effect/crash_matrix.json", __DIR__)
   @external_resource @manifest_path
   @manifest @manifest_path |> File.read!() |> JSON.decode!()
   @fixtures Map.new(@manifest["cases"], &{&1["id"], &1})

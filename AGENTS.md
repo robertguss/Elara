@@ -38,15 +38,11 @@ things that are non-obvious in the Cloud environment.
   where `agent_pid` is an `Agent` holding a queue of canned
   `{:ok, %Elara.Message.Assistant{}}` turns. This is the same mechanism the test
   suite uses.
-- Chat/ask session files persist under `~/.elara/sessions/<cwd-key>/`;
+- Chat session files persist under `~/.elara/sessions/<cwd-key>/`;
   `mix elara.chat --continue` resumes the newest session for the current working
   directory.
 
 ### Roadmap and status
 
-- `docs/roadmap.md` is the sole current roadmap and status source. Update its
-  queue and item Result in the same commit that changes an item's status.
-- `docs/roadmap-history.md` preserves the former Linear project/issue inventory.
-  Do not update Linear unless the user explicitly asks.
-- Historical experiment artifacts may still name Linear because those files are
-  immutable evidence. Do not rewrite them merely to update roadmap links.
+- `ROADMAP.md` is the sole current roadmap and status source. Update its queue
+  and item Result in the same commit that changes an item's status.

@@ -1,0 +1,153 @@
+{
+  "fixtures": [
+    {
+      "id": "w_absent",
+      "operation": "write",
+      "path": "fixture/write/target.txt",
+      "expected": {"state": "absent"},
+      "desired": {
+        "content": "ER2-WRITE-DESIRED-V1\n",
+        "sha256": "1f4398ecf27366819ada3d34c0a7dd114ce8782e4489830b944393f4b9d21ce7"
+      }
+    },
+    {
+      "id": "w_replace",
+      "operation": "write",
+      "path": "fixture/write/target.txt",
+      "expected": {
+        "state": "regular",
+        "content": "ER2-WRITE-PREIMAGE-V1\n",
+        "sha256": "2b21f7f8681c24a8ea3836a0501bfa0548eaef83776c11f515a32002a9621ba2"
+      },
+      "desired": {
+        "content": "ER2-WRITE-DESIRED-V1\n",
+        "sha256": "1f4398ecf27366819ada3d34c0a7dd114ce8782e4489830b944393f4b9d21ce7"
+      }
+    },
+    {
+      "id": "w_conflict",
+      "operation": "write",
+      "path": "fixture/write/target.txt",
+      "initial": {
+        "content": "ER2-WRITE-CONFLICT-V1\n",
+        "sha256": "1471be3f58d771e4868e029ce6754a5c858782ef51384ba36eef0f1f3a56ca8d"
+      },
+      "expected_ref": "w_replace.expected",
+      "desired_ref": "w_replace.desired"
+    },
+    {
+      "id": "w_non_file",
+      "operation": "write",
+      "path": "fixture/write/target.txt",
+      "initial": {"kind": "directory"},
+      "expected_ref": "w_replace.expected",
+      "desired_ref": "w_replace.desired"
+    },
+    {
+      "id": "w_symlink",
+      "operation": "write",
+      "path": "fixture/write/target.txt",
+      "initial": {"kind": "symlink", "target": "../outside.txt"},
+      "expected_ref": "w_replace.expected",
+      "desired_ref": "w_replace.desired"
+    },
+    {
+      "id": "p_unique",
+      "operation": "patch",
+      "path": "fixture/patch/target.txt",
+      "preimage": {
+        "content": "alpha\nOLD\nomega\n",
+        "sha256": "064b0fad4047bc8bd47f5b42bb75b502ee09e4803547696e238fdd4e741bb7be"
+      },
+      "old_text": "OLD",
+      "new_text": "NEW",
+      "postimage": {
+        "content": "alpha\nNEW\nomega\n",
+        "sha256": "03175c7f36e7e2f5035b36eb339019d405b1e6cce9424de8b143bfd851535dab"
+      }
+    },
+    {
+      "id": "p_conflict",
+      "operation": "patch",
+      "path": "fixture/patch/target.txt",
+      "initial": {
+        "content": "alpha\nCONCURRENT\nomega\n",
+        "sha256": "9f0cc3d205468839d42e93cfa33368879aef7eaf021565f1e7ed240753d5df2c"
+      },
+      "operation_ref": "p_unique"
+    },
+    {
+      "id": "p_multiple",
+      "operation": "patch",
+      "path": "fixture/patch/target.txt",
+      "preimage": {
+        "content": "OLD\nOLD\n",
+        "sha256": "7a02f3ce9b0ce432dcfbddec2003f09be030a54738684d45b2ba333369f6139c"
+      },
+      "old_text": "OLD",
+      "new_text": "NEW",
+      "postimage": {
+        "content": "NEW\nOLD\n",
+        "sha256": "16b2f2517b21c206190fbdcbd2b1ca245767f6379f2bd975d23d3afd135c2f4d"
+      }
+    },
+    {
+      "id": "p_non_file",
+      "operation": "patch",
+      "path": "fixture/patch/target.txt",
+      "initial": {"kind": "directory"},
+      "operation_ref": "p_unique"
+    },
+    {
+      "id": "p_symlink",
+      "operation": "patch",
+      "path": "fixture/patch/target.txt",
+      "initial": {"kind": "symlink", "target": "../outside.txt"},
+      "operation_ref": "p_unique"
+    },
+    {
+      "id": "s_success",
+      "operation": "shell",
+      "command": "mkdir -p fixture/shell; printf '%s\\n' 'ER2-SHELL-DESIRED-V1' > fixture/shell/primary.txt",
+      "relative_cwd": ".",
+      "environment": {"LANG": "C", "LC_ALL": "C"},
+      "timeout_ms": 5000,
+      "postcondition": {
+        "kind": "files_sha256",
+        "files": [
+          {
+            "path": "fixture/shell/primary.txt",
+            "sha256": "f094115a4c93bf280393ec31a8d56dc1ab2129ba229558d6ed17dbae46394a5c"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s_success_no_adapter",
+      "operation": "shell",
+      "command_ref": "s_success.command",
+      "relative_cwd": ".",
+      "environment": {"LANG": "C", "LC_ALL": "C"},
+      "timeout_ms": 5000,
+      "postcondition": null
+    },
+    {
+      "id": "s_nonzero",
+      "operation": "shell",
+      "command": "mkdir -p fixture/shell; printf '%s\\n' 'ER2-SHELL-DESIRED-V1' > fixture/shell/primary.txt; exit 7",
+      "relative_cwd": ".",
+      "environment": {"LANG": "C", "LC_ALL": "C"},
+      "timeout_ms": 5000,
+      "postcondition_ref": "s_success.postcondition"
+    },
+    {
+      "id": "s_lifecycle",
+      "operation": "shell",
+      "command": "mkdir -p fixture/shell; printf '%s\\n' \"$$\" > fixture/shell/pid; while [ ! -e fixture/shell/allow-effect ]; do sleep 0.02; done; printf '%s\\n' 'ER2-SHELL-DESIRED-V1' > fixture/shell/primary.txt; while [ ! -e fixture/shell/allow-exit ]; do sleep 0.02; done",
+      "relative_cwd": ".",
+      "environment": {"LANG": "C", "LC_ALL": "C"},
+      "timeout_ms": 5000,
+      "postcondition_ref": "s_success.postcondition"
+    }
+  ]
+}

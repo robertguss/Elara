@@ -1,9 +1,0 @@
-{
-  "name": "elara-exp003-v2-drand-verification",
-  "private": true,
-  "dependencies": {
-    "abort-controller": "3.0.0",
-    "drand-client": "1.4.2",
-    "isomorphic-fetch": "3.0.0"
-  }
-}

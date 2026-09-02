@@ -1,10 +1,10 @@
 # Elara
 
-Elara is a BEAM-native coding-agent research platform for a local working
-directory, intended to grow into a daily-use tool. It can inspect and edit
-files, run shell commands, keep persistent conversations, load local tools, and
-move tool execution to a separate worker. Its research focus is durable,
-causally explainable work—not feature-for-feature parity with existing agents.
+Elara is a BEAM-native coding agent for a local working directory. It can
+inspect and edit files, run shell commands, keep persistent conversations, load
+local tools, and move tool execution to a separate worker. It emphasizes
+durable, causally explainable work rather than feature-for-feature parity with
+existing agents.
 
 > [!WARNING] The built-in `write`, `edit`, and `bash` tools can change files and
 > run any command available to the Elara process. Use Elara only in a checkout
@@ -133,23 +133,7 @@ timeout, and tool output is truncated to 16 KiB before it enters model history.
   session alive after a client disconnects and execute tools elsewhere.
 - [Elixir API](docs/elixir-api.md): target another directory, subscribe to
   events, configure sessions, replay recordings, and coordinate child sessions.
-- [Elara roadmap](docs/roadmap.md): the canonical implementation status,
-  evidence gates, and future research horizons. Historical Linear planning is
-  preserved in the [roadmap archive](docs/roadmap-history.md).
-- [Elara vision](docs/elara-vision.md)
-  ([HTML companion](docs/elara-vision.html)): explore a BEAM-native fabric for
-  durable missions, workspace cells, evidence, causality, and SDLC automation.
-- [Software production frontiers](docs/software-production-frontiers.md)
-  ([HTML companion](docs/software-production-frontiers.html)): a compact
-  research map for rethinking intent, code, review, CI, local development,
-  production, and the wider agentic SDLC.
-- [Living software](docs/living-software.md)
-  ([HTML companion](docs/living-software.html)): software as a continuously
-  adapting constitutional system, compiled into implementation and governed by
-  evidence, authority, causality, and human judgment.
-- [Experimental lab](docs/experiments/README.md): research methods, provenance,
-  repeatable run records, measurement rules, and the
-  [Mission Receipt experiment](docs/experiments/001-mission-receipt.md).
+- [Roadmap](ROADMAP.md): the sole current implementation plan and status source.
 
 ## Develop
 

@@ -117,6 +117,3 @@ Elara.reload_plugins(selected)
 ```
 
 Plugin state belongs to its session and stops when that session stops.
-
-For an end-to-end check against a live xAI session, follow the
-[manual live-reload checklist](../design/plugins/manual-live-reload-checklist.md).

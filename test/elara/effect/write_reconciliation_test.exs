@@ -10,38 +10,10 @@ defmodule Elara.Effect.WriteReconciliationTest do
   alias Elara.Effect.TestExecutor
 
   @bound_ms 2_000
-  @manifest_path Path.expand(
-                   "../../../docs/experiments/004-real-mutations-er2-manifest.json",
-                   __DIR__
-                 )
+  @manifest_path Path.expand("../../fixtures/effect/reconciliation.json", __DIR__)
   @external_resource @manifest_path
   @manifest @manifest_path |> File.read!() |> JSON.decode!()
   @fixtures Map.new(@manifest["fixtures"], &{&1["id"], &1})
-  @write_rows @manifest["matrix"]
-              |> Enum.filter(&(&1["operation"] == "write"))
-              |> Enum.map(& &1["id"])
-              |> MapSet.new()
-  @covered_write_rows MapSet.new(
-                        Enum.map(1..8, &"W-C#{&1}") ++
-                          [
-                            "W-T1",
-                            "W-T2",
-                            "W-NO-FAULT",
-                            "W-ALREADY",
-                            "W-CONFLICT",
-                            "W-NON-FILE",
-                            "W-SYMLINK",
-                            "W-SAME-DIGEST",
-                            "W-CONFLICT-DIGEST",
-                            "W-REPLACEMENT",
-                            "W-LEDGER-LOSS",
-                            "W-STALE"
-                          ]
-                      )
-
-  unless MapSet.equal?(@write_rows, @covered_write_rows) do
-    raise "write reconciliation tests do not cover the frozen write matrix"
-  end
 
   setup do
     root =

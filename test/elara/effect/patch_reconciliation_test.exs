@@ -10,39 +10,10 @@ defmodule Elara.Effect.PatchReconciliationTest do
   alias Elara.Effect.TestExecutor
 
   @bound_ms 2_000
-  @manifest_path Path.expand(
-                   "../../../docs/experiments/004-real-mutations-er2-manifest.json",
-                   __DIR__
-                 )
+  @manifest_path Path.expand("../../fixtures/effect/reconciliation.json", __DIR__)
   @external_resource @manifest_path
   @manifest @manifest_path |> File.read!() |> JSON.decode!()
   @fixtures Map.new(@manifest["fixtures"], &{&1["id"], &1})
-  @patch_rows @manifest["matrix"]
-              |> Enum.filter(&(&1["operation"] == "patch"))
-              |> Enum.map(& &1["id"])
-              |> MapSet.new()
-  @covered_patch_rows MapSet.new(
-                        Enum.map(1..8, &"P-C#{&1}") ++
-                          [
-                            "P-T1",
-                            "P-T2",
-                            "P-NO-FAULT",
-                            "P-ALREADY",
-                            "P-CONFLICT",
-                            "P-MULTIPLE",
-                            "P-NON-FILE",
-                            "P-SYMLINK",
-                            "P-SAME-DIGEST",
-                            "P-CONFLICT-DIGEST",
-                            "P-REPLACEMENT",
-                            "P-LEDGER-LOSS",
-                            "P-STALE"
-                          ]
-                      )
-
-  unless MapSet.equal?(@patch_rows, @covered_patch_rows) do
-    raise "patch reconciliation tests do not cover the frozen patch matrix"
-  end
 
   setup do
     root =

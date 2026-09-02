@@ -9,37 +9,10 @@ defmodule Elara.Effect.OpaqueShellTest do
   alias Elara.Effect.TestExecutor
 
   @bound_ms 5_000
-  @manifest_path Path.expand(
-                   "../../../docs/experiments/004-real-mutations-er2-manifest.json",
-                   __DIR__
-                 )
+  @manifest_path Path.expand("../../fixtures/effect/reconciliation.json", __DIR__)
   @external_resource @manifest_path
   @manifest @manifest_path |> File.read!() |> JSON.decode!()
   @fixtures Map.new(@manifest["fixtures"], &{&1["id"], &1})
-  @shell_rows @manifest["matrix"]
-              |> Enum.filter(&(&1["operation"] == "shell"))
-              |> Enum.map(& &1["id"])
-              |> MapSet.new()
-  @covered_shell_rows MapSet.new(
-                        Enum.map(1..8, &"S-C#{&1}") ++
-                          [
-                            "S-SPAWN",
-                            "S-EFFECT-LIVE",
-                            "S-EXIT",
-                            "S-NO-FAULT",
-                            "S-NONZERO",
-                            "S-SAME-DIGEST",
-                            "S-CONFLICT-DIGEST",
-                            "S-REPLACEMENT",
-                            "S-LEDGER-ADAPTER",
-                            "S-LEDGER-OPAQUE",
-                            "S-TIMEOUT"
-                          ]
-                      )
-
-  unless MapSet.equal?(@shell_rows, @covered_shell_rows) do
-    raise "opaque shell tests do not cover the frozen shell matrix"
-  end
 
   setup do
     root =

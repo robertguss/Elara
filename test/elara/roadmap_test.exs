@@ -23,37 +23,34 @@ defmodule Elara.RoadmapTest do
     assert status_rows |> Enum.map(&hd/1) |> Enum.uniq() |> length() == 81
   end
 
-  test "the roadmap has at most one executable item in dependency order" do
+  test "the roadmap preserves closed V8 and has at most one executable item" do
     rows =
       @roadmap
       |> File.read!()
       |> String.split("\n")
-      |> Enum.filter(&String.starts_with?(&1, "| ER3-V8-"))
+      |> Enum.filter(&Regex.match?(~r/^\| (?:PROD|ER3-V8)-\d+ /, &1))
       |> Enum.map(fn row ->
-        row
-        |> String.split("|")
-        |> Enum.map(&String.trim/1)
-        |> Enum.at(2)
+        [id, status | _rest] =
+          row
+          |> String.split("|", trim: true)
+          |> Enum.map(&String.trim/1)
+
+        {id, status}
       end)
 
-    assert length(rows) == 7
-    assert Enum.count(rows, &(&1 == "IN PROGRESS")) <= 1
-    assert Enum.count(rows, &(&1 == "TODO")) <= 1
-    assert Enum.count(rows, &(&1 in ["IN PROGRESS", "TODO"])) <= 1
+    assert Enum.count(rows, fn {_id, status} -> status == "IN PROGRESS" end) <= 1
+    assert Enum.count(rows, fn {_id, status} -> status == "TODO" end) <= 1
 
-    first_unfinished = Enum.find_index(rows, &(&1 != "DONE")) || length(rows)
-    assert Enum.all?(Enum.take(rows, first_unfinished), &(&1 == "DONE"))
+    assert Enum.count(rows, fn {_id, status} -> status in ["IN PROGRESS", "TODO"] end) <=
+             1
 
-    case Enum.find_index(rows, &(&1 in ["IN PROGRESS", "TODO"])) do
-      nil ->
-        case Enum.drop(rows, first_unfinished) do
-          ["INVALID" | canceled] -> assert Enum.all?(canceled, &(&1 == "CANCELED"))
-          blocked -> assert Enum.all?(blocked, &(&1 == "BLOCKED"))
-        end
+    assert Enum.filter(rows, fn {id, _status} -> String.starts_with?(id, "PROD-") end) ==
+             [{"PROD-1", "TODO"}]
 
-      active ->
-        assert Enum.all?(Enum.drop(rows, active + 1), &(&1 == "BLOCKED"))
-    end
+    assert rows
+           |> Enum.filter(fn {id, _status} -> String.starts_with?(id, "ER3-V8-") end)
+           |> Enum.map(fn {_id, status} -> status end) ==
+             ["DONE", "DONE", "DONE", "INVALID", "CANCELED", "CANCELED", "CANCELED"]
   end
 
   test "repository documentation points to the repository roadmap" do

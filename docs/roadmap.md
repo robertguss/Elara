@@ -48,18 +48,33 @@ The durable-effects evidence chain currently says:
 2. **ER-2: Continue — Universal.** Write, literal patch, and opaque shell share
    one truthful protocol, with operation-specific evidence and no generic shell
    exactly-once claim.
-3. **ER-3: No decision.** Eight confirmatory versions found harness/protocol
-   defects before complete valid evidence. V8 validly fetched and materialized
-   its committed beacon, then its frozen qualification command rejected the
-   frozen final protocol at the first command-frame guard before any
-   qualification run or output. Its evidence is immutable in
+3. **ER-3: METHOD STOP — no thesis decision.** Eight confirmatory versions found
+   harness/protocol defects before complete valid evidence. More importantly,
+   the research-only target is not the product path, and the condition-aware
+   recovery classifier rejects unexpected outcomes as invalid instead of
+   permitting a valid negative comparative result. Another version would not
+   answer the product question. V8 validly fetched and materialized its
+   committed beacon, then its frozen qualification command rejected the frozen
+   final protocol at the first command-frame guard before any qualification run
+   or output. Its evidence remains immutable in
    [`003-effect-receipt-v8-qualification-failure.md`](experiments/003-effect-receipt-v8-qualification-failure.md).
 
-V8 is invalid and no downstream V8 item is authorized. Any resumption requires
-V9, a pre-beacon exercise of the exact final protocol, and genuinely future
-randomness. No next executable experiment item is currently scheduled.
+This stops the ER-3 method, not the durable-effects thesis: ER-1 and ER-2 remain
+useful subsystem evidence, but they do not establish production behavior. V8 is
+invalid, no downstream V8 item is authorized, and **V9 is not planned**. No new
+beacon, claim, preregistration, or confirmatory version will be created. Work
+now moves to one vertical product slice: make local declarative writes
+receipt-backed through the public session and CLI path users actually run.
 
 ## Execution queue
+
+### Current product queue
+
+| ID     | Status | Item                                                    | Depends on       |
+| ------ | ------ | ------------------------------------------------------- | ---------------- |
+| PROD-1 | TODO   | Ship receipt-backed local declarative writes end-to-end | ER-3 METHOD STOP |
+
+### Closed ER-3/V8 queue
 
 | ID       | Status   | Item                                                 | Depends on                |
 | -------- | -------- | ---------------------------------------------------- | ------------------------- |
@@ -70,6 +85,78 @@ randomness. No next executable experiment item is currently scheduled.
 | ER3-V8-5 | CANCELED | Execute the sole internal comparison                 | ER3-V8-4                  |
 | ER3-V8-6 | CANCELED | Execute dogfood or record required non-execution     | ER3-V8-5                  |
 | ER3-V8-7 | CANCELED | Apply Gate 3 and record the thesis decision          | ER3-V8-5 + ER3-V8-6       |
+
+## PROD-1 — Ship receipt-backed local declarative writes end-to-end
+
+**Status:** TODO
+
+### Outcome
+
+Make the built-in local `write` tool use the durable receipt protocol by default
+through `Elara.start_session/1`, `mix elara.ask`, and `mix elara.chat`,
+including recovery through `mix elara.chat --continue`. A user-visible write
+must either have durable causal completion evidence or report truthful
+uncertainty; it must never silently fall back to an unreceipted mutation.
+
+### Scope
+
+- Replace `Elara.Effect.Sidecar`'s hard-coded dependency on the research-only
+  `Elara.Effect.TestExecutor` with the smallest explicit executor contract for
+  its existing submit, query, and continue lifecycle. Keep `TestExecutor` as a
+  test implementation of that contract.
+- Add a supervised local executor that owns and reopens its durable
+  `ExecutorLedger`, so controller/session loss does not destroy the mutation
+  record. A resumed persisted session must address the same logical executor and
+  ledger rather than creating an empty substitute.
+- Route the built-in local `write` tool through `Elara.Effect.DeclarativeWrite`
+  and the receipt sidecar. Preserve its public tool arguments and normal
+  success/error result shape while recording stable job identity, operation
+  digest, controller intent, acceptance, callback attempt, and terminal
+  evidence.
+- Remove the silent `effect_executor == nil` direct-execution bypass for this
+  write path. Executor startup, identity, ledger, or reconciliation failure must
+  fail closed with an actionable error or an `indeterminate` result, never by
+  rerunning the write outside the protocol.
+- Reconcile an unresolved write during normal persisted-session continuation.
+  Surface recovered terminal outcomes and truthful indeterminacy through the
+  existing tool-result and CLI rendering paths.
+- Exercise the vertical slice through the public session API with the scripted
+  provider, not through the benchmark adapter or a research-only target. Cover
+  the existing crash boundaries, same-ID/different-digest rejection, terminal
+  recovery without re-execution, and callback-attempted-without-terminal
+  indeterminacy.
+
+### Non-goals
+
+No literal-patch, opaque-shell, plugin-mutation, or remote-worker production
+wiring; no remote durable ledger; no generic exactly-once claim; no broad
+session, router, or benchmark rewrite; no V9, beacon, claim, preregistration, or
+new confirmatory experiment; and no BEAM-superiority claim. Patch, shell, remote
+durability, and any regression-census simplification require separate decisions
+after this local write slice is running through the product path.
+
+### Acceptance criteria
+
+- Default public session and CLI construction provides the production local
+  executor. Built-in writes cannot reach `Router.execute/4` through the current
+  nil-executor bypass.
+- The executor contract is exercised by both the production executor and test
+  executor; its durable ledger rejects a reused job ID with a different digest
+  and preserves callback-attempt and terminal state across owner restart.
+- A clean persisted-session continuation reconciles each unresolved write once:
+  terminal evidence is returned without mutation re-execution, accepted but
+  unattempted work may continue only under the original durable identity, and an
+  attempted write without causal terminal evidence is reported as
+  `indeterminate` rather than retried.
+- Targeted integration tests drive the write through `Elara.start_session/1` and
+  the same configuration used by `ask`/`chat`; fault assertions classify raw
+  observed facts without reading a condition-specific expected result.
+- Documentation explains the user-visible receipt and continuation behavior.
+  `mix format --check-formatted`, `mix compile --warnings-as-errors`, targeted
+  effect/session/CLI tests, and full `mix test` pass from the documented clean
+  setup.
+- The Result records the pushed commit, exact checks, deviations, remaining
+  uncertainty, and the evidence-based decision for the next product slice.
 
 ## ER3-V8-1 — Build and freeze an explicit pre-beacon materializer
 

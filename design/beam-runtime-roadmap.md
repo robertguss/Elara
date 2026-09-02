@@ -2,10 +2,8 @@
 
 > **Status:** The four prototype experiments in this document are implemented.
 > It is retained as the architectural path that produced the current runtime.
-> See the
-> [canonical Elara roadmap](https://linear.app/robert-guss/project/elara-ff8cc023e770)
-> for current implementation status, the next challenge, and its falsification
-> criteria.
+> See the [canonical Elara roadmap](../docs/roadmap.md) for current
+> implementation status, the next challenge, and its falsification criteria.
 
 ## Product thesis
 
@@ -261,6 +259,6 @@ not make session work durable across VM loss and do not reconcile mutations
 whose acknowledgement was lost.
 
 The next stage is therefore not another breadth feature. It is the
-[durable-effect research sequence](https://linear.app/robert-guss/project/elara-ff8cc023e770):
-commit one mutation as a stable job, crash every boundary, and test whether
-Elara can recover truthfully without a duplicate effect.
+[durable-effect research sequence](../docs/roadmap.md): commit one mutation as a
+stable job, crash every boundary, and test whether Elara can recover truthfully
+without a duplicate effect.

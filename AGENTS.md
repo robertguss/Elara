@@ -26,19 +26,27 @@ things that are non-obvious in the Cloud environment.
 ### Gotchas
 
 - `mix test` intentionally logs a `[error] ... (RuntimeError) boom` line from a
-  crash-recovery test (`Elara.SessionTest.CrashTool`). This is expected; the
-  run still ends with all tests passing. Do not treat that log line as a
-  failure.
+  crash-recovery test (`Elara.SessionTest.CrashTool`). This is expected; the run
+  still ends with all tests passing. Do not treat that log line as a failure.
 - The real agent (`mix elara.ask` / `mix elara.chat`) needs xAI/Grok
   credentials: `ELARA_API_KEY` (preferred) or `XAI_API_KEY`, or an interactive
-  `mix elara.login` (tokens land in `~/.elara/auth.json`). Without
-  credentials these commands fail at the network call.
+  `mix elara.login` (tokens land in `~/.elara/auth.json`). Without credentials
+  these commands fail at the network call.
 - To exercise the full agent loop (session + read/write/edit/bash tools) without
   credentials, drive it with the scripted provider via the public API:
   `Elara.start_session(provider: {Elara.Provider.Scripted, agent_pid}, cwd: dir, persist: false)`,
   where `agent_pid` is an `Agent` holding a queue of canned
-  `{:ok, %Elara.Message.Assistant{}}` turns. This is the same mechanism the
-  test suite uses.
+  `{:ok, %Elara.Message.Assistant{}}` turns. This is the same mechanism the test
+  suite uses.
 - Chat/ask session files persist under `~/.elara/sessions/<cwd-key>/`;
-  `mix elara.chat --continue` resumes the newest session for the current
-  working directory.
+  `mix elara.chat --continue` resumes the newest session for the current working
+  directory.
+
+### Roadmap and status
+
+- `docs/roadmap.md` is the sole current roadmap and status source. Update its
+  queue and item Result in the same commit that changes an item's status.
+- `docs/roadmap-history.md` preserves the former Linear project/issue inventory.
+  Do not update Linear unless the user explicitly asks.
+- Historical experiment artifacts may still name Linear because those files are
+  immutable evidence. Do not rewrite them merely to update roadmap links.

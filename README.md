@@ -133,9 +133,9 @@ timeout, and tool output is truncated to 16 KiB before it enters model history.
   session alive after a client disconnects and execute tools elsewhere.
 - [Elixir API](docs/elixir-api.md): target another directory, subscribe to
   events, configure sessions, replay recordings, and coordinate child sessions.
-- [Elara roadmap](https://linear.app/robert-guss/project/elara-ff8cc023e770):
-  the canonical implementation status, evidence gates, and future research
-  horizons.
+- [Elara roadmap](docs/roadmap.md): the canonical implementation status,
+  evidence gates, and future research horizons. Historical Linear planning is
+  preserved in the [roadmap archive](docs/roadmap-history.md).
 - [Elara vision](docs/elara-vision.md)
   ([HTML companion](docs/elara-vision.html)): explore a BEAM-native fabric for
   durable missions, workspace cells, evidence, causality, and SDLC automation.

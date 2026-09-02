@@ -45,8 +45,14 @@ defmodule Elara.RoadmapTest do
     assert Enum.all?(Enum.take(rows, first_unfinished), &(&1 == "DONE"))
 
     case Enum.find_index(rows, &(&1 in ["IN PROGRESS", "TODO"])) do
-      nil -> assert Enum.all?(Enum.drop(rows, first_unfinished), &(&1 == "BLOCKED"))
-      active -> assert Enum.all?(Enum.drop(rows, active + 1), &(&1 == "BLOCKED"))
+      nil ->
+        case Enum.drop(rows, first_unfinished) do
+          ["INVALID" | canceled] -> assert Enum.all?(canceled, &(&1 == "CANCELED"))
+          blocked -> assert Enum.all?(blocked, &(&1 == "BLOCKED"))
+        end
+
+      active ->
+        assert Enum.all?(Enum.drop(rows, active + 1), &(&1 == "BLOCKED"))
     end
   end
 

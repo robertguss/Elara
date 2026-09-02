@@ -48,27 +48,28 @@ The durable-effects evidence chain currently says:
 2. **ER-2: Continue — Universal.** Write, literal patch, and opaque shell share
    one truthful protocol, with operation-specific evidence and no generic shell
    exactly-once claim.
-3. **ER-3: No decision.** Seven confirmatory versions found harness/protocol
-   defects before complete valid evidence. V7 exposed its committed beacon, then
-   stopped at the first materializer source guard before selection or output.
-   Its evidence is immutable in
-   [`003-effect-receipt-v7-materialization-failure.md`](experiments/003-effect-receipt-v7-materialization-failure.md).
+3. **ER-3: No decision.** Eight confirmatory versions found harness/protocol
+   defects before complete valid evidence. V8 validly fetched and materialized
+   its committed beacon, then its frozen qualification command rejected the
+   frozen final protocol at the first command-frame guard before any
+   qualification run or output. Its evidence is immutable in
+   [`003-effect-receipt-v8-qualification-failure.md`](experiments/003-effect-receipt-v8-qualification-failure.md).
 
-V8 now has an explicit pre-beacon-tested materializer, a pushed confirmatory
-protocol, and a valid fresh corpus from its one-shot committed drand round. Its
-next step is run-only qualification through the unchanged frozen command stack.
+V8 is invalid and no downstream V8 item is authorized. Any resumption requires
+V9, a pre-beacon exercise of the exact final protocol, and genuinely future
+randomness. No next executable experiment item is currently scheduled.
 
 ## Execution queue
 
-| ID       | Status  | Item                                                 | Depends on                |
-| -------- | ------- | ---------------------------------------------------- | ------------------------- |
-| ER3-V8-1 | DONE    | Build and freeze an explicit pre-beacon materializer | V7 immutable failure      |
-| ER3-V8-2 | DONE    | Freeze the V8 protocol and future beacon             | ER3-V8-1                  |
-| ER3-V8-3 | DONE    | Fetch and materialize the fresh V8 corpus            | ER3-V8-2 + committed time |
-| ER3-V8-4 | TODO    | Run qualification through the frozen command stack   | ER3-V8-3                  |
-| ER3-V8-5 | BLOCKED | Execute the sole internal comparison                 | ER3-V8-4                  |
-| ER3-V8-6 | BLOCKED | Execute dogfood or record required non-execution     | ER3-V8-5                  |
-| ER3-V8-7 | BLOCKED | Apply Gate 3 and record the thesis decision          | ER3-V8-5 + ER3-V8-6       |
+| ID       | Status   | Item                                                 | Depends on                |
+| -------- | -------- | ---------------------------------------------------- | ------------------------- |
+| ER3-V8-1 | DONE     | Build and freeze an explicit pre-beacon materializer | V7 immutable failure      |
+| ER3-V8-2 | DONE     | Freeze the V8 protocol and future beacon             | ER3-V8-1                  |
+| ER3-V8-3 | DONE     | Fetch and materialize the fresh V8 corpus            | ER3-V8-2 + committed time |
+| ER3-V8-4 | INVALID  | Run qualification through the frozen command stack   | ER3-V8-3                  |
+| ER3-V8-5 | CANCELED | Execute the sole internal comparison                 | ER3-V8-4                  |
+| ER3-V8-6 | CANCELED | Execute dogfood or record required non-execution     | ER3-V8-5                  |
+| ER3-V8-7 | CANCELED | Apply Gate 3 and record the thesis decision          | ER3-V8-5 + ER3-V8-6       |
 
 ## ER3-V8-1 — Build and freeze an explicit pre-beacon materializer
 
@@ -340,13 +341,13 @@ Implemented and pushed in
   replacement, implementation/schema/protocol/identity/selection change,
   qualification, target fault or timing, comparator, dogfood, `B`, `T`, or
   confirmatory execution claim occurred.
-- Remaining uncertainty: ER3-V8-3 proves only valid acquisition and
-  deterministic materialization. The fresh corpus has not passed the frozen
-  run-only qualification; ER3-V8-4 is the sole next executable item.
+- Remaining uncertainty at ER3-V8-3 completion was the still-unrun frozen
+  qualification. ER3-V8-4 later resolved that uncertainty as an immutable
+  protocol failure, without changing this valid materialization result.
 
 ## ER3-V8-4 — Run qualification through the frozen command stack
 
-**Status:** TODO
+**Status:** INVALID
 
 ### Outcome
 
@@ -367,11 +368,56 @@ runs, target timing runs, comparator runs, dogfood runs, B, and T remain zero.
 
 ### Result
 
-Blocked.
+The immutable failure is preserved in
+[`003-effect-receipt-v8-qualification-failure.md`](experiments/003-effect-receipt-v8-qualification-failure.md)
+(`6e9e016e44cf239c101af61627ae8a33b861a2cba86ae08f2fa06d4b7f2221c2`), pushed in
+[`f87c133`](https://github.com/robertguss/elixir-harness/commit/f87c133fcd123fc1bb53136edf6be1fd950ba5e7).
+
+- Preflight at 2026-09-02T14:06:21Z found a clean synchronized checkout at
+  `afdbf88e1a7854b61e4a57dfe2358669ab8b2d9c`; every frozen protocol, source,
+  semantic-input, preserved-artifact, runtime, beacon-claim, receipt, and corpus
+  identity matched. Both target commits were present. State, workspace, report,
+  checkpoint, replay, temporary outputs, and the receipt-keyed execution claim
+  were absent.
+- The exact frozen command was invoked once:
+
+  ```text
+  mix run priv/benchmark/run_exp003_v8.exs -- qualify docs/experiments/003-effect-receipt-v8-protocol.json 3644b5a3c07663fe7be9f67a710689ce5df43eb4eceb306f2a5f76d8eb26949a test/fixtures/benchmark/exp003-v8/materialization-receipt.json d152bece940eae9718ea3f000e0b4d4c662ca0af0c6fcff553e772d35b532508 /tmp/elara-er3-v8-4-qualification-state /tmp/elara-er3-v8-4-qualification-workspace test/fixtures/benchmark/exp003-v8/internal-confirmatory-qualification.json
+  ```
+
+  It exited 1 with exact error
+  `** (RuntimeError) EXP-003 V8 command failed: :commands`. It was not retried,
+  repaired, resumed, or replaced, and replay was not invoked.
+
+- The frozen confirmatory protocol's `command_stack.commands` contains
+  `beacon_fetch,beacon_verify,beacon_verify_copy,execute,materialize,qualify,replay`.
+  The frozen command source
+  (`c09aa9e80c9c340c918d0b43a76286378e078ea69ded6c8528d5931f028d56ea`) requires
+  that map to contain exactly `execute,qualify,replay`. The exercised
+  development protocols had only those three keys; the final protocol added four
+  beacon/materialization keys without changing the exact-three-key guard.
+  Changing either exposed side now is forbidden.
+- Post-failure audit proved that state, workspace, report, checkpoint, replay,
+  temporary outputs, and execution claim remained absent. Qualification fault
+  and no-fault runs and checkpoint events are zero. V8 target fault/timing,
+  comparator, external fault, dogfood, `B`, and `T` counts also remain zero.
+- Verification passed for the exact failure/postcondition, source and evidence
+  hashes, JSON and preserved-artifact audits, `mix format --check-formatted`,
+  `mix compile --warnings-as-errors`, focused roadmap tests (3 passed), and full
+  `mix test` (442 passed). The expected crash-recovery and cancellation logs
+  remained non-failing.
+- The roadmap validator listed `INVALID` and `CANCELED` as valid statuses but
+  modeled only an all-`BLOCKED` terminal tail. Its non-frozen test was extended
+  to accept exactly `INVALID` followed by canceled successors. No experiment
+  implementation, protocol, schema, identity, evidence, threshold, selection, or
+  expected qualification result changed.
+- Deviations: none. Remaining uncertainty: behavior beyond the first
+  command-frame guard was not observed. V8 is invalid; any continuation requires
+  V9 and fresh future randomness.
 
 ## ER3-V8-5 — Execute the sole internal comparison
 
-**Status:** BLOCKED by ER3-V8-4
+**Status:** CANCELED — V8 invalidated by ER3-V8-4
 
 ### Outcome
 
@@ -390,11 +436,11 @@ denominator.
 
 ### Result
 
-Blocked.
+Not run. The invalid qualification result forbids V8 execution.
 
 ## ER3-V8-6 — Dogfood or required non-execution
 
-**Status:** BLOCKED by ER3-V8-5
+**Status:** CANCELED — V8 invalidated by ER3-V8-4
 
 Run the frozen disposable-workspace dogfood plan only when a complete valid
 internal report authorizes it. Otherwise run nothing and record exact
@@ -403,11 +449,11 @@ shared workspaces, branches, pull requests, or external systems.
 
 ### Result
 
-Blocked.
+Not run. V8 never produced an internal report that could authorize dogfood.
 
 ## ER3-V8-7 — Gate 3 thesis decision
 
-**Status:** BLOCKED by ER3-V8-5 and ER3-V8-6
+**Status:** CANCELED — V8 invalidated by ER3-V8-4
 
 Apply validity and safety first, then full-scope thresholds, strict predeclared
 Narrow scopes, eligible Pivot contradictions, and otherwise Stop. Missing or
@@ -417,7 +463,7 @@ causal-completion, and postcondition evidence. Make no BEAM-superiority claim.
 
 ### Result
 
-Blocked.
+No decision. Invalid qualification evidence cannot support a V8 thesis decision.
 
 ## Later research horizons
 

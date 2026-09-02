@@ -45,13 +45,13 @@ The next work is the smallest production vertical slice.
 
 ## Execution queue
 
-| ID     | Status | Item                                                    | Depends on       |
-| ------ | ------ | ------------------------------------------------------- | ---------------- |
-| PROD-1 | TODO   | Ship receipt-backed local declarative writes end-to-end | ER-3 METHOD STOP |
+| ID     | Status      | Item                                                    | Depends on       |
+| ------ | ----------- | ------------------------------------------------------- | ---------------- |
+| PROD-1 | IN PROGRESS | Ship receipt-backed local declarative writes end-to-end | ER-3 METHOD STOP |
 
 ## PROD-1 — Ship receipt-backed local declarative writes end-to-end
 
-**Status:** TODO
+**Status:** IN PROGRESS
 
 ### Outcome
 

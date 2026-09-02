@@ -51,15 +51,15 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status      | Item                                                          | Depends on       |
-| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | IN PROGRESS | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | BLOCKED     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
+| ID      | Status   | Item                                                          | Depends on       |
+| ------- | -------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | TODO     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| SPLIT-5 | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -476,7 +476,7 @@ without moving session authority into a client.
 
 ## SPLIT-3 — Streaming provider contract and content deltas
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -511,9 +511,81 @@ compaction, no corrective inference.
   interrupted, not presented as complete).
 - Format, warnings-as-errors compile, and full `mix test` pass.
 
+### Result
+
+**DONE (2026-09-02).** Pushed implementation commit
+[`7c99e7d`](https://github.com/robertguss/elixir-harness/commit/7c99e7d5c0b708d429119c14a16ffd53758e6466)
+to `origin/main`.
+
+`Elara.Provider` now has an optional `stream/3` callback: it emits ordered text
+chunks through a sink and returns the final `Assistant`, while providers that
+only implement `chat/2` continue to work. The xAI/Grok path delegates to an
+OpenAI-compatible SSE adapter that reassembles arbitrary byte and SSE-frame
+boundaries, emits content incrementally, assembles fragmented tool-call
+arguments by index, disables request retry, and fails malformed, incomplete, or
+mismatched final streams closed. `Scripted` supports offline delta and sleep
+steps for deterministic ordering and interrupt tests.
+
+Provider tasks send deltas with their pid and Core ref. `Session` accepts them
+only while that exact task is tracked, so interrupt kills the provider and drops
+queued stale deltas. `Core` owns the transient content, records each delta as a
+fact/event, rejects a final Assistant that disagrees with already-rendered text,
+and emits one durable final message that supersedes the delta. Partial text ends
+with an explicit streamed interrupted/error event and is never stored or
+presented as a complete Assistant.
+
+Protocol v2 derives live content from Core, applies `append_content_delta`, and
+clears the content idempotently through `supersedes` metadata when a final
+message or terminal turn replaces it. V1 remains decodable and explicitly
+encodes the new event variants. Both `Elara.Chat` and the v2 attach renderer
+print chunks immediately and suppress duplicate final text. Flight recordings
+include delta facts and causal events; Store persistence and forks continue to
+contain only the same final messages as non-streamed turns.
+
+Exact verification:
+
+- `mix test test/elara/provider/open_ai_test.exs test/elara/session/core_test.exs test/elara/session_test.exs test/elara/protocol_v2_test.exs test/elara/chat/core_test.exs test/elara/chat_test.exs test/elara/cli_test.exs test/elara/flight_recorder_test.exs`
+  — 135 passed. This includes byte-at-a-time SSE parsing with fragmented tool
+  calls, captured incremental Chat output, mid-stream interrupt truth, live v2
+  attach patches, every-sequence Core/projection equality, persisted replay, and
+  Store/fork equivalence.
+- `mix format --check-formatted` — exit 0.
+- `mix compile --warnings-as-errors` — exit 0; Cargo finished incrementally in
+  0.02 s.
+- `cargo fmt --check --manifest-path native/exec-stub/Cargo.toml` — exit 0.
+- `cargo clippy --manifest-path native/exec-stub/Cargo.toml` — exit 0, finished
+  in 0.11 s.
+- `cargo test --manifest-path native/exec-stub/Cargo.toml` — 2 passed.
+- `mix test` — 316 passed. The documented `CrashTool` `RuntimeError: boom` line
+  was the only expected error log.
+- `rg 'System\.shell' lib/` — no matches; `git diff --check` — exit 0; no
+  `spike-*` files are present in the repository root.
+
+Deviations: streaming is optional at the behavior boundary so existing custom
+providers keep the established `chat/2` fallback. The captured scripted Chat run
+exercises `Elara.Chat.run/3`, the public runtime path behind `mix elara.chat`;
+the Mix entrypoint itself resolves credential-backed providers and therefore
+cannot inject `Scripted`. The live attach check drives protocol v2 through
+`Elara.Server` and the exact `Protocol.patch_events/1` plus `CLI.render/1` path
+used by `mix elara.attach`; the existing Mix attach test continues to cover
+entrypoint negotiation and snapshot rendering. No usage or speculative state was
+added.
+
+Remaining uncertainty: the SSE parser is covered against OpenAI-compatible
+frames split at every byte, but not a live xAI stream in the credential-free
+suite; an undocumented vendor event shape would fail closed as `bad_response`. A
+line client that prints a partial stream and later resnapshots may print the
+materialized partial text again because terminal output cannot retract prior
+bytes. Interrupted partial text is intentionally event/view state rather than
+durable message history, preserving replay and fork equivalence.
+
+Decision: proceed to SPLIT-4. Streaming now crosses the settled provider, Core,
+protocol, and line-client boundaries without moving session policy into a view;
+the Rust client can remain a blind snapshot/patch projection.
+
 ## SPLIT-4 — Rust TUI as a protocol v2 projection client
 
-**Status:** BLOCKED (SPLIT-3)
+**Status:** TODO
 
 ### Outcome
 

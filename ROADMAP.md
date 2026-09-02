@@ -51,15 +51,15 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status      | Item                                                          | Depends on       |
-| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | IN PROGRESS | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | BLOCKED     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | BLOCKED     | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | BLOCKED     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
+| ID      | Status   | Item                                                          | Depends on       |
+| ------- | -------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | TODO     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | BLOCKED  | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | BLOCKED  | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| SPLIT-5 | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -234,7 +234,7 @@ edits through normal persisted-session continuation.
 
 ## SPLIT-1 — Rust execution stub in-repo; route built-in `bash` through it
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -292,9 +292,77 @@ the success path; no NIFs.
 - The Result records the pushed commit, exact checks, cold and incremental build
   times, deviations, and remaining uncertainty.
 
+### Result
+
+**DONE (2026-09-02).** Pushed implementation commit
+[`ff8bcb2`](https://github.com/robertguss/elixir-harness/commit/ff8bcb27c6a17894c76f16b7a583fb023c1835a8)
+to `origin/main` from the required clean base
+`79ded4849d629ac0a050deaaf7bc25ce9019eae2`.
+
+`Elara.Exec` now supervises one long-lived, handshaken Port per BEAM, correlates
+jobs and monitors their calling tool Tasks, cancels abandoned jobs, validates
+the stub's terminal accounting, and fails every in-flight caller `indeterminate`
+before replacing a dead Port. The Mix compiler builds the locked crate into the
+application's `priv/native/exec-stub` path. Built-in local and remote-worker
+`bash` and the research `OpaqueShell` path all use this boundary; the worker
+envelope is version 2 so the session's source byte cap travels with remote
+requests. Core retains its independent output cap.
+
+The Rust manager forks one guardian per job. Each guardian owns a process group,
+merged output pipe, timeout and byte accounting, and a manager-liveness pipe.
+Cancel, timeout, overflow, normal leader exit, manager `SIGKILL`, and Port EOF
+all kill and reap the group. This guardian layer was added after the required
+Oracle consult identified that a manager-only process-group design cannot clean
+up after the manager itself receives `SIGKILL`.
+
+Exact verification:
+
+- `mix test test/elara/exec_integration_test.exs test/elara/tools_test.exs test/elara/executor_test.exs test/elara/effect/opaque_shell_test.exs`
+  — 35 passed.
+- `mix format --check-formatted` — exit 0.
+- `mix compile --warnings-as-errors` — exit 0; Cargo's incremental build
+  finished in 0.01 s.
+- `cargo fmt --check --manifest-path native/exec-stub/Cargo.toml` — exit 0.
+- `cargo clippy --manifest-path native/exec-stub/Cargo.toml` — exit 0, finished
+  in 0.17 s.
+- `cargo test --manifest-path native/exec-stub/Cargo.toml` — 2 passed.
+- `mix test` — 296 passed. The documented `CrashTool` `RuntimeError: boom` line
+  was the only expected error log.
+- `rg 'System\.shell' lib/` — no matches; `git diff --check` — exit 0.
+- With Cargo removed from `PATH`, `mix compile.exec_stub` exited 1 with
+  `cannot build native/exec-stub because cargo is not available` and install
+  guidance.
+- After removing the Mix Cargo target and packaged binary,
+  `mix compile.exec_stub` took 3.98 s cold; the immediate incremental run took
+  0.52 s (Cargo itself reported 3.48 s and 0.01 s respectively).
+
+Deviations: the protocol adds a versioned `ready` handshake and explicit
+`rejected`/`pong` replies needed to distinguish proven non-start from uncertain
+submission and to reject incompatible binaries. Chunk bytes are JSON byte arrays
+on one `combined` stream, preserving the prior merged stdout/stderr contract for
+arbitrary bytes. The existing command-string API is preserved by invoking
+`/bin/sh -c`; Rust does not implement a shell interpreter. The guardian process
+is additional hardening beyond the original manager-only spike. No bash receipt,
+approval, NIF, direct remote-stub protocol, or Rust shell implementation was
+added.
+
+Remaining uncertainty: the stub currently targets Unix/Linux primitives
+(`pipe2`, `prctl`, process groups, signals); release packaging and prebuilt
+binaries for other platforms remain future distribution work. The zero-process
+claim covers ordinary descendants that remain in the assigned group, including
+the accepted background-grandchild case; a deliberately hostile command can
+escape with `setsid` or an external privileged supervisor. `bytes_total` is the
+number of bytes observed before source termination, not hypothetical output the
+producer would have emitted afterward.
+
+Decision: proceed to SPLIT-2. The execution boundary now fails uncertain work
+closed and all product-path lifecycle tests leave zero ordinary descendants, so
+the snapshot/patch protocol can be built on the bounded substrate without
+widening durable effects.
+
 ## SPLIT-2 — Protocol v2: snapshot-on-attach and sequenced patches
 
-**Status:** BLOCKED (SPLIT-1)
+**Status:** TODO
 
 ### Outcome
 

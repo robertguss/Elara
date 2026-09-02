@@ -13,8 +13,10 @@ to them, but it must never rewrite an exposed experiment to improve its outcome.
 
 ## Working rules
 
-- Use at most one `IN PROGRESS` item. Exactly one next executable item is either
-  `IN PROGRESS` or `TODO`; all successors remain `BLOCKED`.
+- Use at most one `IN PROGRESS` item. Normally one next executable item is
+  either `IN PROGRESS` or `TODO`; all successors remain `BLOCKED`. When the next
+  item has an explicit external time gate, zero items may be executable and that
+  item remains `BLOCKED` until the gate opens.
 - An item becomes `DONE` only after its Result contains the pushed commit,
   checks, deviations, and remaining uncertainty.
 - A failed confirmatory attempt is preserved and never repaired, resumed,
@@ -52,21 +54,21 @@ The durable-effects evidence chain currently says:
    Its evidence is immutable in
    [`003-effect-receipt-v7-materialization-failure.md`](experiments/003-effect-receipt-v7-materialization-failure.md).
 
-The next challenge is not another beacon immediately. It is to make the entire
-materialization command an explicit, deterministic, pre-beacon-tested program
-rather than a chain of textual transforms.
+V8 now has an explicit pre-beacon-tested materializer and a pushed confirmatory
+protocol. Its next step is time-gated: fetch the committed drand round exactly
+once at or after 2026-09-02T12:00:00Z, never before.
 
 ## Execution queue
 
-| ID       | Status      | Item                                                 | Depends on                |
-| -------- | ----------- | ---------------------------------------------------- | ------------------------- |
-| ER3-V8-1 | DONE        | Build and freeze an explicit pre-beacon materializer | V7 immutable failure      |
-| ER3-V8-2 | IN PROGRESS | Freeze the V8 protocol and future beacon             | ER3-V8-1                  |
-| ER3-V8-3 | BLOCKED     | Fetch and materialize the fresh V8 corpus            | ER3-V8-2 + committed time |
-| ER3-V8-4 | BLOCKED     | Run qualification through the frozen command stack   | ER3-V8-3                  |
-| ER3-V8-5 | BLOCKED     | Execute the sole internal comparison                 | ER3-V8-4                  |
-| ER3-V8-6 | BLOCKED     | Execute dogfood or record required non-execution     | ER3-V8-5                  |
-| ER3-V8-7 | BLOCKED     | Apply Gate 3 and record the thesis decision          | ER3-V8-5 + ER3-V8-6       |
+| ID       | Status  | Item                                                 | Depends on                |
+| -------- | ------- | ---------------------------------------------------- | ------------------------- |
+| ER3-V8-1 | DONE    | Build and freeze an explicit pre-beacon materializer | V7 immutable failure      |
+| ER3-V8-2 | DONE    | Freeze the V8 protocol and future beacon             | ER3-V8-1                  |
+| ER3-V8-3 | BLOCKED | Fetch and materialize the fresh V8 corpus            | ER3-V8-2 + committed time |
+| ER3-V8-4 | BLOCKED | Run qualification through the frozen command stack   | ER3-V8-3                  |
+| ER3-V8-5 | BLOCKED | Execute the sole internal comparison                 | ER3-V8-4                  |
+| ER3-V8-6 | BLOCKED | Execute dogfood or record required non-execution     | ER3-V8-5                  |
+| ER3-V8-7 | BLOCKED | Apply Gate 3 and record the thesis decision          | ER3-V8-5 + ER3-V8-6       |
 
 ## ER3-V8-1 — Build and freeze an explicit pre-beacon materializer
 
@@ -177,7 +179,7 @@ Implemented and pushed in
 
 ## ER3-V8-2 — Freeze the protocol and future beacon
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -211,11 +213,49 @@ checks pass without fetching the round.
 
 ### Result
 
-Pending.
+Implemented and pushed in
+[`d53e2fa`](https://github.com/robertguss/elixir-harness/commit/d53e2fab1da245337a5729f4885386c7b6ce1905).
+
+- The self-contained machine protocol is
+  [`003-effect-receipt-v8-protocol.json`](experiments/003-effect-receipt-v8-protocol.json)
+  (`3644b5a3c07663fe7be9f67a710689ce5df43eb4eceb306f2a5f76d8eb26949a`). Its
+  semantic projection is independently reproduced by the Node and Elixir
+  boundaries as
+  `03b64a144c6de26adea8a9bf0258a6d47537849e6551e665e4302d27971717db`.
+- The protocol commits drand default-mainnet round `6430646`, nominal Unix
+  `1788350400` (2026-09-02T12:00:00Z), over two pinned chain-qualified relays.
+  The protocol commit was pushed at 2026-09-02T05:58:54Z, before nominal time.
+- The pinned verifier checks an integrity-locked `drand-client@1.4.2` runtime
+  closure, both exact chain responses, relay equality, and the BLS signature.
+  Its account-home one-shot claim is exclusively created and durably synced
+  before protocol, dependency, output-argument, or output-state validation.
+- Initial materialization requires the exact canonical beacon root and actual
+  permanent claim. A separate `verify-copy` mode can revalidate copied bundles
+  for internal byte-for-byte rematerialization but cannot authorize initial
+  materialization.
+- Fixed development entropy requalified the final cryptographic boundary: 20
+  candidates, 12 selected tasks, 20 rows, 72 fault runs, 72 no-fault runs, 288
+  checkpoints, and `Pass` score/replay. The report is
+  [`003-effect-receipt-v8-boundary-qualification.json`](experiments/003-effect-receipt-v8-boundary-qualification.json)
+  (`64ba184e231058b875497b9ad21a31372325954aaa59996031d9a42407657327`).
+- Verification passed: `npm ci --ignore-scripts`, Node syntax, JSON parsing,
+  `mix format --check-formatted`, `mix compile --warnings-as-errors`, focused V8
+  tests (27 passed), and full `mix test` (442 passed). The expected `CrashTool`
+  `RuntimeError: boom` recovery log remained non-failing.
+- Oracle first found caller-controlled claim placement, pre-claim validation,
+  incomplete durable ancestry, and alternate/unclaimed initial authority. After
+  remediation, its focused invariant trace returned **GO** with no blocking
+  bypass.
+- Deviations: none. No V8 beacon, selection, held-out literal, target fault or
+  timing, comparator, dogfood, `B`, or `T` evidence was fetched or generated.
+- Remaining uncertainty: the real dual-relay one-shot acquisition and
+  confirmatory materialization have not run. ER3-V8-3 remains blocked until the
+  committed nominal time; any acquisition or frozen-identity failure will
+  invalidate V8 without retry.
 
 ## ER3-V8-3 — Fetch and materialize fresh inputs
 
-**Status:** BLOCKED by ER3-V8-2 and its committed future time
+**Status:** BLOCKED until its committed future time
 
 ### Outcome
 
@@ -234,7 +274,7 @@ retry under the exposed beacon.
 ### Non-goals
 
 No implementation change, alternate round, replacement, target/timing fault run,
-comparator run, dogfood run, B, T, or claim.
+comparator run, dogfood run, B, T, or confirmatory execution claim.
 
 ### Result
 

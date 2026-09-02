@@ -23,7 +23,7 @@ defmodule Elara.RoadmapTest do
     assert status_rows |> Enum.map(&hd/1) |> Enum.uniq() |> length() == 81
   end
 
-  test "exactly one next roadmap item is executable" do
+  test "the roadmap has at most one executable item in dependency order" do
     rows =
       @roadmap
       |> File.read!()
@@ -39,11 +39,15 @@ defmodule Elara.RoadmapTest do
     assert length(rows) == 7
     assert Enum.count(rows, &(&1 == "IN PROGRESS")) <= 1
     assert Enum.count(rows, &(&1 == "TODO")) <= 1
-    assert Enum.count(rows, &(&1 in ["IN PROGRESS", "TODO"])) == 1
+    assert Enum.count(rows, &(&1 in ["IN PROGRESS", "TODO"])) <= 1
 
-    active_index = Enum.find_index(rows, &(&1 in ["IN PROGRESS", "TODO"]))
-    assert Enum.all?(Enum.take(rows, active_index), &(&1 == "DONE"))
-    assert Enum.all?(Enum.drop(rows, active_index + 1), &(&1 == "BLOCKED"))
+    first_unfinished = Enum.find_index(rows, &(&1 != "DONE")) || length(rows)
+    assert Enum.all?(Enum.take(rows, first_unfinished), &(&1 == "DONE"))
+
+    case Enum.find_index(rows, &(&1 in ["IN PROGRESS", "TODO"])) do
+      nil -> assert Enum.all?(Enum.drop(rows, first_unfinished), &(&1 == "BLOCKED"))
+      active -> assert Enum.all?(Enum.drop(rows, active + 1), &(&1 == "BLOCKED"))
+    end
   end
 
   test "repository documentation points to the repository roadmap" do

@@ -6,6 +6,7 @@ defmodule Elara.Effect.OpaqueShell do
   alias Elara.Effect.ExecutorLedger.Record
   alias Elara.Effect.Job
   alias Elara.Effect.Sidecar
+  alias Elara.Exec
 
   @schema "elara.opaque_shell.v1"
   @tool_name "opaque_shell"
@@ -120,21 +121,23 @@ defmodule Elara.Effect.OpaqueShell do
     effect_observer = Keyword.get(opts, :effect_observer, &no_fault/1)
 
     with {:ok, spec} <- parse(job, cwd) do
-      {output, status} =
-        System.shell(spec.command,
-          cd: spec.shell_cwd,
-          env: spec.environment,
-          stderr_to_stdout: true
-        )
+      case Exec.run(["/bin/sh", "-c", spec.command],
+             cwd: spec.shell_cwd,
+             env: spec.environment,
+             max_bytes: Keyword.get(opts, :max_bytes, 16_384),
+             timeout_ms: spec.timeout_ms
+           ) do
+        {:ok, execution} ->
+          workspace = observe_spec(spec)
+          :ok = maybe_observe_effect(effect_observer, workspace)
+          :ok = invoke_hook(operation_hook, :after_shell_exit_before_callback_return)
+          opaque_shell_result(execution, workspace)
 
-      workspace = observe_spec(spec)
-      :ok = maybe_observe_effect(effect_observer, workspace)
-      :ok = invoke_hook(operation_hook, :after_shell_exit_before_callback_return)
+        {:error, {:not_started, message}} ->
+          {:error, "opaque shell failed to start: #{message}"}
 
-      if status == 0 do
-        {:ok, shell_message("completed", status, output, workspace)}
-      else
-        {:error, shell_message("failed", status, output, workspace)}
+        {:indeterminate, message} ->
+          {:indeterminate, "opaque shell #{message}"}
       end
     else
       {:error, reason} ->
@@ -554,6 +557,34 @@ defmodule Elara.Effect.OpaqueShell do
 
   defp shell_message(label, status, output, workspace) do
     "opaque shell #{label}: exit_status=#{status} workspace=#{workspace.state}\n#{output}"
+  end
+
+  defp opaque_shell_result(%Exec.Result{termination: :exited, code: 0} = result, workspace),
+    do: {:ok, shell_message("completed", 0, result.output, workspace)}
+
+  defp opaque_shell_result(
+         %Exec.Result{termination: :exited, code: status} = result,
+         workspace
+       )
+       when is_integer(status),
+       do: {:error, shell_message("failed", status, result.output, workspace)}
+
+  defp opaque_shell_result(
+         %Exec.Result{termination: :exited, signal: signal} = result,
+         workspace
+       ),
+       do: {:error, shell_message("failed", "signal_#{signal}", result.output, workspace)}
+
+  defp opaque_shell_result(%Exec.Result{termination: :cancelled}, _workspace),
+    do: {:error, "opaque shell cancelled"}
+
+  defp opaque_shell_result(%Exec.Result{termination: :timed_out}, _workspace),
+    do: {:error, "opaque shell timed out"}
+
+  defp opaque_shell_result(%Exec.Result{termination: :truncated} = result, _workspace) do
+    {:error,
+     "opaque shell output truncated: bytes_total=#{result.bytes_total} " <>
+       "bytes_sent=#{result.bytes_sent}\n#{result.output}"}
   end
 
   defp unavailable_message(job, workspace, safe_action) do

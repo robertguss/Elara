@@ -69,7 +69,7 @@ defmodule Elara.ExecutorTest do
     worker
   end
 
-  test "request wire value contains identity, deadline, cancellation, capabilities, and placement" do
+  test "request wire value contains identity, deadline, output cap, cancellation, capabilities, and placement" do
     request = %Request{
       job_id: "er1j_v1_job",
       operation_digest: String.duplicate("a", 64),
@@ -80,6 +80,7 @@ defmodule Elara.ExecutorTest do
       arguments: %{"path" => "a.txt"},
       workspace_id: "workspace",
       deadline_ms: 123,
+      max_output_bytes: 16_384,
       cancellation_id: "cancel",
       required_capabilities: ["filesystem:read"],
       placement: :remote,
@@ -166,6 +167,7 @@ defmodule Elara.ExecutorTest do
       arguments: %{"path" => "retry.txt"},
       workspace_id: context.workspace_id,
       deadline_ms: System.system_time(:millisecond) + 2_000,
+      max_output_bytes: 16_384,
       cancellation_id: "cancel",
       required_capabilities: ["filesystem:read"],
       placement: :remote,
@@ -295,6 +297,7 @@ defmodule Elara.ExecutorTest do
       arguments: %{"path" => "forged.txt", "content" => "forged"},
       workspace_id: context.workspace_id,
       deadline_ms: System.system_time(:millisecond) + 2_000,
+      max_output_bytes: 16_384,
       cancellation_id: "cancel",
       required_capabilities: [],
       placement: :remote,
@@ -344,6 +347,7 @@ defmodule Elara.ExecutorTest do
         arguments: %{"path" => path, "content" => "escaped"},
         workspace_id: context.workspace_id,
         deadline_ms: System.system_time(:millisecond) + 2_000,
+        max_output_bytes: 16_384,
         cancellation_id: "cancel",
         required_capabilities: ["filesystem:write"],
         placement: :remote,
@@ -364,6 +368,7 @@ defmodule Elara.ExecutorTest do
       arguments: %{"path" => "escape/secret.txt"},
       workspace_id: context.workspace_id,
       deadline_ms: System.system_time(:millisecond) + 2_000,
+      max_output_bytes: 16_384,
       cancellation_id: "cancel",
       required_capabilities: ["filesystem:read"],
       placement: :remote,

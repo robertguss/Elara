@@ -18,9 +18,19 @@ defmodule Elara.Tool do
             plugin: PluginRef.t() | nil,
             tool_name: String.t() | nil,
             job_id: String.t() | nil,
-            operation_digest: String.t() | nil
+            operation_digest: String.t() | nil,
+            max_output_bytes: pos_integer() | nil,
+            timeout_ms: pos_integer() | nil
           }
-    defstruct [:cwd, :plugin, :tool_name, :job_id, :operation_digest]
+    defstruct [
+      :cwd,
+      :plugin,
+      :tool_name,
+      :job_id,
+      :operation_digest,
+      :max_output_bytes,
+      :timeout_ms
+    ]
   end
 
   @type outcome :: {:ok, String.t()} | {:error, String.t()} | {:indeterminate, String.t()}

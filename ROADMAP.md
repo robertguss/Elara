@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-02 (split adopted) · **Owner:**
-> solo development with AI collaborators
+> **Canonical roadmap and status source** · **Updated:** 2026-09-02 (split
+> adopted) · **Owner:** solo development with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
@@ -51,15 +51,15 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status   | Item                                                          | Depends on       |
-| ------- | -------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | TODO     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | BLOCKED  | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | BLOCKED  | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | BLOCKED  | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| SPLIT-5 | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
+| ID      | Status      | Item                                                          | Depends on       |
+| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | IN PROGRESS | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | BLOCKED     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | BLOCKED     | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | BLOCKED     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | SPLIT-4          |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -234,7 +234,7 @@ edits through normal persisted-session continuation.
 
 ## SPLIT-1 — Rust execution stub in-repo; route built-in `bash` through it
 
-**Status:** TODO
+**Status:** IN PROGRESS
 
 ### Outcome
 

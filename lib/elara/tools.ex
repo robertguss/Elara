@@ -1,6 +1,7 @@
 defmodule Elara.Tools do
   @moduledoc "Built-in tool implementations."
 
+  alias Elara.Exec
   alias Elara.Tool.Ctx
 
   @spec read(map(), Ctx.t()) :: Elara.Tool.outcome()
@@ -61,17 +62,38 @@ defmodule Elara.Tools do
   def edit(_args, _ctx), do: {:error, "edit requires path, old_text, and new_text"}
 
   @spec bash(map(), Ctx.t()) :: Elara.Tool.outcome()
-  def bash(%{"command" => command}, %Ctx{cwd: cwd}) when is_binary(command) do
-    {out, status} = System.shell(command, cd: cwd, stderr_to_stdout: true)
-
-    if status == 0 do
-      {:ok, out}
-    else
-      {:error, "exit #{status}\n" <> out}
+  def bash(%{"command" => command}, %Ctx{} = ctx) when is_binary(command) do
+    case Exec.run(["/bin/sh", "-c", command],
+           cwd: ctx.cwd,
+           max_bytes: ctx.max_output_bytes || 16_384,
+           timeout_ms: ctx.timeout_ms || 30_000
+         ) do
+      {:ok, result} -> bash_result(result)
+      {:error, {:not_started, message}} -> {:error, "execution failed: #{message}"}
+      {:indeterminate, _message} = result -> result
     end
   end
 
   def bash(_args, _ctx), do: {:error, "bash requires command"}
+
+  defp bash_result(%Exec.Result{termination: :exited, code: 0, output: output}),
+    do: {:ok, output}
+
+  defp bash_result(%Exec.Result{termination: :exited, code: code, output: output})
+       when is_integer(code),
+       do: {:error, "exit #{code}\n" <> output}
+
+  defp bash_result(%Exec.Result{termination: :exited, signal: signal, output: output}),
+    do: {:error, "signal #{signal}\n" <> output}
+
+  defp bash_result(%Exec.Result{termination: :cancelled}), do: {:error, "cancelled"}
+  defp bash_result(%Exec.Result{termination: :timed_out}), do: {:error, "timed out"}
+
+  defp bash_result(%Exec.Result{termination: :truncated} = result) do
+    {:error,
+     "output truncated: bytes_total=#{result.bytes_total} bytes_sent=#{result.bytes_sent}\n" <>
+       result.output}
+  end
 
   defp describe_posix(:enoent), do: "no such file"
   defp describe_posix(:eacces), do: "permission denied"

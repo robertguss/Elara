@@ -9,7 +9,7 @@ defmodule Elara.RoadmapTest do
       @roadmap
       |> File.read!()
       |> String.split("\n")
-      |> Enum.filter(&Regex.match?(~r/^\| PROD-\d+ /, &1))
+      |> Enum.filter(&Regex.match?(~r/^\| (?:PROD|SPLIT)-\d+ /, &1))
       |> Enum.map(fn row ->
         [id, status | _rest] =
           row
@@ -25,7 +25,12 @@ defmodule Elara.RoadmapTest do
     assert Enum.count(rows, fn {_id, status} -> status in ["IN PROGRESS", "TODO"] end) <=
              1
 
-    assert [{"PROD-1", "DONE"}, {"PROD-2", "TODO"}] = rows
+    assert Enum.map(rows, &elem(&1, 0)) ==
+             ["PROD-1", "PROD-2", "SPLIT-1", "SPLIT-2", "SPLIT-3", "SPLIT-4", "SPLIT-5"]
+
+    assert Enum.all?(rows, fn {_id, status} ->
+             status in ["TODO", "IN PROGRESS", "BLOCKED", "DONE", "CANCELED", "INVALID"]
+           end)
   end
 
   test "repository documentation points to the repository roadmap" do

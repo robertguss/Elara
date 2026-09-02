@@ -5,7 +5,7 @@ defmodule Elara.Executor.Remote do
 
   alias Elara.Executor.Request
 
-  @protocol_version 1
+  @protocol_version 2
 
   @impl true
   def execute(config, %Request{} = request, _tool) do

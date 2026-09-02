@@ -9,6 +9,7 @@ defmodule Elara.Application do
       {Registry, keys: :unique, name: Elara.SessionLocks},
       {Registry, keys: :unique, name: Elara.Sessions},
       {Registry, keys: :unique, name: Elara.EffectExecutors},
+      Elara.Exec,
       {Task.Supervisor, name: Elara.TaskSup},
       {Elara.Executor.Router, name: Elara.Executor.Router},
       {DynamicSupervisor, name: Elara.EffectExecutorSup, strategy: :one_for_one},

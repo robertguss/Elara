@@ -14,6 +14,7 @@ defmodule Elara.Executor do
             arguments: map(),
             workspace_id: String.t(),
             deadline_ms: integer(),
+            max_output_bytes: pos_integer(),
             cancellation_id: String.t(),
             required_capabilities: [String.t()],
             placement: :local | :remote | :any,
@@ -30,6 +31,7 @@ defmodule Elara.Executor do
       :arguments,
       :workspace_id,
       :deadline_ms,
+      :max_output_bytes,
       :cancellation_id,
       :required_capabilities,
       :placement,
@@ -48,6 +50,7 @@ defmodule Elara.Executor do
         "arguments" => request.arguments,
         "workspace_id" => request.workspace_id,
         "deadline_ms" => request.deadline_ms,
+        "max_output_bytes" => request.max_output_bytes,
         "cancellation_id" => request.cancellation_id,
         "required_capabilities" => request.required_capabilities,
         "placement" => Atom.to_string(request.placement),
@@ -65,6 +68,7 @@ defmodule Elara.Executor do
             "arguments" => arguments,
             "workspace_id" => workspace_id,
             "deadline_ms" => deadline,
+            "max_output_bytes" => max_output_bytes,
             "cancellation_id" => cancellation_id,
             "required_capabilities" => capabilities,
             "placement" => placement,
@@ -73,8 +77,8 @@ defmodule Elara.Executor do
         )
         when is_binary(call_id) and is_binary(session_id) and is_binary(name) and
                is_binary(version) and is_map(arguments) and is_binary(workspace_id) and
-               is_integer(deadline) and is_binary(cancellation_id) and is_list(capabilities) and
-               is_boolean(mutating) do
+               is_integer(deadline) and is_integer(max_output_bytes) and max_output_bytes > 0 and
+               is_binary(cancellation_id) and is_list(capabilities) and is_boolean(mutating) do
       job_id = Map.get(encoded, "job_id")
       operation_digest = Map.get(encoded, "operation_digest")
 
@@ -92,6 +96,7 @@ defmodule Elara.Executor do
            arguments: arguments,
            workspace_id: workspace_id,
            deadline_ms: deadline,
+           max_output_bytes: max_output_bytes,
            cancellation_id: cancellation_id,
            required_capabilities: capabilities,
            placement: placement,

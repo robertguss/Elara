@@ -6,7 +6,7 @@ defmodule Elara.Worker.Server do
   alias Elara.Executor.Request
   alias Elara.Tool.Ctx
 
-  @protocol_version 1
+  @protocol_version 2
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
@@ -223,7 +223,9 @@ defmodule Elara.Worker.Server do
       cwd: cwd,
       tool_name: request.tool_name,
       job_id: request.job_id,
-      operation_digest: request.operation_digest
+      operation_digest: request.operation_digest,
+      max_output_bytes: request.max_output_bytes,
+      timeout_ms: max(request.deadline_ms - System.system_time(:millisecond), 1)
     }
 
     apply(module, function, [request.arguments, ctx])

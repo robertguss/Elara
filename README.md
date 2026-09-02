@@ -13,8 +13,9 @@ existing agents.
 ## Run from source
 
 Elara currently runs from this Mix project; it does not install a standalone
-`elara` executable. You need Elixir 1.20, Erlang/OTP 29, and the `flock`
-command.
+`elara` executable. You need Elixir 1.20, Erlang/OTP 29, Rust with Cargo, and
+the `flock` command. Mix builds the Rust execution stub automatically; a missing
+Cargo installation fails compilation with setup instructions.
 
 ```bash
 git clone https://github.com/robertguss/elixir-harness.git
@@ -115,7 +116,10 @@ full command behavior.
   directories. It records durable controller intent and executor receipts before
   and after mutation.
 - `edit` replaces exactly one occurrence of `old_text` with `new_text`.
-- `bash` runs a shell command with stdout and stderr merged.
+- `bash` runs a shell command with stdout and stderr merged. A supervised Rust
+  stub runs each command in its own process group and kills the group on
+  interruption, timeout, or output overflow. Stub loss reports an
+  `indeterminate` outcome rather than success.
 
 Relative paths and shell commands use the session working directory. `write`
 rejects absolute paths, `..`, symlink path components, and non-file targets so
@@ -133,7 +137,8 @@ callback never started, and reports `indeterminate` rather than retrying after a
 callback started without durable terminal evidence.
 
 Each turn allows 12 model iterations by default. Each tool has a 30-second
-timeout, and tool output is truncated to 16 KiB before it enters model history.
+timeout. Shell output is capped at 16 KiB in the execution stub, and the session
+keeps the same 16 KiB cap as a second line before output enters model history.
 
 ## More user guides
 
@@ -153,6 +158,7 @@ timeout, and tool output is truncated to 16 KiB before it enters model history.
 mix format --check-formatted
 mix compile --warnings-as-errors
 mix test
+cd native/exec-stub && cargo fmt --check && cargo clippy && cargo test
 ```
 
 Tests use `Elara.Provider.Scripted` and do not call the network. One

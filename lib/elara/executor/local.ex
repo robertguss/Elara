@@ -14,7 +14,9 @@ defmodule Elara.Executor.Local do
       plugin: tool.plugin,
       tool_name: request.tool_name,
       job_id: request.job_id,
-      operation_digest: request.operation_digest
+      operation_digest: request.operation_digest,
+      max_output_bytes: request.max_output_bytes,
+      timeout_ms: max(request.deadline_ms - System.system_time(:millisecond), 1)
     }
 
     apply(module, function, [request.arguments, ctx])

@@ -100,6 +100,37 @@ defmodule Elara.Effect.DeclarativeWrite do
     }
   end
 
+  @doc false
+  @spec prepare_arguments(map(), String.t()) :: {:ok, map()} | {:error, String.t()}
+  def prepare_arguments(%{"path" => path, "content" => content}, cwd)
+      when is_binary(path) and is_binary(content) and is_binary(cwd) do
+    with {:ok, target} <- AtomicFile.target(path, cwd) do
+      case AtomicFile.snapshot(target) do
+        :absent ->
+          {:ok, arguments(path, :absent, content)}
+
+        {:regular, _current, digest} ->
+          {:ok, arguments(path, {:regular, digest}, content)}
+
+        {:symlink, link_target} ->
+          {:error,
+           "write rejected: path=#{path} state=symlink_rejected " <>
+             "reason=#{inspect(link_target)}"}
+
+        {:non_file, type} ->
+          {:error, "write rejected: path=#{path} state=non_file reason=#{inspect(type)}"}
+
+        {:unavailable, reason} ->
+          {:error, "write rejected: path=#{path} state=unavailable reason=#{inspect(reason)}"}
+      end
+    else
+      {:error, :path_outside_workspace} ->
+        {:error, "write rejected: path=#{path} reason=path_outside_workspace"}
+    end
+  end
+
+  def prepare_arguments(_arguments, _cwd), do: {:error, "write requires path and content"}
+
   @spec sha256(binary()) :: String.t()
   def sha256(content) when is_binary(content) do
     content
@@ -135,12 +166,10 @@ defmodule Elara.Effect.DeclarativeWrite do
     with {:ok, spec} <- parse(job, cwd) do
       case observe_spec(spec) do
         %Observation{state: :exact_postimage} ->
-          {:ok,
-           "declarative write postcondition_satisfied: path=#{spec.path} " <>
-             "sha256=#{spec.desired_sha256} no_write=true"}
+          success(spec, :already_satisfied, opts)
 
         %Observation{state: :expected_preimage} ->
-          replace(spec, job, operation_hook, effect_observer)
+          replace(spec, job, operation_hook, effect_observer, opts)
 
         %Observation{} = observation ->
           observation_error(observation)
@@ -227,8 +256,8 @@ defmodule Elara.Effect.DeclarativeWrite do
     end
   end
 
-  defp replace(spec, job, operation_hook, effect_observer) do
-    opts = [operation_hook: operation_hook, effect_observer: effect_observer]
+  defp replace(spec, job, operation_hook, effect_observer, result_opts) do
+    atomic_opts = [operation_hook: operation_hook, effect_observer: effect_observer]
 
     case AtomicFile.replace(
            spec.target,
@@ -237,17 +266,13 @@ defmodule Elara.Effect.DeclarativeWrite do
            spec.desired_sha256,
            job.job_id,
            job.operation_digest,
-           opts
+           atomic_opts
          ) do
       {:ok, :committed} ->
-        {:ok,
-         "declarative write committed: path=#{spec.path} " <>
-           "sha256=#{spec.desired_sha256}"}
+        success(spec, :committed, result_opts)
 
       {:ok, :already_satisfied} ->
-        {:ok,
-         "declarative write postcondition_satisfied: path=#{spec.path} " <>
-           "sha256=#{spec.desired_sha256} no_write=true"}
+        success(spec, :already_satisfied, result_opts)
 
       {:error, {:observation, observation}} ->
         observation |> local_observation() |> observation_error()
@@ -261,6 +286,23 @@ defmodule Elara.Effect.DeclarativeWrite do
     spec.target
     |> AtomicFile.observe(spec.expected, spec.desired_sha256)
     |> local_observation()
+  end
+
+  defp success(spec, state, opts) do
+    case Keyword.get(opts, :result_format, :protocol) do
+      :write_tool ->
+        {:ok, "wrote #{byte_size(spec.content)} bytes to #{spec.path}"}
+
+      :protocol when state == :committed ->
+        {:ok,
+         "declarative write committed: path=#{spec.path} " <>
+           "sha256=#{spec.desired_sha256}"}
+
+      :protocol ->
+        {:ok,
+         "declarative write postcondition_satisfied: path=#{spec.path} " <>
+           "sha256=#{spec.desired_sha256} no_write=true"}
+    end
   end
 
   defp parse(%Job{} = job, cwd) do

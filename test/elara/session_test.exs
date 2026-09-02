@@ -133,6 +133,8 @@ defmodule Elara.SessionTest do
 
     assert :ok = Elara.ask_async(session, "go")
     assert {:error, :busy} = Elara.ask_async(session, "again")
+    Elara.interrupt(session)
+    assert Elara.status(session).phase == :idle
   end
 
   test "interrupt kills the running tool task immediately" do

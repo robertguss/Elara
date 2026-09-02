@@ -1,8 +1,9 @@
 defmodule Elara do
   @moduledoc "Public API. Callers never see GenServer message shapes or wire types."
 
-  alias Elara.Prompt
+  alias Elara.Effect.LocalExecutor
   alias Elara.Plugin
+  alias Elara.Prompt
   alias Elara.Session
   alias Elara.Session.Core
   alias Elara.Session.Store
@@ -35,7 +36,9 @@ defmodule Elara do
 
     with {:ok, provider} <- fetch_provider(opts),
          {:ok, store} <- prepare_store(opts, cwd),
-         {:ok, store} <- seed_store(store, Keyword.get(opts, :seed_history, [])) do
+         {:ok, store} <- seed_store(store, Keyword.get(opts, :seed_history, [])),
+         {:ok, effect_executor, effect_executor_explicit?} <-
+           prepare_effect_executor(opts, tools, cwd, workspace_id) do
       effect_journal_path = Keyword.get(opts, :effect_journal_path) || effect_journal_path(store)
 
       core_config = %Core.Config{
@@ -56,7 +59,8 @@ defmodule Elara do
         workspace_id: workspace_id,
         allowed_capabilities: allowed_capabilities,
         effect_journal_path: effect_journal_path,
-        effect_executor: Keyword.get(opts, :effect_executor),
+        effect_executor: effect_executor,
+        effect_executor_explicit?: effect_executor_explicit?,
         effect_fault_hook: Keyword.get(opts, :effect_fault_hook, fn _point -> :ok end)
       ]
 
@@ -290,6 +294,23 @@ defmodule Elara do
         error -> {:halt, error}
       end
     end)
+  end
+
+  defp prepare_effect_executor(opts, tools, cwd, workspace_id) do
+    case Keyword.get(opts, :effect_executor) do
+      nil ->
+        if Enum.any?(tools, &Tool.builtin_write?/1) do
+          case LocalExecutor.open(cwd, workspace_id) do
+            {:ok, executor} -> {:ok, executor, false}
+            {:error, reason} -> {:error, {:effect_executor_start_failed, reason}}
+          end
+        else
+          {:ok, nil, false}
+        end
+
+      executor ->
+        {:ok, executor, true}
+    end
   end
 
   defp workspace_id(cwd) do

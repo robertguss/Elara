@@ -3,10 +3,10 @@ defmodule Elara.Effect.Sidecar do
 
   alias Elara.Effect.ControllerJournal
   alias Elara.Effect.ControllerJournal.Observation
+  alias Elara.Effect.Executor
   alias Elara.Effect.ExecutorLedger
   alias Elara.Effect.ExecutorLedger.Record
   alias Elara.Effect.Job
-  alias Elara.Effect.TestExecutor
 
   defmodule Result do
     @moduledoc false
@@ -36,7 +36,7 @@ defmodule Elara.Effect.Sidecar do
       when is_function(operation, 0) and is_integer(timeout) and timeout > 0 do
     safely(job, journal, fn ->
       executor
-      |> TestExecutor.submit(job.job_id, job.operation_digest, operation)
+      |> Executor.submit(job.job_id, job.operation_digest, operation)
       |> resolve(executor, journal, job, operation, timeout, fault_hook)
     end)
   end
@@ -59,7 +59,7 @@ defmodule Elara.Effect.Sidecar do
 
         {:ok, _observation} ->
           executor
-          |> TestExecutor.query(job.job_id)
+          |> Executor.query(job.job_id)
           |> resolve(executor, journal, job, operation, timeout, fault_hook)
 
         {:error, reason} ->
@@ -70,7 +70,7 @@ defmodule Elara.Effect.Sidecar do
 
   defp resolve(:unknown, executor, journal, job, operation, timeout, fault_hook) do
     executor
-    |> TestExecutor.submit(job.job_id, job.operation_digest, operation)
+    |> Executor.submit(job.job_id, job.operation_digest, operation)
     |> resolve(executor, journal, job, operation, timeout, fault_hook)
   end
 
@@ -87,7 +87,7 @@ defmodule Elara.Effect.Sidecar do
          :ok <- invoke_hook(fault_hook, :after_accept_observation_before_continue) do
       monitor = monitor_executor(executor)
 
-      case TestExecutor.continue(executor, job.job_id, job.operation_digest, operation) do
+      case Executor.continue(executor, job.job_id, job.operation_digest, operation) do
         :ok ->
           await_completion(executor, journal, job, operation, timeout, fault_hook, monitor)
 
@@ -95,7 +95,7 @@ defmodule Elara.Effect.Sidecar do
           demonitor(monitor)
 
           executor
-          |> TestExecutor.query(job.job_id)
+          |> Executor.query(job.job_id)
           |> resolve(executor, journal, job, operation, timeout, fault_hook)
 
         {:error, reason} ->
@@ -159,7 +159,7 @@ defmodule Elara.Effect.Sidecar do
 
   defp await_completion(_executor, journal, job, _operation, timeout, fault_hook, monitor) do
     receive do
-      {:elara_test_executor, _executor_id, job_id, {state, %Record{state: state} = record}}
+      {:elara_effect_executor, _executor_id, job_id, {state, %Record{state: state} = record}}
       when job_id == job.job_id and state in [:completed, :failed] ->
         demonitor(monitor)
 

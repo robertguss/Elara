@@ -111,14 +111,26 @@ full command behavior.
 ## Built-in tools
 
 - `read` reads a file.
-- `write` writes a file and creates parent directories.
+- `write` atomically writes a workspace-relative regular file and creates parent
+  directories. It records durable controller intent and executor receipts before
+  and after mutation.
 - `edit` replaces exactly one occurrence of `old_text` with `new_text`.
 - `bash` runs a shell command with stdout and stderr merged.
 
-Relative paths and shell commands use the session working directory. The local
-file tools call `Path.expand/2`; absolute paths and `..` can therefore reach
-outside that directory. Use a container or other OS sandbox when the model or
-workspace is not trusted.
+Relative paths and shell commands use the session working directory. `write`
+rejects absolute paths, `..`, symlink path components, and non-file targets so
+its observed preimage and atomic replacement stay inside that workspace. `read`
+and `edit` still call `Path.expand/2`, and `bash` is unrestricted, so those
+tools can reach outside the working directory. Use a container or other OS
+sandbox when the model or workspace is not trusted.
+
+The local write executor stores its durable ledger under
+`~/.elara/sessions/_effect_executors/`; persistent sessions keep their
+controller journal beside the session JSONL. If a process stops after a write
+starts, `mix elara.chat --continue` reconciles those records. It returns a
+recorded terminal result without rewriting, continues only accepted work whose
+callback never started, and reports `indeterminate` rather than retrying after a
+callback started without durable terminal evidence.
 
 Each turn allows 12 model iterations by default. Each tool has a 30-second
 timeout, and tool output is truncated to 16 KiB before it enters model history.

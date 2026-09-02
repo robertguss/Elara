@@ -18,8 +18,8 @@ mix elara.chat --continue
 mix elara.chat --continue "continue the previous investigation"
 ```
 
-Session files live under `~/.elara/sessions/<cwd-key>/`. They are scoped by
-the session working directory and created with mode `0600`. Starting plain
+Session files live under `~/.elara/sessions/<cwd-key>/`. They are scoped by the
+session working directory and created with mode `0600`. Starting plain
 `mix elara.chat` creates a new session; it does not silently continue an old
 one.
 
@@ -40,6 +40,22 @@ a new session with `mix elara.chat --name TEXT`.
 newest usable session. If there is no saved session for the current directory,
 startup fails instead of creating one.
 
+### Recover an interrupted write
+
+The built-in local `write` tool records a durable intent and executor receipt.
+When `--continue` finds an unresolved write, Elara reconciles those records
+before accepting another prompt:
+
+- a durable terminal receipt is returned without writing the file again;
+- an accepted write whose callback never started may continue under the same job
+  and executor identity; and
+- a callback attempt without a terminal receipt is reported as `indeterminate`
+  and is not retried.
+
+Current file contents can prove that desired bytes are present, but cannot by
+themselves prove which job wrote them. Elara therefore fails closed when causal
+evidence is missing.
+
 ## Branch conversation history
 
 Elara stores a tree of messages rather than only a linear transcript.
@@ -49,9 +65,9 @@ Elara stores a tree of messages rather than only a linear transcript.
 1. Run `/tree` to list user turns on the active path.
 2. Run `/tree N` to select one.
 
-Elara moves the active history to just before that user turn and re-submits
-the selected prompt. Later messages on the old path remain in the same JSONL
-file but are no longer sent to the model on the new path.
+Elara moves the active history to just before that user turn and re-submits the
+selected prompt. Later messages on the old path remain in the same JSONL file
+but are no longer sent to the model on the new path.
 
 ### Fork into another session
 

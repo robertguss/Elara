@@ -62,6 +62,14 @@ defmodule Elara.Tool do
     ]
   end
 
+  @doc false
+  @spec builtin_write?(t()) :: boolean()
+  def builtin_write?(%__MODULE__{} = tool) do
+    tool.name == "write" and tool.version == "1" and tool.run == {Elara.Tools, :write} and
+      tool.plugin == nil and tool.capabilities == ["filesystem:write"] and
+      tool.placement == :any and tool.mutating
+  end
+
   @doc "Table keyed by name. Duplicate names are an ArgumentError at session start."
   @spec table([t()]) :: %{String.t() => t()}
   def table(tools) when is_list(tools) do

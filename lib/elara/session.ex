@@ -5,7 +5,7 @@ defmodule Elara.Session do
 
   use GenServer
 
-  alias Elara.Effect.{ControllerJournal, Job, Sidecar}
+  alias Elara.Effect.{ControllerJournal, DeclarativeWrite, Job, Sidecar}
   alias Elara.FlightRecorder
   alias Elara.Message
   alias Elara.Message.{Assistant, ToolResult}
@@ -29,6 +29,7 @@ defmodule Elara.Session do
             effect_journal: pid() | nil,
             effect_journal_path: String.t(),
             effect_executor: GenServer.server() | nil,
+            effect_executor_explicit?: boolean(),
             base_tools: %{String.t() => Tool.t()},
             plugins: [%{pid: pid(), path: String.t()}],
             subscribers: %{pid() => reference()},
@@ -54,6 +55,7 @@ defmodule Elara.Session do
       :recorder,
       :effect_journal_path,
       :effect_executor,
+      :effect_executor_explicit?,
       :effect_fault_hook,
       base_tools: %{},
       plugins: [],
@@ -100,12 +102,14 @@ defmodule Elara.Session do
     allowed_capabilities = Keyword.fetch!(opts, :allowed_capabilities)
     effect_journal_path = Keyword.fetch!(opts, :effect_journal_path)
     effect_executor = Keyword.get(opts, :effect_executor)
+    effect_executor_explicit? = Keyword.fetch!(opts, :effect_executor_explicit?)
     effect_fault_hook = Keyword.fetch!(opts, :effect_fault_hook)
 
     recovery = %{
       cwd: cwd,
       router: router,
       executor: effect_executor,
+      executor_explicit?: effect_executor_explicit?,
       journal_path: effect_journal_path,
       workspace_id: workspace_id,
       allowed_capabilities: allowed_capabilities,
@@ -128,6 +132,7 @@ defmodule Elara.Session do
             allowed_capabilities: allowed_capabilities,
             effect_journal_path: effect_journal_path,
             effect_executor: effect_executor,
+            effect_executor_explicit?: effect_executor_explicit?,
             effect_fault_hook: effect_fault_hook,
             effect_journal: effect_journal,
             provider: provider,
@@ -216,7 +221,7 @@ defmodule Elara.Session do
   end
 
   def handle_call({:replace_effect_executor, executor}, _from, shell) do
-    shell = %{shell | effect_executor: executor}
+    shell = %{shell | effect_executor: executor, effect_executor_explicit?: true}
     {:reply, :ok, resume_pending_effects(shell)}
   end
 
@@ -381,6 +386,15 @@ defmodule Elara.Session do
           persist_effect_result(shell, result)
 
         {:tool, %Sidecar.Result{status: :awaiting_executor, job: job}} ->
+          shell = %{shell | pending_effects: Map.put(shell.pending_effects, core_ref, job)}
+          resume_pending_effect(shell, core_ref, job)
+
+        {:tool, %DeclarativeWrite.Result{status: :terminal} = result} ->
+          shell = %{shell | pending_effects: Map.delete(shell.pending_effects, core_ref)}
+          shell = feed({:tool_result, core_ref, result.outcome}, shell)
+          persist_effect_result(shell, result)
+
+        {:tool, %DeclarativeWrite.Result{status: :awaiting_executor, job: job}} ->
           shell = %{shell | pending_effects: Map.put(shell.pending_effects, core_ref, job)}
           resume_pending_effect(shell, core_ref, job)
 
@@ -576,6 +590,43 @@ defmodule Elara.Session do
   end
 
   defp recover_tool_call(store, call, job, tools, journal, recovery) do
+    cond do
+      declarative_write_job?(job) ->
+        recover_declarative_write(store, call, job, tools, journal, recovery)
+
+      recovery.executor_explicit? ->
+        recover_generic_tool_call(store, call, job, tools, journal, recovery)
+
+      true ->
+        {:error, {:unrecoverable_effect, job.job_id}}
+    end
+  end
+
+  defp recover_declarative_write(store, call, job, tools, journal, recovery) do
+    with {:ok, args} <- call.args,
+         %Tool{} = tool <- Map.get(tools, call.name),
+         true <- Tool.builtin_write?(tool),
+         true <- recoverable_declarative_write?(job, call, args, recovery) do
+      result =
+        DeclarativeWrite.reconcile(
+          recovery.executor,
+          journal,
+          job,
+          recovery.cwd,
+          timeout: @effect_recovery_timeout_ms,
+          sidecar_hook: recovery.fault_hook,
+          operation_hook: recovery.fault_hook,
+          effect_observer: recovery.fault_hook,
+          result_format: :write_tool
+        )
+
+      persist_recovered_tool_result(store, call, journal, result)
+    else
+      _reason -> {:error, {:unrecoverable_effect, job.job_id}}
+    end
+  end
+
+  defp recover_generic_tool_call(store, call, job, tools, journal, recovery) do
     with {:ok, args} <- call.args,
          %Tool{plugin: nil, mutating: true} = tool <- Map.get(tools, call.name),
          true <- recoverable_job?(job, call, args, tool, recovery) do
@@ -592,21 +643,46 @@ defmodule Elara.Session do
           recovery.fault_hook
         )
 
-      with %Sidecar.Result{status: :terminal} <- result,
-           {:ok, store} <- Store.append(store, Message.tool_result(call, result.outcome)),
-           :ok <- mark_effect_result_persisted(journal, result) do
-        {:ok, store}
-      else
-        %Sidecar.Result{status: :awaiting_executor} ->
-          {:error, {:effect_executor_unavailable, job.job_id}}
-
-        {:error, _reason} = error ->
-          error
-      end
+      persist_recovered_tool_result(store, call, journal, result)
     else
       _reason -> {:error, {:unrecoverable_effect, job.job_id}}
     end
   end
+
+  defp persist_recovered_tool_result(store, call, journal, %{status: :terminal} = result) do
+    with {:ok, store} <- Store.append(store, Message.tool_result(call, result.outcome)),
+         :ok <- mark_effect_result_persisted(journal, result) do
+      {:ok, store}
+    end
+  end
+
+  defp persist_recovered_tool_result(_store, _call, _journal, %{
+         status: :awaiting_executor,
+         job: job
+       }) do
+    {:error, {:effect_executor_unavailable, job.job_id}}
+  end
+
+  defp recoverable_declarative_write?(job, call, args, recovery) do
+    authority_scope = %{
+      allowed_capabilities: canonical_capabilities(recovery.allowed_capabilities),
+      placement: :local
+    }
+
+    job.operation_kind == :declarative_write and
+      job.tool_call_id == call.id and
+      job.tool_name == "declarative_write" and
+      job.tool_version == "1" and
+      job.arguments["path"] == args["path"] and
+      job.arguments["desired"]["content"] == args["content"] and
+      job.workspace_id == recovery.workspace_id and
+      job.required_capabilities == ["filesystem:write"] and
+      job.authority_scope == authority_scope and
+      DeclarativeWrite.validate(job, recovery.cwd) == :ok
+  end
+
+  defp declarative_write_job?(%Job{operation_kind: :declarative_write}), do: true
+  defp declarative_write_job?(%Job{}), do: false
 
   defp recoverable_job?(job, call, args, tool, recovery) do
     authority_scope = %{
@@ -656,28 +732,80 @@ defmodule Elara.Session do
 
   defp resume_pending_effect(shell, core_ref, job) do
     with true <- effect_executor_available?(shell.effect_executor),
-         %Tool{plugin: nil, mutating: true} = tool <-
-           Map.get(shell.core.config.tools, job.tool_name) do
-      request = request_from_job(shell.id, job, tool)
-      operation = fn -> Router.execute(shell.router, request, tool, shell.cwd) end
-
-      task =
-        Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
-          Sidecar.reconcile(
-            shell.effect_executor,
-            shell.effect_journal,
-            job,
-            operation,
-            @effect_recovery_timeout_ms,
-            shell.effect_fault_hook
-          )
-        end)
+         {:ok, operation} <- pending_effect_operation(shell, job) do
+      task = Task.Supervisor.async_nolink(Elara.TaskSup, operation)
 
       shell
       |> Map.update!(:pending_effects, &Map.delete(&1, core_ref))
       |> track_tool_task(task, core_ref, nil)
     else
-      _unavailable_or_invalid -> shell
+      _unavailable_or_invalid -> fail_closed_pending_effect(shell, core_ref, job)
+    end
+  end
+
+  defp fail_closed_pending_effect(shell, core_ref, job) do
+    if declarative_write_job?(job) and not shell.effect_executor_explicit? do
+      result =
+        DeclarativeWrite.reconcile_unavailable(
+          shell.effect_journal,
+          job,
+          shell.cwd
+        )
+
+      shell = %{shell | pending_effects: Map.delete(shell.pending_effects, core_ref)}
+      shell = feed({:tool_result, core_ref, result.outcome}, shell)
+      persist_effect_result(shell, result)
+    else
+      shell
+    end
+  end
+
+  defp pending_effect_operation(shell, job) do
+    cond do
+      declarative_write_job?(job) ->
+        {:ok,
+         fn ->
+           DeclarativeWrite.reconcile(
+             shell.effect_executor,
+             shell.effect_journal,
+             job,
+             shell.cwd,
+             timeout: @effect_recovery_timeout_ms,
+             sidecar_hook: shell.effect_fault_hook,
+             operation_hook: shell.effect_fault_hook,
+             effect_observer: shell.effect_fault_hook,
+             result_format: :write_tool
+           )
+         end}
+
+      shell.effect_executor_explicit? ->
+        generic_pending_effect_operation(shell, job)
+
+      true ->
+        :error
+    end
+  end
+
+  defp generic_pending_effect_operation(shell, job) do
+    case Map.get(shell.core.config.tools, job.tool_name) do
+      %Tool{plugin: nil, mutating: true} = tool ->
+        request = request_from_job(shell.id, job, tool)
+        operation = fn -> Router.execute(shell.router, request, tool, shell.cwd) end
+
+        {:ok,
+         fn ->
+           Sidecar.reconcile(
+             shell.effect_executor,
+             shell.effect_journal,
+             job,
+             operation,
+             @effect_recovery_timeout_ms,
+             shell.effect_fault_hook
+           )
+         end}
+
+      _invalid_tool ->
+        :error
     end
   end
 
@@ -745,9 +873,26 @@ defmodule Elara.Session do
     end
   end
 
+  defp persist_effect_result(shell, %DeclarativeWrite.Result{} = result) do
+    case mark_effect_result_persisted(shell.effect_journal, result) do
+      :ok -> shell
+      {:error, reason} -> raise "effect result persistence failed: #{inspect(reason)}"
+    end
+  end
+
   defp mark_effect_result_persisted(_journal, %Sidecar.Result{executor_record: nil}), do: :ok
 
   defp mark_effect_result_persisted(journal, %Sidecar.Result{job: job}) do
+    case ControllerJournal.mark_result_persisted(journal, job.job_id) do
+      {:ok, _observation} -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp mark_effect_result_persisted(_journal, %DeclarativeWrite.Result{executor_record: nil}),
+    do: :ok
+
+  defp mark_effect_result_persisted(journal, %DeclarativeWrite.Result{job: job}) do
     case ControllerJournal.mark_result_persisted(journal, job.job_id) do
       {:ok, _observation} -> :ok
       {:error, _reason} = error -> error
@@ -824,39 +969,74 @@ defmodule Elara.Session do
     {:ok, args} = call.args
 
     if capabilities_allowed?(tool.capabilities, shell.allowed_capabilities) do
-      request = tool_request(shell, call, tool, args)
-      {shell, request, job} = commit_tool_intent(shell, effect_id, request, tool)
-
-      task =
-        if job && shell.effect_executor do
-          operation = fn -> Router.execute(shell.router, request, tool, shell.cwd) end
-
-          Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
-            Sidecar.execute(
-              shell.effect_executor,
-              shell.effect_journal,
-              job,
-              operation,
-              @effect_recovery_timeout_ms,
-              shell.effect_fault_hook
-            )
-          end)
-        else
-          Task.Supervisor.async_nolink(
-            Elara.TaskSup,
-            Router,
-            :execute,
-            [shell.router, request, tool, shell.cwd]
-          )
-        end
-
-      track_tool_task(shell, task, core_ref, nil)
+      if Tool.builtin_write?(tool) do
+        run_declarative_write(shell, effect_id, core_ref, call, args)
+      else
+        run_routed_tool(shell, effect_id, core_ref, call, tool, args)
+      end
     else
       feed(
         {:tool_result, core_ref, {:error, "permission denied: required capability not granted"}},
         shell
       )
     end
+  end
+
+  defp run_declarative_write(shell, effect_id, core_ref, call, args) do
+    case DeclarativeWrite.prepare_arguments(args, shell.cwd) do
+      {:ok, arguments} ->
+        {shell, job} = commit_declarative_write_intent(shell, effect_id, call, arguments)
+
+        task =
+          Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
+            DeclarativeWrite.execute(
+              shell.effect_executor,
+              shell.effect_journal,
+              job,
+              shell.cwd,
+              timeout: shell.tool_timeout_ms,
+              sidecar_hook: shell.effect_fault_hook,
+              operation_hook: shell.effect_fault_hook,
+              effect_observer: shell.effect_fault_hook,
+              result_format: :write_tool
+            )
+          end)
+
+        track_tool_task(shell, task, core_ref, nil)
+
+      {:error, message} ->
+        feed({:tool_result, core_ref, {:error, message}}, shell)
+    end
+  end
+
+  defp run_routed_tool(shell, effect_id, core_ref, call, tool, args) do
+    request = tool_request(shell, call, tool, args)
+    {shell, request, job} = commit_tool_intent(shell, effect_id, request, tool)
+
+    task =
+      if job && shell.effect_executor && shell.effect_executor_explicit? do
+        operation = fn -> Router.execute(shell.router, request, tool, shell.cwd) end
+
+        Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
+          Sidecar.execute(
+            shell.effect_executor,
+            shell.effect_journal,
+            job,
+            operation,
+            @effect_recovery_timeout_ms,
+            shell.effect_fault_hook
+          )
+        end)
+      else
+        Task.Supervisor.async_nolink(
+          Elara.TaskSup,
+          Router,
+          :execute,
+          [shell.router, request, tool, shell.cwd]
+        )
+      end
+
+    track_tool_task(shell, task, core_ref, nil)
   end
 
   defp emit(event, effect_id, shell) do
@@ -1163,6 +1343,28 @@ defmodule Elara.Session do
       placement: tool.placement,
       mutating: tool.mutating
     }
+  end
+
+  defp commit_declarative_write_intent(shell, effect_id, call, arguments) do
+    shell = ensure_effect_journal(shell)
+
+    job =
+      Job.new(effect_id,
+        operation_kind: :declarative_write,
+        tool_call_id: call.id,
+        tool_name: "declarative_write",
+        tool_version: "1",
+        arguments: arguments,
+        workspace_id: shell.workspace_id,
+        required_capabilities: ["filesystem:write"],
+        allowed_capabilities: shell.allowed_capabilities,
+        placement: :local
+      )
+
+    case ControllerJournal.commit_intent(shell.effect_journal, job, shell.effect_fault_hook) do
+      {:ok, ^job} -> {shell, job}
+      {:error, reason} -> raise "controller intent persistence failed: #{inspect(reason)}"
+    end
   end
 
   defp commit_tool_intent(shell, _effect_id, %Request{mutating: false} = request, _tool),

@@ -1,8 +1,8 @@
 # Elixir API
 
-Use the public API when embedding Elara in another Elixir application,
-targeting a directory other than the Elara checkout, customizing tools, or
-using advanced runtime features.
+Use the public API when embedding Elara in another Elixir application, targeting
+a directory other than the Elara checkout, customizing tools, or using advanced
+runtime features.
 
 ## Start a session and ask
 
@@ -18,9 +18,9 @@ Application.ensure_all_started(:elara)
 {:ok, answer} = Elara.ask(session, "summarize the current changes")
 ```
 
-If `provider:` is omitted, Elara resolves `ELARA_API_KEY`, then
-`XAI_API_KEY`, then saved Grok login tokens. `Elara.ask/3` blocks until the
-turn ends and returns one of:
+If `provider:` is omitted, Elara resolves `ELARA_API_KEY`, then `XAI_API_KEY`,
+then saved Grok login tokens. `Elara.ask/3` blocks until the turn ends and
+returns one of:
 
 ```elixir
 {:ok, final_text}
@@ -48,8 +48,8 @@ Events include `{:turn_started, prompt}`, message appends, tool starts, and
 `{:turn_ended, outcome}`. Call `Elara.interrupt(session)` to cancel the active
 turn. `Elara.transcript/1` returns the current message path.
 
-Public session calls use stable string IDs. `Elara.session_pid/1` resolves an
-ID only when code needs to monitor or explicitly stop the underlying process.
+Public session calls use stable string IDs. `Elara.session_pid/1` resolves an ID
+only when code needs to monitor or explicitly stop the underlying process.
 
 ## Session options
 
@@ -59,8 +59,8 @@ ID only when code needs to monitor or explicitly stop the underlying process.
 | ------------------------ | ------------------------------------ | ---------------------------------------------------------------------------- |
 | `cwd:`                   | `File.cwd!()`                        | Working directory for prompt rules, local tools, plugins, and session scope. |
 | `provider:`              | resolved auth configuration          | `{provider_module, provider_config}`.                                        |
-| `tools:`                 | `Elara.Tool.builtins()`            | Tools exposed to the model.                                                  |
-| `plugins:`               | discovered under `.elara/plugins/` | Explicit plugin paths; `[]` disables plugins.                                |
+| `tools:`                 | `Elara.Tool.builtins()`              | Tools exposed to the model.                                                  |
+| `plugins:`               | discovered under `.elara/plugins/`   | Explicit plugin paths; `[]` disables plugins.                                |
 | `system:`                | built-in prompt plus `cwd/AGENTS.md` | Complete system prompt override.                                             |
 | `max_iterations:`        | `12`                                 | Maximum provider calls in a turn.                                            |
 | `tool_timeout_ms:`       | `30_000`                             | Timeout for each tool call.                                                  |
@@ -70,10 +70,19 @@ ID only when code needs to monitor or explicitly stop the underlying process.
 | `name:`                  | `nil`                                | Display name for a new persisted session.                                    |
 | `allowed_capabilities:`  | `:all`                               | Capability names allowed before executor routing.                            |
 | `workspace_id:`          | derived from `cwd`                   | Logical workspace identity used for remote routing.                          |
-| `router:`                | `Elara.Executor.Router`            | Executor router process or registered name.                                  |
+| `router:`                | `Elara.Executor.Router`              | Executor router process or registered name.                                  |
 
 `persist: false` cannot be combined with `resume:`. The one-shot Mix task sets
 `persist: false`; direct API sessions and interactive chat persist by default.
+
+Default sessions provision a supervised durable local executor for the exact
+built-in `write` tool. Its public `%{"path" => path, "content" => content}`
+arguments and successful `"wrote N bytes to path"` result are unchanged, but the
+write is now an atomic workspace-confined declarative operation with durable
+intent, callback-attempt, and terminal evidence. Resuming a persisted session
+reconciles an unresolved write without blindly retrying it. Custom tools,
+`edit`, `bash`, plugins, and remote execution do not yet use this production
+receipt path.
 
 ## Custom tools
 
@@ -192,8 +201,8 @@ Supported patterns are `:parallel`, `:specialists`, `:candidates` with a
 worktrees, so the parent `cwd` must be a Git checkout.
 
 `Elara.Coordinator.status/1` reports children and live budgets.
-`Elara.Coordinator.kill_child/2` stops one child without stopping siblings.
-Call `GenServer.stop(coordinator)` when finished to stop its children and remove
+`Elara.Coordinator.kill_child/2` stops one child without stopping siblings. Call
+`GenServer.stop(coordinator)` when finished to stop its children and remove
 temporary coding worktrees.
 
 See [Detached sessions and remote workers](detached-and-remote.md) to route

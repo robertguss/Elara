@@ -44,7 +44,7 @@ defmodule Elara.Effect.TestExecutorProtocolTest do
     assert_receive {:hook, :after_external_mutation_before_completion_commit, ^executor}
     assert_receive {:hook, :after_completion_commit_before_completion_reply, ^executor}
 
-    assert_receive {:elara_test_executor, "executor-1", "job-1",
+    assert_receive {:elara_effect_executor, "executor-1", "job-1",
                     {:completed, %Record{} = completed}}
 
     assert completed.admission_count == 1
@@ -82,7 +82,7 @@ defmodule Elara.Effect.TestExecutorProtocolTest do
     assert Agent.get(mutations, & &1) == 0
     assert :ok = TestExecutor.continue(executor, "job-1")
 
-    assert_receive {:elara_test_executor, "executor-1", "job-1",
+    assert_receive {:elara_effect_executor, "executor-1", "job-1",
                     {:completed, %Record{} = completed}}
 
     assert Agent.get(mutations, & &1) == 1
@@ -176,7 +176,7 @@ defmodule Elara.Effect.TestExecutorProtocolTest do
 
     assert :ok = TestExecutor.continue(reopened, "job-1", digest("a"), operation)
 
-    assert_receive {:elara_test_executor, "executor-1", "job-1",
+    assert_receive {:elara_effect_executor, "executor-1", "job-1",
                     {:completed, %Record{} = completed}}
 
     assert completed.admission_count == 1
@@ -216,7 +216,7 @@ defmodule Elara.Effect.TestExecutorProtocolTest do
     assert {:error, :callback_already_attempted} =
              TestExecutor.continue(reopened, "job-1", digest("a"), operation)
 
-    refute_receive {:elara_test_executor, _, _, _}
+    refute_receive {:elara_effect_executor, _, _, _}
     assert Agent.get(mutations, & &1) == 1
     assert :ok = TestExecutor.close(reopened)
   end
@@ -240,7 +240,7 @@ defmodule Elara.Effect.TestExecutorProtocolTest do
     monitor = Process.monitor(executor)
     Process.exit(executor, :kill)
     assert_receive {:DOWN, ^monitor, :process, ^executor, :killed}
-    refute_receive {:elara_test_executor, _, _, _}
+    refute_receive {:elara_effect_executor, _, _, _}
 
     reopened = start_executor(context.path)
     assert {:completed, %Record{} = completed} = TestExecutor.query(reopened, "job-1")
@@ -260,7 +260,7 @@ defmodule Elara.Effect.TestExecutorProtocolTest do
 
     assert :ok = TestExecutor.continue(executor, "job-error")
 
-    assert_receive {:elara_test_executor, "executor-1", "job-error",
+    assert_receive {:elara_effect_executor, "executor-1", "job-error",
                     {:failed, %Record{} = failed}}
 
     assert failed.result == {:error, "no"}
@@ -270,7 +270,7 @@ defmodule Elara.Effect.TestExecutorProtocolTest do
 
     assert :ok = TestExecutor.continue(executor, "job-crash")
 
-    assert_receive {:elara_test_executor, "executor-1", "job-crash",
+    assert_receive {:elara_effect_executor, "executor-1", "job-crash",
                     {:failed, %Record{} = crashed}}
 
     assert {:error, "callback crashed: boom"} = crashed.result

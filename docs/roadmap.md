@@ -54,9 +54,9 @@ The durable-effects evidence chain currently says:
    Its evidence is immutable in
    [`003-effect-receipt-v7-materialization-failure.md`](experiments/003-effect-receipt-v7-materialization-failure.md).
 
-V8 now has an explicit pre-beacon-tested materializer and a pushed confirmatory
-protocol. Its next step is time-gated: fetch the committed drand round exactly
-once at or after 2026-09-02T12:00:00Z, never before.
+V8 now has an explicit pre-beacon-tested materializer, a pushed confirmatory
+protocol, and a valid fresh corpus from its one-shot committed drand round. Its
+next step is run-only qualification through the unchanged frozen command stack.
 
 ## Execution queue
 
@@ -64,8 +64,8 @@ once at or after 2026-09-02T12:00:00Z, never before.
 | -------- | ------- | ---------------------------------------------------- | ------------------------- |
 | ER3-V8-1 | DONE    | Build and freeze an explicit pre-beacon materializer | V7 immutable failure      |
 | ER3-V8-2 | DONE    | Freeze the V8 protocol and future beacon             | ER3-V8-1                  |
-| ER3-V8-3 | BLOCKED | Fetch and materialize the fresh V8 corpus            | ER3-V8-2 + committed time |
-| ER3-V8-4 | BLOCKED | Run qualification through the frozen command stack   | ER3-V8-3                  |
+| ER3-V8-3 | DONE    | Fetch and materialize the fresh V8 corpus            | ER3-V8-2 + committed time |
+| ER3-V8-4 | TODO    | Run qualification through the frozen command stack   | ER3-V8-3                  |
 | ER3-V8-5 | BLOCKED | Execute the sole internal comparison                 | ER3-V8-4                  |
 | ER3-V8-6 | BLOCKED | Execute dogfood or record required non-execution     | ER3-V8-5                  |
 | ER3-V8-7 | BLOCKED | Apply Gate 3 and record the thesis decision          | ER3-V8-5 + ER3-V8-6       |
@@ -255,7 +255,7 @@ Implemented and pushed in
 
 ## ER3-V8-3 — Fetch and materialize fresh inputs
 
-**Status:** BLOCKED until its committed future time
+**Status:** DONE
 
 ### Outcome
 
@@ -278,11 +278,75 @@ comparator run, dogfood run, B, T, or confirmatory execution claim.
 
 ### Result
 
-Blocked.
+Implemented and pushed in
+[`b6a8f65`](https://github.com/robertguss/elixir-harness/commit/b6a8f650660a713abe1cf4037425a458588ae3d0).
+
+- Pre-exposure audit completed at 2026-09-02T12:09:56Z, after the committed
+  2026-09-02T12:00:00Z gate. The checkout was clean and synchronized at
+  `6d373da1fb2e2b625a52e1dbde451bd435955435`; the protocol
+  (`3644b5a3c07663fe7be9f67a710689ce5df43eb4eceb306f2a5f76d8eb26949a`), semantic
+  commitment
+  (`03b64a144c6de26adea8a9bf0258a6d47537849e6551e665e4302d27971717db`), 17
+  source identities, five semantic inputs, five report/development identities,
+  12 preserved artifacts, and both integrity-locked runtime files matched. The
+  permanent account-home claim and canonical beacon and corpus roots were
+  absent.
+- The runtime closure was reproduced with `npm ci --ignore-scripts` (15 pinned
+  packages, zero reported vulnerabilities). The one-shot command was invoked
+  exactly once:
+
+  ```text
+  node priv/benchmark/exp003-v8-beacon/fetch-and-verify.cjs fetch docs/experiments/003-effect-receipt-v8-protocol.json 3644b5a3c07663fe7be9f67a710689ce5df43eb4eceb306f2a5f76d8eb26949a
+  ```
+
+  It durably claimed the attempt at 2026-09-02T12:10:10.277Z. The claim SHA-256
+  is `b4cbfae7907eeb19055521bf9982db79cc0fe82beca6580160efef2b4ca88b75`. Both
+  chain-qualified relays returned equal round, randomness, signature, and
+  previous-signature fields; all four network observations were exact; and
+  `drand-client@1.4.2` plus the frozen offline verifier accepted round
+  `6430646`. Randomness is
+  `5bff7db2150c2637d45f7240f2d675001dfbbbfe937f465eea6ca48780137254`.
+
+- The frozen materializer then ran twice from absent roots, with no source or
+  protocol change:
+
+  ```text
+  mix run priv/benchmark/materialize_exp003_v8.exs -- docs/experiments/003-effect-receipt-v8-protocol.json 3644b5a3c07663fe7be9f67a710689ce5df43eb4eceb306f2a5f76d8eb26949a test/fixtures/benchmark/exp003-v8-beacon e1d957be54831ac42939c6536c8267c8c9091453b44b0cf7ff743064d62573a4 test/fixtures/benchmark/exp003-v8
+  mix run priv/benchmark/materialize_exp003_v8.exs -- docs/experiments/003-effect-receipt-v8-protocol.json 3644b5a3c07663fe7be9f67a710689ce5df43eb4eceb306f2a5f76d8eb26949a test/fixtures/benchmark/exp003-v8-beacon e1d957be54831ac42939c6536c8267c8c9091453b44b0cf7ff743064d62573a4 /tmp/elara-er3-v8-3-materialization-copy
+  ```
+
+  All eight output files were byte-identical. The verified-beacon, verification,
+  manifest, dogfood, external-attestation, and receipt SHA-256s are respectively
+  `a4cff520898b1d2d39ca60491369ba3773b63f16850a615f652a2f62a0feb01b`,
+  `e1d957be54831ac42939c6536c8267c8c9091453b44b0cf7ff743064d62573a4`,
+  `bb2ec63393e8c57e968ecc430d71f1fb4873797efa0aadc033cbfc996ffda2a2`,
+  `454f0f96d16d5904d43d376ef62d7680b4a492244643e0abae435cc1ab143282`,
+  `d8848f2f5167acf8e4cd3dacfde502b71132fd48f76ec47aabeab49fb28c7c2b`, and
+  `d152bece940eae9718ea3f000e0b4d4c662ca0af0c6fcff553e772d35b532508`. The two
+  relay-record SHA-256s are
+  `aebb15782f79703c157cf9f90e433b86a34aac1dab5de13b93d3b5c5eb51d58e` and
+  `3d86efbc7056a93bd1d18aafb2b80be183a69d37216c0a604d97d56011336d1a`.
+
+- Seed `8055419f03000edf43bfa15db59919d4df8bb074fc166d01c5025c710ebde1f0`
+  selected `S03,W03,W07,S02,W08,P08,S04,P04,W05,P07,P01,S01`: 20 candidates were
+  constructed and validated before selection, 17 were eligible, 12 tasks and 20
+  rows were locked, and all 54 required evidence fields remain frozen.
+- Verification passed: exact eight-file `diff -qr`; JSON, receipt-output hash,
+  permanent-claim, relay-equality, cardinality, exposure, and preserved-artifact
+  audits; focused V8 tests (23 passed); `mix format --check-formatted`;
+  `mix compile --warnings-as-errors`; and full `mix test` (442 passed). The
+  expected `CrashTool` `RuntimeError: boom` recovery log remained non-failing.
+- Deviations: none. No alternate or predecessor round, retry, repair, resume,
+  replacement, implementation/schema/protocol/identity/selection change,
+  qualification, target fault or timing, comparator, dogfood, `B`, `T`, or
+  confirmatory execution claim occurred.
+- Remaining uncertainty: ER3-V8-3 proves only valid acquisition and
+  deterministic materialization. The fresh corpus has not passed the frozen
+  run-only qualification; ER3-V8-4 is the sole next executable item.
 
 ## ER3-V8-4 — Run qualification through the frozen command stack
 
-**Status:** BLOCKED by ER3-V8-3
+**Status:** TODO
 
 ### Outcome
 

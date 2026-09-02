@@ -33,10 +33,13 @@ The creating attachment's current directory becomes the new session's working
 directory. Reattaching does not change it.
 
 Disconnecting the attachment does not interrupt the current turn or stop the
-session. The client stores its last event cursor under `~/.elara/attach/`, so
-reattaching replays missed retained events instead of the whole stream. The
-server process must remain running; this is client detachability, not recovery
-after the server VM exits.
+session. `mix elara.attach` uses session protocol v2: every attachment starts
+from an atomic materialized snapshot and then applies ordered patches. The
+client stores its last sequence and incarnation under `~/.elara/attach/`. A
+sequence gap or incarnation change causes one fresh snapshot request; the client
+never reconstructs current state from an incomplete event history. The server
+process must remain running; this is client detachability, not recovery after
+the server VM exits.
 
 Only one controlling attachment can ask or interrupt. Additional read-only
 clients can observe the event stream:
@@ -59,6 +62,38 @@ mix elara.attach new --port 14048
 # The attach client also reads this when --port is absent:
 export ELARA_SERVER_PORT=14048
 ```
+
+### Session protocol
+
+The loopback TCP protocol uses newline-delimited JSON with a 16 MiB maximum
+message size. Every request includes `version`. The server supports these
+session protocol versions:
+
+- **v1:** The `attached` response contains `session_id`, `incarnation`, `head`,
+  and `mode`. It is followed by retained `event` messages after the requested
+  cursor. Cursors older than the 1,000-event replay window and stale
+  incarnations are rejected. This behavior remains available for existing v1
+  clients.
+- **v2:** The `attached` response adds `snapshot` and never replays the v1 event
+  ring. The snapshot contains session identity, the complete encoded message
+  history, tool calls with `pending`, `running`, `succeeded`, `failed`, or
+  `indeterminate` status and outcome, current turn state, usage (currently
+  `null`), and reserved content-delta state. Subsequent `patch` messages carry
+  the session incarnation, sequence, and an ordered `ops` array.
+
+V2 has a closed patch operation set: `append_message`, `set_tool_status`,
+`set_turn_state`, `set_usage`, and the `append_content_delta` operation reserved
+for streaming. Clients apply these operations to their last snapshot in sequence
+order. They ignore already-applied sequences. On a gap, malformed patch, or
+incarnation change, they send exactly one `{"version":2,"command":"resnapshot"}`
+while a snapshot is pending. The server replies with a fresh `snapshot` message
+and atomic `head`; queued patches at or below that head are stale and safe to
+ignore.
+
+The v1 and v2 command set otherwise remains `create`, `attach`, `ask`,
+`interrupt`, and `inspect`. Only a controlling attachment may mutate session
+state; observers receive the same events or patches but control commands fail
+with `not_controller`.
 
 ## Remote workers
 
@@ -104,12 +139,11 @@ remote_tools =
 ```
 
 The worker uses its own mapping for `project-a`; it does not receive or assume
-the brain node's `cwd`. `mix elara.worker --cwd` configures that worker
-mapping only. It is not a `--cwd` option for `mix elara.ask` or
-`mix elara.chat`.
+the brain node's `cwd`. `mix elara.worker --cwd` configures that worker mapping
+only. It is not a `--cwd` option for `mix elara.ask` or `mix elara.chat`.
 
-Inspect registered executors with `Elara.workers/0`. A session can restrict
-tool permissions before routing with `allowed_capabilities:`:
+Inspect registered executors with `Elara.workers/0`. A session can restrict tool
+permissions before routing with `allowed_capabilities:`:
 
 ```elixir
 Elara.start_session(allowed_capabilities: ["filesystem:read"])

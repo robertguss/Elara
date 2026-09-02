@@ -17,7 +17,11 @@ defmodule Elara.ServerTest do
 
   defp connect(port) do
     {:ok, socket} =
-      :gen_tcp.connect({127, 0, 0, 1}, port, [:binary, packet: :line, active: false])
+      :gen_tcp.connect(
+        {127, 0, 0, 1},
+        port,
+        [:binary, packet: :line, packet_size: 16 * 1_024 * 1_024, active: false]
+      )
 
     socket
   end
@@ -25,15 +29,24 @@ defmodule Elara.ServerTest do
   defp send_json(socket, message), do: :gen_tcp.send(socket, Protocol.encode(message))
 
   defp recv_json(socket, timeout \\ 2_000) do
-    {:ok, line} = :gen_tcp.recv(socket, 0, timeout)
+    {:ok, line} = recv_line(socket, timeout)
     {:ok, message} = Protocol.decode(line)
     message
+  end
+
+  defp recv_line(socket, timeout, line_buffer \\ {[], 0}) do
+    {:ok, chunk} = :gen_tcp.recv(socket, 0, timeout)
+
+    case Protocol.push_line(line_buffer, chunk) do
+      {:ok, line} -> {:ok, line}
+      {:more, line_buffer} -> recv_line(socket, timeout, line_buffer)
+    end
   end
 
   defp attach(socket, session, mode, cursor, incarnation) do
     :ok =
       send_json(socket, %{
-        "version" => Protocol.version(),
+        "version" => Protocol.v1(),
         "command" => "attach",
         "session_id" => session,
         "mode" => mode,
@@ -70,7 +83,7 @@ defmodule Elara.ServerTest do
 
     :ok =
       send_json(controller, %{
-        "version" => Protocol.version(),
+        "version" => Protocol.v1(),
         "command" => "create",
         "mode" => "control",
         "cwd" => File.cwd!()
@@ -85,7 +98,7 @@ defmodule Elara.ServerTest do
 
     :ok =
       send_json(controller, %{
-        "version" => Protocol.version(),
+        "version" => Protocol.v1(),
         "command" => "ask",
         "prompt" => "run it"
       })
@@ -112,12 +125,13 @@ defmodule Elara.ServerTest do
 
     :ok =
       send_json(observer, %{
-        "version" => Protocol.version(),
+        "version" => Protocol.v1(),
         "command" => "ask",
         "prompt" => "not allowed"
       })
 
-    assert %{"type" => "error", "error" => "not_controller"} = recv_json(observer)
+    assert %{"type" => "error", "version" => 1, "error" => "not_controller"} =
+             recv_json(observer)
 
     replayed = Enum.map(5..7, fn seq -> {seq, recv_json(observer, 3_000)} end)
 

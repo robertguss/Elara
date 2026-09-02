@@ -98,6 +98,23 @@ defmodule Elara do
   end
 
   @doc false
+  @spec attach_v2(session_ref(), :control | :observe, non_neg_integer(), String.t() | nil) ::
+          {:ok, map()} | {:error, term()}
+  def attach_v2(session, mode, cursor \\ 0, incarnation \\ nil)
+      when (is_pid(session) or is_binary(session)) and mode in [:control, :observe] and
+             is_integer(cursor) and cursor >= 0 do
+    call(session, {:attach_v2, mode, cursor, incarnation})
+  end
+
+  @doc false
+  @spec snapshot(session_ref()) :: map() | {:error, :session_not_found}
+  def snapshot(session) when is_pid(session) or is_binary(session), do: call(session, :snapshot)
+
+  @spec materialized_view(session_ref()) :: map() | {:error, :session_not_found}
+  def materialized_view(session) when is_pid(session) or is_binary(session),
+    do: call(session, :materialized_view)
+
+  @doc false
   @spec attached_command(session_ref(), term()) :: :ok | {:error, term()}
   def attached_command(session, command) when is_pid(session) or is_binary(session) do
     call(session, {:attached_command, command})

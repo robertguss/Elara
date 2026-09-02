@@ -10,6 +10,7 @@ defmodule Elara.Session do
   alias Elara.Message
   alias Elara.Message.{Assistant, ToolResult}
   alias Elara.Plugin.Server, as: PluginServer
+  alias Elara.Protocol
   alias Elara.Provider
   alias Elara.Executor.{Request, Router}
   alias Elara.Session.{Core, Store}
@@ -208,6 +209,14 @@ defmodule Elara.Session do
     {:reply, shell.core.history, shell}
   end
 
+  def handle_call(:materialized_view, _from, shell) do
+    {:reply, materialized_view(shell), shell}
+  end
+
+  def handle_call(:snapshot, _from, shell) do
+    {:reply, snapshot(shell), shell}
+  end
+
   def handle_call(:recording, _from, shell) do
     {:reply, FlightRecorder.snapshot(shell.recorder), shell}
   end
@@ -329,7 +338,7 @@ defmodule Elara.Session do
          :ok <- grant_control(mode, pid, shell) do
       ref = Process.monitor(pid)
       replay = Enum.filter(:queue.to_list(shell.event_log), fn {seq, _} -> seq > cursor end)
-      attachment = %{monitor: ref, mode: mode}
+      attachment = %{monitor: ref, mode: mode, protocol: 1}
 
       shell = %{
         shell
@@ -347,6 +356,26 @@ defmodule Elara.Session do
       {:reply, {:ok, reply}, shell}
     else
       {:error, reason} -> {:reply, {:error, reason}, shell}
+    end
+  end
+
+  def handle_call({:attach_v2, mode, _cursor, _incarnation}, {pid, _}, shell)
+      when mode in [:control, :observe] do
+    case grant_control(mode, pid, shell) do
+      :ok ->
+        ref = Process.monitor(pid)
+        attachment = %{monitor: ref, mode: mode, protocol: 2}
+
+        shell = %{
+          shell
+          | attachments: Map.put(shell.attachments, pid, attachment),
+            controller: if(mode == :control, do: pid, else: shell.controller)
+        }
+
+        {:reply, {:ok, snapshot(shell)}, shell}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, shell}
     end
   end
 
@@ -1058,8 +1087,14 @@ defmodule Elara.Session do
       send(pid, {:elara, shell.id, event})
     end)
 
-    Enum.each(shell.attachments, fn {pid, _} ->
-      send(pid, {:elara_event, shell.id, shell.incarnation, seq, event})
+    patch_ops = Protocol.patch_ops(event, shell.core)
+
+    Enum.each(shell.attachments, fn
+      {pid, %{protocol: 2}} ->
+        send(pid, {:elara_patch, shell.id, shell.incarnation, seq, patch_ops})
+
+      {pid, _attachment} ->
+        send(pid, {:elara_event, shell.id, shell.incarnation, seq, event})
     end)
 
     case {event, shell.pending_reply} do
@@ -1300,6 +1335,19 @@ defmodule Elara.Session do
       {:value, {first, _}} when cursor < first - 1 -> {:error, :cursor_expired}
       _ -> :ok
     end
+  end
+
+  defp snapshot(shell) do
+    %{
+      id: shell.id,
+      incarnation: shell.incarnation,
+      head: shell.next_event_seq - 1,
+      snapshot: materialized_view(shell)
+    }
+  end
+
+  defp materialized_view(shell) do
+    Protocol.snapshot(shell.id, shell.incarnation, shell.core)
   end
 
   defp grant_control(:observe, _pid, _shell), do: :ok

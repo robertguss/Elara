@@ -6,7 +6,8 @@ defmodule Elara.Server do
   alias Elara.Protocol
 
   @default_port 4_048
-  @protocol_version Protocol.version()
+  @max_packet_bytes Protocol.max_line_bytes()
+  @protocol_versions Protocol.versions()
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
@@ -24,7 +25,14 @@ defmodule Elara.Server do
     port = Keyword.get(opts, :port, @default_port)
     provider = Keyword.get(opts, :provider)
 
-    listen_opts = [:binary, packet: :line, active: false, reuseaddr: true, ip: {127, 0, 0, 1}]
+    listen_opts = [
+      :binary,
+      packet: :line,
+      packet_size: @max_packet_bytes,
+      active: false,
+      reuseaddr: true,
+      ip: {127, 0, 0, 1}
+    ]
 
     case :gen_tcp.listen(port, listen_opts) do
       {:ok, listen} ->
@@ -69,67 +77,111 @@ defmodule Elara.Server do
   end
 
   defp connection(socket, provider) do
-    with {:ok, line} <- :gen_tcp.recv(socket, 0, 30_000),
-         {:ok, request} <- Protocol.decode(line),
-         {:ok, session, mode, cursor, incarnation} <- prepare_attachment(request, provider),
-         {:ok, attachment} <- Elara.attach(session, mode, cursor, incarnation) do
-      send_json(socket, %{
-        "type" => "attached",
-        "version" => Protocol.version(),
-        "session_id" => attachment.id,
-        "incarnation" => attachment.incarnation,
-        "head" => attachment.head,
-        "mode" => Atom.to_string(mode)
-      })
-
-      Enum.each(attachment.replay, fn {seq, event} ->
-        send_json(socket, Protocol.event(seq, event))
-      end)
-
-      :ok = :inet.setopts(socket, active: :once)
-      connection_loop(socket, session)
+    with {:ok, line} <- recv_line(socket, 30_000),
+         {:ok, request} <- Protocol.decode(line) do
+      establish_connection(socket, provider, request)
     else
-      {:error, reason} -> send_error(socket, reason)
+      {:error, reason} -> send_error(socket, reason, Protocol.version())
     end
 
     :gen_tcp.close(socket)
   end
 
+  defp establish_connection(socket, provider, request) do
+    version = response_version(request)
+
+    with {:ok, version, session, mode, cursor, incarnation} <-
+           prepare_attachment(request, provider),
+         {:ok, attachment} <- attach(version, session, mode, cursor, incarnation) do
+      send_json(socket, attached_message(version, mode, attachment))
+
+      if version == 1 do
+        Enum.each(attachment.replay, fn {seq, event} ->
+          send_json(socket, Protocol.event(seq, event))
+        end)
+      end
+
+      :ok = :inet.setopts(socket, active: :once)
+      connection_loop(socket, session, version, Protocol.line_buffer())
+    else
+      {:error, reason} -> send_error(socket, reason, version)
+    end
+  end
+
   defp prepare_attachment(%{"version" => version}, _provider)
-       when version != @protocol_version,
+       when version not in @protocol_versions,
        do: {:error, :unsupported_version}
 
-  defp prepare_attachment(%{"version" => _, "command" => "create"} = request, provider) do
+  defp prepare_attachment(%{"version" => version, "command" => "create"} = request, provider) do
     mode = decode_mode(Map.get(request, "mode", "control"))
     cwd = Map.get(request, "cwd", File.cwd!())
 
     with {:ok, mode} <- mode,
          {:ok, provider} <- resolve_provider(provider),
          {:ok, session} <- Elara.start_session(provider: provider, cwd: cwd) do
-      {:ok, session, mode, 0, nil}
+      {:ok, version, session, mode, 0, nil}
     end
   end
 
   defp prepare_attachment(
-         %{"version" => _, "command" => "attach", "session_id" => session} = request,
+         %{"version" => version, "command" => "attach", "session_id" => session} = request,
          _provider
        )
        when is_binary(session) do
     with {:ok, mode} <- decode_mode(Map.get(request, "mode", "control")),
          {:ok, cursor} <- decode_cursor(Map.get(request, "cursor", 0)) do
-      {:ok, session, mode, cursor, Map.get(request, "incarnation")}
+      {:ok, version, session, mode, cursor, Map.get(request, "incarnation")}
     end
   end
 
   defp prepare_attachment(_request, _provider), do: {:error, :invalid_command}
 
-  defp connection_loop(socket, session) do
+  defp attach(1, session, mode, cursor, incarnation),
+    do: Elara.attach(session, mode, cursor, incarnation)
+
+  defp attach(2, session, mode, cursor, incarnation),
+    do: Elara.attach_v2(session, mode, cursor, incarnation)
+
+  defp attached_message(1, mode, attachment) do
+    %{
+      "type" => "attached",
+      "version" => 1,
+      "session_id" => attachment.id,
+      "incarnation" => attachment.incarnation,
+      "head" => attachment.head,
+      "mode" => Atom.to_string(mode)
+    }
+  end
+
+  defp attached_message(2, mode, attachment) do
+    %{
+      "type" => "attached",
+      "version" => 2,
+      "session_id" => attachment.id,
+      "incarnation" => attachment.incarnation,
+      "head" => attachment.head,
+      "mode" => Atom.to_string(mode),
+      "snapshot" => attachment.snapshot
+    }
+  end
+
+  defp connection_loop(socket, session, version, line_buffer) do
     receive do
-      {:tcp, ^socket, line} ->
-        response = handle_command(session, Protocol.decode(line))
-        send_json(socket, response)
-        :ok = :inet.setopts(socket, active: :once)
-        connection_loop(socket, session)
+      {:tcp, ^socket, chunk} ->
+        case Protocol.push_line(line_buffer, chunk) do
+          {:ok, line} ->
+            response = handle_command(session, version, Protocol.decode(line))
+            send_json(socket, response)
+            :ok = :inet.setopts(socket, active: :once)
+            connection_loop(socket, session, version, Protocol.line_buffer())
+
+          {:more, line_buffer} ->
+            :ok = :inet.setopts(socket, active: :once)
+            connection_loop(socket, session, version, line_buffer)
+
+          {:error, reason} ->
+            send_error(socket, reason, version)
+        end
 
       {:tcp_closed, ^socket} ->
         :ok
@@ -141,40 +193,70 @@ defmodule Elara.Server do
         message = Protocol.event(seq, event) |> Map.put("incarnation", incarnation)
 
         case send_json(socket, message) do
-          :ok -> connection_loop(socket, session)
+          :ok -> connection_loop(socket, session, version, line_buffer)
+          {:error, _} -> :ok
+        end
+
+      {:elara_patch, ^session, incarnation, seq, ops} ->
+        message = Protocol.patch(seq, ops) |> Map.put("incarnation", incarnation)
+
+        case send_json(socket, message) do
+          :ok -> connection_loop(socket, session, version, line_buffer)
           {:error, _} -> :ok
         end
     end
   end
 
-  defp handle_command(_session, {:ok, %{"version" => version}})
-       when version != @protocol_version,
-       do: error_message(:unsupported_version)
+  defp handle_command(session, version, {:ok, %{"version" => version} = request}),
+    do: handle_versioned_command(session, version, request)
 
-  defp handle_command(session, {:ok, %{"command" => "ask", "prompt" => prompt}})
+  defp handle_command(_session, version, {:ok, _request}),
+    do: error_message(:unsupported_version, version)
+
+  defp handle_command(_session, version, {:error, reason}), do: error_message(reason, version)
+
+  defp handle_versioned_command(session, version, %{"command" => "ask", "prompt" => prompt})
        when is_binary(prompt) do
-    command_result(Elara.attached_command(session, {:ask, prompt}))
+    command_result(Elara.attached_command(session, {:ask, prompt}), version)
   end
 
-  defp handle_command(session, {:ok, %{"command" => "interrupt"}}) do
-    command_result(Elara.attached_command(session, :interrupt))
+  defp handle_versioned_command(session, version, %{"command" => "interrupt"}) do
+    command_result(Elara.attached_command(session, :interrupt), version)
   end
 
-  defp handle_command(session, {:ok, %{"command" => "inspect"}}) do
+  defp handle_versioned_command(session, version, %{"command" => "inspect"}) do
     case Elara.status(session) do
       %{} = status ->
-        %{"type" => "status", "version" => Protocol.version(), "status" => json_status(status)}
+        %{"type" => "status", "version" => version, "status" => json_status(status)}
 
       {:error, reason} ->
-        error_message(reason)
+        error_message(reason, version)
     end
   end
 
-  defp handle_command(_session, {:ok, _request}), do: error_message(:invalid_command)
-  defp handle_command(_session, {:error, reason}), do: error_message(reason)
+  defp handle_versioned_command(session, 2, %{"command" => "resnapshot"}) do
+    case Elara.snapshot(session) do
+      %{} = snapshot -> snapshot_message(snapshot)
+      {:error, reason} -> error_message(reason, 2)
+    end
+  end
 
-  defp command_result(:ok), do: %{"type" => "ok", "version" => Protocol.version()}
-  defp command_result({:error, reason}), do: error_message(reason)
+  defp handle_versioned_command(_session, version, _request),
+    do: error_message(:invalid_command, version)
+
+  defp command_result(:ok, version), do: %{"type" => "ok", "version" => version}
+  defp command_result({:error, reason}, version), do: error_message(reason, version)
+
+  defp snapshot_message(snapshot) do
+    %{
+      "type" => "snapshot",
+      "version" => 2,
+      "session_id" => snapshot.id,
+      "incarnation" => snapshot.incarnation,
+      "head" => snapshot.head,
+      "snapshot" => snapshot.snapshot
+    }
+  end
 
   defp decode_mode("control"), do: {:ok, :control}
   defp decode_mode("observe"), do: {:ok, :observe}
@@ -186,16 +268,29 @@ defmodule Elara.Server do
   defp resolve_provider(nil), do: Elara.Config.resolve()
   defp resolve_provider(provider), do: {:ok, provider}
 
-  defp send_error(socket, reason), do: send_json(socket, error_message(reason))
+  defp response_version(%{"version" => version}) when version in @protocol_versions, do: version
+  defp response_version(_request), do: Protocol.version()
 
-  defp error_message(reason) do
-    %{"type" => "error", "version" => Protocol.version(), "error" => format_reason(reason)}
+  defp send_error(socket, reason, version), do: send_json(socket, error_message(reason, version))
+
+  defp error_message(reason, version) do
+    %{"type" => "error", "version" => version, "error" => format_reason(reason)}
   end
 
   defp format_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
   defp format_reason(reason), do: inspect(reason)
 
   defp send_json(socket, message), do: :gen_tcp.send(socket, Protocol.encode(message))
+
+  defp recv_line(socket, timeout, line_buffer \\ {[], 0}) do
+    with {:ok, chunk} <- :gen_tcp.recv(socket, 0, timeout) do
+      case Protocol.push_line(line_buffer, chunk) do
+        {:ok, line} -> {:ok, line}
+        {:more, line_buffer} -> recv_line(socket, timeout, line_buffer)
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
 
   defp json_status(status) do
     %{

@@ -3,11 +3,43 @@ defmodule Elara.Protocol do
 
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
   alias Elara.Provider
+  alias Elara.Session.Core
 
-  @version 1
+  @version 2
+  @versions [1, 2]
+  @max_line_bytes 16 * 1_024 * 1_024
 
   @spec version() :: pos_integer()
   def version, do: @version
+
+  @spec versions() :: [pos_integer()]
+  def versions, do: @versions
+
+  @spec v1() :: 1
+  def v1, do: 1
+
+  @spec max_line_bytes() :: pos_integer()
+  def max_line_bytes, do: @max_line_bytes
+
+  @spec line_buffer() :: {iodata(), non_neg_integer()}
+  def line_buffer, do: {[], 0}
+
+  @spec push_line({iodata(), non_neg_integer()}, binary()) ::
+          {:ok, binary()} | {:more, {iodata(), non_neg_integer()}} | {:error, :message_too_large}
+  def push_line({parts, size}, chunk) when is_binary(chunk) do
+    size = size + byte_size(chunk)
+
+    cond do
+      size > @max_line_bytes ->
+        {:error, :message_too_large}
+
+      chunk != "" and :binary.last(chunk) == ?\n ->
+        {:ok, parts |> Enum.reverse([chunk]) |> IO.iodata_to_binary()}
+
+      true ->
+        {:more, {[chunk | parts], size}}
+    end
+  end
 
   @spec encode(map()) :: iodata()
   def encode(message) when is_map(message), do: [JSON.encode!(message), "\n"]
@@ -23,8 +55,86 @@ defmodule Elara.Protocol do
 
   @spec event(non_neg_integer(), Elara.Event.t()) :: map()
   def event(seq, event) do
-    %{"type" => "event", "version" => @version, "seq" => seq, "event" => encode_event(event)}
+    %{"type" => "event", "version" => 1, "seq" => seq, "event" => encode_event(event)}
   end
+
+  @spec snapshot(String.t(), String.t(), Core.State.t()) :: map()
+  def snapshot(session_id, incarnation, %Core.State{} = core) do
+    %{
+      "session" => %{"id" => session_id, "incarnation" => incarnation},
+      "messages" => Enum.map(core.history, &encode_message/1),
+      "tool_calls" => tool_views(core),
+      "turn" => encode_phase(core.phase),
+      "usage" => nil,
+      "content_deltas" => %{}
+    }
+  end
+
+  @spec patch(non_neg_integer(), [map()]) :: map()
+  def patch(seq, ops) when is_integer(seq) and seq >= 0 and is_list(ops) do
+    %{"type" => "patch", "version" => 2, "seq" => seq, "ops" => ops}
+  end
+
+  @spec patch_ops(Elara.Event.t(), Core.State.t()) :: [map()]
+  def patch_ops(event, %Core.State{} = core) do
+    event_ops(event) ++ [%{"op" => "set_turn_state", "turn" => event_turn(event, core.phase)}]
+  end
+
+  @spec apply_patch(map(), [map()]) :: {:ok, map()} | {:error, :invalid_patch}
+  def apply_patch(view, ops) when is_map(view) and is_list(ops) do
+    Enum.reduce_while(ops, {:ok, view}, fn op, {:ok, view} ->
+      case apply_op(view, op) do
+        {:ok, view} -> {:cont, {:ok, view}}
+        {:error, :invalid_patch} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  def apply_patch(_view, _ops), do: {:error, :invalid_patch}
+
+  @spec snapshot_events(map()) :: {:ok, [Elara.Event.t()]} | {:error, :invalid_snapshot}
+  def snapshot_events(%{"messages" => messages, "tool_calls" => tool_calls})
+      when is_list(messages) and is_list(tool_calls) do
+    statuses = Map.new(tool_calls, &{&1["id"], &1})
+
+    case Enum.reduce_while(messages, [], fn encoded, events ->
+           case decode_message(encoded) do
+             {:ok, %Assistant{tool_calls: calls} = message} ->
+               started =
+                 calls
+                 |> Enum.filter(fn call -> get_in(statuses, [call.id, "status"]) != "pending" end)
+                 |> Enum.map(&{:tool_started, &1})
+
+               new_events = [{:message_appended, message} | started]
+               {:cont, Enum.reverse(new_events, events)}
+
+             {:ok, message} ->
+               {:cont, [{:message_appended, message} | events]}
+
+             {:error, _reason} ->
+               {:halt, :error}
+           end
+         end) do
+      :error -> {:error, :invalid_snapshot}
+      events -> {:ok, Enum.reverse(events)}
+    end
+  end
+
+  def snapshot_events(_snapshot), do: {:error, :invalid_snapshot}
+
+  @spec patch_events([map()]) :: {:ok, [Elara.Event.t()]} | {:error, :invalid_patch}
+  def patch_events(ops) when is_list(ops) do
+    ops
+    |> Enum.reduce_while({:ok, []}, fn op, {:ok, events} ->
+      case event_from_op(op) do
+        {:ok, nil} -> {:cont, {:ok, events}}
+        {:ok, event} -> {:cont, {:ok, events ++ [event]}}
+        {:error, :invalid_patch} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  def patch_events(_ops), do: {:error, :invalid_patch}
 
   @spec decode_event(map()) :: {:ok, Elara.Event.t()} | {:error, :invalid_event}
   def decode_event(%{"kind" => "turn_started", "prompt" => prompt}) when is_binary(prompt),
@@ -54,6 +164,197 @@ defmodule Elara.Protocol do
 
   defp encode_event({:turn_ended, outcome}),
     do: %{"kind" => "turn_ended", "outcome" => encode_turn_outcome(outcome)}
+
+  defp event_ops({:turn_started, _prompt}), do: []
+
+  defp event_ops({:tool_started, call}) do
+    [
+      %{
+        "op" => "set_tool_status",
+        "id" => call.id,
+        "status" => "running",
+        "outcome" => nil,
+        "call" => encode_call(call)
+      }
+    ]
+  end
+
+  defp event_ops({:message_appended, %ToolResult{} = result}) do
+    [
+      %{"op" => "append_message", "message" => encode_message(result)},
+      %{
+        "op" => "set_tool_status",
+        "id" => result.call_id,
+        "status" => tool_status(result.outcome),
+        "outcome" => encode_tool_outcome(result.outcome)
+      }
+    ]
+  end
+
+  defp event_ops({:message_appended, message}) do
+    [%{"op" => "append_message", "message" => encode_message(message)}]
+  end
+
+  defp event_ops({:turn_ended, _outcome}), do: []
+
+  defp event_turn({:turn_started, prompt}, phase),
+    do: Map.put(encode_phase(phase), "prompt", prompt)
+
+  defp event_turn({:turn_ended, outcome}, phase),
+    do: Map.put(encode_phase(phase), "outcome", encode_turn_outcome(outcome))
+
+  defp event_turn(_event, phase), do: encode_phase(phase)
+
+  defp encode_phase(:idle), do: %{"state" => "idle"}
+
+  defp encode_phase({:calling_provider, _ref, iteration}),
+    do: %{"state" => "calling_provider", "iteration" => iteration}
+
+  defp encode_phase({:running_tool, _ref, call, _remaining, iteration}) do
+    %{"state" => "running_tool", "tool_call_id" => call.id, "iteration" => iteration}
+  end
+
+  defp tool_views(%Core.State{} = core) do
+    results =
+      core.history
+      |> Enum.filter(&is_struct(&1, ToolResult))
+      |> Map.new(&{&1.call_id, &1.outcome})
+
+    running =
+      case core.phase do
+        {:running_tool, _ref, call, _remaining, _iteration} -> call.id
+        _phase -> nil
+      end
+
+    core.history
+    |> Enum.filter(&is_struct(&1, Assistant))
+    |> Enum.flat_map(& &1.tool_calls)
+    |> Enum.map(fn call ->
+      case Map.fetch(results, call.id) do
+        {:ok, outcome} ->
+          call
+          |> encode_call()
+          |> Map.merge(%{
+            "status" => tool_status(outcome),
+            "outcome" => encode_tool_outcome(outcome)
+          })
+
+        :error when call.id == running ->
+          call |> encode_call() |> Map.merge(%{"status" => "running", "outcome" => nil})
+
+        :error ->
+          call |> encode_call() |> Map.merge(%{"status" => "pending", "outcome" => nil})
+      end
+    end)
+  end
+
+  defp tool_status({:ok, _text}), do: "succeeded"
+  defp tool_status({:error, _text}), do: "failed"
+  defp tool_status({:indeterminate, _text}), do: "indeterminate"
+
+  defp apply_op(
+         %{"messages" => messages, "tool_calls" => tool_calls} = view,
+         %{"op" => "append_message", "message" => message}
+       )
+       when is_list(messages) and is_list(tool_calls) and is_map(message) do
+    case decode_message(message) do
+      {:ok, %Assistant{tool_calls: calls}} ->
+        new_calls =
+          Enum.map(calls, fn call ->
+            call |> encode_call() |> Map.merge(%{"status" => "pending", "outcome" => nil})
+          end)
+
+        {:ok,
+         %{view | "messages" => messages ++ [message], "tool_calls" => tool_calls ++ new_calls}}
+
+      {:ok, _message} ->
+        {:ok, %{view | "messages" => messages ++ [message]}}
+
+      {:error, _reason} ->
+        {:error, :invalid_patch}
+    end
+  end
+
+  defp apply_op(
+         %{"tool_calls" => calls} = view,
+         %{"op" => "set_tool_status", "id" => id, "status" => status, "outcome" => outcome}
+       )
+       when is_list(calls) and is_binary(id) and
+              status in ["pending", "running", "succeeded", "failed", "indeterminate"] do
+    if Enum.any?(calls, &(&1["id"] == id)) do
+      calls =
+        Enum.map(calls, fn
+          %{"id" => ^id} = call -> Map.merge(call, %{"status" => status, "outcome" => outcome})
+          call -> call
+        end)
+
+      {:ok, %{view | "tool_calls" => calls}}
+    else
+      {:error, :invalid_patch}
+    end
+  end
+
+  defp apply_op(view, %{"op" => "set_turn_state", "turn" => %{"state" => state} = turn})
+       when state in ["idle", "calling_provider", "running_tool"] do
+    {:ok, Map.put(view, "turn", Map.drop(turn, ["prompt", "outcome"]))}
+  end
+
+  defp apply_op(view, %{"op" => "set_usage", "usage" => usage})
+       when is_map(usage) or is_nil(usage),
+       do: {:ok, Map.put(view, "usage", usage)}
+
+  defp apply_op(
+         %{"content_deltas" => deltas} = view,
+         %{"op" => "append_content_delta", "message_id" => id, "text" => text}
+       )
+       when is_map(deltas) and is_binary(id) and is_binary(text) do
+    {:ok, %{view | "content_deltas" => Map.update(deltas, id, text, &(&1 <> text))}}
+  end
+
+  defp apply_op(_view, _op), do: {:error, :invalid_patch}
+
+  defp event_from_op(%{"op" => "append_message", "message" => message}) do
+    case decode_message(message) do
+      {:ok, message} -> {:ok, {:message_appended, message}}
+      {:error, _reason} -> {:error, :invalid_patch}
+    end
+  end
+
+  defp event_from_op(%{
+         "op" => "set_tool_status",
+         "status" => "running",
+         "call" => call
+       }) do
+    case decode_call(call) do
+      {:ok, call} -> {:ok, {:tool_started, call}}
+      {:error, _reason} -> {:error, :invalid_patch}
+    end
+  end
+
+  defp event_from_op(%{"op" => "set_tool_status"}), do: {:ok, nil}
+
+  defp event_from_op(%{
+         "op" => "set_turn_state",
+         "turn" => %{"prompt" => prompt}
+       })
+       when is_binary(prompt),
+       do: {:ok, {:turn_started, prompt}}
+
+  defp event_from_op(%{
+         "op" => "set_turn_state",
+         "turn" => %{"outcome" => outcome}
+       }) do
+    case decode_turn_outcome(outcome) do
+      {:ok, outcome} -> {:ok, {:turn_ended, outcome}}
+      {:error, _reason} -> {:error, :invalid_patch}
+    end
+  end
+
+  defp event_from_op(%{"op" => op})
+       when op in ["set_turn_state", "set_usage", "append_content_delta"],
+       do: {:ok, nil}
+
+  defp event_from_op(_op), do: {:error, :invalid_patch}
 
   defp encode_message(%User{text: text}), do: %{"role" => "user", "text" => text}
 

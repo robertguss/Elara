@@ -16,8 +16,12 @@ defmodule Elara.Message do
 
   defmodule Assistant do
     @typedoc "Invariant: text and tool_calls are never both empty. Enforced by assistant/2."
-    @type t :: %__MODULE__{text: String.t() | nil, tool_calls: [ToolCall.t()]}
-    defstruct text: nil, tool_calls: []
+    @type t :: %__MODULE__{
+            text: String.t() | nil,
+            tool_calls: [ToolCall.t()],
+            provider_state: map() | nil
+          }
+    defstruct text: nil, tool_calls: [], provider_state: nil
   end
 
   defmodule ToolResult do
@@ -28,17 +32,18 @@ defmodule Elara.Message do
   @type t :: User.t() | Assistant.t() | ToolResult.t()
 
   @doc "The only way to build an Assistant message. Rejects the empty message."
-  @spec assistant(String.t() | nil, [ToolCall.t()]) ::
+  @spec assistant(String.t() | nil, [ToolCall.t()], map() | nil) ::
           {:ok, Assistant.t()} | {:error, :empty_assistant}
-  def assistant(text, tool_calls)
-      when (is_binary(text) or is_nil(text)) and is_list(tool_calls) do
+  def assistant(text, tool_calls, provider_state \\ nil)
+      when (is_binary(text) or is_nil(text)) and is_list(tool_calls) and
+             (is_map(provider_state) or is_nil(provider_state)) do
     text_empty? = text == nil or text == ""
     calls_empty? = tool_calls == []
 
     if text_empty? and calls_empty? do
       {:error, :empty_assistant}
     else
-      {:ok, %Assistant{text: text, tool_calls: tool_calls}}
+      {:ok, %Assistant{text: text, tool_calls: tool_calls, provider_state: provider_state}}
     end
   end
 

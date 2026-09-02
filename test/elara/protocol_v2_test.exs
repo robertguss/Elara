@@ -327,6 +327,33 @@ defmodule Elara.ProtocolV2Test do
     assert {:ignored, ^invalid} = Projector.ingest_patch(invalid, incarnation, 11, [%{}])
   end
 
+  test "protocol snapshots omit provider-private assistant state" do
+    provider_state = %{
+      "openai_codex" => %{
+        "output" => [
+          %{
+            "type" => "reasoning",
+            "id" => "rs_1",
+            "summary" => [],
+            "encrypted_content" => "must-not-cross-tui-boundary"
+          }
+        ]
+      }
+    }
+
+    {:ok, assistant} = Message.assistant("answer", [], provider_state)
+    config = %Core.Config{system: "system", tools: %{}}
+    snapshot = Protocol.snapshot("session", "incarnation", Core.new(config, [assistant]))
+    encoded = JSON.encode!(snapshot)
+
+    assert snapshot["messages"] == [
+             %{"role" => "assistant", "text" => "answer", "tool_calls" => []}
+           ]
+
+    refute encoded =~ "must-not-cross-tui-boundary"
+    refute encoded =~ "provider_state"
+  end
+
   test "v1 event encoding remains explicit for streamed deltas and finals" do
     delta = {:content_delta, "assistant-1", "hel"}
     assistant = asst("hello")

@@ -5,7 +5,7 @@ defmodule Mix.Tasks.Elara.Ask do
 
       mix elara.ask "what files are in this repo?"
 
-  Requires `mix elara.login` or `ELARA_API_KEY` / `XAI_API_KEY`.
+  Requires a Grok/OpenAI login or `ELARA_API_KEY` / `XAI_API_KEY`.
   """
   @requirements ["app.start"]
   use Mix.Task

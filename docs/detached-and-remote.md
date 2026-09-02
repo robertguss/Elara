@@ -14,6 +14,10 @@ Start the server in one terminal:
 mix elara.server
 ```
 
+The server process owns provider configuration. For a ChatGPT/Codex subscription
+login, start it with `ELARA_PROVIDER=openai-codex` in its environment; setting
+that variable only on the TUI process does not change an existing server.
+
 It listens only on `127.0.0.1:4048`. Use `--port PORT` to change the server
 port.
 

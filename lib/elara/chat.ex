@@ -27,7 +27,7 @@ defmodule Elara.Chat do
 
       {:error, :not_logged_in} ->
         Mix.shell().error(
-          "Not logged in. Run `mix elara.login` or set ELARA_API_KEY / XAI_API_KEY."
+          "Not logged in. Run `mix elara.login`, or `mix elara.login openai` and set ELARA_PROVIDER=openai-codex, or set ELARA_API_KEY / XAI_API_KEY."
         )
 
         exit({:shutdown, 1})

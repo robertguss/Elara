@@ -604,8 +604,16 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_message(%User{text: text}), do: %{kind: :user, text: text}
 
-  defp normalize_message(%Assistant{text: text, tool_calls: calls}),
+  defp normalize_message(%Assistant{text: text, tool_calls: calls, provider_state: nil}),
     do: %{kind: :assistant, text: text, tool_calls: Enum.map(calls, &normalize_call/1)}
+
+  defp normalize_message(%Assistant{text: text, tool_calls: calls, provider_state: state}),
+    do: %{
+      kind: :assistant,
+      text: text,
+      tool_calls: Enum.map(calls, &normalize_call/1),
+      provider_state: state
+    }
 
   defp normalize_message(%ToolResult{} = result) do
     %{
@@ -618,8 +626,12 @@ defmodule Elara.FlightRecorder do
 
   defp denormalize_message(%{kind: :user, text: text}), do: %User{text: text}
 
-  defp denormalize_message(%{kind: :assistant, text: text, tool_calls: calls}),
-    do: %Assistant{text: text, tool_calls: Enum.map(calls, &denormalize_call/1)}
+  defp denormalize_message(%{kind: :assistant, text: text, tool_calls: calls} = message),
+    do: %Assistant{
+      text: text,
+      tool_calls: Enum.map(calls, &denormalize_call/1),
+      provider_state: Map.get(message, :provider_state)
+    }
 
   defp denormalize_message(%{kind: :tool_result} = result),
     do: %ToolResult{

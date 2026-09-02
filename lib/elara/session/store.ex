@@ -347,8 +347,16 @@ defmodule Elara.Session.Store do
   @doc false
   def encode_message(%User{text: text}), do: %{"user" => %{"text" => text}}
 
-  def encode_message(%Assistant{text: text, tool_calls: tool_calls}) do
-    %{"assistant" => %{"text" => text, "toolCalls" => Enum.map(tool_calls, &encode_tool_call/1)}}
+  def encode_message(%Assistant{
+        text: text,
+        tool_calls: tool_calls,
+        provider_state: provider_state
+      }) do
+    assistant =
+      %{"text" => text, "toolCalls" => Enum.map(tool_calls, &encode_tool_call/1)}
+      |> put_optional("providerState", provider_state)
+
+    %{"assistant" => assistant}
   end
 
   def encode_message(%ToolResult{call_id: call_id, name: name, outcome: outcome}) do
@@ -368,10 +376,14 @@ defmodule Elara.Session.Store do
 
   def decode_message(%{"assistant" => payload} = encoded) when map_size(encoded) == 1 do
     with %{"text" => text, "toolCalls" => calls} = assistant
-         when map_size(assistant) == 2 and (is_binary(text) or is_nil(text)) and is_list(calls) <-
+         when map_size(assistant) in [2, 3] and (is_binary(text) or is_nil(text)) and
+                is_list(calls) <-
            payload,
+         provider_state when is_map(provider_state) or is_nil(provider_state) <-
+           Map.get(assistant, "providerState"),
+         true <- map_size(assistant) == 2 or Map.has_key?(assistant, "providerState"),
          {:ok, tool_calls} <- decode_tool_calls(calls),
-         {:ok, message} <- Message.assistant(text, tool_calls) do
+         {:ok, message} <- Message.assistant(text, tool_calls, provider_state) do
       {:ok, message}
     else
       _ -> {:error, :invalid_message}

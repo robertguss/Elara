@@ -53,6 +53,35 @@ defmodule Elara.Session.StoreTest do
     end
   end
 
+  test "assistant provider state persists across reopen without changing legacy wire shape", %{
+    cwd: cwd
+  } do
+    provider_state = %{
+      "openai_codex" => %{
+        "output" => [
+          %{
+            "type" => "reasoning",
+            "id" => "rs_1",
+            "summary" => [],
+            "encrypted_content" => "encrypted"
+          }
+        ]
+      }
+    }
+
+    {:ok, with_state} = Message.assistant("answer", [], provider_state)
+    encoded = Store.encode_message(with_state)
+    assert encoded["assistant"]["providerState"] == provider_state
+    assert {:ok, ^with_state} = Store.decode_message(encoded)
+
+    assert {:ok, store} = Store.append(Store.new(cwd), with_state)
+    assert {:ok, reopened} = Store.open(store.path, cwd)
+    assert Store.history(reopened) == [with_state]
+
+    {:ok, legacy} = Message.assistant("answer", [])
+    refute Map.has_key?(Store.encode_message(legacy)["assistant"], "providerState")
+  end
+
   test "append writes a private tree-shaped log", %{root: root, cwd: cwd} do
     store = Store.new(cwd)
     user = Message.user("hello")

@@ -36,6 +36,29 @@ prompt.
 
 ## Authenticate
 
+### OpenAI Codex subscription
+
+An eligible ChatGPT Plus/Pro Codex subscription can provide the model while
+Elara keeps ownership of its own session, tools, execution, and agent loop:
+
+```bash
+mix elara.login openai
+export ELARA_PROVIDER='openai-codex'
+
+# Optional; this is the current default:
+export ELARA_MODEL='gpt-5.3-codex'
+```
+
+Open the printed OpenAI URL, enter the device code, and wait for Elara to save
+the tokens under `~/.elara/openai-codex-auth.json` with mode `0600`. Elara uses
+the subscription-backed Codex Responses stream and identifies itself as
+`originator=elara`; it does not read credentials from Codex, Pi, or another
+harness. `ELARA_PROVIDER` must be set in the process that owns the session—for
+detached use, that is `mix elara.server`.
+
+This path uses ChatGPT plan limits. It is separate from OpenAI Platform API-key
+billing below.
+
 ### Grok login
 
 ```bash

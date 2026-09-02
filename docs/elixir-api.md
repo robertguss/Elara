@@ -18,9 +18,10 @@ Application.ensure_all_started(:elara)
 {:ok, answer} = Elara.ask(session, "summarize the current changes")
 ```
 
-If `provider:` is omitted, Elara resolves `ELARA_API_KEY`, then `XAI_API_KEY`,
-then saved Grok login tokens. `Elara.ask/3` blocks until the turn ends and
-returns one of:
+If `provider:` is omitted, `ELARA_PROVIDER=openai-codex` explicitly selects
+saved ChatGPT/Codex subscription credentials. Otherwise Elara resolves
+`ELARA_API_KEY`, then `XAI_API_KEY`, then saved Grok login tokens. `Elara.ask/3`
+blocks until the turn ends and returns one of:
 
 ```elixir
 {:ok, final_text}

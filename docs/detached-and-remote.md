@@ -20,47 +20,63 @@ port.
 Create a server-owned session from another terminal:
 
 ```bash
-mix elara.attach new
+mix elara.tui new
 ```
 
-The first line prints a stable session ID. Save it, then reconnect later with:
+The status bar shows the stable session ID. Save it, then reconnect later with:
 
 ```bash
-mix elara.attach SESSION_ID
+mix elara.tui SESSION_ID
 ```
 
 The creating attachment's current directory becomes the new session's working
 directory. Reattaching does not change it.
 
-Disconnecting the attachment does not interrupt the current turn or stop the
-session. `mix elara.attach` uses session protocol v2: every attachment starts
-from an atomic materialized snapshot and then applies ordered patches. The
-client stores its last sequence and incarnation under `~/.elara/attach/`. A
-sequence gap or incarnation change causes one fresh snapshot request; the client
-never reconstructs current state from an incomplete event history. The server
-process must remain running; this is client detachability, not recovery after
-the server VM exits.
+Disconnecting the attachment with Escape or Ctrl-C does not interrupt the
+current turn or stop the session. `mix elara.tui` is a Rust `ratatui` projection
+client for session protocol v2: every attachment starts from an atomic
+materialized snapshot and then applies ordered patches. The client stores each
+session's last sequence and incarnation in `~/.elara/tui/cursors.json`. A
+sequence gap, malformed patch, or incarnation change causes exactly one fresh
+snapshot request while resynchronization is pending; the client never
+reconstructs current state from an incomplete event history. The server process
+must remain running; this is client detachability, not recovery after the server
+VM exits.
+
+Inside the TUI, type a prompt and press Enter. Ctrl-X explicitly interrupts the
+active turn. List the server's live sessions without attaching:
+
+```bash
+mix elara.tui list
+```
 
 Only one controlling attachment can ask or interrupt. Additional read-only
 clients can observe the event stream:
 
 ```bash
-mix elara.attach SESSION_ID --observe
+mix elara.tui SESSION_ID --observe
 ```
 
-Controller commands are `/interrupt`, `/inspect`, `/quit`, and `/exit`.
-`/inspect` prints session status as JSON. The richer persistent-chat commands
-such as `/resume`, `/tree`, and `/reload` belong to `mix elara.chat`, not the
-attachment client.
+The richer persistent-chat commands such as `/resume`, `/tree`, and `/reload`
+belong to `mix elara.chat`, not the projection client.
 
 Port configuration:
 
 ```bash
 mix elara.server --port 14048
-mix elara.attach new --port 14048
+mix elara.tui new --port 14048
 
-# The attach client also reads this when --port is absent:
+# The TUI also reads this when --port is absent:
 export ELARA_SERVER_PORT=14048
+```
+
+For deterministic diagnostics without taking over a terminal, `--headless`
+renders the current state with ratatui's off-screen `TestBackend` and exits once
+an optional `--ask` turn ends. `--event-dump` writes every received JSON frame
+with its arrival latency:
+
+```bash
+mix elara.tui SESSION_ID --headless --event-dump --ask "check the build"
 ```
 
 ### Session protocol
@@ -104,14 +120,14 @@ The operation payloads are:
 already present there is unchanged, the next index appends, and a gap or
 different existing message is invalid. This lets every sequence fully reconcile
 its atomic Core transition without duplicating messages. `set_tool_status`
-updates the matching snapshot `tool_calls` entry. The current Elixir line client
-also consumes optional rendering hints on operations; projection clients do not
-need them to build state.
+updates the matching snapshot `tool_calls` entry. The Elixir line client used
+during protocol bring-up consumed optional rendering hints on operations; the
+Rust projection client does not need them to build state.
 
-The v1 and v2 command set otherwise remains `create`, `attach`, `ask`,
-`interrupt`, and `inspect`. Only a controlling attachment may mutate session
-state; observers receive the same events or patches but control commands fail
-with `not_controller`.
+The v1 and v2 attachment command set otherwise remains `create`, `attach`,
+`ask`, `interrupt`, and `inspect`; v2 also accepts `list` as an initial request.
+Only a controlling attachment may mutate session state; observers receive the
+same events or patches but control commands fail with `not_controller`.
 
 ## Remote workers
 

@@ -1,0 +1,18 @@
+┌ transcript · protocol v2 projection ─────────────────────────────────────────────────┐
+│you inspect the build                                                                 │
+│ai  I’ll check it.                                                                    │
+│Detached; the server-owned session continues.                                         │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · Ctrl-X interrupt · Esc detach ────────────────────────────────────┐
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+ session-demo · control · detached · head 4 · idle · outcome -

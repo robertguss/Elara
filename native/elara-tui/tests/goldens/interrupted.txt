@@ -1,0 +1,18 @@
+┌ transcript · protocol v2 projection ─────────────────────────────────────────────────┐
+│you inspect the build                                                                 │
+│ai  I’ll check it.                                                                    │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · Ctrl-X interrupt · Esc detach ────────────────────────────────────┐
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 9 · idle · outcome interrupted

@@ -227,6 +227,23 @@ defmodule Elara do
     Store.list(cwd)
   end
 
+  @doc false
+  @spec live_sessions() :: [map()]
+  def live_sessions do
+    Elara.Sessions
+    |> Registry.select([
+      {{:"$1", :"$2", :"$3"}, [], [{{:"$1", :"$2"}}]}
+    ])
+    |> Enum.flat_map(fn {_id, pid} ->
+      try do
+        [GenServer.call(pid, :listing)]
+      catch
+        :exit, _reason -> []
+      end
+    end)
+    |> Enum.sort_by(& &1.id)
+  end
+
   @spec resume(session_ref(), String.t()) :: {:ok, [Elara.Message.t()]} | {:error, term()}
   def resume(session, path) when (is_pid(session) or is_binary(session)) and is_binary(path) do
     cwd = cwd(session)

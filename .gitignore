@@ -1,6 +1,7 @@
 # The directory Mix will write compiled artifacts to.
 /_build/
 /native/exec-stub/target/
+/native/elara-tui/target/
 
 # If you run "mix test --cover", coverage assets end up here.
 /cover/

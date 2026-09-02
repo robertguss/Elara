@@ -90,21 +90,27 @@ defmodule Elara.Server do
   defp establish_connection(socket, provider, request) do
     version = response_version(request)
 
-    with {:ok, version, session, mode, cursor, incarnation} <-
-           prepare_attachment(request, provider),
-         {:ok, attachment} <- attach(version, session, mode, cursor, incarnation) do
-      send_json(socket, attached_message(version, mode, attachment))
+    case request do
+      %{"version" => 2, "command" => "list"} ->
+        send_json(socket, sessions_message())
 
-      if version == 1 do
-        Enum.each(attachment.replay, fn {seq, event} ->
-          send_json(socket, Protocol.event(seq, event))
-        end)
-      end
+      _request ->
+        with {:ok, version, session, mode, cursor, incarnation} <-
+               prepare_attachment(request, provider),
+             {:ok, attachment} <- attach(version, session, mode, cursor, incarnation) do
+          send_json(socket, attached_message(version, mode, attachment))
 
-      :ok = :inet.setopts(socket, active: :once)
-      connection_loop(socket, session, version, Protocol.line_buffer())
-    else
-      {:error, reason} -> send_error(socket, reason, version)
+          if version == 1 do
+            Enum.each(attachment.replay, fn {seq, event} ->
+              send_json(socket, Protocol.event(seq, event))
+            end)
+          end
+
+          :ok = :inet.setopts(socket, active: :once)
+          connection_loop(socket, session, version, Protocol.line_buffer())
+        else
+          {:error, reason} -> send_error(socket, reason, version)
+        end
     end
   end
 
@@ -164,6 +170,25 @@ defmodule Elara.Server do
       "snapshot" => attachment.snapshot
     }
   end
+
+  defp sessions_message do
+    sessions =
+      Enum.map(Elara.live_sessions(), fn status ->
+        %{
+          "id" => status.id,
+          "incarnation" => status.incarnation,
+          "cwd" => status.cwd,
+          "state" => phase_name(status.phase),
+          "head" => status.event_head
+        }
+      end)
+
+    %{"type" => "sessions", "version" => 2, "sessions" => sessions}
+  end
+
+  defp phase_name(:idle), do: "idle"
+  defp phase_name({:calling_provider, _ref, _iteration}), do: "calling_provider"
+  defp phase_name({:running_tool, _ref, _call, _remaining, _iteration}), do: "running_tool"
 
   defp connection_loop(socket, session, version, line_buffer) do
     receive do

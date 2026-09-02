@@ -1,12 +1,10 @@
 defmodule Elara.ProtocolV2Test do
   use ExUnit.Case, async: false
 
-  import ExUnit.CaptureIO
-
-  alias Elara.Attach.Projector
   alias Elara.Message
   alias Elara.Message.ToolCall
   alias Elara.Protocol
+  alias Elara.Protocol.Projector
   alias Elara.Session.Core
   alias Elara.Tool
 
@@ -88,23 +86,24 @@ defmodule Elara.ProtocolV2Test do
     end
   end
 
-  defp ingest_render_until_idle(socket, projector, events \\ [], output \\ []) do
+  defp ingest_ops_until_idle(socket, projector, all_ops \\ []) do
     case recv_json(socket, 5_000) do
       %{"type" => "patch", "incarnation" => incarnation, "seq" => seq, "ops" => ops} ->
         assert {:applied, projector} = Projector.ingest_patch(projector, incarnation, seq, ops)
-        assert {:ok, patch_events} = Protocol.patch_events(ops)
-        output = [output, Enum.map(patch_events, &Elara.CLI.render/1)]
-        events = events ++ patch_events
+        all_ops = all_ops ++ ops
 
         if projector.view["turn"]["state"] == "idle" and
-             Enum.any?(events, &match?({:turn_ended, _outcome}, &1)) do
-          {projector, events, IO.iodata_to_binary(output)}
+             Enum.any?(
+               all_ops,
+               &match?(%{"op" => "set_turn_state", "turn" => %{"outcome" => _}}, &1)
+             ) do
+          {projector, all_ops}
         else
-          ingest_render_until_idle(socket, projector, events, output)
+          ingest_ops_until_idle(socket, projector, all_ops)
         end
 
       %{"type" => type} when type in ["ok", "error", "status"] ->
-        ingest_render_until_idle(socket, projector, events, output)
+        ingest_ops_until_idle(socket, projector, all_ops)
     end
   end
 
@@ -340,33 +339,7 @@ defmodule Elara.ProtocolV2Test do
     end
   end
 
-  test "mix elara.attach negotiates v2 and renders the current snapshot" do
-    {:ok, session} =
-      Elara.start_session(
-        provider: script([{:ok, asst("already happened")}]),
-        tools: [],
-        persist: false
-      )
-
-    assert {:ok, "already happened"} = Elara.ask(session, "earlier")
-    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
-
-    output =
-      capture_io("/quit\n", fn ->
-        assert catch_exit(
-                 Mix.Tasks.Elara.Attach.run([
-                   session,
-                   "--port",
-                   Integer.to_string(Elara.Server.port(server))
-                 ])
-               ) == {:shutdown, 0}
-      end)
-
-    assert output =~ "already happened"
-    assert output =~ "snapshot head 4"
-  end
-
-  test "v2 attach patches render each content delta before the superseding final" do
+  test "v2 attach patches deliver each content delta before the superseding final" do
     {:ok, session} =
       Elara.start_session(
         provider:
@@ -384,15 +357,15 @@ defmodule Elara.ProtocolV2Test do
     :ok = send_json(socket, %{"version" => 2, "command" => "ask", "prompt" => "stream"})
     assert %{"type" => "ok", "version" => 2} = recv_json(socket)
 
-    {projector, events, output} = ingest_render_until_idle(socket, projector)
+    {projector, ops} = ingest_ops_until_idle(socket, projector)
 
-    assert Enum.filter(events, &match?({:content_delta, _, _}, &1)) == [
-             {:content_delta, "assistant-1", "hel"},
-             {:content_delta, "assistant-1", "lo"}
+    assert Enum.filter(ops, &match?(%{"op" => "append_content_delta"}, &1)) == [
+             %{"op" => "append_content_delta", "message_id" => "assistant-1", "text" => "hel"},
+             %{"op" => "append_content_delta", "message_id" => "assistant-1", "text" => "lo"}
            ]
 
-    assert output =~ "hello\n"
-    refute output =~ "hello\nhello\n"
+    assert Enum.count(projector.view["messages"], &(&1["role"] == "assistant")) == 1
+    assert List.last(projector.view["messages"])["text"] == "hello"
     assert projector.view["content_deltas"] == %{}
     assert projector.view == Elara.materialized_view(session)
     :gen_tcp.close(socket)

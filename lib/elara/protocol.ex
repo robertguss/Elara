@@ -121,55 +121,6 @@ defmodule Elara.Protocol do
 
   def apply_patch(_view, _ops), do: {:error, :invalid_patch}
 
-  @spec snapshot_events(map()) :: {:ok, [Elara.Event.t()]} | {:error, :invalid_snapshot}
-  def snapshot_events(%{"messages" => messages, "tool_calls" => tool_calls} = snapshot)
-      when is_list(messages) and is_list(tool_calls) do
-    statuses = Map.new(tool_calls, &{&1["id"], &1})
-
-    case Enum.reduce_while(messages, [], fn encoded, events ->
-           case decode_message(encoded) do
-             {:ok, %Assistant{tool_calls: calls} = message} ->
-               started =
-                 calls
-                 |> Enum.filter(fn call -> get_in(statuses, [call.id, "status"]) != "pending" end)
-                 |> Enum.map(&{:tool_started, &1})
-
-               new_events = [{:message_appended, message} | started]
-               {:cont, Enum.reverse(new_events, events)}
-
-             {:ok, message} ->
-               {:cont, [{:message_appended, message} | events]}
-
-             {:error, _reason} ->
-               {:halt, :error}
-           end
-         end) do
-      :error ->
-        {:error, :invalid_snapshot}
-
-      events ->
-        with {:ok, deltas} <- snapshot_delta_events(Map.get(snapshot, "content_deltas", %{})) do
-          {:ok, Enum.reverse(events) ++ deltas}
-        end
-    end
-  end
-
-  def snapshot_events(_snapshot), do: {:error, :invalid_snapshot}
-
-  @spec patch_events([map()]) :: {:ok, [Elara.Event.t()]} | {:error, :invalid_patch}
-  def patch_events(ops) when is_list(ops) do
-    ops
-    |> Enum.reduce_while({:ok, []}, fn op, {:ok, events} ->
-      case event_from_op(op) do
-        {:ok, nil} -> {:cont, {:ok, events}}
-        {:ok, event} -> {:cont, {:ok, events ++ [event]}}
-        {:error, :invalid_patch} = error -> {:halt, error}
-      end
-    end)
-  end
-
-  def patch_events(_ops), do: {:error, :invalid_patch}
-
   @spec decode_event(map()) :: {:ok, Elara.Event.t()} | {:error, :invalid_event}
   def decode_event(%{"kind" => "turn_started", "prompt" => prompt}) when is_binary(prompt),
     do: {:ok, {:turn_started, prompt}}
@@ -407,16 +358,6 @@ defmodule Elara.Protocol do
   defp tool_status({:error, _text}), do: "failed"
   defp tool_status({:indeterminate, _text}), do: "indeterminate"
 
-  defp snapshot_delta_events(deltas) when is_map(deltas) do
-    if Enum.all?(deltas, fn {id, text} -> is_binary(id) and is_binary(text) end) do
-      {:ok, Enum.map(deltas, fn {id, text} -> {:content_delta, id, text} end)}
-    else
-      {:error, :invalid_snapshot}
-    end
-  end
-
-  defp snapshot_delta_events(_deltas), do: {:error, :invalid_snapshot}
-
   defp content_deltas(%Core.State{streaming: %{id: id, text: text}}) when text != "",
     do: %{id => text}
 
@@ -514,83 +455,6 @@ defmodule Elara.Protocol do
         {:error, :invalid_patch}
     end
   end
-
-  defp event_from_op(%{
-         "op" => "append_message",
-         "message" => message,
-         "render" => true,
-         "streamed" => true
-       }) do
-    case decode_message(message) do
-      {:ok, %Assistant{} = message} ->
-        {:ok, {:message_appended, message, :streamed}}
-
-      _error ->
-        {:error, :invalid_patch}
-    end
-  end
-
-  defp event_from_op(%{"op" => "append_message", "message" => message, "render" => true}) do
-    case decode_message(message) do
-      {:ok, message} -> {:ok, {:message_appended, message}}
-      {:error, _reason} -> {:error, :invalid_patch}
-    end
-  end
-
-  defp event_from_op(%{"op" => "append_message"}), do: {:ok, nil}
-
-  defp event_from_op(%{
-         "op" => "set_tool_status",
-         "status" => "running",
-         "call" => call
-       }) do
-    case decode_call(call) do
-      {:ok, call} -> {:ok, {:tool_started, call}}
-      {:error, _reason} -> {:error, :invalid_patch}
-    end
-  end
-
-  defp event_from_op(%{"op" => "set_tool_status"}), do: {:ok, nil}
-
-  defp event_from_op(%{
-         "op" => "append_content_delta",
-         "message_id" => id,
-         "text" => text
-       })
-       when is_binary(id) and is_binary(text),
-       do: {:ok, {:content_delta, id, text}}
-
-  defp event_from_op(%{
-         "op" => "set_turn_state",
-         "turn" => %{"outcome" => outcome, "streamed" => true}
-       }) do
-    case decode_turn_outcome(outcome) do
-      {:ok, outcome} -> {:ok, {:turn_ended, outcome, :streamed}}
-      {:error, _reason} -> {:error, :invalid_patch}
-    end
-  end
-
-  defp event_from_op(%{
-         "op" => "set_turn_state",
-         "turn" => %{"prompt" => prompt}
-       })
-       when is_binary(prompt),
-       do: {:ok, {:turn_started, prompt}}
-
-  defp event_from_op(%{
-         "op" => "set_turn_state",
-         "turn" => %{"outcome" => outcome}
-       }) do
-    case decode_turn_outcome(outcome) do
-      {:ok, outcome} -> {:ok, {:turn_ended, outcome}}
-      {:error, _reason} -> {:error, :invalid_patch}
-    end
-  end
-
-  defp event_from_op(%{"op" => op}) when op in ["set_turn_state", "set_usage"],
-    do: {:ok, nil}
-
-  defp event_from_op(_op), do: {:error, :invalid_patch}
 
   defp encode_message(%User{text: text}), do: %{"role" => "user", "text" => text}
 

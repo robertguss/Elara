@@ -14,8 +14,9 @@ existing agents.
 
 Elara currently runs from this Mix project; it does not install a standalone
 `elara` executable. You need Elixir 1.20, Erlang/OTP 29, Rust with Cargo, and
-the `flock` command. Mix builds the Rust execution stub automatically; a missing
-Cargo installation fails compilation with setup instructions.
+the `flock` command. Mix builds the Rust execution stub automatically and builds
+the Rust TUI on first use; a missing Cargo installation fails with setup
+instructions.
 
 ```bash
 git clone https://github.com/robertguss/elixir-harness.git
@@ -159,6 +160,7 @@ mix format --check-formatted
 mix compile --warnings-as-errors
 mix test
 cd native/exec-stub && cargo fmt --check && cargo clippy && cargo test
+cd ../elara-tui && cargo fmt --check && cargo clippy && cargo test
 ```
 
 Tests use `Elara.Provider.Scripted` and do not call the network. One

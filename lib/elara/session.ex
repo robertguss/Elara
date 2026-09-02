@@ -176,6 +176,17 @@ defmodule Elara.Session do
 
   def handle_call(:session_id, _from, shell), do: {:reply, shell.id, shell}
 
+  def handle_call(:listing, _from, shell) do
+    {:reply,
+     %{
+       id: shell.id,
+       incarnation: shell.incarnation,
+       cwd: shell.cwd,
+       phase: shell.core.phase,
+       event_head: shell.next_event_seq - 1
+     }, shell}
+  end
+
   def handle_call(:status, _from, shell) do
     {:message_queue_len, mailbox_length} = Process.info(self(), :message_queue_len)
 

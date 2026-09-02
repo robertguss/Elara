@@ -1,0 +1,18 @@
+┌ transcript · protocol v2 projection ─────────────────────────────────────────────────┐
+│you inspect the build                                                                 │
+│ai  I’ll check it.                                                                    │
+│ai  Streaming the answer▌                                                             │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · Ctrl-X interrupt · Esc detach ────────────────────────────────────┐
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 7 · calling_provider · outcome -

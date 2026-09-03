@@ -51,18 +51,18 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status      | Item                                                          | Depends on       |
-| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | DONE        | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | DONE        | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| PROV-1  | DONE        | ChatGPT/Codex subscription provider                           | SPLIT-4          |
-| TUI-1   | DONE        | One-command embedded server for new TUI sessions              | PROV-1           |
-| MAC-1   | IN PROGRESS | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
-| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | MAC-1            |
+| ID      | Status   | Item                                                          | Depends on       |
+| ------- | -------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | DONE     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| PROV-1  | DONE     | ChatGPT/Codex subscription provider                           | SPLIT-4          |
+| TUI-1   | DONE     | One-command embedded server for new TUI sessions              | PROV-1           |
+| MAC-1   | DONE     | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
+| SPLIT-5 | TODO     | Daily-driver checkpoint and recorded go/no-go                 | MAC-1            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -871,7 +871,7 @@ into a separate server only when they want its longer lifetime.
 
 ## MAC-1 — Build and retain execution cleanup on macOS
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -892,9 +892,60 @@ execution boundary or weakening its process-group cleanup contract.
 - Pass both Rust crates' format, Clippy, and tests; Mix format,
   warnings-as-errors compile, full tests, and `rg 'System\.shell' lib/`.
 
+### Result
+
+**DONE (2026-09-03).** Pushed implementation commit
+[`991f2b4`](https://github.com/robertguss/Elara/commit/991f2b48a0eac997cbe9ed0e2d7e2053f31d10bc)
+to `origin/main`.
+
+The exec stub now compiles Linux's `prctl(PR_SET_CHILD_SUBREAPER)` hardening
+only on Linux. Darwin keeps the same guardian and process-group kill behavior;
+its init process reaps orphaned grandchildren because Darwin has no
+child-subreaper facility. The output/control/event pipes now use portable `pipe`
+followed by fail-closed `fcntl(FD_CLOEXEC)` on both descriptors. A unit test
+verifies the close-on-exec flags, while the existing lifecycle suite confirms
+the portable implementation retains interrupt, timeout, byte-cap, stub-loss, and
+BEAM-death cleanup behavior on Linux.
+
+Exact verification:
+
+- `cargo check --all-targets --target aarch64-apple-darwin --manifest-path native/exec-stub/Cargo.toml`
+  — exit 0; the owner's three missing-symbol compile failures are absent.
+- `cargo fmt --check --manifest-path native/exec-stub/Cargo.toml` — exit 0.
+- `cargo clippy --all-targets --manifest-path native/exec-stub/Cargo.toml -- -D warnings`
+  — exit 0.
+- `cargo test --manifest-path native/exec-stub/Cargo.toml` — 3 passed.
+- `mix test test/elara/exec_integration_test.exs` — 6 passed, including zero
+  ordinary descendants after interrupt, timeout, stub loss, and BEAM death.
+- `mix format --check-formatted` — exit 0.
+- `mix compile --warnings-as-errors` — exit 0.
+- `cargo fmt --check --manifest-path native/elara-tui/Cargo.toml` — exit 0.
+- `cargo clippy --all-targets --manifest-path native/elara-tui/Cargo.toml -- -D warnings`
+  — exit 0.
+- `cargo test --manifest-path native/elara-tui/Cargo.toml` — 5 passed plus empty
+  binary/doc targets.
+- `mix test` — 335 passed in 15.2 seconds. The documented `CrashTool`
+  `RuntimeError: boom` line was the only expected error log.
+- `rg 'System\.shell' lib/` — no matches; `git diff --check` — exit 0 before the
+  implementation commit.
+
+Deviations: no new dependency or platform-specific compatibility shim was
+needed. `pipe` plus `fcntl` is safe here because each guardian is
+single-threaded and cannot race another exec between descriptor creation and
+flagging.
+
+Remaining uncertainty: the orb can type-check but cannot execute the Darwin
+binary. The owner still needs to retry `mix elara.tui new` on Apple Silicon and
+exercise interrupt/exit during daily use. macOS retains the zero-ordinary-
+descendant process-group kill contract, but Linux alone gets guardian-side
+orphan reaping; Darwin delegates that reaping to the OS.
+
+Decision: unblock SPLIT-5. The Apple Silicon compile blocker is removed without
+changing the Elixir/Rust boundary or moving policy into Rust.
+
 ## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
 
-**Status:** BLOCKED (owner checkpoint; MAC-1)
+**Status:** TODO (owner checkpoint)
 
 ### Outcome
 

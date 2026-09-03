@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# Drive one Elara user surface. Requires a launch state.
+
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$here/common.sh"
+
+usage() {
+  cat <<'EOF'
+usage: bin/drive <mode> [options]
+
+modes:
+  mix-ask              real mix elara.ask (needs credentials for a successful turn)
+  mix-chat             real mix elara.chat (needs credentials to start)
+  mix-ask-usage        real mix elara.ask with no prompt (login-independent)
+  mix-ask-unauth       real mix elara.ask without credentials (isolated HOME)
+  scripted-ask         public API + CLI renderer + Scripted provider
+  scripted-chat        Elara.Chat.run + Scripted provider
+  tui-headless         mix elara.tui new --headless on this run's port
+
+common:
+  --feature NAME       evidence folder name (ask|chat|tui|sessions|tools)
+  --state PATH         launch state.env (or ELARA_VERIFY_STATE)
+
+mix-ask / scripted-ask:
+  --prompt TEXT
+  --reply TEXT         scripted only
+  --tool write|read|bash
+  --path REL           tool path or read target
+  --content TEXT       write body or bash command
+  --persist            persist the session under isolated HOME
+  --name TEXT
+
+scripted-chat / mix-chat:
+  --lines a,b,c        stdin lines, comma-separated (default /help,/quit)
+  --reply TEXT
+  --replies a||b       multiple canned assistant texts
+  --continue
+  --persist
+  --name TEXT
+
+tui-headless:
+  --ask TEXT           optional; requires a provider that can complete a turn
+EOF
+}
+
+if [ $# -lt 1 ]; then
+  usage >&2
+  exit 1
+fi
+
+MODE="$1"
+shift
+
+FEATURE=""
+STATE=""
+PROMPT=""
+REPLY=""
+REPLIES=""
+LINES="/help,/quit"
+TOOL=""
+TOOL_PATH=""
+CONTENT=""
+NAME=""
+ASK=""
+PERSIST=0
+CONTINUE=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --feature) FEATURE="${2:?}"; shift 2 ;;
+    --state) STATE="${2:?}"; shift 2 ;;
+    --prompt) PROMPT="${2:?}"; shift 2 ;;
+    --reply) REPLY="${2:?}"; shift 2 ;;
+    --replies) REPLIES="${2:?}"; shift 2 ;;
+    --lines) LINES="${2:?}"; shift 2 ;;
+    --tool) TOOL="${2:?}"; shift 2 ;;
+    --path) TOOL_PATH="${2:?}"; shift 2 ;;
+    --content) CONTENT="${2:?}"; shift 2 ;;
+    --name) NAME="${2:?}"; shift 2 ;;
+    --ask) ASK="${2:?}"; shift 2 ;;
+    --persist) PERSIST=1; shift ;;
+    --continue) CONTINUE=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "verify-elara drive: unknown option $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [ -n "$STATE" ]; then
+  load_state "$STATE"
+else
+  load_state
+fi
+
+if [ "$HOME" != "$VERIFY_ROOT/home" ]; then
+  echo "verify-elara drive: REFUSE: HOME is not the isolated launch home. Run doctor." >&2
+  exit 1
+fi
+
+case "$MODE" in
+  mix-ask|mix-ask-usage|mix-ask-unauth|scripted-ask) FEATURE="${FEATURE:-ask}" ;;
+  mix-chat|scripted-chat) FEATURE="${FEATURE:-chat}" ;;
+  tui-headless) FEATURE="${FEATURE:-tui}" ;;
+  *) echo "verify-elara drive: unknown mode $MODE" >&2; usage >&2; exit 1 ;;
+esac
+
+DEST="$(evidence_dir "$FEATURE")"
+CMD_FILE="$DEST/command.txt"
+OUT_FILE="$DEST/stdout.txt"
+ERR_FILE="$DEST/stderr.txt"
+CODE_FILE="$DEST/exit_code.txt"
+META_FILE="$DEST/meta.txt"
+
+export HOME
+export ELARA_TUI_STATE_DIR
+export ELARA_SERVER_PORT
+# Never inherit the user's provider into an isolated HOME unless the mode is
+# a real Mix turn that explicitly wants credentials.
+unset ELARA_PROVIDER || true
+
+run_and_capture() {
+  local cwd="$1"
+  shift
+  printf '%s\n' "cwd=$cwd" >"$CMD_FILE"
+  printf '%s\n' "$*" >>"$CMD_FILE"
+  set +e
+  (
+    cd "$cwd"
+    "$@"
+  ) >"$OUT_FILE" 2>"$ERR_FILE"
+  local code=$?
+  set +e
+  printf '%s\n' "$code" >"$CODE_FILE"
+  return 0
+}
+
+SCRIPTS="$(skill_root)/scripts"
+
+case "$MODE" in
+  mix-ask-usage)
+    run_and_capture "$WORKTREE" mix elara.ask
+    ;;
+  mix-ask-unauth)
+    unset ELARA_API_KEY XAI_API_KEY ELARA_PROVIDER || true
+    PROMPT="${PROMPT:-summarize this workspace}"
+    run_and_capture "$WORKTREE" mix elara.ask "$PROMPT"
+    ;;
+  mix-ask)
+    PROMPT="${PROMPT:-summarize this workspace}"
+    run_and_capture "$WORKTREE" mix elara.ask "$PROMPT"
+    ;;
+  mix-chat)
+    echo "verify-elara drive: mix-chat is interactive; prefer scripted-chat unless you have a PTY recipe." >&2
+    if [ ! -t 0 ]; then
+      echo "verify-elara drive: REFUSE: mix-chat without a TTY. Use scripted-chat --lines ..." >&2
+      exit 1
+    fi
+    args=(mix elara.chat)
+    if [ "$CONTINUE" -eq 1 ]; then
+      args+=(--continue)
+    fi
+    if [ -n "$NAME" ]; then
+      args+=(--name "$NAME")
+    fi
+    run_and_capture "$WORKTREE" "${args[@]}"
+    ;;
+  scripted-ask)
+    export ELARA_VERIFY_SESSION_CWD="$WORKSPACE"
+    export ELARA_VERIFY_PROMPT="${PROMPT:-summarize this workspace}"
+    export ELARA_VERIFY_REPLY="${REPLY:-workspace contains README.md}"
+    export ELARA_VERIFY_OUT="$DEST/render.txt"
+    export ELARA_VERIFY_PERSIST="$PERSIST"
+    export ELARA_VERIFY_NAME="$NAME"
+    export ELARA_VERIFY_TOOL="$TOOL"
+    export ELARA_VERIFY_PATH="$TOOL_PATH"
+    export ELARA_VERIFY_CONTENT="$CONTENT"
+    run_and_capture "$REPO_ROOT" mix run "$SCRIPTS/scripted_ask.exs"
+    ;;
+  scripted-chat)
+    export ELARA_VERIFY_SESSION_CWD="$WORKSPACE"
+    export ELARA_VERIFY_LINES="$LINES"
+    export ELARA_VERIFY_OUT="$DEST/transcript.txt"
+    export ELARA_VERIFY_PERSIST="$PERSIST"
+    export ELARA_VERIFY_CONTINUE="$CONTINUE"
+    export ELARA_VERIFY_NAME="$NAME"
+    export ELARA_VERIFY_REPLY="$REPLY"
+    export ELARA_VERIFY_REPLIES="$REPLIES"
+    if [ "$CONTINUE" -eq 1 ]; then
+      export ELARA_VERIFY_PERSIST=1
+    fi
+    run_and_capture "$REPO_ROOT" mix run "$SCRIPTS/scripted_chat.exs"
+    ;;
+  tui-headless)
+    if [ -z "${ELARA_API_KEY:-}" ] && [ -z "${XAI_API_KEY:-}" ]; then
+      # Config.resolve requires a key or saved login. Isolated HOME has no
+      # tokens. A dummy key lets `new --headless` create a session; a turn
+      # would then hit the network and fail. Do not pass --ask without creds.
+      export ELARA_API_KEY="verify-elara-placeholder"
+    fi
+    args=(mix elara.tui new --headless --port "$ELARA_SERVER_PORT" --width 100 --height 24)
+    if [ -n "$ASK" ]; then
+      args+=(--ask "$ASK")
+    fi
+    run_and_capture "$WORKTREE" "${args[@]}"
+    ;;
+esac
+
+code="$(cat "$CODE_FILE")"
+
+{
+  echo "mode=$MODE"
+  echo "feature=$FEATURE"
+  echo "run_id=$RUN_ID"
+  echo "home=$HOME"
+  echo "workspace=$WORKSPACE"
+  echo "worktree=$WORKTREE"
+  echo "port=$ELARA_SERVER_PORT"
+  echo "exit=$code"
+  echo "evidence=$DEST"
+} >"$META_FILE"
+
+echo "verify-elara drive: mode=$MODE feature=$FEATURE exit=$code evidence=$DEST"
+exit "$code"

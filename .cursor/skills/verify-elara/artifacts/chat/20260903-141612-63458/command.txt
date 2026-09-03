@@ -1,0 +1,2 @@
+cwd=/Users/robertguss/Projects/startups/Elara
+mix run /Users/robertguss/Projects/startups/Elara/.cursor/skills/verify-elara/scripts/scripted_chat.exs

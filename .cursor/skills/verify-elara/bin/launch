@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Create an isolated verification instance. Does not start a long-lived server.
+# Prints the state path and exports ELARA_VERIFY_STATE for the current shell
+# only when this script is sourced; it is meant to be executed.
+
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$here/common.sh"
+
+require_cmd elixir
+require_cmd mix
+require_cmd cargo
+require_cmd flock
+require_cmd git
+require_cmd python3
+
+REPO_ROOT="$(repo_root)"
+SKILL_ROOT="$(skill_root)"
+RUN_ID="${ELARA_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}"
+VERIFY_ROOT="${ELARA_VERIFY_ROOT:-/tmp/elara-verify-$RUN_ID}"
+WORKSPACE="$VERIFY_ROOT/workspace"
+WORKTREE="$VERIFY_ROOT/worktree"
+ISOLATED_HOME="$VERIFY_ROOT/home"
+TUI_STATE="$VERIFY_ROOT/tui"
+EVIDENCE_ROOT="$SKILL_ROOT/artifacts"
+ELARA_USER_HOME="${HOME}"
+
+if [ -e "$VERIFY_ROOT" ]; then
+  echo "verify-elara: REFUSE: $VERIFY_ROOT already exists. Reuse it with ELARA_VERIFY_STATE or pick a new RUN_ID." >&2
+  exit 1
+fi
+
+mkdir -p "$WORKSPACE" "$ISOLATED_HOME" "$TUI_STATE" "$EVIDENCE_ROOT"
+printf 'verification workspace\n' >"$WORKSPACE/README.md"
+
+# Mix CLI tasks use process cwd as the session cwd and have no --cwd flag.
+# A detached worktree keeps write/edit/bash off the user's checkout.
+git -C "$REPO_ROOT" worktree add --detach "$WORKTREE" HEAD >/dev/null
+
+ELARA_SERVER_PORT="$(pick_free_port)"
+
+echo "verify-elara: compiling in $REPO_ROOT"
+(
+  cd "$REPO_ROOT"
+  mix deps.get
+  mix compile
+) >/tmp/elara-verify-compile-$RUN_ID.log 2>&1
+
+STATE="$VERIFY_ROOT/state.env"
+cat >"$STATE" <<EOF
+RUN_ID=$RUN_ID
+VERIFY_ROOT=$VERIFY_ROOT
+REPO_ROOT=$REPO_ROOT
+WORKSPACE=$WORKSPACE
+WORKTREE=$WORKTREE
+HOME=$ISOLATED_HOME
+ELARA_USER_HOME=$ELARA_USER_HOME
+ELARA_SERVER_PORT=$ELARA_SERVER_PORT
+ELARA_TUI_STATE_DIR=$TUI_STATE
+EVIDENCE_ROOT=$EVIDENCE_ROOT
+PIDS=
+CREATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+
+# Seed a marker so doctor can prove HOME isolation.
+mkdir -p "$ISOLATED_HOME/.elara"
+printf 'isolated\n' >"$ISOLATED_HOME/.elara/verify-marker"
+
+echo "verify-elara: launched"
+echo "ELARA_VERIFY_STATE=$STATE"
+echo "HOME=$ISOLATED_HOME"
+echo "WORKSPACE=$WORKSPACE"
+echo "WORKTREE=$WORKTREE"
+echo "ELARA_SERVER_PORT=$ELARA_SERVER_PORT"
+echo "compile log: /tmp/elara-verify-compile-$RUN_ID.log"

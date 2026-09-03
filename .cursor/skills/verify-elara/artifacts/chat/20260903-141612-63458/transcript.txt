@@ -1,0 +1,14 @@
+elara  ·  /help  /interrupt  /reload  /resume  /quit
+
+> /help       this list
+/interrupt  cancel the current turn
+/reload     reload local plugins
+/why [N]    explain the latest event, or event N
+/resume     list saved sessions
+/resume N   resume saved session N
+/tree       list user turns; /tree N branches in this session
+/fork       list user turns; /fork N branches into a new session
+/clone      copy the current path into a new session
+/name TEXT  name the current session
+/quit       exit
+> 

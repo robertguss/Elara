@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Read-only: is this verification instance worth driving?
+
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$here/common.sh"
+
+fail=0
+warn() { echo "verify-elara doctor: WARN  $*" >&2; }
+err() { echo "verify-elara doctor: FAIL  $*" >&2; fail=1; }
+ok() { echo "verify-elara doctor: OK    $*"; }
+
+require_cmd elixir
+require_cmd mix
+require_cmd cargo
+require_cmd flock
+require_cmd lsof
+
+elixir_v="$(elixir --version 2>&1 || true)"
+echo "$elixir_v" | grep -q 'Elixir 1.20' && ok "Elixir 1.20" || err "need Elixir 1.20, got: $elixir_v"
+echo "$elixir_v" | grep -q 'Erlang/OTP 29' && ok "OTP 29" || err "need OTP 29, got: $elixir_v"
+ok "cargo $(cargo --version | awk '{print $2}')"
+ok "flock at $(command -v flock)"
+
+if [ "${1:-}" = "--toolchain-only" ]; then
+  credentials_report "${HOME}"
+  exit "$fail"
+fi
+
+STATE="${1:-}"
+if [ -z "$STATE" ]; then
+  STATE="$(default_state_path)"
+fi
+load_state "$STATE"
+
+ok "state $ELARA_VERIFY_STATE"
+ok "run $RUN_ID"
+
+case "$HOME" in
+  "$VERIFY_ROOT"/home)
+    ok "HOME is isolated ($HOME)"
+    ;;
+  *)
+    err "HOME $HOME is not $VERIFY_ROOT/home — refuse to drive a shared instance"
+    ;;
+esac
+
+if [ "$HOME" = "${ELARA_USER_HOME:-}" ]; then
+  err "isolated HOME equals the user home; refuse to drive"
+fi
+
+if [ ! -f "$HOME/.elara/verify-marker" ]; then
+  err "isolated HOME is missing the launch marker"
+else
+  ok "isolated HOME marker present"
+fi
+
+if [ ! -d "$WORKSPACE" ] || [ ! -d "$WORKTREE" ]; then
+  err "workspace or worktree missing"
+else
+  ok "workspace $WORKSPACE"
+  ok "worktree $WORKTREE"
+fi
+
+if [ ! -f "$WORKTREE/mix.exs" ]; then
+  err "worktree is not an Elara checkout"
+else
+  ok "worktree has mix.exs"
+fi
+
+if [ ! -d "$REPO_ROOT/_build" ]; then
+  err "repo has no _build; run bin/launch again"
+else
+  ok "repo _build present"
+fi
+
+owner="$(port_owner_pid "$ELARA_SERVER_PORT")"
+if [ -z "$owner" ]; then
+  ok "port $ELARA_SERVER_PORT is free (no shared server)"
+else
+  case " ${PIDS:-} " in
+    *" $owner "*)
+      ok "port $ELARA_SERVER_PORT owned by recorded pid $owner"
+      ;;
+    *)
+      err "port $ELARA_SERVER_PORT is owned by pid $owner, which this run did not start"
+      ;;
+  esac
+fi
+
+if [ -d "${ELARA_USER_HOME:-}/.elara/sessions" ] && [ "$HOME" = "${ELARA_USER_HOME:-}" ]; then
+  err "would write into the user's ~/.elara/sessions"
+fi
+
+credentials_report "${ELARA_USER_HOME:-$HOME}"
+ok "isolated sessions would land under $HOME/.elara/sessions"
+
+if [ "$fail" -ne 0 ]; then
+  echo "verify-elara doctor: instance is not safe to drive" >&2
+  exit 1
+fi
+
+echo "verify-elara doctor: instance is safe to drive"

@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Tear down the instance this run started. Proof artifacts are not deleted.
+
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$here/common.sh"
+
+STATE="${1:-}"
+if [ -z "$STATE" ]; then
+  STATE="$(default_state_path)"
+fi
+load_state "$STATE"
+
+# Restore a usable HOME for git/worktree operations that read user config.
+USER_HOME="${ELARA_USER_HOME:-}"
+if [ -n "$USER_HOME" ]; then
+  export HOME="$USER_HOME"
+fi
+
+echo "verify-elara cleanup: state $ELARA_VERIFY_STATE"
+
+# Kill only recorded PIDs. Never pkill by process name.
+for pid in ${PIDS:-}; do
+  if [ -z "$pid" ]; then
+    continue
+  fi
+  if kill -0 "$pid" 2>/dev/null; then
+    echo "verify-elara cleanup: SIGTERM $pid"
+    kill -TERM "$pid" 2>/dev/null || true
+  fi
+done
+
+sleep 0.3
+
+for pid in ${PIDS:-}; do
+  if [ -z "$pid" ]; then
+    continue
+  fi
+  if kill -0 "$pid" 2>/dev/null; then
+    echo "verify-elara cleanup: SIGKILL $pid"
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+done
+
+if [ -n "${WORKTREE:-}" ] && [ -d "$WORKTREE" ]; then
+  echo "verify-elara cleanup: removing worktree $WORKTREE"
+  git -C "$REPO_ROOT" worktree remove --force "$WORKTREE" 2>/dev/null || rm -rf "$WORKTREE"
+fi
+
+if [ -n "${VERIFY_ROOT:-}" ] && [ -d "$VERIFY_ROOT" ]; then
+  case "$VERIFY_ROOT" in
+    /tmp/elara-verify-*)
+      echo "verify-elara cleanup: removing $VERIFY_ROOT"
+      rm -rf "$VERIFY_ROOT"
+      ;;
+    *)
+      echo "verify-elara cleanup: REFUSE to rm -rf unexpected VERIFY_ROOT=$VERIFY_ROOT" >&2
+      exit 1
+      ;;
+  esac
+fi
+
+echo "verify-elara cleanup: evidence retained at $EVIDENCE_ROOT"
+echo "verify-elara cleanup: done"

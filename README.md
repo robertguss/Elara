@@ -146,7 +146,9 @@ launching the Rust client. That embedded server and its live sessions end when
 the command exits. To let turns continue while the TUI is closed and reattach
 later, run `mix elara.server` separately; the TUI automatically uses it. See
 [Detached sessions and remote workers](docs/detached-and-remote.md) for the
-long-lived mode.
+long-lived mode. Assistant responses and in-progress content render as terminal
+Markdown, including styled headings, emphasis, code, lists, quotes, links, and
+tables. User prompts and tool output remain literal.
 
 ## Built-in tools
 

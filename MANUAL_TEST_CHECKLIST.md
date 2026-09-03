@@ -71,7 +71,7 @@ silently omitting either Rust program.
 - [ ] `cargo fmt --check --manifest-path native/elara-tui/Cargo.toml` exits 0.
 - [ ] `cargo clippy --all-targets --manifest-path native/elara-tui/Cargo.toml -- -D warnings`
       exits 0.
-- [ ] `cargo test --manifest-path native/elara-tui/Cargo.toml` passes 5 tests
+- [ ] `cargo test --manifest-path native/elara-tui/Cargo.toml` passes 7 tests
       plus the empty binary/doc targets.
 - [ ] `mix test` passes. The intentional `Elara.SessionTest.CrashTool`
       `RuntimeError: boom` log is expected; the final ExUnit result is
@@ -165,6 +165,9 @@ mix elara.tui new
 - [ ] The TUI shows a stable session ID and the correct working directory.
 - [ ] Typing a prompt and pressing Enter starts a turn.
 - [ ] Assistant content streams live and settles without duplicated text.
+- [ ] Assistant Markdown renders headings, emphasis, code, lists, quotes, links,
+      and tables without exposing source markers such as `**bold**` or inline
+      backticks.
 - [ ] Tool activity and its `pending`/`running`/terminal state are visible.
 - [ ] Ask Elara to read `README.md`; it reads and accurately summarizes it.
 - [ ] Ask Elara to write `.elara-manual/nested.txt`; parent directories are

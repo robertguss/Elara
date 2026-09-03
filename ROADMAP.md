@@ -51,18 +51,19 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status   | Item                                                          | Depends on       |
-| ------- | -------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | DONE     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| PROV-1  | DONE     | ChatGPT/Codex subscription provider                           | SPLIT-4          |
-| TUI-1   | DONE     | One-command embedded server for new TUI sessions              | PROV-1           |
-| MAC-1   | DONE     | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
-| SPLIT-5 | TODO     | Daily-driver checkpoint and recorded go/no-go                 | MAC-1            |
+| ID      | Status      | Item                                                          | Depends on       |
+| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | DONE        | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | DONE        | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| PROV-1  | DONE        | ChatGPT/Codex subscription provider                           | SPLIT-4          |
+| TUI-1   | DONE        | One-command embedded server for new TUI sessions              | PROV-1           |
+| MAC-1   | DONE        | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
+| TUI-2   | IN PROGRESS | Render assistant Markdown in the Rust TUI                     | MAC-1            |
+| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | TUI-2            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -934,18 +935,41 @@ needed. `pipe` plus `fcntl` is safe here because each guardian is
 single-threaded and cannot race another exec between descriptor creation and
 flagging.
 
-Remaining uncertainty: the orb can type-check but cannot execute the Darwin
-binary. The owner still needs to retry `mix elara.tui new` on Apple Silicon and
-exercise interrupt/exit during daily use. macOS retains the zero-ordinary-
-descendant process-group kill contract, but Linux alone gets guardian-side
-orphan reaping; Darwin delegates that reaping to the OS.
+The owner subsequently confirmed with a screenshot that `mix elara.tui new`
+builds, starts, and completes multiple turns on Apple Silicon. Process-group
+interrupt/exit behavior remains daily-use evidence. macOS retains the
+zero-ordinary-descendant process-group kill contract, but Linux alone gets
+guardian-side orphan reaping; Darwin delegates that reaping to the OS.
 
 Decision: unblock SPLIT-5. The Apple Silicon compile blocker is removed without
 changing the Elixir/Rust boundary or moving policy into Rust.
 
+## TUI-2 — Render assistant Markdown in the Rust TUI
+
+**Status:** IN PROGRESS
+
+### Outcome
+
+Assistant responses render as readable terminal Markdown instead of exposing
+source markers such as `**bold**` and inline-code backticks.
+
+### Scope and acceptance
+
+- Parse final assistant messages and in-progress content deltas entirely in the
+  Rust presentation layer. User prompts and tool output remain literal.
+- Render headings, paragraphs, emphasis, strong and strikethrough text, inline
+  and block code, ordered/unordered/task lists, blockquotes and alerts, links,
+  image fallbacks, tables, rules, HTML, math, definitions, and footnotes using
+  terminal-safe text and ratatui styles.
+- Preserve the `ai` speaker label and streaming cursor across multiline output.
+- Cover semantic text output and span/line styling directly, plus a headless
+  transcript frame through the shipped renderer.
+- Do not change protocol v2, Elixir DTOs, session policy, or persistence. Syntax
+  highlighting and browser/image rendering are non-goals.
+
 ## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
 
-**Status:** TODO (owner checkpoint)
+**Status:** BLOCKED (owner checkpoint; TUI-2)
 
 ### Outcome
 

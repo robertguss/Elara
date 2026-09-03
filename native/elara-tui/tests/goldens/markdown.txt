@@ -1,0 +1,18 @@
+┌ transcript · protocol v2 projection ─────────────────────────────────────────────────┐
+│you show **markdown**                                                                 │
+│ai  Result                                                                            │
+│                                                                                      │
+│    Bold and code                                                                     │
+│                                                                                      │
+│    - first                                                                           │
+│    - second                                                                          │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · Ctrl-X interrupt · Esc detach ────────────────────────────────────┐
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 10 · idle · outcome -

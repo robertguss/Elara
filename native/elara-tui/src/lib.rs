@@ -13,6 +13,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use serde_json::{Value, json};
+use tui_markdown::{ImageFallback, Options as MarkdownOptions, StyleSheet};
 
 pub const DEFAULT_PORT: u16 = 4_048;
 const MAX_LINE_BYTES: usize = 16 * 1_024 * 1_024;
@@ -538,7 +539,7 @@ fn transcript_lines(model: &Model) -> Vec<Line<'static>> {
                     if let Some(text) = message["text"].as_str()
                         && !text.is_empty()
                     {
-                        lines.push(prefixed_line("ai  ", Color::Green, text));
+                        lines.extend(assistant_markdown_lines(text, false));
                     }
                     if let Some(calls) = message["tool_calls"].as_array() {
                         for call in calls {
@@ -586,15 +587,7 @@ fn transcript_lines(model: &Model) -> Vec<Line<'static>> {
 
     if let Some(deltas) = view["content_deltas"].as_object() {
         for text in deltas.values().filter_map(Value::as_str) {
-            lines.push(Line::from(vec![
-                Span::styled(
-                    "ai  ",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(format!("{text}▌")),
-            ]));
+            lines.extend(assistant_markdown_lines(text, true));
         }
     }
 
@@ -611,6 +604,65 @@ fn transcript_lines(model: &Model) -> Vec<Line<'static>> {
         )));
     }
     lines
+}
+
+#[derive(Clone, Copy)]
+struct TranscriptMarkdown;
+
+impl StyleSheet for TranscriptMarkdown {
+    fn heading_marker(&self, _level: u8) -> &str {
+        ""
+    }
+
+    fn code_block_fence(&self) -> &str {
+        ""
+    }
+}
+
+fn assistant_markdown_lines(text: &str, streaming: bool) -> Vec<Line<'static>> {
+    let options =
+        MarkdownOptions::new(TranscriptMarkdown).image_fallback(ImageFallback::AltTextAndUrl);
+    let rendered = tui_markdown::from_str_with_options(text, &options);
+    let mut lines: Vec<Line<'static>> = rendered.lines.into_iter().map(owned_line).collect();
+
+    if lines.is_empty() {
+        lines.push(Line::default());
+    }
+
+    for (index, line) in lines.iter_mut().enumerate() {
+        let prefix = if index == 0 { "ai  " } else { "    " };
+        line.spans.insert(
+            0,
+            Span::styled(
+                prefix,
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        );
+    }
+
+    if streaming {
+        lines
+            .last_mut()
+            .expect("assistant markdown always has one line")
+            .spans
+            .push(Span::raw("▌"));
+    }
+
+    lines
+}
+
+fn owned_line(line: Line<'_>) -> Line<'static> {
+    Line {
+        style: line.style,
+        alignment: line.alignment,
+        spans: line
+            .spans
+            .into_iter()
+            .map(|span| Span::styled(span.content.into_owned(), span.style))
+            .collect(),
+    }
 }
 
 fn prefixed_line(prefix: &'static str, color: Color, text: &str) -> Line<'static> {
@@ -970,6 +1022,13 @@ pub fn fixture_model(name: &str) -> Model {
             model.connection = ConnectionState::Detached;
             model.notice = Some("Detached; the server-owned session continues.".to_string());
         }
+        "markdown" => {
+            model.projection.view["messages"] = json!([
+                {"role": "user", "text": "show **markdown**"},
+                {"role": "assistant", "text": "## Result\n\n**Bold** and `code`\n\n- first\n- second", "tool_calls": []}
+            ]);
+            model.projection.head = 10;
+        }
         other => panic!("unknown fixture {other}"),
     }
     model
@@ -1075,6 +1134,52 @@ mod tests {
     }
 
     #[test]
+    fn assistant_markdown_renders_blocks_and_inline_styles() {
+        let markdown = "# Heading\n\n**Bold** and *italic* with `code`.\n\n- [x] done\n\n> quote\n\n[docs](https://example.com)\n\n| A | B |\n| - | - |\n| 1 | 2 |";
+        let lines = assistant_markdown_lines(markdown, false);
+        let rendered = lines
+            .iter()
+            .map(Line::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(rendered.starts_with("ai  Heading"));
+        assert!(rendered.contains("- [x] done"));
+        assert!(rendered.contains("quote"));
+        assert!(rendered.contains("docs (https://example.com)"));
+        assert!(rendered.contains('┌') && rendered.contains('│'));
+        assert!(!rendered.contains("**Bold**"));
+        assert!(!rendered.contains("`code`"));
+
+        assert!(lines.iter().flat_map(|line| &line.spans).any(|span| {
+            span.content == "Bold" && span.style.add_modifier.contains(Modifier::BOLD)
+        }));
+        assert!(lines.iter().flat_map(|line| &line.spans).any(|span| {
+            span.content == "italic" && span.style.add_modifier.contains(Modifier::ITALIC)
+        }));
+        assert!(
+            lines
+                .iter()
+                .flat_map(|line| &line.spans)
+                .any(|span| { span.content == "code" && span.style.bg == Some(Color::Black) })
+        );
+    }
+
+    #[test]
+    fn streaming_markdown_keeps_multiline_speaker_prefix_and_cursor() {
+        let lines = assistant_markdown_lines("First paragraph\n\nSecond paragraph", true);
+
+        assert_eq!(lines[0].spans[0].content, "ai  ");
+        assert!(
+            lines
+                .iter()
+                .skip(1)
+                .all(|line| line.spans[0].content == "    ")
+        );
+        assert_eq!(lines.last().unwrap().spans.last().unwrap().content, "▌");
+    }
+
+    #[test]
     fn frame_dump_goldens_cover_required_states() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens");
         for name in [
@@ -1083,6 +1188,7 @@ mod tests {
             "tool-running",
             "interrupted",
             "detached",
+            "markdown",
         ] {
             let actual = render_frame(&fixture_model(name), 88, 18).unwrap();
             let path = root.join(format!("{name}.txt"));

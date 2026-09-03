@@ -60,7 +60,9 @@ must remain running; this is client detachability, not recovery after the server
 VM exits.
 
 Inside the TUI, type a prompt and press Enter. Ctrl-X explicitly interrupts the
-active turn. List the server's live sessions without attaching:
+active turn. Assistant messages and streaming content render as terminal
+Markdown; user prompts and tool output remain literal. List the server's live
+sessions without attaching:
 
 ```bash
 mix elara.tui list

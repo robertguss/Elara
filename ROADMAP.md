@@ -51,17 +51,17 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status      | Item                                                          | Depends on       |
-| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | DONE        | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | DONE        | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| PROV-1  | DONE        | ChatGPT/Codex subscription provider                           | SPLIT-4          |
-| TUI-1   | IN PROGRESS | One-command embedded server for new TUI sessions              | PROV-1           |
-| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | TUI-1            |
+| ID      | Status   | Item                                                          | Depends on       |
+| ------- | -------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | DONE     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| PROV-1  | DONE     | ChatGPT/Codex subscription provider                           | SPLIT-4          |
+| TUI-1   | DONE     | One-command embedded server for new TUI sessions              | PROV-1           |
+| SPLIT-5 | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-1            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -793,7 +793,7 @@ decision; the owner must now collect the stated daily-use evidence.
 
 ## TUI-1 — One-command embedded server for new TUI sessions
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -821,9 +821,56 @@ TUI command.
 No background daemon, service manager, persisted-session auto-hydration,
 protocol change, or change to session ownership and detach semantics.
 
+### Result
+
+**DONE (2026-09-03).** Pushed implementation commit
+[`131fc52`](https://github.com/robertguss/elixir-harness/commit/131fc52c0650b84cf35fc38cc30266ee9679e5b3)
+to `origin/main`.
+
+`mix elara.tui new` now parses the same relevant client switches and starts an
+embedded `Elara.Server` on the selected `--port`, `ELARA_SERVER_PORT`, or port
+4048 before launching the shipped Rust binary. A bound port is treated as an
+existing server and left untouched. Other targets still require an existing
+server because a fresh embedded VM cannot contain the live session named by an
+attach, observe, or list command.
+
+The embedded server uses an unlinked start so a normal `eaddrinuse` result does
+not terminate the Mix task before the Rust client can connect to the existing
+server. Existing supervised callers retain `start_link`. README and the
+detached-session guide now distinguish the one-command lifetime from the
+explicit long-lived mode.
+
+Exact verification:
+
+- `mix test test/elara/tui_test.exs` — 4 passed in 1.1 s, including embedded
+  startup from `ELARA_SERVER_PORT` and reuse of an existing server through the
+  shipped Rust binary.
+- `mix format --check-formatted` — exit 0.
+- `mix compile --warnings-as-errors` — exit 0; Cargo finished incrementally in
+  0.01 s.
+- `cd native/exec-stub && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test`
+  — exit 0; 2 tests passed.
+- `cd native/elara-tui && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test`
+  — exit 0; 5 tests passed plus empty binary/doc test targets.
+- `mix test` — 335 passed in 15.6 s. The documented `CrashTool`
+  `RuntimeError: boom` line was the only expected error log.
+- `rg 'System\.shell' lib/` — no matches; `git diff --check` — exit 0.
+
+Deviations: none from scope. Automatic startup is deliberately limited to `new`;
+implementing a durable daemon or persisted-session hydration would change the
+stated lifetime and protocol scope.
+
+Remaining uncertainty: headless tests exercise the real binary and launch path,
+but ordinary alternate-screen terminal behavior remains daily-driver evidence. A
+non-Elara process occupying the selected port is left for the Rust client's
+protocol/connection error rather than being replaced.
+
+Decision: unblock SPLIT-5. Everyday new sessions need one command; users opt
+into a separate server only when they want its longer lifetime.
+
 ## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
 
-**Status:** BLOCKED (owner checkpoint; unblocks after TUI-1)
+**Status:** TODO (owner checkpoint)
 
 ### Outcome
 

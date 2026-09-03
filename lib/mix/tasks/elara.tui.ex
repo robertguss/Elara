@@ -2,11 +2,34 @@ defmodule Mix.Tasks.Elara.Tui do
   use Mix.Task
 
   @shortdoc "Run the Rust protocol-v2 terminal client"
+  @moduledoc """
+  Run the Rust protocol-v2 terminal client.
+
+  `mix elara.tui new` starts an embedded Elara server when the selected port is
+  free. Start `mix elara.server` separately when sessions must outlive this
+  command.
+  """
   @requirements ["app.start"]
+
+  @default_port 4_048
+  @switches [
+    port: :integer,
+    observe: :boolean,
+    headless: :boolean,
+    event_dump: :boolean,
+    dump_events: :boolean,
+    ask: :string,
+    interrupt_after_ms: :integer,
+    timeout_ms: :integer,
+    width: :integer,
+    height: :integer,
+    help: :boolean
+  ]
 
   @impl true
   def run(argv) do
     binary = binary!()
+    maybe_start_embedded_server(argv)
 
     port =
       Port.open({:spawn_executable, String.to_charlist(binary)}, [
@@ -17,6 +40,50 @@ defmodule Mix.Tasks.Elara.Tui do
       ])
 
     await_exit(port)
+  end
+
+  defp maybe_start_embedded_server(argv) do
+    case OptionParser.parse(argv, strict: @switches, aliases: [o: :observe, h: :help]) do
+      {opts, ["new"], []} ->
+        port = Keyword.get(opts, :port, environment_port())
+
+        if is_integer(port) and port in 1..65_535 do
+          start_embedded_server(port)
+        end
+
+      _other_command_or_invalid_arguments ->
+        :ok
+    end
+  end
+
+  defp start_embedded_server(port) do
+    case Elara.Server.start(port: port, name: Elara.Server) do
+      {:ok, _server} ->
+        :ok
+
+      {:error, :eaddrinuse} ->
+        :ok
+
+      {:error, {:already_started, server}} ->
+        if Elara.Server.port(server) == port do
+          :ok
+        else
+          Mix.raise(
+            "Elara.Server is already running on port #{Elara.Server.port(server)}, " <>
+              "but the TUI selected port #{port}"
+          )
+        end
+
+      {:error, reason} ->
+        Mix.raise("could not start embedded Elara server: #{inspect(reason)}")
+    end
+  end
+
+  defp environment_port do
+    case Integer.parse(System.get_env("ELARA_SERVER_PORT", "")) do
+      {port, ""} when port in 1..65_535 -> port
+      _invalid_or_missing -> @default_port
+    end
   end
 
   @doc false

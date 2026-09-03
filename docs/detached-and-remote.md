@@ -8,7 +8,18 @@ inside one interactive client:
 
 ## Detachable sessions
 
-Start the server in one terminal:
+For a normal one-terminal session, run:
+
+```bash
+mix elara.tui new
+```
+
+If nothing is listening on the selected port, the Mix task starts an embedded
+Elixir server before launching the Rust client. The embedded server lives only
+for that command, so exiting the TUI also ends its live sessions.
+
+For turns to continue after the TUI exits and for later live reattachment, start
+a long-lived server in one terminal:
 
 ```bash
 mix elara.server
@@ -19,7 +30,8 @@ login, start it with `ELARA_PROVIDER=openai-codex` in its environment; setting
 that variable only on the TUI process does not change an existing server.
 
 It listens only on `127.0.0.1:4048`. Use `--port PORT` to change the server
-port.
+port. `mix elara.tui new` detects and uses this existing server instead of
+starting an embedded one.
 
 Create a server-owned session from another terminal:
 

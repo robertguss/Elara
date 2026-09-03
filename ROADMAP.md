@@ -51,16 +51,17 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status   | Item                                                          | Depends on       |
-| ------- | -------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | DONE     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| PROV-1  | DONE     | ChatGPT/Codex subscription provider                           | SPLIT-4          |
-| SPLIT-5 | TODO     | Daily-driver checkpoint and recorded go/no-go                 | PROV-1           |
+| ID      | Status      | Item                                                          | Depends on       |
+| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | DONE        | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | DONE        | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| PROV-1  | DONE        | ChatGPT/Codex subscription provider                           | SPLIT-4          |
+| TUI-1   | IN PROGRESS | One-command embedded server for new TUI sessions              | PROV-1           |
+| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | TUI-1            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -790,9 +791,39 @@ daily-driver checkpoint.
 Decision: unblock SPLIT-5. Provider work does not make the split go/no-go
 decision; the owner must now collect the stated daily-use evidence.
 
+## TUI-1 — One-command embedded server for new TUI sessions
+
+**Status:** IN PROGRESS
+
+### Outcome
+
+The normal `mix elara.tui new` path needs one terminal and one command. An
+explicit long-lived server remains available when the session must outlive the
+TUI command.
+
+### Scope and acceptance
+
+- Before launching the Rust client for a `new` target, the Mix task starts an
+  Elixir server on the TUI's selected `--port` or `ELARA_SERVER_PORT` when that
+  port is free.
+- If the port already has an Elara server, use it without replacing or stopping
+  it. Keep attach-by-ID, observe, and list commands dependent on that existing
+  server because an embedded server has no live session to attach to.
+- The embedded server lives in the same Mix VM as the client and ends with that
+  command. Document that `mix elara.server` is still required for turns to
+  continue after the TUI exits and for later live reattachment.
+- Exercise both automatic startup and existing-server reuse through the shipped
+  Rust binary. Pass focused tests, both languages' format/lint/tests, full
+  `mix test`, and `rg 'System\.shell' lib/` before recording the Result.
+
+### Non-goals
+
+No background daemon, service manager, persisted-session auto-hydration,
+protocol change, or change to session ownership and detach semantics.
+
 ## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
 
-**Status:** TODO (owner checkpoint)
+**Status:** BLOCKED (owner checkpoint; unblocks after TUI-1)
 
 ### Outcome
 

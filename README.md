@@ -133,6 +133,21 @@ session state are refused during a turn; interrupt the turn first.
 See [Sessions and chat](docs/sessions.md) for persistence, branching, and the
 full command behavior.
 
+## Rust TUI
+
+Start a new TUI session with one command:
+
+```bash
+mix elara.tui new
+```
+
+When no server is listening, the Mix task starts one inside the same VM before
+launching the Rust client. That embedded server and its live sessions end when
+the command exits. To let turns continue while the TUI is closed and reattach
+later, run `mix elara.server` separately; the TUI automatically uses it. See
+[Detached sessions and remote workers](docs/detached-and-remote.md) for the
+long-lived mode.
+
 ## Built-in tools
 
 - `read` reads a file.

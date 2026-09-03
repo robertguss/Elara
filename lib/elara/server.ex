@@ -9,6 +9,15 @@ defmodule Elara.Server do
   @max_packet_bytes Protocol.max_line_bytes()
   @protocol_versions Protocol.versions()
 
+  @doc false
+  @spec start(keyword()) :: GenServer.on_start()
+  def start(opts \\ []) do
+    case Keyword.get(opts, :name) do
+      nil -> GenServer.start(__MODULE__, opts)
+      name -> GenServer.start(__MODULE__, opts, name: name)
+    end
+  end
+
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
     case Keyword.get(opts, :name) do

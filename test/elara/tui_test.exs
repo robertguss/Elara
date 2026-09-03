@@ -21,6 +21,24 @@ defmodule Elara.TuiTest do
     )
   end
 
+  defp available_port do
+    {:ok, socket} =
+      :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true, ip: {127, 0, 0, 1}])
+
+    {:ok, port} = :inet.port(socket)
+    :ok = :gen_tcp.close(socket)
+    port
+  end
+
+  defp stop_sessions_except(existing) do
+    Elara.live_sessions()
+    |> Enum.reject(&MapSet.member?(existing, &1.id))
+    |> Enum.each(fn session ->
+      {:ok, pid} = Elara.session_pid(session.id)
+      :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+    end)
+  end
+
   defp eventually(fun, attempts \\ 100)
 
   defp eventually(fun, attempts) when attempts > 0 do
@@ -70,6 +88,48 @@ defmodule Elara.TuiTest do
 
     binary = Mix.Tasks.Elara.Tui.binary!()
     %{binary: binary, state_dir: Path.join(tmp, "state")}
+  end
+
+  test "mix task starts an embedded server for new and reuses an existing server", context do
+    env_names = ["ELARA_API_KEY", "ELARA_PROVIDER", "ELARA_SERVER_PORT", "ELARA_TUI_STATE_DIR"]
+    previous_env = Map.new(env_names, &{&1, System.get_env(&1)})
+
+    on_exit(fn ->
+      Enum.each(previous_env, fn
+        {name, nil} -> System.delete_env(name)
+        {name, value} -> System.put_env(name, value)
+      end)
+    end)
+
+    existing_sessions = Elara.live_sessions() |> Enum.map(& &1.id) |> MapSet.new()
+    embedded_port = available_port()
+    System.put_env("ELARA_API_KEY", "test-key")
+    System.delete_env("ELARA_PROVIDER")
+    System.put_env("ELARA_SERVER_PORT", Integer.to_string(embedded_port))
+    System.put_env("ELARA_TUI_STATE_DIR", context.state_dir)
+
+    assert :ok = Mix.Tasks.Elara.Tui.run(["new", "--headless"])
+    embedded = Process.whereis(Elara.Server)
+    assert is_pid(embedded)
+    assert Elara.Server.port(embedded) == embedded_port
+    GenServer.stop(embedded)
+    stop_sessions_except(existing_sessions)
+
+    {:ok, external} = Elara.Server.start_link(port: 0, provider: script([]))
+    external_port = Elara.Server.port(external)
+
+    assert :ok =
+             Mix.Tasks.Elara.Tui.run([
+               "new",
+               "--headless",
+               "--port",
+               Integer.to_string(external_port)
+             ])
+
+    assert Process.alive?(external)
+    assert Process.whereis(Elara.Server) == nil
+    stop_sessions_except(existing_sessions)
+    GenServer.stop(external)
   end
 
   test "cold snapshot, create, and live session list use the Rust client", context do

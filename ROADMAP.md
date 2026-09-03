@@ -51,17 +51,18 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status   | Item                                                          | Depends on       |
-| ------- | -------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | DONE     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| PROV-1  | DONE     | ChatGPT/Codex subscription provider                           | SPLIT-4          |
-| TUI-1   | DONE     | One-command embedded server for new TUI sessions              | PROV-1           |
-| SPLIT-5 | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-1            |
+| ID      | Status      | Item                                                          | Depends on       |
+| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | DONE        | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | DONE        | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| PROV-1  | DONE        | ChatGPT/Codex subscription provider                           | SPLIT-4          |
+| TUI-1   | DONE        | One-command embedded server for new TUI sessions              | PROV-1           |
+| MAC-1   | IN PROGRESS | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
+| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | MAC-1            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -868,9 +869,32 @@ protocol/connection error rather than being replaced.
 Decision: unblock SPLIT-5. Everyday new sessions need one command; users opt
 into a separate server only when they want its longer lifetime.
 
+## MAC-1 — Build and retain execution cleanup on macOS
+
+**Status:** IN PROGRESS
+
+### Outcome
+
+The owner can build and start Elara on Apple Silicon without removing the Rust
+execution boundary or weakening its process-group cleanup contract.
+
+### Scope and acceptance
+
+- Compile Linux-only `prctl` use only on Linux. macOS retains the guardian,
+  process group, kill-on-cancel/timeout/cap/manager-loss behavior, but relies on
+  the OS reaper for orphan collection because Darwin has no child-subreaper
+  equivalent.
+- Replace Linux-only `pipe2(O_CLOEXEC)` with portable `pipe` plus fail-closed
+  `fcntl(FD_CLOEXEC)` on both descriptors.
+- Cross-check the exec stub for `aarch64-apple-darwin`; run the full Linux
+  execution lifecycle suite to ensure the portable path does not regress
+  zero-descendant behavior.
+- Pass both Rust crates' format, Clippy, and tests; Mix format,
+  warnings-as-errors compile, full tests, and `rg 'System\.shell' lib/`.
+
 ## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
 
-**Status:** TODO (owner checkpoint)
+**Status:** BLOCKED (owner checkpoint; MAC-1)
 
 ### Outcome
 

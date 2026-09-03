@@ -370,6 +370,7 @@ fn spawn_guardian(
 }
 
 fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::Result<()> {
+    #[cfg(target_os = "linux")]
     unsafe {
         libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
     }
@@ -689,12 +690,19 @@ fn kill_group(pgid: libc::pid_t) {
 
 fn pipe() -> io::Result<[RawFd; 2]> {
     let mut fds = [-1; 2];
-    let result = unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) };
-    if result == 0 {
-        Ok(fds)
-    } else {
-        Err(io::Error::last_os_error())
+    if unsafe { libc::pipe(fds.as_mut_ptr()) } != 0 {
+        return Err(io::Error::last_os_error());
     }
+
+    for fd in fds {
+        if let Err(error) = set_close_on_exec(fd) {
+            close_fd(fds[0]);
+            close_fd(fds[1]);
+            return Err(error);
+        }
+    }
+
+    Ok(fds)
 }
 
 fn duplicate_fd(fd: RawFd) -> io::Result<RawFd> {
@@ -704,6 +712,17 @@ fn duplicate_fd(fd: RawFd) -> io::Result<RawFd> {
     } else {
         Err(io::Error::last_os_error())
     }
+}
+
+fn set_close_on_exec(fd: RawFd) -> io::Result<()> {
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+    if flags < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 fn set_nonblocking(fd: RawFd) -> io::Result<()> {
@@ -776,5 +795,17 @@ mod tests {
         let bytes = [0, 127, 128, 255];
         let encoded = json!({"bytes": bytes});
         assert_eq!(encoded["bytes"], json!([0, 127, 128, 255]));
+    }
+
+    #[test]
+    fn pipes_are_closed_on_exec() {
+        let fds = pipe().unwrap();
+
+        for fd in fds {
+            let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+            assert!(flags >= 0);
+            assert_ne!(flags & libc::FD_CLOEXEC, 0);
+            close_fd(fd);
+        }
     }
 }

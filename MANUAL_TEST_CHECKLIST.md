@@ -67,7 +67,7 @@ silently omitting either Rust program.
 - [ ] `cargo fmt --check --manifest-path native/exec-stub/Cargo.toml` exits 0.
 - [ ] `cargo clippy --all-targets --manifest-path native/exec-stub/Cargo.toml -- -D warnings`
       exits 0.
-- [ ] `cargo test --manifest-path native/exec-stub/Cargo.toml` passes 2 tests.
+- [ ] `cargo test --manifest-path native/exec-stub/Cargo.toml` passes 3 tests.
 - [ ] `cargo fmt --check --manifest-path native/elara-tui/Cargo.toml` exits 0.
 - [ ] `cargo clippy --all-targets --manifest-path native/elara-tui/Cargo.toml -- -D warnings`
       exits 0.

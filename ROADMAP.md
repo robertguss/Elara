@@ -51,19 +51,19 @@ shortcut through it.
 
 ## Execution queue
 
-| ID      | Status      | Item                                                          | Depends on       |
-| ------- | ----------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | DONE        | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | DONE        | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| PROV-1  | DONE        | ChatGPT/Codex subscription provider                           | SPLIT-4          |
-| TUI-1   | DONE        | One-command embedded server for new TUI sessions              | PROV-1           |
-| MAC-1   | DONE        | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
-| TUI-2   | IN PROGRESS | Render assistant Markdown in the Rust TUI                     | MAC-1            |
-| SPLIT-5 | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | TUI-2            |
+| ID      | Status   | Item                                                          | Depends on       |
+| ------- | -------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3 | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4 | DONE     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| PROV-1  | DONE     | ChatGPT/Codex subscription provider                           | SPLIT-4          |
+| TUI-1   | DONE     | One-command embedded server for new TUI sessions              | PROV-1           |
+| MAC-1   | DONE     | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
+| TUI-2   | DONE     | Render assistant Markdown in the Rust TUI                     | MAC-1            |
+| SPLIT-5 | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-2            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -946,7 +946,7 @@ changing the Elixir/Rust boundary or moving policy into Rust.
 
 ## TUI-2 — Render assistant Markdown in the Rust TUI
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -967,9 +967,59 @@ source markers such as `**bold**` and inline-code backticks.
 - Do not change protocol v2, Elixir DTOs, session policy, or persistence. Syntax
   highlighting and browser/image rendering are non-goals.
 
+### Result
+
+**DONE (2026-09-03).** Pushed implementation commit
+[`220c18c`](https://github.com/robertguss/Elara/commit/220c18cb1943a5977a8bcb78c89ef50fc153de9e)
+to `origin/main`.
+
+Final and streaming assistant content now passes through `tui-markdown` in the
+Rust transcript renderer. It produces terminal-safe headings, emphasis, code,
+lists, quotes, links, image fallbacks, tables, and the library's other supported
+CommonMark/GFM blocks while preserving the `ai` label on the first line,
+continuation indentation, and streaming cursor. User prompts and tool output
+remain literal. Direct semantic/style tests and a headless golden cover the
+shipped rendering path.
+
+Exact verification:
+
+- `cargo fmt --check --manifest-path native/elara-tui/Cargo.toml` — exit 0.
+- `cargo clippy --all-targets --manifest-path native/elara-tui/Cargo.toml -- -D warnings`
+  — exit 0.
+- `cargo test --manifest-path native/elara-tui/Cargo.toml` — 7 passed plus empty
+  binary/doc targets.
+- `cargo check --all-targets --target aarch64-apple-darwin --manifest-path native/elara-tui/Cargo.toml`
+  — exit 0.
+- `cargo fmt --check --manifest-path native/exec-stub/Cargo.toml` — exit 0.
+- `cargo clippy --all-targets --manifest-path native/exec-stub/Cargo.toml -- -D warnings`
+  — exit 0.
+- `cargo test --manifest-path native/exec-stub/Cargo.toml` — 3 passed.
+- `mix format --check-formatted` — exit 0.
+- `mix compile --warnings-as-errors` — exit 0.
+- `mix test test/elara/protocol_v2_test.exs test/elara/tui_test.exs` — 12
+  passed.
+- `mix test` — 335 passed in 15.6 seconds. The documented `CrashTool`
+  `RuntimeError: boom` line was the only expected error log.
+- `rg 'System\.shell' lib/` — no matches; `git diff --check` — exit 0 before the
+  implementation commit.
+
+Deviations: none from product scope. Ratatui moved from 0.29 to 0.30 and
+crossterm from 0.28 to 0.29 to use the current `tui-markdown` release. Syntax
+highlighting remains deliberately disabled, avoiding its heavier dependency
+tree; fenced code still renders with terminal styling.
+
+Remaining uncertainty: the owner still needs to judge styles, colors, and
+streaming behavior in the actual macOS terminal. Streaming reparses the
+accumulated Markdown on each redraw; this could need optimization for unusually
+large in-progress responses.
+
+Decision: unblock SPLIT-5. This is checkpoint feature 1 of 5: Rust duplicated no
+session policy or transition logic, and protocol/DTO synchronization was 0% of
+the implementation because the change remained presentation-only.
+
 ## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
 
-**Status:** BLOCKED (owner checkpoint; TUI-2)
+**Status:** TODO (owner checkpoint)
 
 ### Outcome
 
@@ -990,3 +1040,9 @@ are measured and the split is either kept or reversed to Rust-everything.
   time, or the BEAM-specific features went unused. Otherwise keep the split and
   queue the next items from "Blocked on SPLIT-5's decision".
 - The Result records the measurements, the decision, and the next queue.
+
+### Feature evidence
+
+| Feature                     | Rust duplicated session policy / transitions | Protocol/DTO share             |
+| --------------------------- | -------------------------------------------- | ------------------------------ |
+| 1. TUI-2 assistant Markdown | No; Rust changed presentation only           | 0%; no protocol or DTO changes |

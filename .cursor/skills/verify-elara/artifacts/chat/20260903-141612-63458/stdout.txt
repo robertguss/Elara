@@ -1,0 +1,22 @@
+   Compiling zmij v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling libc v0.2.189
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling exec-stub v0.1.0 (/Users/robertguss/Projects/startups/Elara/native/exec-stub)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.35s
+elara  ·  /help  /interrupt  /reload  /resume  /quit
+
+> /help       this list
+/interrupt  cancel the current turn
+/reload     reload local plugins
+/why [N]    explain the latest event, or event N
+/resume     list saved sessions
+/resume N   resume saved session N
+/tree       list user turns; /tree N branches in this session
+/fork       list user turns; /fork N branches into a new session
+/clone      copy the current path into a new session
+/name TEXT  name the current session
+/quit       exit
+> 

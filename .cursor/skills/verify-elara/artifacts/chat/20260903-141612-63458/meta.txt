@@ -1,0 +1,9 @@
+mode=scripted-chat
+feature=chat
+run_id=20260903-141612-63458
+home=/tmp/elara-verify-20260903-141612-63458/home
+workspace=/tmp/elara-verify-20260903-141612-63458/workspace
+worktree=/tmp/elara-verify-20260903-141612-63458/worktree
+port=56379
+exit=0
+evidence=/Users/robertguss/Projects/startups/Elara/.cursor/skills/verify-elara/artifacts/chat/20260903-141612-63458

@@ -1199,13 +1199,16 @@ submission deduplication, file attachments, or later roadmap slices were added.
 
 Verification recorded so far:
 
-- TUI Rust tests: 24 passed, including existing projection/Markdown goldens,
+- TUI Rust tests: 25 passed, including existing projection/Markdown goldens,
   Unicode editing, exact draft restoration, reply correlation, safe paste,
   resnapshot/interruption preservation, visible cursor at 80x24, and explicit
   empty/wrapped/selected/tall composer frames. Pending/uncertain acceptance
   remains visible in the fixed status bar even behind a long transcript.
   Regression tests cover LF/CRLF safe paste, repeated history replacement,
-  no-op Delete during submission, and delayed/late acknowledgement.
+  no-op Delete during submission, and delayed/late acknowledgement. A follow-up
+  frame regression reproduced flattened submitted prompts, then verified the fix:
+  user transcript lines preserve blank lines, indentation, literal Markdown,
+  combining characters, emoji, and four-column tab stops.
 - Targeted TUI product tests: 6 passed, including prompt-validation failure and
   the interactive PTY product test
   against a real Elara server using the scripted provider. It checks exact
@@ -1221,11 +1224,24 @@ Verification recorded so far:
   the same three failures. No effect code or assertions were altered.
 - Installed terminal versions: Ghostty 1.3.1; WezTerm
   20240203-110809-5046fc22. Computer Use denied access to both apps, including
-  a retry requested by the owner. Native typing, modifier mappings, clipboard,
-  and resize evidence in those terminals remains unavailable. No subscription
-  calls or screenshots were used for this item.
+  a retry requested by the owner. The subsequently requested built-in shell
+  route successfully launched both terminals. WezTerm's CLI verified bracketed
+  Unicode paste without submission, exact canonical text after Enter, Ctrl-J,
+  history restoration, selection replacement, and F2 LF/CRLF safe paste at 80x24.
+  The rebuilt transcript fix passed native frame checks at 80x24, 120x40, and
+  180x45 with completed scripted turns. A temporary isolated Lua configuration
+  using WezTerm's documented `set_inner_size` API then exercised live resize
+  from 80x24 through 120x40 and 180x45 back to 80x24: Unicode draft and visible
+  cursor survived; replacing the selection proved selection also survived.
+  Evidence is under `/tmp/elara-tui3-check/followup-wezterm-*.txt` and
+  `live-resize-*.txt`. Tests used stock/isolated configuration, not the owner's
+  keymap. CLI input injection does not verify physical modifier mappings or
+  system clipboard paste. Ghostty has launch evidence only. No subscription
+  calls or screenshots were used for this item. A temporary scripted-provider
+  stream/final-text mismatch was corrected before the follow-up checks.
 
-Remaining acceptance: native Ghostty/WezTerm checks at the required dimensions,
+Remaining acceptance: Ghostty interaction/resize, physical modifier mappings
+and system clipboard checks in both terminals,
 full-suite passing evidence on a supported host (or a separately scoped fix for
 the baseline macOS tests). Keep TUI-4 BLOCKED.
 
@@ -1235,8 +1251,10 @@ fixing reproduced safe-paste LF/CRLF, history-sentinel bounds, no-op Delete
 revision, and unsent headless ask issues. Full local receipt is at
 `/tmp/compound-engineering-501/ce-code-review/tui3-206f19d8/review.json`.
 Additional uncertainty: lost/delayed acknowledgements have model-level coverage,
-not fault-injected socket evidence; responsiveness at the 64 KiB limit is not
-measured. These are not claims of native-terminal acceptance.
+not fault-injected socket evidence. One local WezTerm 80x24 sample measured
+84 ms from a 64 KiB CLI paste to a visible tail marker, including CLI overhead;
+the draft remained unsubmitted and could be replaced. This is a smoke measurement,
+not a latency distribution or a claim of complete native-terminal acceptance.
 
 Boundary evidence: authority implementation unchanged; Rust implements editor,
 input dispatch, layout, and connection-local acknowledgement tracking. Protocol

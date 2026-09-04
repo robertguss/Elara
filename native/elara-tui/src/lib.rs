@@ -17,6 +17,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use serde_json::{Value, json};
 use tui_markdown::{ImageFallback, Options as MarkdownOptions, StyleSheet};
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 pub const DEFAULT_PORT: u16 = 4_048;
 const MAX_LINE_BYTES: usize = 16 * 1_024 * 1_024;
@@ -855,11 +857,9 @@ fn transcript_lines(model: &Model) -> Vec<Line<'static>> {
     if let Some(messages) = view["messages"].as_array() {
         for message in messages {
             match message["role"].as_str() {
-                Some("user") => lines.push(prefixed_line(
-                    "you ",
-                    Color::Cyan,
-                    message["text"].as_str().unwrap_or_default(),
-                )),
+                Some("user") => {
+                    lines.extend(user_lines(message["text"].as_str().unwrap_or_default()))
+                }
                 Some("assistant") => {
                     if let Some(text) = message["text"].as_str()
                         && !text.is_empty()
@@ -990,14 +990,33 @@ fn owned_line(line: Line<'_>) -> Line<'static> {
     }
 }
 
-fn prefixed_line(prefix: &'static str, color: Color, text: &str) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(
-            prefix,
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(text.to_string()),
-    ])
+fn user_lines(text: &str) -> Vec<Line<'static>> {
+    text.split('\n')
+        .enumerate()
+        .map(|(index, line)| {
+            let mut content = String::new();
+            let mut column = 0;
+            for grapheme in line.graphemes(true) {
+                if grapheme == "\t" {
+                    let spaces = 4 - column % 4;
+                    content.extend(std::iter::repeat_n(' ', spaces));
+                    column += spaces;
+                } else {
+                    content.push_str(grapheme);
+                    column += grapheme.width();
+                }
+            }
+            Line::from(vec![
+                Span::styled(
+                    if index == 0 { "you " } else { "    " },
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(content),
+            ])
+        })
+        .collect()
 }
 
 fn outcome(value: &Value) -> (&str, &str) {
@@ -1668,6 +1687,25 @@ mod tests {
         ]);
         assert_eq!(projection.ingest_patch("inc", 1, &ops), Ingest::Resnapshot);
         assert_eq!(projection.view, snapshot);
+    }
+
+    #[test]
+    fn user_transcript_preserves_multiline_literal_text_and_tab_stops() {
+        let mut model = fixture_model("idle");
+        let prompt = "first\n\n  **literal**\ne\u{301}\t👩‍💻\tend\n";
+        model.projection.view["messages"] = json!([{"role": "user", "text": prompt}]);
+        let frame = render_frame(&model, 80, 24).unwrap();
+        let rows = frame.lines().collect::<Vec<_>>();
+        let first = rows
+            .iter()
+            .position(|row| row.contains("you first"))
+            .unwrap();
+        assert!(rows[first + 1].trim_matches(['│', ' ']).is_empty());
+        assert!(rows[first + 2].contains("│      **literal**"));
+        assert!(rows[first + 3].contains("│    e\u{301}   👩‍💻  "));
+        assert!(rows[first + 3].contains("end"));
+        assert!(rows[first + 4].trim_matches(['│', ' ']).is_empty());
+        assert_eq!(model.projection.view["messages"][0]["text"], prompt);
     }
 
     #[test]

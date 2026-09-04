@@ -3,8 +3,8 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{
-    self, DisableBracketedPaste, EnableBracketedPaste, KeyboardEnhancementFlags,
-    PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use crossterm::terminal::{
@@ -411,8 +411,13 @@ impl TerminalGuard {
         let mut guard = Self {
             enhanced_keyboard: false,
         };
-        execute!(io::stdout(), EnterAlternateScreen, EnableBracketedPaste)
-            .map_err(|error| format!("cannot initialize terminal: {error}"))?;
+        execute!(
+            io::stdout(),
+            EnterAlternateScreen,
+            EnableBracketedPaste,
+            EnableMouseCapture
+        )
+        .map_err(|error| format!("cannot initialize terminal: {error}"))?;
         if supports_keyboard_enhancement().unwrap_or(false) {
             execute!(
                 io::stdout(),
@@ -433,6 +438,7 @@ impl Drop for TerminalGuard {
         let _ = execute!(
             io::stdout(),
             DisableBracketedPaste,
+            DisableMouseCapture,
             LeaveAlternateScreen,
             crossterm::cursor::Show
         );

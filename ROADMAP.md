@@ -10,11 +10,10 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** [TUI-4 — transcript navigation](#tui-4--navigable-transcript-controller)
-is IN PROGRESS. TUI-3 implementation is pushed through `0e1cbda`; Linux
-acceptance passed in `434f3c3`. On 2026-09-04 the owner explicitly deferred the
-remaining hands-on terminal checks and authorized continuing the later items.
-Those checks remain unverified and do not block implementation of successors.
+**Current:** [TUI-5 — tool inspection](#tui-5--inspectable-typed-tool-blocks)
+is next. TUI-4 implementation and review fixes pass shared checks. TUI-3 and
+TUI-4 hands-on acceptance are DEFERRED by the owner's 2026-09-04 instruction
+while away. Those checks remain unverified and do not block later implementation.
 
 Update this handoff and each item's Result after verified milestones. Continue
 available agent work autonomously, committing and pushing completed changes;
@@ -28,12 +27,12 @@ with the next concrete action. Close test terminal windows after testing.
 | TUI-3 WezTerm rendering and live resize | Verified | 80x24, 120x40, 180x45; draft/cursor/selection retained |
 | TUI-3 native clipboard actions and Ghostty modified Enter | Verified for API path | Exact canonical text; physical shortcuts remain unverified |
 | TUI-3 physical keys and Ghostty resize | Deferred by owner | Revisit when owner returns; does not gate later implementation |
-| TUI-4 anchored scrolling, focus, and follow-tail | In progress | Add semantic entries and wrapping-aware viewport |
-| TUI-4 search, selection, and clipboard | Pending | Add Unicode-safe search/selection and honest clipboard delivery |
-| TUI-4 actions, help, product checks | Pending | One action registry; automated and available native checks |
-| TUI-5 tool inspection | Next after TUI-4 | Compact/expanded/fullscreen typed tool views |
+| TUI-4 anchored scrolling, focus, and follow-tail | Implementation verified | Semantic anchors, cached wrapping, explicit follow-tail; 45 Rust tests |
+| TUI-4 search, selection, and clipboard | Implementation verified | Search paste preserves draft; review fixes cover reverse/stale drags and focus |
+| TUI-4 actions, help, product checks | Complete | 7 TUI product tests; 339 full Linux tests; both Rust crates pass checks |
+| TUI-5 tool inspection | Next | Compact/expanded/fullscreen typed tool views |
 
-**Next action:** implement and verify TUI-4, then proceed to TUI-5. Manual-only
+**Next action:** implement and verify TUI-5 typed tool inspection. Manual-only
 acceptance that requires the absent owner stays explicitly deferred, not passed.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -81,8 +80,8 @@ versioned line protocol; no NIFs. That document holds the architecture,
 evidence, and reversal signals; this file holds the queue and status.
 
 The foundations are shipped, but the current Rust client is not yet a credible
-daily driver. TUI-3 implements the multiline composer; the transcript is still
-always-following, tool output is truncated, and session selection is CLI-oriented. Starting SPLIT-5 in that state would measure missing product basics
+daily driver. TUI-3 implements the multiline composer and TUI-4 adds independent transcript
+navigation. Tool inspection is still unstructured and session selection is CLI-oriented. Starting SPLIT-5 in that state would measure missing product basics
 rather than the Elixir/Rust boundary.
 
 [`xai-org/grok-build`](https://github.com/xai-org/grok-build) remains the
@@ -94,7 +93,7 @@ HTML prototypes or existing batch coordinator already implement them.
 
 Build the TUI foundations first, then provider/input and session controls, then
 persistent communicating threads and automatic handoff. Both the TUI and threads
-must be usable before SPLIT-5. TUI-4 is the next executable item; TUI-3 manual acceptance is owner-deferred. Later
+must be usable before SPLIT-5. TUI-5 is the next executable item; TUI-3/TUI-4 manual acceptance is owner-deferred. Later
 slices are bounded vertical deliveries; the expanded scope must not be hidden
 inside the composer or session picker.
 
@@ -197,8 +196,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | MAC-1   | DONE     | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
 | TUI-2   | DONE     | Render assistant Markdown in the Rust TUI                     | MAC-1            |
 | TUI-3   | DEFERRED | Cursor-aware multiline daily-driver composer                  | TUI-2            |
-| TUI-4   | IN PROGRESS | Navigable transcript controller                               | TUI-3            |
-| TUI-5   | BLOCKED  | Inspectable typed tool blocks                                 | TUI-4            |
+| TUI-4   | DEFERRED | Navigable transcript controller                               | TUI-3            |
+| TUI-5   | TODO     | Inspectable typed tool blocks                                 | TUI-4            |
 | TUI-7   | BLOCKED  | Three layouts and four independent dark themes               | TUI-5            |
 | PROV-2  | BLOCKED  | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
 | INPUT-1 | BLOCKED  | File references and image attachments from disk               | PROV-2           |
@@ -1332,7 +1331,7 @@ tracked and remain unknown; no percentage is inferred from changed-line counts.
 
 ## TUI-4 — Navigable transcript controller
 
-**Status:** IN PROGRESS — TUI-3 manual acceptance deferred by owner
+**Status:** DEFERRED — implementation verified; hands-on acceptance postponed by owner
 
 ### Outcome
 
@@ -1378,15 +1377,47 @@ unless profiling shows synchronous search stalls interaction.
 
 ### Result
 
-**IN PROGRESS (2026-09-04).** Implement anchored transcript navigation, search,
-selection/copy, mouse support, and a shared Rust action registry. Preserve
-canonical protocol authority and the existing composer. Hands-on checks requiring
-the absent owner are deferred by instruction; automated and available native
-checks remain required.
+**DEFERRED (2026-09-04): implementation verified and reviewed; hands-on
+acceptance postponed by owner.** Semantic message/tool/stream entries now support
+independent transcript focus, wrapped line/page/user-turn navigation, explicit
+follow-tail, case-insensitive search, drag selection, and selection/entry copy.
+A shared action registry supplies dispatch and help. Rendering and wrapping are
+cached; same-head snapshot installs explicitly invalidate semantic content.
+Search paste is bounded/sanitized and cannot change the composer. Ctrl-C still
+detaches while searching; safe-paste mode retains precedence.
+
+- Verification: 45 Rust TUI tests and 3 execution-stub tests; both crates pass
+  format and all-target Clippy. All 7 interactive TUI product tests pass on macOS.
+  An unprivileged, network-disconnected Linux ARM64 container passes all 339 Mix
+  tests, formatting, warnings-as-errors compilation, and both Rust crate checks.
+  The new product test failed against TUI-3 before implementation; a stronger
+  pasted-search regression failed before the routing fix and now passes.
+- Native WezTerm 20240203-110809-5046fc22 at 100x30 verified exact whole-entry Unicode/newline clipboard
+  contents via pbcopy/pbpaste, search 1/2 to 2/2, a paused viewport surviving
+  streamed completion, explicit return to follow-tail, and injected SGR drag
+  selection copying `TOP `. This is terminal API/protocol evidence, not physical
+  keyboard/mouse acceptance. A repeat after cache/search fixes stalled in the
+  WezTerm CLI before starting the client; the test GUI was terminated and no
+  WezTerm test windows remain. Automated final-source checks passed independently.
+- The owner deferred physical keyboard/mouse acceptance while away; Ghostty's
+  TUI-4 clipboard/selection/resize exercise is also still unverified. Earlier
+  TUI-3 Ghostty clipboard results do not establish TUI-4 acceptance.
+- Full retained tool text is navigable; compact/expanded typed views remain
+  TUI-5. Offscreen row virtualization is deferred as a broader redesign: caching
+  avoids rebuilds during navigation, but layout still retains the full history.
+  Elixir canonical authority and the wire protocol are unchanged.
+- Review completed (`20260904-193903-tui4`) with seven local lenses and an
+  independent Claude Opus 5 pass. All five validated findings were fixed: reverse-drag endpoints,
+  Ctrl-X in search, outside wheel focus, stale drag lifecycle, and a product
+  search assertion that now requires navigation to a different entry. Four new
+  input tests failed before the fixes and now pass. No actionable findings remain. Residual risks: clipboard helpers are synchronous with
+  no timeout; long-history streaming layout cost is unmeasured; search Backspace
+  removes a Unicode scalar, not a whole grapheme. Clipboard failure/fallback and
+  terminal-initialization failure cleanup lack dedicated product coverage.
 
 ## TUI-5 — Inspectable typed tool blocks
 
-**Status:** BLOCKED on TUI-4
+**Status:** TODO — TUI-4 hands-on acceptance deferred by owner
 
 ### Outcome
 
@@ -1418,6 +1449,13 @@ result, failure, or reported mutation needed to understand the work.
 
 No streamed shell-output protocol, syntax-aware full-file highlighting, custom
 renderer for every plugin, or removal of source byte limits.
+
+### Result
+
+**TODO (2026-09-04).** Implement compact, expanded, and fullscreen typed tool
+inspection after the TUI-4 commit is pushed. Reuse transcript navigation/search/
+selection; preserve canonical outcomes and explicitly distinguish retained text
+from upstream truncation. Physical acceptance remains owner-deferred while away.
 
 ## TUI-7 — Three layouts and four independent dark themes
 

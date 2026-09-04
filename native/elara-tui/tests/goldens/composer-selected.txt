@@ -1,4 +1,4 @@
-┌ transcript · protocol v2 projection ─────────────────────────────────────────┐
+┌ transcript · prompt focus · FOLLOW ──────────────────────────────────────────┐
 │you inspect the build                                                         │
 │ai  I’ll check it.                                                            │
 │                                                                              │
@@ -17,7 +17,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+└ Tab transcript ──────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste ──────────────────────────────────┐
 │replace this selection                                                        │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘

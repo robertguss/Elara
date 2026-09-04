@@ -1,7 +1,6 @@
-┌ transcript · protocol v2 projection ─────────────────────────────────────────────────┐
+┌ transcript · prompt focus · FOLLOW ──────────────────────────────────────────────────┐
 │you inspect the build                                                                 │
 │ai  I’ll check it.                                                                    │
-│Detached; the server-owned session continues.                                         │
 │                                                                                      │
 │                                                                                      │
 │                                                                                      │
@@ -11,7 +10,8 @@
 │                                                                                      │
 │                                                                                      │
 │                                                                                      │
-└──────────────────────────────────────────────────────────────────────────────────────┘
+│                                                                                      │
+└ Tab transcript ──────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste ──────────────────────────────────────────┐
 │                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────┘

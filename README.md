@@ -180,9 +180,36 @@ the draft. Only the corresponding server acceptance clears an unchanged draft;
 edits made while waiting survive. A lost or delayed acknowledgement is shown as
 uncertain and repeat submission is blocked. Inspect the session before retrying
 from a new attachment; this is not a durable queue or reconnect deduplication.
-Ctrl-X interrupts, Esc/Ctrl-C detaches. Drafts live in this client window and are
+Ctrl-X interrupts; Ctrl-C detaches. Esc closes search/help or returns transcript
+focus to the prompt before detaching. Drafts live in this client window and are
 not saved after it exits. Local history recalls up to 200 canonical prompts that
 fit the editor limit; it does not change persisted conversation history.
+
+Press **Tab** to move between the prompt and transcript. With transcript focus,
+Up/Down scroll by line, PageUp/PageDown by page, Home goes to the beginning, and
+End returns to live following. Alt-Up/Down visits user turns. Scrolling away
+pauses following: new output does not pull you away from what you are reading.
+The transcript shows whether it is following or paused. Your prompt stays intact
+while you navigate.
+
+In the transcript, **/** opens case-insensitive search. Enter advances to the
+next match, Shift-Enter goes to the previous match, and Esc closes search.
+The match counter shows where you are. Drag with the left mouse button to select
+text; **c** copies the selection and **y** copies the current entry. Copies omit
+speaker labels and borders and do not add newlines at visual wraps. Real content
+line breaks remain; crossing entries separates them with a newline.
+Assistant Markdown copies as rendered plain text; user text retains literal
+tabs. Anchors use semantic entry IDs. Stream completion maps to the final
+assistant entry; if an entry disappears, navigation falls back to the nearest
+surviving prior entry (earlier on a tie), then the first current entry. Text
+offsets clamp to surviving grapheme boundaries when content changes.
+
+The app sends clipboard text through `pbcopy` on macOS and available clipboard
+utilities on Linux. A failed or unavailable clipboard command produces a notice;
+the app does not claim success. Mouse reporting supports wheel scrolling and
+selection. Terminal-native selection remains available through the terminal's
+mouse-reporting bypass modifier (typically Shift; check your terminal settings).
+F1 lists the current action bindings.
 
 ## Built-in tools
 

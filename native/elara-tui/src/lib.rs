@@ -1,7 +1,11 @@
 use std::collections::{BTreeMap, VecDeque};
 
+mod actions;
+mod clipboard;
 mod editor;
+mod transcript;
 pub use editor::Editor;
+use std::cell::RefCell;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -17,8 +21,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use serde_json::{Value, json};
 use tui_markdown::{ImageFallback, Options as MarkdownOptions, StyleSheet};
-use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthStr;
 
 pub const DEFAULT_PORT: u16 = 4_048;
 const MAX_LINE_BYTES: usize = 16 * 1_024 * 1_024;
@@ -36,6 +38,7 @@ pub struct Projection {
     pub incarnation: String,
     pub head: u64,
     awaiting_snapshot: bool,
+    snapshot_generation: u64,
 }
 
 impl Projection {
@@ -48,6 +51,7 @@ impl Projection {
             incarnation,
             head,
             awaiting_snapshot: false,
+            snapshot_generation: 0,
         })
     }
 
@@ -63,6 +67,7 @@ impl Projection {
             .expect("validated session");
         validate_snapshot_identity(&view, session, &incarnation)?;
         self.view = view;
+        self.snapshot_generation = self.snapshot_generation.wrapping_add(1);
         self.incarnation = incarnation;
         self.head = head;
         self.awaiting_snapshot = false;
@@ -136,6 +141,7 @@ pub struct Model {
     safe_paste_cr: bool,
     pub enhanced_keyboard: bool,
     pub show_help: bool,
+    transcript: RefCell<transcript::Transcript>,
     pending_replies: VecDeque<PendingReply>,
     // Acceptance can remain uncertain after the turn's metrics have finished.
     pending_ask: Option<(u64, Instant)>,
@@ -159,6 +165,7 @@ impl Model {
             safe_paste_cr: false,
             enhanced_keyboard: false,
             show_help: false,
+            transcript: RefCell::new(transcript::Transcript::default()),
             pending_replies: VecDeque::new(),
             pending_ask: None,
             last_outcome: None,
@@ -383,13 +390,66 @@ pub fn handle_input(
                 Some("Draft limit: 64 KiB. Insert rejected; existing text retained.".into());
         }
     };
+    if let Event::Mouse(mouse) = &event {
+        use crossterm::event::MouseEventKind;
+        if matches!(mouse.kind, MouseEventKind::Down(_) | MouseEventKind::Up(_)) {
+            model.transcript.borrow_mut().drag_anchor = None;
+        }
+    }
     match event {
+        Event::Mouse(mouse) if !model.safe_paste && !model.show_help => {
+            use crossterm::event::{MouseButton, MouseEventKind};
+            let mut state = model.transcript.borrow_mut();
+            if mouse.modifiers.contains(KeyModifiers::SHIFT) {
+                return InputAction::None;
+            }
+            match mouse.kind {
+                MouseEventKind::ScrollUp
+                    if state.rect.contains((mouse.column, mouse.row).into()) =>
+                {
+                    state.focused = true;
+                    state.scroll(-3);
+                }
+                MouseEventKind::ScrollDown
+                    if state.rect.contains((mouse.column, mouse.row).into()) =>
+                {
+                    state.focused = true;
+                    state.scroll(3);
+                }
+                MouseEventKind::Down(MouseButton::Left)
+                    if state.rect.contains((mouse.column, mouse.row).into()) =>
+                {
+                    state.focused = true;
+                    state.scroll(0);
+                    state.begin_drag(mouse.column, mouse.row);
+                }
+                MouseEventKind::Drag(MouseButton::Left) if state.drag_anchor.is_some() => {
+                    if mouse.row < state.rect.y {
+                        state.scroll(-1);
+                    }
+                    if mouse.row >= state.rect.bottom() {
+                        state.scroll(1);
+                    }
+                    state.drag_to(mouse.column, mouse.row);
+                }
+                _ => {}
+            }
+        }
         Event::Paste(text) => {
             model.safe_paste_cr = false;
-            insert(model, &text);
+            if !model.safe_paste && !model.show_help && model.transcript.borrow().searching {
+                if !model.transcript.borrow_mut().append_query(&text) {
+                    model.notice = Some("Search limit: 4 KiB; query retained.".into());
+                }
+            } else {
+                insert(model, &text);
+            }
         }
         Event::Key(key) if key.kind != KeyEventKind::Release => {
-            if key.code == KeyCode::F(2) && key.kind == KeyEventKind::Press {
+            use actions::Action;
+            let focused = model.transcript.borrow().focused;
+            let action = actions::lookup(key, focused);
+            if action == Some(Action::SafePaste) && key.kind == KeyEventKind::Press {
                 model.safe_paste = !model.safe_paste;
                 model.safe_paste_cr = false;
                 return InputAction::None;
@@ -420,7 +480,7 @@ pub fn handle_input(
                 }
                 return InputAction::None;
             }
-            if key.code == KeyCode::F(1) && key.kind == KeyEventKind::Press {
+            if action == Some(Action::Help) {
                 model.show_help = !model.show_help;
                 return InputAction::None;
             }
@@ -430,25 +490,89 @@ pub fn handle_input(
                 }
                 return InputAction::None;
             }
-            match (key.code, key.modifiers) {
-                (KeyCode::Esc, _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                    return InputAction::Detach;
+            if action == Some(Action::Escape) && key.code != KeyCode::Esc {
+                return InputAction::Detach;
+            }
+            if action == Some(Action::Interrupt) && key.kind == KeyEventKind::Press {
+                return InputAction::Interrupt;
+            }
+            if model.transcript.borrow().searching {
+                let mut state = model.transcript.borrow_mut();
+                match key.code {
+                    KeyCode::Esc => state.searching = false,
+                    KeyCode::Enter => state.next_match(key.modifiers.contains(KeyModifiers::SHIFT)),
+                    KeyCode::Backspace => {
+                        state.query.pop();
+                        state.search_changed();
+                    }
+                    KeyCode::Char(c)
+                        if !key.modifiers.intersects(
+                            KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER,
+                        ) =>
+                    {
+                        let accepted = state.append_query(&c.to_string());
+                        if !accepted {
+                            model.notice = Some("Search limit: 4 KiB; query retained.".into());
+                        }
+                    }
+                    _ => {}
                 }
-                (KeyCode::Char('x'), KeyModifiers::CONTROL) if key.kind == KeyEventKind::Press => {
-                    return InputAction::Interrupt;
+                return InputAction::None;
+            }
+            match action {
+                Some(Action::Focus) => {
+                    model.transcript.borrow_mut().focused = !focused;
                 }
-                (KeyCode::Enter, modifiers)
-                    if modifiers.intersects(KeyModifiers::ALT | KeyModifiers::SHIFT) =>
-                {
-                    insert(model, "\n")
+                Some(Action::Escape) => {
+                    if focused && key.code == KeyCode::Esc {
+                        model.transcript.borrow_mut().focused = false;
+                    } else {
+                        return InputAction::Detach;
+                    }
                 }
-                (KeyCode::Char('j'), KeyModifiers::CONTROL) => insert(model, "\n"),
-                (KeyCode::Enter, KeyModifiers::NONE) if key.kind == KeyEventKind::Press => {
+                Some(Action::Copy | Action::CopyEntry) => {
+                    let text = if action == Some(Action::Copy) {
+                        model.transcript.borrow().copy_selection()
+                    } else {
+                        model.transcript.borrow().copy_entry()
+                    };
+                    model.notice = Some(match text {
+                        Some(text) if !text.is_empty() => match clipboard::copy(&text) {
+                            Ok(()) => format!("Copied {} bytes to clipboard", text.len()),
+                            Err(error) => error,
+                        },
+                        _ => "Nothing selected to copy".into(),
+                    });
+                }
+                Some(action) if focused => {
+                    let mut state = model.transcript.borrow_mut();
+                    match action {
+                        Action::Up => state.scroll(-1),
+                        Action::Down => state.scroll(1),
+                        Action::PageUp => state.page(-1),
+                        Action::PageDown => state.page(1),
+                        Action::Home => state.home(),
+                        Action::Tail => state.tail(),
+                        Action::PreviousTurn => state.user_turn(-1),
+                        Action::NextTurn => state.user_turn(1),
+                        Action::Search => {
+                            state.searching = true;
+                            state.query.clear();
+                            state.search_changed();
+                        }
+                        Action::NextMatch | Action::Submit => state.next_match(false),
+                        Action::PreviousMatch => state.next_match(true),
+                        _ => {}
+                    }
+                }
+                Some(Action::Newline) => insert(model, "\n"),
+                Some(Action::Submit) if key.kind == KeyEventKind::Press => {
                     return InputAction::Submit;
                 }
-                _ => {
+                _ if !focused => {
                     model.editor.handle_key(key, width);
                 }
+                _ => {}
             }
         }
         _ => {}
@@ -722,17 +846,37 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
         ])
         .split(area);
 
-    let lines = transcript_lines(model);
-    let visible_height = chunks[0].height.saturating_sub(2) as usize;
-    let first = lines.len().saturating_sub(visible_height);
-    let transcript = Paragraph::new(lines[first..].to_vec())
-        .wrap(Wrap { trim: false })
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" transcript · protocol v2 projection "),
-        );
+    let mut state = model.transcript.borrow_mut();
+    state.rect = chunks[0].inner(ratatui::layout::Margin::new(1, 1));
+    let source_key = (
+        model.session_id.clone(),
+        model.projection.incarnation.clone(),
+        model.projection.head,
+        model.projection.snapshot_generation,
+    );
+    let entries = if state.source_key.as_ref() != Some(&source_key) {
+        state.source_key = Some(source_key);
+        Some(transcript_entries(model))
+    } else {
+        None
+    };
+    state.update(
+        entries,
+        state_width(chunks[0].width),
+        chunks[0].height.saturating_sub(2) as usize,
+    );
+    let transcript = Paragraph::new(state.visible_lines()).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(state.title())
+            .title_bottom(if state.focused {
+                actions::hints(true)
+            } else {
+                " Tab transcript ".into()
+            }),
+    );
     frame.render_widget(transcript, chunks[0]);
+    drop(state);
 
     let visible = chunks[1].height.saturating_sub(2) as usize;
     let first_row = editor_layout
@@ -759,10 +903,11 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
             )
         })
         .collect();
+    let prompt_title = actions::prompt_title();
     let title = if model.safe_paste {
         " SAFE PASTE · Enter newline · F2 finish (does not send) "
     } else {
-        " ask · Enter send · F1 help · F2 safe paste "
+        &prompt_title
     };
     let bindings = if model.enhanced_keyboard {
         " Alt/Shift-Enter or Ctrl-J newline · Alt-↑/↓ history "
@@ -776,7 +921,7 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
             .title_bottom(bindings),
     );
     frame.render_widget(input, chunks[1]);
-    if visible > 0 && chunks[1].width > 2 {
+    if visible > 0 && chunks[1].width > 2 && !model.transcript.borrow().focused {
         frame.set_cursor_position((
             chunks[1].x + 1 + (editor_layout.cursor_column as u16).min(chunks[1].width - 3),
             chunks[1].y + 1 + (editor_layout.cursor_row - first_row) as u16,
@@ -815,34 +960,33 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
 
 fn composer_help(model: &Model) -> Vec<Line<'static>> {
     let mut lines = vec![
-        "Composer · F1/Esc closes help",
-        "Enter sends only when idle; rejected/uncertain sends retain the draft.",
-        "Ctrl-J inserts newline in both terminals. Alt-Enter also works when",
-        "the terminal sends Esc+Enter; Shift-Enter needs enhanced keys.",
-        "Arrows move by grapheme / wrapped row; Shift selects.",
-        "Ctrl/Alt-Left/Right moves by word; Ctrl/Alt-Backspace/Delete deletes.",
-        "Home/End: logical line; Ctrl-Home/End: entire draft. Ctrl-A: select all.",
-        "Alt-Up/Down: prompt history; newest restores your original draft.",
-        "Bracketed paste keeps newlines. F2 safe paste: Enter never sends,",
-        "commands are disabled; F2 finishes, then inspect and Enter to send.",
-        "Unframed Enter cannot be identified as paste. Enable F2 BEFORE paste.",
-        "Tabs preserved (4-column display); control bytes are removed.",
-        "Draft limit 64 KiB; oversized insert is rejected, never truncated.",
-        "Ctrl-X interrupts; Esc/Ctrl-C detaches. Draft is local to this window.",
-    ]
-    .into_iter()
-    .map(Line::from)
-    .collect::<Vec<_>>();
-    lines.push(Line::from(if model.enhanced_keyboard {
-        "Enhanced keys detected: Alt/Shift-Enter enabled."
-    } else {
-        "Legacy keys: Ctrl-J fallback; modified Enter depends on terminal mapping."
-    }));
+        Line::from("Enter sends when idle; rejected/uncertain sends retain the draft."),
+        Line::from("Prompt: arrows move; Shift selects; Ctrl-A selects all."),
+        Line::from("Ctrl/Alt arrows/delete: words. Home/End: line; Ctrl: whole draft."),
+        Line::from("Alt-Up/Down prompt history restores the original draft at newest."),
+        Line::from("F2 BEFORE unframed paste: commands disabled, Enter inserts newline."),
+        Line::from("F2 finishes safe paste without sending. Draft limit 64 KiB."),
+        Line::from("Tabs/line breaks retained; other control bytes removed."),
+        Line::from(if model.enhanced_keyboard {
+            "Enhanced keys: modified Enter available."
+        } else {
+            "Legacy keys: Ctrl-J fallback; Alt-Enter depends on terminal mapping."
+        }),
+    ];
+    lines.extend(actions::help());
+    lines.push(Line::from(
+        "Mouse wheel/drag: scroll/select; native selection: terminal modifier.",
+    ));
     lines
 }
 
-fn transcript_lines(model: &Model) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
+fn state_width(width: u16) -> usize {
+    width.saturating_sub(2).max(1) as usize
+}
+
+fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
+    use transcript::Entry;
+    let mut entries = Vec::new();
     let view = &model.projection.view;
     let statuses = view["tool_calls"]
         .as_array()
@@ -853,18 +997,40 @@ fn transcript_lines(model: &Model) -> Vec<Line<'static>> {
                 .collect::<BTreeMap<_, _>>()
         })
         .unwrap_or_default();
-
     if let Some(messages) = view["messages"].as_array() {
-        for message in messages {
+        for (index, message) in messages.iter().enumerate() {
+            let id = format!("{}:message:{index}", model.session_id);
             match message["role"].as_str() {
                 Some("user") => {
-                    lines.extend(user_lines(message["text"].as_str().unwrap_or_default()))
+                    let text = message["text"].as_str().unwrap_or_default();
+                    // Keep literal tabs in the source mapping; expand only visual cells.
+                    let lines = text
+                        .split('\n')
+                        .enumerate()
+                        .map(|(i, line)| {
+                            Line::from(vec![
+                                Span::styled(
+                                    if i == 0 { "you " } else { "    " },
+                                    Style::default()
+                                        .fg(Color::Cyan)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
+                                Span::raw(line.to_owned()),
+                            ])
+                        })
+                        .collect();
+                    entries.push(Entry::rendered(id, lines, true, false));
                 }
                 Some("assistant") => {
                     if let Some(text) = message["text"].as_str()
                         && !text.is_empty()
                     {
-                        lines.extend(assistant_markdown_lines(text, false));
+                        entries.push(Entry::rendered(
+                            id,
+                            assistant_markdown_lines(text),
+                            false,
+                            false,
+                        ));
                     }
                     if let Some(calls) = message["tool_calls"].as_array() {
                         for call in calls {
@@ -872,63 +1038,89 @@ fn transcript_lines(model: &Model) -> Vec<Line<'static>> {
                             let name = call["name"].as_str().unwrap_or("?");
                             let status = statuses
                                 .get(id)
-                                .and_then(|view| view["status"].as_str())
+                                .and_then(|v| v["status"].as_str())
                                 .unwrap_or("pending");
-                            let color = match status {
+                            let mut entry = Entry::rendered(
+                                format!("{}:tool:{id}", model.session_id),
+                                vec![Line::from(vec![
+                                    Span::raw("    "),
+                                    Span::raw(format!("{name} · {status}")),
+                                ])],
+                                false,
+                                false,
+                            );
+                            entry.lines[0].style = Style::default().fg(match status {
                                 "succeeded" => Color::Blue,
                                 "failed" | "indeterminate" => Color::Red,
                                 "running" => Color::Yellow,
                                 _ => Color::DarkGray,
-                            };
-                            lines.push(Line::from(Span::styled(
-                                format!("    {name} · {status}"),
-                                Style::default().fg(color),
-                            )));
+                            });
+                            entries.push(entry);
                         }
                     }
                 }
                 Some("tool") => {
                     let name = message["name"].as_str().unwrap_or("?");
                     let (kind, text) = outcome(&message["outcome"]);
-                    lines.push(Line::from(Span::styled(
-                        format!("    {name} · {kind}"),
-                        Style::default().fg(if kind == "ok" {
-                            Color::Blue
-                        } else {
-                            Color::Red
-                        }),
-                    )));
-                    for line in text.lines().take(6) {
-                        lines.push(Line::from(Span::styled(
-                            format!("      {line}"),
-                            Style::default().fg(Color::DarkGray),
-                        )));
-                    }
+                    let tool_id = message["call_id"].as_str().unwrap_or("?");
+                    let lines = text
+                        .split('\n')
+                        .enumerate()
+                        .map(|(i, line)| {
+                            Line::from(vec![
+                                Span::styled(
+                                    if i == 0 {
+                                        format!("    {name} · {kind} · ")
+                                    } else {
+                                        "      ".into()
+                                    },
+                                    Style::default().fg(if kind == "ok" {
+                                        Color::Blue
+                                    } else {
+                                        Color::Red
+                                    }),
+                                ),
+                                Span::styled(line.to_owned(), Style::default().fg(Color::DarkGray)),
+                            ])
+                        })
+                        .collect();
+                    entries.push(Entry::rendered(
+                        format!("{}:outcome:{tool_id}", model.session_id),
+                        lines,
+                        false,
+                        false,
+                    ));
                 }
                 _ => {}
             }
         }
     }
-
     if let Some(deltas) = view["content_deltas"].as_object() {
-        for text in deltas.values().filter_map(Value::as_str) {
-            lines.extend(assistant_markdown_lines(text, true));
+        for (id, text) in deltas {
+            if let Some(text) = text.as_str() {
+                let mut entry = Entry::rendered(
+                    format!("{}:stream:{id}", model.session_id),
+                    assistant_markdown_lines(text),
+                    false,
+                    true,
+                );
+                entry.final_id = Some(format!(
+                    "{}:message:{}",
+                    model.session_id,
+                    view["messages"].as_array().map_or(0, Vec::len)
+                ));
+                entries.push(entry);
+            }
         }
     }
-
-    if let Some(notice) = &model.notice {
-        lines.push(Line::from(Span::styled(
-            notice.clone(),
-            Style::default().fg(Color::Red),
-        )));
-    }
-    if lines.is_empty() {
-        lines.push(Line::from(Span::styled(
+    if entries.is_empty() {
+        entries.push(Entry::plain(
+            &format!("{}:empty", model.session_id),
             "No messages yet.",
-            Style::default().fg(Color::DarkGray),
-        )));
+            false,
+        ));
     }
-    lines
+    entries
 }
 
 #[derive(Clone, Copy)]
@@ -944,7 +1136,7 @@ impl StyleSheet for TranscriptMarkdown {
     }
 }
 
-fn assistant_markdown_lines(text: &str, streaming: bool) -> Vec<Line<'static>> {
+fn assistant_markdown_lines(text: &str) -> Vec<Line<'static>> {
     let options =
         MarkdownOptions::new(TranscriptMarkdown).image_fallback(ImageFallback::AltTextAndUrl);
     let rendered = tui_markdown::from_str_with_options(text, &options);
@@ -967,14 +1159,6 @@ fn assistant_markdown_lines(text: &str, streaming: bool) -> Vec<Line<'static>> {
         );
     }
 
-    if streaming {
-        lines
-            .last_mut()
-            .expect("assistant markdown always has one line")
-            .spans
-            .push(Span::raw("▌"));
-    }
-
     lines
 }
 
@@ -988,35 +1172,6 @@ fn owned_line(line: Line<'_>) -> Line<'static> {
             .map(|span| Span::styled(span.content.into_owned(), span.style))
             .collect(),
     }
-}
-
-fn user_lines(text: &str) -> Vec<Line<'static>> {
-    text.split('\n')
-        .enumerate()
-        .map(|(index, line)| {
-            let mut content = String::new();
-            let mut column = 0;
-            for grapheme in line.graphemes(true) {
-                if grapheme == "\t" {
-                    let spaces = 4 - column % 4;
-                    content.extend(std::iter::repeat_n(' ', spaces));
-                    column += spaces;
-                } else {
-                    content.push_str(grapheme);
-                    column += grapheme.width();
-                }
-            }
-            Line::from(vec![
-                Span::styled(
-                    if index == 0 { "you " } else { "    " },
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(content),
-            ])
-        })
-        .collect()
 }
 
 fn outcome(value: &Value) -> (&str, &str) {
@@ -1711,7 +1866,7 @@ mod tests {
     #[test]
     fn assistant_markdown_renders_blocks_and_inline_styles() {
         let markdown = "# Heading\n\n**Bold** and *italic* with `code`.\n\n- [x] done\n\n> quote\n\n[docs](https://example.com)\n\n| A | B |\n| - | - |\n| 1 | 2 |";
-        let lines = assistant_markdown_lines(markdown, false);
+        let lines = assistant_markdown_lines(markdown);
         let rendered = lines
             .iter()
             .map(Line::to_string)
@@ -1742,7 +1897,7 @@ mod tests {
 
     #[test]
     fn streaming_markdown_keeps_multiline_speaker_prefix_and_cursor() {
-        let lines = assistant_markdown_lines("First paragraph\n\nSecond paragraph", true);
+        let lines = assistant_markdown_lines("First paragraph\n\nSecond paragraph");
 
         assert_eq!(lines[0].spans[0].content, "ai  ");
         assert!(
@@ -1751,7 +1906,20 @@ mod tests {
                 .skip(1)
                 .all(|line| line.spans[0].content == "    ")
         );
-        assert_eq!(lines.last().unwrap().spans.last().unwrap().content, "▌");
+        let entry = transcript::Entry::rendered("stream".into(), lines, false, true);
+        let mut state = transcript::Transcript::default();
+        state.layout(vec![entry], 80, 24);
+        assert_eq!(
+            state
+                .visible_lines()
+                .last()
+                .unwrap()
+                .spans
+                .last()
+                .unwrap()
+                .content,
+            "▌"
+        );
     }
 
     #[test]
@@ -1775,5 +1943,224 @@ mod tests {
                 .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
             assert_eq!(actual, expected, "frame golden {name}");
         }
+    }
+}
+
+#[cfg(test)]
+mod transcript_input_tests {
+    use super::*;
+    use crossterm::event::{
+        Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    };
+    fn key(model: &mut Model, code: KeyCode) -> InputAction {
+        handle_input(
+            model,
+            Event::Key(KeyEvent::new(code, KeyModifiers::NONE)),
+            78,
+        )
+    }
+    #[test]
+    fn focus_search_and_safe_paste_preserve_local_draft() {
+        let mut model = fixture_model("idle");
+        model.editor.insert("unsent draft");
+        render_frame(&model, 80, 24).unwrap();
+        assert_eq!(key(&mut model, KeyCode::Tab), InputAction::None);
+        key(&mut model, KeyCode::Home);
+        key(&mut model, KeyCode::Char('/'));
+        for c in "INSPECT".chars() {
+            key(&mut model, KeyCode::Char(c));
+        }
+        assert_eq!(model.transcript.borrow().matches.len(), 1);
+        assert_eq!(key(&mut model, KeyCode::Enter), InputAction::None);
+        key(&mut model, KeyCode::Esc);
+        assert!(model.transcript.borrow().focused);
+        key(&mut model, KeyCode::F(2));
+        key(&mut model, KeyCode::Tab);
+        key(&mut model, KeyCode::Enter);
+        key(&mut model, KeyCode::F(2));
+        assert_eq!(model.editor.text(), "unsent draft\t\n");
+        key(&mut model, KeyCode::Tab);
+        assert!(!model.transcript.borrow().focused);
+        assert_eq!(key(&mut model, KeyCode::Enter), InputAction::Submit);
+    }
+    #[test]
+    fn mouse_drag_stops_follow_and_copy_mapping_excludes_speaker() {
+        let mut model = fixture_model("idle");
+        render_frame(&model, 80, 24).unwrap();
+        for (kind, column) in [
+            (MouseEventKind::Down(MouseButton::Left), 1),
+            (MouseEventKind::Drag(MouseButton::Left), 11),
+        ] {
+            handle_input(
+                &mut model,
+                Event::Mouse(MouseEvent {
+                    kind,
+                    column,
+                    row: 1,
+                    modifiers: KeyModifiers::NONE,
+                }),
+                78,
+            );
+        }
+        let state = model.transcript.borrow();
+        assert!(!state.follow);
+        assert!(state.focused);
+        assert_eq!(state.copy_selection().as_deref(), Some("inspect"));
+    }
+    fn mouse(model: &mut Model, kind: MouseEventKind, column: u16, row: u16) {
+        handle_input(
+            model,
+            Event::Mouse(MouseEvent {
+                kind,
+                column,
+                row,
+                modifiers: KeyModifiers::NONE,
+            }),
+            78,
+        );
+    }
+    #[test]
+    fn reverse_mouse_drag_includes_both_cells_and_unicode_graphemes() {
+        for (text, start, end, expected) in [
+            ("abc", 7, 5, "abc"),
+            ("abc", 6, 5, "ab"),
+            ("a界é", 8, 6, "界é"),
+            ("a界é", 6, 8, "界é"),
+        ] {
+            let mut model = fixture_model("idle");
+            model.projection.view["messages"][0]["text"] = json!(text);
+            render_frame(&model, 80, 24).unwrap();
+            mouse(
+                &mut model,
+                MouseEventKind::Down(MouseButton::Left),
+                start,
+                1,
+            );
+            mouse(&mut model, MouseEventKind::Drag(MouseButton::Left), end, 1);
+            assert_eq!(
+                model.transcript.borrow().copy_selection().as_deref(),
+                Some(expected)
+            );
+        }
+    }
+    #[test]
+    fn outside_wheel_preserves_prompt_focus_and_submission() {
+        let mut model = fixture_model("idle");
+        render_frame(&model, 80, 24).unwrap();
+        for kind in [MouseEventKind::ScrollUp, MouseEventKind::ScrollDown] {
+            mouse(&mut model, kind, 1, 23);
+            assert!(!model.transcript.borrow().focused);
+            assert!(model.transcript.borrow().follow);
+        }
+        key(&mut model, KeyCode::Char('a'));
+        assert_eq!(model.editor.text(), "a");
+        assert_eq!(key(&mut model, KeyCode::Enter), InputAction::Submit);
+    }
+    #[test]
+    fn mouse_release_or_outside_down_ends_selection_drag() {
+        for finish in [
+            MouseEventKind::Up(MouseButton::Left),
+            MouseEventKind::Down(MouseButton::Left),
+        ] {
+            let mut model = fixture_model("idle");
+            model.projection.view["messages"][0]["text"] = json!("abc\n".repeat(60));
+            render_frame(&model, 80, 24).unwrap();
+            key(&mut model, KeyCode::Tab);
+            key(&mut model, KeyCode::Home);
+            mouse(&mut model, MouseEventKind::Down(MouseButton::Left), 5, 1);
+            mouse(&mut model, MouseEventKind::Drag(MouseButton::Left), 6, 1);
+            mouse(&mut model, finish, 1, 23);
+            let before = model.transcript.borrow().copy_selection();
+            let top = model.transcript.borrow().top;
+            mouse(&mut model, MouseEventKind::Drag(MouseButton::Left), 1, 23);
+            assert_eq!(model.transcript.borrow().copy_selection(), before);
+            assert_eq!(model.transcript.borrow().top, top);
+            mouse(&mut model, MouseEventKind::Down(MouseButton::Left), 5, 1);
+            mouse(&mut model, MouseEventKind::Drag(MouseButton::Left), 1, 23);
+            assert!(model.transcript.borrow().top > top);
+        }
+    }
+    #[test]
+    fn control_x_interrupts_search_unless_safe_paste() {
+        let mut model = fixture_model("idle");
+        render_frame(&model, 80, 24).unwrap();
+        key(&mut model, KeyCode::Tab);
+        key(&mut model, KeyCode::Char('/'));
+        let control_x = Event::Key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL));
+        assert_eq!(
+            handle_input(&mut model, control_x.clone(), 78),
+            InputAction::Interrupt
+        );
+        key(&mut model, KeyCode::F(2));
+        assert_eq!(handle_input(&mut model, control_x, 78), InputAction::None);
+    }
+    #[test]
+    fn help_exposes_transcript_bindings_in_standard_window() {
+        let mut model = fixture_model("idle");
+        model.show_help = true;
+        let frame = render_frame(&model, 80, 24).unwrap();
+        assert!(frame.contains("/ search"));
+        assert!(frame.contains("y copy entry"));
+    }
+    #[test]
+    fn tool_entries_use_stable_call_ids_and_copy_only_outcome_content() {
+        let mut model = fixture_model("idle");
+        model.projection.view["messages"].as_array_mut().unwrap().push(json!({"role":"tool","call_id":"stable","name":"bash","outcome":{"ok":"a\tb\nresult"}}));
+        let entries = transcript_entries(&model);
+        let last = entries.last().unwrap();
+        assert!(last.id.ends_with(":outcome:stable"));
+        assert_eq!(last.text, "a\tb\nresult");
+    }
+    #[test]
+    fn pasted_search_query_does_not_edit_draft() {
+        let mut model = fixture_model("idle");
+        model.editor.insert("draft");
+        render_frame(&model, 80, 24).unwrap();
+        key(&mut model, KeyCode::Tab);
+        key(&mut model, KeyCode::Char('/'));
+        handle_input(&mut model, Event::Paste("INSPECT\r\n\t\u{1b}".into()), 78);
+        assert_eq!(model.editor.text(), "draft");
+        assert_eq!(model.transcript.borrow().query, "INSPECT  ");
+    }
+    #[test]
+    fn control_c_detaches_from_search_unless_safe_paste() {
+        let mut model = fixture_model("idle");
+        render_frame(&model, 80, 24).unwrap();
+        key(&mut model, KeyCode::Tab);
+        key(&mut model, KeyCode::Char('/'));
+        let control_c = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+        assert_eq!(
+            handle_input(&mut model, control_c.clone(), 78),
+            InputAction::Detach
+        );
+        key(&mut model, KeyCode::F(2));
+        assert_eq!(handle_input(&mut model, control_c, 78), InputAction::None);
+    }
+    #[test]
+    fn composer_navigation_and_height_changes_reuse_transcript_cache() {
+        let mut model = fixture_model("markdown");
+        render_frame(&model, 80, 24).unwrap();
+        let builds = model.transcript.borrow().layout_rebuilds;
+        model.editor.insert("different\ndraft");
+        render_frame(&model, 80, 30).unwrap();
+        key(&mut model, KeyCode::Tab);
+        key(&mut model, KeyCode::Home);
+        render_frame(&model, 80, 30).unwrap();
+        assert_eq!(model.transcript.borrow().layout_rebuilds, builds);
+        render_frame(&model, 90, 30).unwrap();
+        assert_eq!(model.transcript.borrow().layout_rebuilds, builds + 1);
+        let mut snapshot = model.projection.view.clone();
+        snapshot["messages"][0]["text"] = json!("replacement");
+        model
+            .projection
+            .install_snapshot(
+                snapshot,
+                model.projection.incarnation.clone(),
+                model.projection.head,
+            )
+            .unwrap();
+        let frame = render_frame(&model, 90, 30).unwrap();
+        assert_eq!(model.transcript.borrow().layout_rebuilds, builds + 2);
+        assert!(frame.contains("replacement"));
     }
 }

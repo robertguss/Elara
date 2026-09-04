@@ -184,6 +184,51 @@ defmodule Elara.TuiTest do
     refute output =~ "timed out"
   end
 
+  @tag timeout: 60_000
+  test "interactive transcript navigates and copies without losing the draft", context do
+    first =
+      "TOP é 👩‍💻\n" <>
+        Enum.map_join(1..60, "\n", fn row ->
+          marker = if row in [20, 40], do: "NEEDLE ", else: ""
+          "#{marker}row #{row}: " <> String.duplicate("wrapped Unicode 界 ", 8)
+        end)
+
+    {:ok, session} =
+      Elara.start_session(
+        provider:
+          script([
+            {:ok, asst("first reply")},
+            {:ok, asst("final reply")},
+            {:ok, asst("accepted")}
+          ]),
+        tools: [],
+        persist: false
+      )
+
+    assert {:ok, "first reply"} = Elara.ask(session, first)
+    assert {:ok, "final reply"} = Elara.ask(session, "last user")
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+    expected_path = Path.join(Path.dirname(context.state_dir), "expected-transcript.txt")
+    File.write!(expected_path, first)
+
+    {output, status} =
+      System.cmd(
+        System.find_executable("python3") || flunk("python3 is required"),
+        [
+          Path.expand("../support/transcript_pty.py", __DIR__),
+          context.binary,
+          Integer.to_string(Elara.Server.port(server)),
+          session,
+          expected_path
+        ],
+        env: [{"ELARA_TUI_STATE_DIR", context.state_dir}],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+    assert output =~ "Transcript PTY passed"
+  end
+
   test "cold snapshot, create, and live session list use the Rust client", context do
     {:ok, session} =
       Elara.start_session(

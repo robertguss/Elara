@@ -1,4 +1,4 @@
-┌ transcript · protocol v2 projection ─────────────────────────────────────────┐
+┌ transcript · prompt focus · FOLLOW ──────────────────────────────────────────┐
 │you inspect the build                                                         │
 │ai  I’ll check it.                                                            │
 │                                                                              │
@@ -16,7 +16,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+└ Tab transcript ──────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste ──────────────────────────────────┐
 │Unicode é 👩‍💻  中  with spaces Unicode é 👩‍💻  中  with spaces Unicode é 👩‍💻  中  with s│
 │paces Unicode é 👩‍💻  中  with spaces                                             │

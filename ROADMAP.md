@@ -1,7 +1,8 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-02 (split
-> adopted) · **Owner:** solo development with AI collaborators
+> **Canonical roadmap and status source** · **Updated:** 2026-09-04
+> (daily-driver prerequisites adopted) · **Owner:** solo development with AI
+> collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
@@ -44,10 +45,26 @@ stub behind an Erlang Port and a terminal UI behind a socket. The boundary is a
 versioned line protocol; no NIFs. That document holds the architecture,
 evidence, and reversal signals; this file holds the queue and status.
 
-Sequencing favors foundations over an early daily driver: kill boundary first,
-then the attach/patch protocol, then streaming, then the TUI, then a recorded
-go/no-go checkpoint. A daily driver is the outcome of the sequence, not a
-shortcut through it.
+The foundations are shipped, but the current Rust client is not yet a credible
+daily driver. It has a single-line append/backspace composer, an
+always-following transcript, truncated tool output, and CLI-oriented session
+selection. Starting SPLIT-5 in that state would measure missing product basics
+rather than the Elixir/Rust boundary.
+
+[`xai-org/grok-build`](https://github.com/xai-org/grok-build) is the interaction
+north star for the next sequence: a real prompt editor, independently navigable
+semantic scrollback, inspectable tool blocks, a session picker, and contextual
+discovery. It is not a parity mandate. Multi-agent dashboards, worktree and MCP
+administration, media, extensive permission policy, and other product-specific
+breadth are outside this sequence.
+
+TUI-3 through TUI-5 are deliberately client-first. Protocol v2 already provides
+atomic snapshots, ordered patches, resynchronization, canonical messages, and
+stable tool-call IDs. Rust should derive presentation blocks and own editor,
+viewport, folds, selection, search, and copy state. Do not add wire-level render
+blocks or persisted message IDs speculatively. TUI-6 is the intentional
+protocol-heavy slice because saved-session lifecycle belongs to the Elixir
+authority. SPLIT-5 starts only after those prerequisites are usable.
 
 ## Execution queue
 
@@ -63,7 +80,11 @@ shortcut through it.
 | TUI-1   | DONE     | One-command embedded server for new TUI sessions              | PROV-1           |
 | MAC-1   | DONE     | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
 | TUI-2   | DONE     | Render assistant Markdown in the Rust TUI                     | MAC-1            |
-| SPLIT-5 | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-2            |
+| TUI-3   | TODO     | Cursor-aware multiline daily-driver composer                  | TUI-2            |
+| TUI-4   | BLOCKED  | Navigable transcript controller                               | TUI-3            |
+| TUI-5   | BLOCKED  | Inspectable typed tool blocks                                 | TUI-4            |
+| TUI-6   | BLOCKED  | In-TUI session lifecycle and action discovery                 | TUI-5            |
+| SPLIT-5 | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-6            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -1013,36 +1034,293 @@ streaming behavior in the actual macOS terminal. Streaming reparses the
 accumulated Markdown on each redraw; this could need optimization for unusually
 large in-progress responses.
 
-Decision: unblock SPLIT-5. This is checkpoint feature 1 of 5: Rust duplicated no
-session policy or transition logic, and protocol/DTO synchronization was 0% of
-the implementation because the change remained presentation-only.
+Original decision: unblock SPLIT-5. This is checkpoint feature 1 of 5: Rust
+duplicated no session policy or transition logic, and protocol/DTO
+synchronization was 0% of the implementation because the change remained
+presentation-only. The 2026-09-04 daily-driver review superseded the immediate
+checkpoint handoff: TUI-2 proved Markdown rendering, not that the client had the
+interaction baseline required for primary use. Proceed to TUI-3.
 
-## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
+## TUI-3 — Cursor-aware multiline daily-driver composer
 
-**Status:** TODO (owner checkpoint)
+**Status:** TODO
 
 ### Outcome
 
-A recorded decision, not new code. The owner uses the Rust TUI as the primary
-client for a fixed period, then the reversal signals from the design document
-are measured and the split is either kept or reversed to Rust-everything.
+The prompt area behaves like a small text editor rather than an append-only
+field. A user can compose and revise realistic multiline prompts while the
+session continues streaming, without losing the draft or leaving the TUI.
+
+### Scope
+
+- Replace the Rust model's prompt `String` and ad hoc key handling with one
+  editor state that owns text, cursor, selection, and prompt-history position.
+  Keystrokes and draft state remain local to Rust; Elixir receives only a
+  complete prompt through the existing `ask` command.
+- Support insertion and replacement at the cursor, left/right/up/down, Home/End,
+  forward delete, backspace, word movement/deletion, selection, and terminal
+  paste, including Unicode and wrapped lines.
+- Enter submits. Alt-Enter inserts a newline; also accept Shift-Enter when the
+  terminal reports it distinctly. Show the binding in the prompt border or
+  contextual footer rather than relying on undocumented behavior.
+- Grow and shrink the composer within a bounded portion of the terminal, keep
+  the cursor visible, and preserve a useful transcript viewport above it.
+- Recall prior user prompts from the canonical projection. Moving back to the
+  newest history position restores the draft that existed before recall.
+- Keep the draft, cursor, and selection unchanged across incoming patches,
+  resnapshots, and turn interruption. A rejected or busy submission must not
+  discard the draft.
+
+### Non-goals
+
+No file-reference completion, slash completion, fuzzy history search, external
+editor, image/media paste, follow-up queue, Vim mode, or configurable keymap.
+Those remain possible polish after the daily-driver checkpoint.
+
+### Acceptance criteria
+
+- Deterministic editor tests compose, navigate, select, revise, paste, and
+  submit an exact multiline Unicode prompt.
+- History recall is reversible and never mutates canonical transcript data.
+- A streamed patch and forced resnapshot during composition leave the draft and
+  cursor unchanged; busy submission preserves the complete buffer.
+- Headless rendering covers empty, wrapped, multiline, selected, and tall
+  composer states. The shipped interactive TUI is exercised in a real terminal
+  before completion.
+- Both Rust crates pass format, Clippy, and tests; Mix format,
+  warnings-as-errors compile, targeted TUI/protocol tests, and full tests pass.
+- The Result records the pushed commit, checks, deviations, remaining
+  uncertainty, whether Rust duplicated policy, and the protocol/DTO share of
+  implementation time.
+
+## TUI-4 — Navigable transcript controller
+
+**Status:** BLOCKED on TUI-3
+
+### Outcome
+
+A user can leave the live tail, inspect and search earlier work, and return to
+streaming without the viewport jumping or focus attaching to the wrong entry.
+
+### Scope
+
+- Derive semantic transcript entries in Rust from protocol v2's canonical
+  messages, content deltas, tool calls, and outcomes. These are presentation
+  objects, not new Elixir domain entities or wire-level render blocks.
+- Add explicit prompt and transcript focus, line/page/top/bottom scrolling,
+  previous/next user-turn navigation, and a visible follow-tail state. New
+  output follows only while follow mode is active; jumping to the bottom resumes
+  it.
+- Keep a selected-entry/viewport anchor across patches, terminal resize, and
+  resnapshot. Use message position while history remains append-only, existing
+  tool-call IDs for tools, and stream IDs only for transient content.
+- Add case-insensitive transcript search with next/previous match and a visible
+  match count. Support copying the selected assistant entry with an explicit
+  fallback when terminal clipboard delivery is unavailable.
+- Keep keyboard routing, footer hints, and help text sourced from the same
+  action definitions so advertised navigation is always executable.
+
+### Identity trigger
+
+Do not add persisted message or block IDs merely to start this item. Add
+authoritative message IDs only if a test proves one of these failures: a
+resnapshot cannot preserve an anchor without content matching; history becomes
+non-append-only through edit, regeneration, deletion, reordering, compaction, or
+splice; another client or server command must target a message; or streaming
+finalization cannot retain exact focus. Renderer-specific block IDs and fold
+state remain Rust-owned even if message IDs become necessary.
+
+### Acceptance criteria
+
+- Scrolling away while assistant content streams never snaps the viewport to the
+  tail; explicitly resuming follow mode shows the latest output.
+- Previous/next turn, page, top/bottom, search, and copy work with wrapped
+  Unicode content and after terminal resize.
+- Duplicate patches, a sequence gap followed by resnapshot, and streaming
+  finalization preserve the same surviving selected entry or use a documented
+  deterministic fallback.
+- Headless frames cover focused transcript, scrolled/not-following, active
+  search, and resumed-tail states; the shipped TUI is exercised interactively.
+- Rust and Mix checks pass, and the Result records the same architectural and
+  protocol-cost evidence required by TUI-3.
+
+### Non-goals
+
+No persisted bookmarks or folds, cross-client message links, mouse text
+selection, raw-Markdown mode, Vim navigation, or asynchronous search unless
+profiling demonstrates that synchronous search stalls the UI.
+
+## TUI-5 — Inspectable typed tool blocks
+
+**Status:** BLOCKED on TUI-4
+
+### Outcome
+
+Tool activity stays concise in the transcript without hiding the command,
+arguments, complete result, failure, or mutation the user needs to inspect.
+
+### Scope
+
+- Replace the unconditional six-line tool-result truncation with Rust-owned
+  compact, expanded, and fullscreen presentations keyed by the existing stable
+  tool-call ID.
+- Show the tool name, useful argument summary, and explicit pending, running,
+  succeeded, failed, or indeterminate state. Never infer success from output
+  text.
+- Provide tailored presentations for the shipped `bash`, `read`, `write`, and
+  `edit` tools, plus a lossless generic fallback for custom and plugin tools.
+- Show a tail while compact and complete output when expanded. The fullscreen
+  viewer supports scrolling, wrapping, search, and copying the full result.
+- Render an edit-oriented diff from canonical arguments/outcomes when they
+  contain enough information. Do not reconstruct or imply bytes the authority
+  did not report.
+- Preserve expansion, viewer position, and selected tool across lifecycle
+  patches and ordinary resnapshots.
+
+### Acceptance criteria
+
+- A representative turn containing reads, a long shell result, a successful
+  edit, and a failed tool remains compact while every argument and result is
+  reachable without leaving the TUI.
+- Long output is visibly summarized rather than silently clipped; expanded and
+  copied output is complete and byte-faithful apart from documented terminal
+  sanitization.
+- Fold/viewer state survives running-to-terminal status changes and resnapshot.
+- Headless and direct renderer tests cover each built-in kind, generic fallback,
+  long output, diff, failure, and indeterminate states; interactive verification
+  covers expansion and fullscreen navigation.
+- No protocol change is expected. If canonical data is insufficient, the Result
+  must identify the exact missing authority fact instead of adding a
+  presentation-shaped DTO.
+- Rust and Mix checks pass, and the Result records architectural and
+  protocol-cost evidence.
+
+### Non-goals
+
+No streamed shell-output protocol, syntax-aware full-file highlighting, tool
+verb grouping, elapsed timers, or renderer per arbitrary plugin tool.
+
+## TUI-6 — In-TUI session lifecycle and action discovery
+
+**Status:** BLOCKED on TUI-5
+
+### Outcome
+
+A user can find, create, resume, name, switch, and safely remove persisted
+sessions—and discover the available session actions—without copying IDs or
+escaping to another shell UI.
+
+### Scope
+
+- Extend the Elixir server/protocol to list both live and persisted resumable
+  sessions for the current working directory with authoritative ID, name, update
+  time, working directory, and live/idle/running state. Include current
+  provider/model labels where the authority can report them truthfully.
+- Keep persistence discovery, hydration, create/resume validation, naming, and
+  deletion in Elixir. Rust owns picker layout, fuzzy name/ID filtering,
+  selection, loading/empty/error states, and delete confirmation.
+- Create and resume through authority operations. Switching detaches and
+  reconnects to the selected session; it does not make one attached socket
+  silently change identity. A running session remains owned by the server.
+- Add one Rust action registry that drives key dispatch, contextual footer
+  hints, a searchable help surface, and slash/action discovery. At minimum
+  expose new, sessions, name, tree, fork, clone, reload, why, interrupt, detach,
+  and help by calling Elixir-owned operations rather than reproducing their
+  policy in Rust.
+- Preserve drafts per attachment where practical and never attach one session's
+  draft, cursor, viewport, or fold state to another session.
+- Return typed unsupported/version errors to older clients. Add protocol
+  capability advertisement only if compatibility requires it; do not build a
+  general dynamic command-schema system for a fixed command set.
+
+### Acceptance criteria
+
+- From one TUI process, create and name two sessions, switch between them,
+  observe one while it is running, detach, restart the server, and resume each
+  with the correct transcript and state.
+- The picker distinguishes loading, empty, error, live, running, and persisted
+  states; filtering cannot make delete act on a different session than the one
+  confirmed.
+- Tree/fork/clone, reload, why, interrupt, and detach use the same Elixir
+  semantics as the line chat. No session policy or persistence parsing is
+  duplicated in Rust.
+- Snapshot/event ordering remains correct when a selected persisted session is
+  hydrated and live patches begin. Incompatible clients fail explicitly rather
+  than misprojecting state.
+- Contextual hints and help are generated from the action registry and tested
+  against actual routing. Headless and interactive checks cover picker,
+  confirmation, command discovery, switching, and recovery states.
+- Rust and Mix checks pass. The Result separately records authority/protocol,
+  Rust presentation, fixture/adapter, and cross-runtime debugging effort so the
+  boundary cost is visible to SPLIT-5.
+
+### Non-goals
+
+No session-content search, generated titles, model switching, rewind/compact,
+foreign-session import, multi-agent dashboard, worktree management, or dynamic
+backend command marketplace.
+
+## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
+
+**Status:** BLOCKED on TUI-6 (owner checkpoint)
+
+### Outcome
+
+A recorded architecture decision made only after the Rust TUI has the minimum
+interaction baseline needed for primary use. The checkpoint measures both the
+five feature implementations and real usage, then keeps the Elixir/Rust split or
+reverses to Rust-everything.
+
+### Entry criteria
+
+- TUI-3 through TUI-6 are DONE with pushed commits and completed Result
+  evidence. No prerequisite may be waived by documenting its absence as a daily
+  use finding.
+- The owner can compose and revise multiline prompts, navigate old output while
+  streaming continues, inspect complete tool results, and find/resume/switch
+  sessions without leaving the TUI.
+- Forced resnapshot, server restart, interruption, and session switching do not
+  corrupt the transcript, lose a submitted prompt, or silently discard a draft.
 
 ### Scope and acceptance
 
-- Period: two weeks of daily use, or the next five session/UI features,
-  whichever comes first.
-- Record per feature: did Rust have to duplicate session policy or transition
-  logic; share of implementation time spent on protocol/DTO synchronization.
-- Record whether detached sessions, plugin reload, remote workers, and durable
-  recovery were actually used.
-- Decision rule (from `docs/rust-elixir-split.md` §9): reverse if 3 of 5
-  features duplicated policy, or boundary work exceeded 30 % of implementation
-  time, or the BEAM-specific features went unused. Otherwise keep the split and
-  queue the next items from "Blocked on SPLIT-5's decision".
-- The Result records the measurements, the decision, and the next queue.
+- Use the Rust TUI as the primary client for two weeks, including at least five
+  real working days. Record friction and defects separately from architecture
+  boundary cost; a missing shortcut is not evidence for a Rust rewrite unless
+  the ownership boundary caused it.
+- Aggregate TUI-2 through TUI-6: did Rust duplicate session policy or transition
+  logic, and what share of implementation time went to protocol/DTO work,
+  including serialization, validators, fixtures, version handling, resync, and
+  cross-runtime debugging.
+- Reverse if at least 3 of the 5 features duplicated policy, or aggregate
+  protocol/DTO synchronization exceeded 30% of implementation time. Otherwise
+  keep the split provisionally and continue through the design document's full
+  one-month usage window.
+- During that month, record whether detached concurrent sessions, plugin hot
+  reload, remote workers, and durable recovery were actually useful. Reverse if
+  those BEAM-specific advantages remain unused and the product is effectively
+  one local interactive session. Do not apply this one-month signal after only
+  the two-week UI evaluation.
+- The Result records measurements, daily-use evidence, known usability gaps, the
+  keep/reverse decision, and the next executable queue. An early reverse is
+  allowed when a code-based threshold is already met; otherwise SPLIT-5 remains
+  open until the one-month usage signal is observable.
 
 ### Feature evidence
 
-| Feature                     | Rust duplicated session policy / transitions | Protocol/DTO share             |
-| --------------------------- | -------------------------------------------- | ------------------------------ |
-| 1. TUI-2 assistant Markdown | No; Rust changed presentation only           | 0%; no protocol or DTO changes |
+| Feature                        | Rust duplicated policy / transitions | Protocol/DTO share             |
+| ------------------------------ | ------------------------------------ | ------------------------------ |
+| 1. TUI-2 assistant Markdown    | No; presentation only                | 0%; no protocol or DTO changes |
+| 2. TUI-3 daily-driver composer | Pending                              | Pending                        |
+| 3. TUI-4 transcript controller | Pending                              | Pending                        |
+| 4. TUI-5 typed tool blocks     | Pending                              | Pending                        |
+| 5. TUI-6 session lifecycle     | Pending                              | Pending                        |
+
+### Result
+
+**BLOCKED (2026-09-04).** The owner reported that the existing TUI lacks the
+interaction features required to serve as a primary client. A gap review against
+Grok Build's editor, scrollback, tool-view, session-picker, and discovery
+patterns confirmed that beginning daily-use measurement now would test missing
+basics rather than the split architecture. TUI-3 through TUI-6 were inserted as
+prerequisites; no keep/reverse decision has been made.

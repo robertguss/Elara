@@ -1173,9 +1173,9 @@ Vim mode, configurable keymaps, and fuzzy prompt-history search remain deferred.
 
 ### Result
 
-**IN PROGRESS (2026-09-04).** Implementation commit `dd9d80b` is saved locally
-on `codex/tui-3-composer`; native terminal acceptance remains open. The branch
-has not been pushed. The approved six-file roadmap/research
+**IN PROGRESS (2026-09-04).** Implementation commit `dd9d80b` and evidence
+commit `bb5e3d9` were pushed to `origin/codex/tui-3-composer`. Native terminal
+acceptance remains open. The approved six-file roadmap/research
 revision was imported byte-for-byte from the owner's original checkout before
 implementation. That checkout and historical DONE Results were not modified.
 
@@ -1227,8 +1227,7 @@ Verification recorded so far:
 
 Remaining acceptance: native Ghostty/WezTerm checks at the required dimensions,
 full-suite passing evidence on a supported host (or a separately scoped fix for
-the baseline macOS tests), and publication of the reviewed branch. Keep TUI-4
-BLOCKED.
+the baseline macOS tests). Keep TUI-4 BLOCKED.
 
 Review: completed `ce-code-review` run `tui3-206f19d8`, including independent
 Claude review and a fresh validator. No remaining actionable findings after

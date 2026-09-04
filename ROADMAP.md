@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-04
-> (daily-driver prerequisites adopted) · **Owner:** solo development with AI
+> (daily-driver product contract expanded) · **Owner:** solo development with AI
 > collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -32,9 +32,11 @@ detachable conversations, capability-routed local and remote workers,
 deterministic replay, live plugins, and a durable-effects subsystem whose
 receipt-backed local `write` now runs through the public product path (PROD-1).
 
-ER-3 is closed as a **METHOD STOP**; V9 is not planned. Durable effects are
-**frozen at PROD-1's scope**: no further receipt wiring for `edit`, `bash`,
-plugins, or remote workers until execution crosses the process boundary below.
+ER-3 is closed as a **METHOD STOP**; V9 is not planned. Durable effects remain
+**frozen at PROD-1's scope**. SPLIT-1 has crossed the execution process boundary,
+but receipt wiring for `edit`, `bash`, plugins, and remote workers is still
+deferred until the post-checkpoint decision. Durable message delivery in the
+items below does not imply exactly-once external commands or edits.
 
 The direction is now the **Rust + Elixir split** decided in
 [`docs/rust-elixir-split.md`](docs/rust-elixir-split.md) after two throwaway
@@ -46,25 +48,106 @@ versioned line protocol; no NIFs. That document holds the architecture,
 evidence, and reversal signals; this file holds the queue and status.
 
 The foundations are shipped, but the current Rust client is not yet a credible
-daily driver. It has a single-line append/backspace composer, an
-always-following transcript, truncated tool output, and CLI-oriented session
-selection. Starting SPLIT-5 in that state would measure missing product basics
+daily driver. TUI-3 is implementing the multiline composer; the transcript is still
+always-following, tool output is truncated, and session selection is CLI-oriented. Starting SPLIT-5 in that state would measure missing product basics
 rather than the Elixir/Rust boundary.
 
-[`xai-org/grok-build`](https://github.com/xai-org/grok-build) is the interaction
-north star for the next sequence: a real prompt editor, independently navigable
-semantic scrollback, inspectable tool blocks, a session picker, and contextual
-discovery. It is not a parity mandate. Multi-agent dashboards, worktree and MCP
-administration, media, extensive permission policy, and other product-specific
-breadth are outside this sequence.
+[`xai-org/grok-build`](https://github.com/xai-org/grok-build) remains the
+interaction north star, not a parity mandate. The owner approved three original
+visual layouts, four independent dark themes, and the daily-driver requirements
+below. Amp contributes the dark-green palette reference and persistent
+communicating-thread ideas. These are product requirements, not claims that the
+HTML prototypes or existing batch coordinator already implement them.
 
-TUI-3 through TUI-5 are deliberately client-first. Protocol v2 already provides
-atomic snapshots, ordered patches, resynchronization, canonical messages, and
-stable tool-call IDs. Rust should derive presentation blocks and own editor,
-viewport, folds, selection, search, and copy state. Do not add wire-level render
-blocks or persisted message IDs speculatively. TUI-6 is the intentional
-protocol-heavy slice because saved-session lifecycle belongs to the Elixir
-authority. SPLIT-5 starts only after those prerequisites are usable.
+Build the TUI foundations first, then provider/input and session controls, then
+persistent communicating threads and automatic handoff. Both the TUI and threads
+must be usable before SPLIT-5. TUI-3 remains the next executable item. Later
+slices are bounded vertical deliveries; the expanded scope must not be hidden
+inside the composer or session picker.
+
+Rust owns presentation and interaction state; Elixir owns canonical content,
+provider configuration, input delivery, thread relationships, and continuation.
+Protocol v2's snapshot/patch foundation is retained, with explicit versioned
+extensions where authoritative facts are missing. Layouts and themes do not
+require a second session implementation. Do not add wire-level render blocks.
+
+## Daily-driver product contract
+
+The following decisions were settled with the owner on 2026-09-04. They
+supersede earlier non-goals only where explicitly mapped here. Historical DONE
+Results remain evidence of what shipped at that time, not present queue advice.
+
+| Requirement | Settled behavior | Delivery |
+| --- | --- | --- |
+| Terminal target | Dark appearance; Ghostty and WezTerm on macOS | All TUI items |
+| Layouts | Ember: inline thinking; Observatory: side thinking pane; Workbench: turn navigation and thinking strip | TUI-7 |
+| Themes | Ember charcoal/amber, Observatory blue-black/teal, Workbench violet/lavender, Forest dark-green/sage; any layout with any theme | TUI-7 |
+| Appearance selection | Choose before starting, save defaults, switch mid-session without restarting work | TUI-7 |
+| Thinking visibility | Provider-exposed reasoning summaries/text expanded by default, remain open after completion, user can hide/show; readable and distinct from answers and tool activity | PROV-2, TUI-7 |
+| Provider | ChatGPT/Codex subscription is the initial daily-driver target; in-TUI model and reasoning-effort selection | PROV-2 |
+| Prompt and transcript | Multiline editor, reliable text paste, history, independent scrolling/search, mouse scrolling, clickable tools, drag selection and copy | TUI-3, TUI-4, TUI-5 |
+| References and attachments | `@path` completion and real file references; attach images from disk and deliver image content to the model | INPUT-1 |
+| Queue and steer | Queue follow-ups until the turn ends; delete pending messages; steer at the next safe boundary; explicit interrupt remains available | CTRL-1 |
+| Instructions and skills | Standard `AGENTS.md` and Agent Skills `SKILL.md`, including existing owner-selected skill directories | INST-1 |
+| Approvals | Trusted local execution without per-command or file-edit approval prompts by default; no repeated approval on child work or handoff | CTRL-1 |
+| Session lifecycle | Find, create, name, switch, resume, inspect, fork/clone, and safely remove sessions within the TUI | TUI-6 |
+| Communicating threads | Persistent children, parent/child messages, results and follow-ups; open a child to inspect or guide it | THREAD-1, THREAD-2 |
+| Context continuity | Early context warning; automatically prepare a handoff and continue in a linked fresh thread, without owner approval | CTX-1 |
+| Trial scope | All three layouts, all four themes, and all requirements above precede primary-use evaluation | SPLIT-5 |
+
+Out of scope for this trial: clipboard image paste, queued-message editing,
+MCP (future plugin), cloud/orb infrastructure, extensive approval policy,
+multiplayer, foreign thread import, and copying all Grok Build features.
+Plan/read-only mode is a nice-to-have, not a prerequisite. Existing capability
+restrictions remain enforceable; no-approval does not mean ignoring execution
+errors, filesystem confinement, or truthful indeterminate results. Existing
+non-ChatGPT providers are preserved, but new feature parity is not required.
+
+### Evidence and unresolved implementation facts
+
+- The current ChatGPT adapter encodes text-only user messages, ignores
+  reasoning-summary stream events, and does not request reasoning effort or
+  summaries. Provider-native encrypted reasoning is continuation data, not
+  displayable thinking. PROV-2 must verify capabilities on the actual
+  subscription route; public Responses API documentation is not proof of
+  entitlement or support there.
+- `Elara.Prompt.system/1` loads only cwd `AGENTS.md`; standard skills discovery
+  and nested instruction handling are not implemented by that behavior.
+- The existing coordinator supports bounded parallel children and temporary
+  coding worktrees, but forces `persist: false` and disables child plugins.
+  THREAD-1 must replace those lifecycle assumptions for persistent work.
+- The default embedded server ends when the TUI command exits. TUI-6/THREAD-1
+  must distinguish that lifetime from explicit long-lived server operation.
+- Tool output has source and Core limits, and protocol lines are capped at
+  16 MiB. An expanded viewer cannot recover bytes already discarded upstream.
+  INPUT-1 and CTX-1 must budget attachments and serialized snapshots as well as
+  model context.
+- The screenshots and approved prototypes establish design direction, not
+  terminal rendering or provider acceptance evidence. The detailed reference
+  analysis is in [Grok Build TUI research](docs/grok-build-tui-research.md) and
+  [Amp thread research](docs/amp-thread-research.md); neither is another queue.
+
+### Shared completion contract for new items
+
+- Exercise the shipped interactive path with scripted/loopback fixtures and
+  appropriate direct tests. Headless goldens alone do not prove key, paste,
+  mouse, clipboard, focus, resize, or alternate-screen behavior.
+- Record terminal versions, dimensions, actions, and observed results for real
+  Ghostty/WezTerm checks. Cover 80x24, 120x40, and a wide window; no inaccessible
+  actions at narrow sizes. Only relevant features need repetition per item.
+- Code changes pass both Rust crates' format/Clippy/tests, Mix format,
+  warnings-as-errors compile, relevant tests, and full `mix test`. Keep offline
+  tests offline; separately record credential-backed subscription checks for
+  provider-dependent acceptance.
+- Record the pushed commit, checks, deviations, remaining uncertainty, and
+  actual authority work, Rust presentation work, protocol/DTO/fixture work, and
+  cross-runtime debugging effort. Unknown effort stays unknown, never 0%.
+- Preserve protocol ordering, control/observe ownership, old persisted-session
+  readability, terminal cleanup, and receipt-backed write behavior. New request
+  kinds must negotiate compatibility and fail explicitly on unsupported peers.
+- A `DONE` label requires the item's behavior, not a prototype or a claimed
+  future fallback. Unavailable provider functionality remains a named blocker;
+  do not substitute invented thinking, usage, images, or model capabilities.
 
 ## Execution queue
 
@@ -80,11 +163,19 @@ authority. SPLIT-5 starts only after those prerequisites are usable.
 | TUI-1   | DONE     | One-command embedded server for new TUI sessions              | PROV-1           |
 | MAC-1   | DONE     | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
 | TUI-2   | DONE     | Render assistant Markdown in the Rust TUI                     | MAC-1            |
-| TUI-3   | TODO     | Cursor-aware multiline daily-driver composer                  | TUI-2            |
+| TUI-3   | IN PROGRESS | Cursor-aware multiline daily-driver composer                  | TUI-2            |
 | TUI-4   | BLOCKED  | Navigable transcript controller                               | TUI-3            |
 | TUI-5   | BLOCKED  | Inspectable typed tool blocks                                 | TUI-4            |
-| TUI-6   | BLOCKED  | In-TUI session lifecycle and action discovery                 | TUI-5            |
-| SPLIT-5 | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-6            |
+| TUI-7   | BLOCKED  | Three layouts and four independent dark themes               | TUI-5            |
+| PROV-2  | BLOCKED  | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
+| INPUT-1 | BLOCKED  | File references and image attachments from disk               | PROV-2           |
+| INST-1  | BLOCKED  | Standard project instructions and Agent Skills               | INPUT-1          |
+| TUI-6   | BLOCKED  | In-TUI session lifecycle and action discovery                 | INST-1           |
+| CTRL-1  | BLOCKED  | Durable input queue, steering, and execution preferences      | TUI-6            |
+| THREAD-1 | BLOCKED | Persistent delegated threads and preserved workspaces        | CTRL-1           |
+| THREAD-2 | BLOCKED | Durable thread communication and TUI navigation              | THREAD-1         |
+| CTX-1   | BLOCKED  | Automatic handoff and uninterrupted continuation              | THREAD-2         |
+| SPLIT-5 | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -1043,55 +1134,118 @@ interaction baseline required for primary use. Proceed to TUI-3.
 
 ## TUI-3 — Cursor-aware multiline daily-driver composer
 
-**Status:** TODO
+**Status:** IN PROGRESS
 
 ### Outcome
 
-The prompt area behaves like a small text editor rather than an append-only
-field. A user can compose and revise realistic multiline prompts while the
-session continues streaming, without losing the draft or leaving the TUI.
+Compose and revise realistic multiline prompts while a session streams, without
+losing text, cursor, or selection. This is the next executable item.
 
-### Scope
+### Scope and acceptance
 
-- Replace the Rust model's prompt `String` and ad hoc key handling with one
-  editor state that owns text, cursor, selection, and prompt-history position.
-  Keystrokes and draft state remain local to Rust; Elixir receives only a
-  complete prompt through the existing `ask` command.
-- Support insertion and replacement at the cursor, left/right/up/down, Home/End,
-  forward delete, backspace, word movement/deletion, selection, and terminal
-  paste, including Unicode and wrapped lines.
-- Enter submits. Alt-Enter inserts a newline; also accept Shift-Enter when the
-  terminal reports it distinctly. Show the binding in the prompt border or
-  contextual footer rather than relying on undocumented behavior.
-- Grow and shrink the composer within a bounded portion of the terminal, keep
-  the cursor visible, and preserve a useful transcript viewport above it.
-- Recall prior user prompts from the canonical projection. Moving back to the
-  newest history position restores the draft that existed before recall.
-- Keep the draft, cursor, and selection unchanged across incoming patches,
-  resnapshots, and turn interruption. A rejected or busy submission must not
-  discard the draft.
+- Introduce one Rust editor state for text, cursor, selection, and history.
+  Support insertion/replacement, grapheme-aware movement and deletion, word
+  movement/deletion, Home/End, wrapped-line navigation, and bounded growth.
+- Enter submits; Alt-Enter inserts a newline; accept Shift-Enter when distinct.
+  Show the actual available bindings. Detect terminal keyboard support and
+  retain a working fallback in Ghostty and WezTerm rather than assuming every
+  modified Enter is distinguishable.
+- Enable bracketed paste so normal clipboard paste preserves multiline content
+  without submitting it. If framing is unavailable, offer an explicit safe paste
+  mode; unframed pasted newlines cannot reliably be distinguished from Enter.
+  Include Unicode, combining characters, emoji, tabs, and escape-like text;
+  terminal control bytes cannot execute. Verify the actual terminal bindings.
+- Recall canonical user prompts without mutating history. Returning to the
+  newest history position restores the original draft. Patches, resnapshot,
+  interruption, and resize preserve local editor state.
+- Clear the submitted buffer only on authoritative acceptance. Busy/rejected
+  submission keeps it; uncertain acknowledgement remains visible rather than
+  encouraging a blind retry. CTRL-1 adds durable request identity and queues.
+- Keep the cursor visible and a useful transcript viewport at 80x24. Test the
+  exact submitted text plus empty, wrapped, selected, and tall editor frames.
+- Complete the shared checks and real-terminal typing/paste exercise.
 
-### Non-goals
+### Boundaries
 
-No file-reference completion, slash completion, fuzzy history search, external
-editor, image/media paste, follow-up queue, Vim mode, or configurable keymap.
-Those remain possible polish after the daily-driver checkpoint.
+`@path` and image disk attachment ship in INPUT-1, and queue/steer in CTRL-1;
+these are required later slices, not post-trial deferrals. External editor,
+Vim mode, configurable keymaps, and fuzzy prompt-history search remain deferred.
 
-### Acceptance criteria
+### Result
 
-- Deterministic editor tests compose, navigate, select, revise, paste, and
-  submit an exact multiline Unicode prompt.
-- History recall is reversible and never mutates canonical transcript data.
-- A streamed patch and forced resnapshot during composition leave the draft and
-  cursor unchanged; busy submission preserves the complete buffer.
-- Headless rendering covers empty, wrapped, multiline, selected, and tall
-  composer states. The shipped interactive TUI is exercised in a real terminal
-  before completion.
-- Both Rust crates pass format, Clippy, and tests; Mix format,
-  warnings-as-errors compile, targeted TUI/protocol tests, and full tests pass.
-- The Result records the pushed commit, checks, deviations, remaining
-  uncertainty, whether Rust duplicated policy, and the protocol/DTO share of
-  implementation time.
+**IN PROGRESS (2026-09-04).** Implementation commit `dd9d80b` is saved locally
+on `codex/tui-3-composer`; native terminal acceptance remains open. The branch
+has not been pushed. The approved six-file roadmap/research
+revision was imported byte-for-byte from the owner's original checkout before
+implementation. That checkout and historical DONE Results were not modified.
+
+Rust now owns one grapheme-aware editor for text, cursor, selection, wrapped
+navigation, and bounded canonical prompt history with original-draft restoration.
+The composer grows to at most one third of screen height, keeps its cursor in
+view, accepts bracketed multiline paste, and has F1 help and F2 explicit safe
+paste. Ctrl-J is the unconditional newline fallback; modified Enter is accepted
+when distinct and keyboard-protocol detection controls the advertised hint.
+CRLF/CR normalize to LF, tabs are retained, other C0/C1 controls are removed,
+and inserts over 64 KiB are rejected atomically. Drafts remain local to the
+client window and are not persisted after exit.
+
+The client correlates existing protocol-v2 command replies in connection order.
+Only an ask's successful reply clears an unchanged submitted editor revision;
+busy/rejected sends and edits made while waiting are retained. A pending/uncertain
+ask cannot be resent, including after disconnection; the window remains open
+for inspection. Patches, resnapshot, interruption, and resize preserve local
+editing state. No new wire commands, Elixir session policy, durable queues,
+submission deduplication, file attachments, or later roadmap slices were added.
+
+Verification recorded so far:
+
+- TUI Rust tests: 24 passed, including existing projection/Markdown goldens,
+  Unicode editing, exact draft restoration, reply correlation, safe paste,
+  resnapshot/interruption preservation, visible cursor at 80x24, and explicit
+  empty/wrapped/selected/tall composer frames. Pending/uncertain acceptance
+  remains visible in the fixed status bar even behind a long transcript.
+  Regression tests cover LF/CRLF safe paste, repeated history replacement,
+  no-op Delete during submission, and delayed/late acknowledgement.
+- Targeted TUI product tests: 6 passed, including prompt-validation failure and
+  the interactive PTY product test
+  against a real Elara server using the scripted provider. It checks exact
+  Unicode multiline submission, selection, streaming/busy retention, interrupt,
+  history, safe paste with LF/CR/CRLF, 80x24/120x40/180x45 resize, and alternate-screen/paste
+  cleanup. PTY emulation is not native-terminal or clipboard evidence.
+- Both Rust crates: format and all-target Clippy with `-D warnings` passed;
+  exec-stub tests: 3 passed. Mix format and warnings-as-errors compile passed.
+- Full `mix test`: 335/338 passed. Three opaque-shell process-lifetime tests
+  fail because the existing helper reads Linux `/proc/<pid>/stat` on macOS.
+  Isolated rerun and an unchanged archive of baseline
+  `cc6e778fd3f1951fe7fcdc68fc3a2c1f79b094ae` both reproduced 17/20 passing with
+  the same three failures. No effect code or assertions were altered.
+- Installed terminal versions: Ghostty 1.3.1; WezTerm
+  20240203-110809-5046fc22. Computer Use denied access to both apps, including
+  a retry requested by the owner. Native typing, modifier mappings, clipboard,
+  and resize evidence in those terminals remains unavailable. No subscription
+  calls or screenshots were used for this item.
+
+Remaining acceptance: native Ghostty/WezTerm checks at the required dimensions,
+full-suite passing evidence on a supported host (or a separately scoped fix for
+the baseline macOS tests), and publication of the reviewed branch. Keep TUI-4
+BLOCKED.
+
+Review: completed `ce-code-review` run `tui3-206f19d8`, including independent
+Claude review and a fresh validator. No remaining actionable findings after
+fixing reproduced safe-paste LF/CRLF, history-sentinel bounds, no-op Delete
+revision, and unsent headless ask issues. Full local receipt is at
+`/tmp/compound-engineering-501/ce-code-review/tui3-206f19d8/review.json`.
+Additional uncertainty: lost/delayed acknowledgements have model-level coverage,
+not fault-injected socket evidence; responsiveness at the 64 KiB limit is not
+measured. These are not claims of native-terminal acceptance.
+
+Boundary evidence: authority implementation unchanged; Rust implements editor,
+input dispatch, layout, and connection-local acknowledgement tracking. Protocol
+schema/DTO changes: none. Fixture work adds a Python-stdlib PTY driver to the
+existing Mix product test. Debugging found missing terminal-query responses in
+the initial fixture and confirmed the baseline `/proc` test limitation. Actual
+authority/presentation/protocol/fixture/debugging time shares were not separately
+tracked and remain unknown; no percentage is inferred from changed-line counts.
 
 ## TUI-4 — Navigable transcript controller
 
@@ -1099,56 +1253,45 @@ Those remain possible polish after the daily-driver checkpoint.
 
 ### Outcome
 
-A user can leave the live tail, inspect and search earlier work, and return to
-streaming without the viewport jumping or focus attaching to the wrong entry.
+Inspect, select, search, and copy earlier work while streaming continues,
+without jumping to the tail or attaching focus to the wrong entry.
 
-### Scope
+### Scope and acceptance
 
-- Derive semantic transcript entries in Rust from protocol v2's canonical
-  messages, content deltas, tool calls, and outcomes. These are presentation
-  objects, not new Elixir domain entities or wire-level render blocks.
-- Add explicit prompt and transcript focus, line/page/top/bottom scrolling,
-  previous/next user-turn navigation, and a visible follow-tail state. New
-  output follows only while follow mode is active; jumping to the bottom resumes
-  it.
-- Keep a selected-entry/viewport anchor across patches, terminal resize, and
-  resnapshot. Use message position while history remains append-only, existing
-  tool-call IDs for tools, and stream IDs only for transient content.
-- Add case-insensitive transcript search with next/previous match and a visible
-  match count. Support copying the selected assistant entry with an explicit
-  fallback when terminal clipboard delivery is unavailable.
-- Keep keyboard routing, footer hints, and help text sourced from the same
-  action definitions so advertised navigation is always executable.
+- Derive semantic entries from canonical messages, streams, tool IDs, and
+  outcomes. Keep prompt/transcript focus, scroll offsets, selected entry, and
+  visible follow-tail state in Rust. Scroll by line/page/top/bottom and user
+  turn; new output follows only in follow mode.
+- Support mouse wheel scrolling and drag text selection, with keyboard copy
+  and terminal-native copy/paste coexistence. Copy selected text without UI
+  chrome or injected wrap newlines; document the newline policy for real lines.
+  Provide whole-entry copy as well as selection copy.
+- Use an explicit clipboard strategy verified in both target terminals. Show
+  failure/fallback honestly when clipboard delivery is unavailable; the required
+  macOS path must actually put text on the clipboard. Mouse capture must not
+  make native terminal selection impossible; document the escape/modifier.
+- Add case-insensitive transcript search, next/previous match, and match count.
+  Preserve anchors and selection through streaming, tool completion, resize,
+  duplicate patches, and resnapshot, or use a documented surviving-entry fallback.
+- Keep dispatch, help, and footer hints derived from one small Rust action
+  registry now; TUI-6 extends it rather than inventing another registry.
+- Test long wrapped Unicode content, selection across entry boundaries, search,
+  copying, focus changes, and leave-tail/return-tail behavior. Real mouse and
+  clipboard checks are mandatory alongside headless frames and shared checks.
 
 ### Identity trigger
 
-Do not add persisted message or block IDs merely to start this item. Add
-authoritative message IDs only if a test proves one of these failures: a
-resnapshot cannot preserve an anchor without content matching; history becomes
-non-append-only through edit, regeneration, deletion, reordering, compaction, or
-splice; another client or server command must target a message; or streaming
-finalization cannot retain exact focus. Renderer-specific block IDs and fold
-state remain Rust-owned even if message IDs become necessary.
-
-### Acceptance criteria
-
-- Scrolling away while assistant content streams never snaps the viewport to the
-  tail; explicitly resuming follow mode shows the latest output.
-- Previous/next turn, page, top/bottom, search, and copy work with wrapped
-  Unicode content and after terminal resize.
-- Duplicate patches, a sequence gap followed by resnapshot, and streaming
-  finalization preserve the same surviving selected entry or use a documented
-  deterministic fallback.
-- Headless frames cover focused transcript, scrolled/not-following, active
-  search, and resumed-tail states; the shipped TUI is exercised interactively.
-- Rust and Mix checks pass, and the Result records the same architectural and
-  protocol-cost evidence required by TUI-3.
+Use message position while history is append-only, stable tool-call IDs, and
+stream IDs for transient content. Add authoritative message IDs only when a
+reproducible test shows resnapshot/finalization cannot retain focus, history
+becomes non-append-only, or an authority operation must target a message.
+Existing store IDs are not automatically a stable wire contract. Renderer block
+IDs and fold state stay Rust-owned. Session switching always namespaces anchors.
 
 ### Non-goals
 
-No persisted bookmarks or folds, cross-client message links, mouse text
-selection, raw-Markdown mode, Vim navigation, or asynchronous search unless
-profiling demonstrates that synchronous search stalls the UI.
+No persisted bookmarks, raw-Markdown mode, Vim navigation, or asynchronous search
+unless profiling shows synchronous search stalls interaction.
 
 ## TUI-5 — Inspectable typed tool blocks
 
@@ -1156,171 +1299,504 @@ profiling demonstrates that synchronous search stalls the UI.
 
 ### Outcome
 
-Tool activity stays concise in the transcript without hiding the command,
-arguments, complete result, failure, or mutation the user needs to inspect.
+Keep tool activity concise without hiding the command, arguments, available
+result, failure, or reported mutation needed to understand the work.
 
-### Scope
+### Scope and acceptance
 
-- Replace the unconditional six-line tool-result truncation with Rust-owned
-  compact, expanded, and fullscreen presentations keyed by the existing stable
-  tool-call ID.
-- Show the tool name, useful argument summary, and explicit pending, running,
-  succeeded, failed, or indeterminate state. Never infer success from output
-  text.
-- Provide tailored presentations for the shipped `bash`, `read`, `write`, and
-  `edit` tools, plus a lossless generic fallback for custom and plugin tools.
-- Show a tail while compact and complete output when expanded. The fullscreen
-  viewer supports scrolling, wrapping, search, and copying the full result.
-- Render an edit-oriented diff from canonical arguments/outcomes when they
-  contain enough information. Do not reconstruct or imply bytes the authority
-  did not report.
-- Preserve expansion, viewer position, and selected tool across lifecycle
-  patches and ordinary resnapshots.
-
-### Acceptance criteria
-
-- A representative turn containing reads, a long shell result, a successful
-  edit, and a failed tool remains compact while every argument and result is
-  reachable without leaving the TUI.
-- Long output is visibly summarized rather than silently clipped; expanded and
-  copied output is complete and byte-faithful apart from documented terminal
-  sanitization.
-- Fold/viewer state survives running-to-terminal status changes and resnapshot.
-- Headless and direct renderer tests cover each built-in kind, generic fallback,
-  long output, diff, failure, and indeterminate states; interactive verification
-  covers expansion and fullscreen navigation.
-- No protocol change is expected. If canonical data is insufficient, the Result
-  must identify the exact missing authority fact instead of adding a
-  presentation-shaped DTO.
-- Rust and Mix checks pass, and the Result records architectural and
-  protocol-cost evidence.
+- Replace unconditional six-line display clipping with compact, expanded, and
+  fullscreen views keyed by tool-call ID. Keyboard and mouse can expand/collapse
+  a block or enter/leave its viewer without losing transcript position.
+- Show name, useful argument summary, and canonical pending/running/succeeded/
+  failed/indeterminate state. Include cancellation, timeout, and truncation
+  details when reported; never infer success from output text.
+- Tailor views for bash/read/write/edit, with a lossless generic fallback.
+  Expanded/fullscreen views expose all retained arguments and result text,
+  scrolling, wrapping, search, selection, and copy.
+- Distinguish display folding from upstream truncation. Show all retained bytes
+  subject to documented terminal sanitization, and label source/Core caps.
+  Never promise the full original process output after it has been discarded.
+- Derive edit diffs only when canonical arguments/outcomes justify the shown
+  before/after content. A failed edit is not a successful diff. Identify missing
+  authority facts rather than silently reading current files as prior evidence.
+- Preserve fold/viewer state across lifecycle patches and resnapshots. Test all
+  four built-ins, a plugin fallback, long output, diff, failed and indeterminate
+  cases; exercise real mouse/keyboard inspection and complete shared checks.
 
 ### Non-goals
 
-No streamed shell-output protocol, syntax-aware full-file highlighting, tool
-verb grouping, elapsed timers, or renderer per arbitrary plugin tool.
+No streamed shell-output protocol, syntax-aware full-file highlighting, custom
+renderer for every plugin, or removal of source byte limits.
 
-## TUI-6 — In-TUI session lifecycle and action discovery
+## TUI-7 — Three layouts and four independent dark themes
 
 **Status:** BLOCKED on TUI-5
 
 ### Outcome
 
-A user can find, create, resume, name, switch, and safely remove persisted
-sessions—and discover the available session actions—without copying IDs or
-escaping to another shell UI.
-
-### Scope
-
-- Extend the Elixir server/protocol to list both live and persisted resumable
-  sessions for the current working directory with authoritative ID, name, update
-  time, working directory, and live/idle/running state. Include current
-  provider/model labels where the authority can report them truthfully.
-- Keep persistence discovery, hydration, create/resume validation, naming, and
-  deletion in Elixir. Rust owns picker layout, fuzzy name/ID filtering,
-  selection, loading/empty/error states, and delete confirmation.
-- Create and resume through authority operations. Switching detaches and
-  reconnects to the selected session; it does not make one attached socket
-  silently change identity. A running session remains owned by the server.
-- Add one Rust action registry that drives key dispatch, contextual footer
-  hints, a searchable help surface, and slash/action discovery. At minimum
-  expose new, sessions, name, tree, fork, clone, reload, why, interrupt, detach,
-  and help by calling Elixir-owned operations rather than reproducing their
-  policy in Rust.
-- Preserve drafts per attachment where practical and never attach one session's
-  draft, cursor, viewport, or fold state to another session.
-- Return typed unsupported/version errors to older clients. Add protocol
-  capability advertisement only if compatibility requires it; do not build a
-  general dynamic command-schema system for a fixed command set.
-
-### Acceptance criteria
-
-- From one TUI process, create and name two sessions, switch between them,
-  observe one while it is running, detach, restart the server, and resume each
-  with the correct transcript and state.
-- The picker distinguishes loading, empty, error, live, running, and persisted
-  states; filtering cannot make delete act on a different session than the one
-  confirmed.
-- Tree/fork/clone, reload, why, interrupt, and detach use the same Elixir
-  semantics as the line chat. No session policy or persistence parsing is
-  duplicated in Rust.
-- Snapshot/event ordering remains correct when a selected persisted session is
-  hydrated and live patches begin. Incompatible clients fail explicitly rather
-  than misprojecting state.
-- Contextual hints and help are generated from the action registry and tested
-  against actual routing. Headless and interactive checks cover picker,
-  confirmation, command discovery, switching, and recovery states.
-- Rust and Mix checks pass. The Result separately records authority/protocol,
-  Rust presentation, fixture/adapter, and cross-runtime debugging effort so the
-  boundary cost is visible to SPLIT-5.
-
-### Non-goals
-
-No session-content search, generated titles, model switching, rewind/compact,
-foreign-session import, multi-agent dashboard, worktree management, or dynamic
-backend command marketplace.
-
-## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
-
-**Status:** BLOCKED on TUI-6 (owner checkpoint)
-
-### Outcome
-
-A recorded architecture decision made only after the Rust TUI has the minimum
-interaction baseline needed for primary use. The checkpoint measures both the
-five feature implementations and real usage, then keeps the Elixir/Rust split or
-reverses to Rust-everything.
-
-### Entry criteria
-
-- TUI-3 through TUI-6 are DONE with pushed commits and completed Result
-  evidence. No prerequisite may be waived by documenting its absence as a daily
-  use finding.
-- The owner can compose and revise multiline prompts, navigate old output while
-  streaming continues, inspect complete tool results, and find/resume/switch
-  sessions without leaving the TUI.
-- Forced resnapshot, server restart, interruption, and session switching do not
-  corrupt the transcript, lose a submitted prompt, or silently discard a draft.
+Choose among the approved visual directions without changing session behavior:
+three layouts multiplied by four themes, all available before daily use.
+The [approved visual reference](docs/elara-tui-visual-reference.md) identifies
+the preserved prototype, original screenshots, and limits of that evidence.
 
 ### Scope and acceptance
 
-- Use the Rust TUI as the primary client for two weeks, including at least five
-  real working days. Record friction and defects separately from architecture
-  boundary cost; a missing shortcut is not evidence for a Rust rewrite unless
-  the ownership boundary caused it.
-- Aggregate TUI-2 through TUI-6: did Rust duplicate session policy or transition
-  logic, and what share of implementation time went to protocol/DTO work,
-  including serialization, validators, fixtures, version handling, resync, and
-  cross-runtime debugging.
-- Reverse if at least 3 of the 5 features duplicated policy, or aggregate
-  protocol/DTO synchronization exceeded 30% of implementation time. Otherwise
-  keep the split provisionally and continue through the design document's full
-  one-month usage window.
-- During that month, record whether detached concurrent sessions, plugin hot
-  reload, remote workers, and durable recovery were actually useful. Reverse if
-  those BEAM-specific advantages remain unused and the product is effectively
-  one local interactive session. Do not apply this one-month signal after only
-  the two-week UI evaluation.
-- The Result records measurements, daily-use evidence, known usability gaps, the
-  keep/reverse decision, and the next executable queue. An early reverse is
-  allowed when a code-based threshold is already met; otherwise SPLIT-5 remains
-  open until the one-month usage signal is observable.
+- Before starting this item, complete the bounded PROV-2 subscription capability
+  preflight: verify reasoning summaries, model/effort controls, disk image input,
+  usage, and context-limit evidence. Record unsupported or unknown capabilities
+  as blockers before building dependent presentation; full adapter work remains
+  in PROV-2. This preflight does not change TUI-3 as the next executable item.
+- Layouts: **Ember**, inline thinking in a restrained single-column conversation;
+  **Observatory**, conversation beside a dedicated thinking pane; **Workbench**,
+  turn navigation plus a thinking strip and inspectable work.
+- Themes: **Ember** charcoal/amber, **Observatory** blue-black/teal,
+  **Workbench** violet/lavender, **Forest** near-black green/sage inspired by
+  the owner's Amp screenshot. Use semantic color tokens independent of layout.
+- Provide a pre-session appearance picker, saved user defaults, and an in-session
+  layout/theme action. Local preference writes and clipboard access are explicit
+  presentation exceptions to the original TUI's no-file-access non-goal; Rust
+  still must not parse session persistence or own workspace mutations.
+- One projection, editor, transcript controller, and action registry serve all
+  layouts. Changing layout/theme never asks, interrupts, reattaches, or changes
+  provider settings. Preserve draft/cursor, semantic selection/anchor, folds,
+  search, and thinking visibility; visible panes may reflow without exact pixel
+  preservation. Session-specific state stays scoped to its session.
+- Thinking starts expanded and stays open after completion. A user hide action
+  remains in force through new chunks, completion, resize, and layout changes
+  until the user shows it again. Model content comes from PROV-2; use labeled
+  fixtures for this slice, never fabricate live provider reasoning.
+- A separate thinking pane/strip identifies its source turn and whether it is
+  live or historical. Follow-tail shows the active turn; inspecting a historical
+  turn binds thinking to that turn until the user returns to live work. Preserve
+  that identity in narrow overlays and restore focus on close. Test historical
+  selection while live reasoning streams, including resize and layout changes.
+- Define concrete theme tokens and reference frames in-repo during this item:
+  background, surfaces, text, secondary text, focus, selection, reasoning, tool
+  status, and diff colors. Essential and secondary text remain readable;
+  target at least 4.5:1 contrast for text, and distinguish state with text/symbols
+  as well as color. No forced animations or low-contrast thinking text.
+- At 80x24, optional rails/panes collapse into accessible views. Test all 12
+  combinations for idle, composing, streaming, reasoning hidden/open, tool
+  failure, and narrow/wide resize. Both target terminals must support the actual
+  layouts, focus, mouse selection, clipboard, and restoration of terminal state.
+- Capture terminal screenshots for comparison with the approved visual studies
+  and complete the shared checks. Prototypes are reference material, not code
+  to transplant into ratatui.
+
+## PROV-2 — ChatGPT reasoning visibility, model controls, and usage
+
+**Status:** BLOCKED on TUI-7
+
+### Outcome
+
+Use the ChatGPT/Codex subscription from Elara with honest visible reasoning
+summaries, in-TUI model/effort selection, and usable context accounting.
+
+### Scope and acceptance
+
+- Use the capability preflight recorded before TUI-7; refresh it if the route or
+  model contract has changed. Verify the actual subscription route for visible reasoning summaries,
+  model/effort options, image-input support, usage fields, and model context
+  limits. Pin the observed contract/date and representative sanitized fixtures.
+  Public OpenAI API guides inform the adapter but do not establish support on
+  this private subscription route. Do not change provider or billing silently.
+- Request supported reasoning summaries and deliver typed public content through
+  provider events, Core, persistence, snapshot/patch, and the TUI. Distinguish
+  reasoning summary, assistant progress/commentary, and final answer. Keep
+  encrypted reasoning and auth tokens out of display DTOs and diagnostics.
+- Preserve ordering and identities across interleaved reasoning/text/tool events,
+  streaming finalization, interruption, persistence/resume, and resnapshot.
+  Absent summaries are visibly unavailable, not an endless thinking indicator.
+  All layouts show the same content and honor manual visibility state.
+- Add authority-owned model/effort discovery or a small versioned supported
+  catalog with source provenance. Handle unsupported settings explicitly.
+  Active requests keep their original settings; accepted changes apply at the
+  next request boundary and show current versus pending values truthfully.
+  Resume and child creation inherit explicit effective settings.
+- Expose input/output/cached/reasoning usage only when provided, distinguishing
+  request usage, session totals, and context occupancy. Show a labeled estimate
+  if exact occupancy is unavailable. CTX-1 needs a conservative preflight budget
+  for instructions, history, tools, pending input, attachments, and output reserve.
+- Test arbitrary SSE boundaries, no-summary responses, errors, settings rejected
+  by the server, and state recovery. Record a real subscription turn with tool
+  use, visible reasoning summaries where supported, and model/effort selection.
+  Confirm image capability here before INPUT-1 depends on it. Shared checks pass.
+
+### Boundaries
+
+No hidden-reasoning reconstruction and no promise of raw internal thoughts.
+Support is conditional on what the provider exposes. If a required capability
+cannot be verified, report it as a blocker with evidence rather than treating a
+placeholder as completion. Existing provider behavior remains compatible.
+
+## INPUT-1 — File references and image attachments from disk
+
+**Status:** BLOCKED on PROV-2
+
+### Outcome
+
+Reference project files with `@path` and attach disk images that the ChatGPT
+model actually receives, while keeping input inspectable and recoverable.
+
+### Scope and acceptance
+
+- Provide responsive `@path` discovery with fuzzy/path matching, keyboard and
+  mouse choice, spaces/Unicode, empty/error states, and visible selected items.
+  Elixir owns workspace discovery and attachment ingestion; Rust owns the picker
+  and draft attachment state. Standard file references remain distinct from
+  images and ordinary typed text.
+- Resolve chosen text files to a deterministic submission-time representation
+  with path/source metadata and clear size limits. Do not read arbitrary files
+  merely because the model sees an `@` in prose. Explain any clipped/omitted
+  content; a filename alone must not masquerade as included file content.
+- Accept explicit disk image selection, including absolute paths outside the
+  repository (for example Downloads). Validate readable file, supported format,
+  decoded type and size before submission. Deliver supported image content to
+  the provider, not only a filename. No clipboard image paste is required.
+- Store immutable attachment content or owned durable references sufficient for
+  queued delivery, resume, and handoff if the original disk file moves/changes.
+  The submitted attachment identity and preview metadata must agree. Support
+  removal before send; missing/unsupported/too-large files keep the draft intact.
+- Bound ingestion and rendering so large trees/images cannot freeze typing.
+  Do not inline image blobs into every snapshot or violate the 16 MiB wire
+  limit. Define chunking/reference retrieval or a smaller explicit attachment
+  cap; never let local disk paths become arbitrary remote-client file reads.
+- Test text/image round trips through persistence and actual provider conversion,
+  queue-ready payloads, cancellation, restart, and bad paths. Record one real
+  subscription image-understanding turn. Terminal thumbnail rendering is
+  optional; selectable name/type/size plus verified model delivery is required.
+  Complete shared checks in all layouts.
+
+## INST-1 — Standard project instructions and Agent Skills
+
+**Status:** BLOCKED on INPUT-1
+
+### Outcome
+
+Existing standard project instructions and skills influence actual Elara work,
+including delegated children and fresh handoff sessions.
+
+### Scope and acceptance
+
+- Implement documented `AGENTS.md` scope and precedence for the repository root,
+  invocation directory, and nested paths used by tools. Load applicable ancestor
+  instructions deterministically; nearest scoped instructions specialize parent
+  guidance and explicit user directions take precedence. Expose the loaded
+  paths so the owner can diagnose missing instructions.
+- Implement the portable Agent Skills directory/frontmatter contract: discover
+  metadata, load selected `SKILL.md` instructions on demand, resolve supporting
+  references/scripts relative to that skill, and support explicit skill use.
+  Avoid loading every skill body into the context at startup.
+- Support project and user skill locations plus explicitly configured existing
+  directories/symlinks, without copying or mutating other harness installations.
+  Define deterministic duplicate-name precedence and display source identity.
+- Validate malformed/unreadable skills with actionable diagnostics. Distinguish
+  portable skills from instructions that require unavailable vendor tools,
+  plugins, or unsupported experimental fields. Standard format compatibility
+  does not promise every harness-specific skill workflow will execute.
+- Skills do not silently override an explicitly restricted capability set.
+  Skill scripts execute through the normal Elara execution path, with the same
+  no-approval default and outcome reporting as other authorized local work.
+- Test root/nested precedence, explicit user override, duplicate skills, relative
+  resources, missing dependencies, and selective loading. Verify inherited
+  instruction/skill resolution in child and handoff paths when those ship.
+  Complete shared checks; no MCP transport or Claude-specific format required.
+
+Sources: [AGENTS.md](https://agents.md/) and
+[Agent Skills specification](https://agentskills.io/specification).
+
+## TUI-6 — In-TUI session lifecycle and action discovery
+
+**Status:** BLOCKED on INST-1
+
+### Outcome
+
+Find, create, resume, name, switch, and safely remove sessions without copying
+IDs or escaping to another shell UI.
+
+### Scope and acceptance
+
+- Extend Elixir-owned discovery/hydration for live and persisted resumable
+  sessions in the current workspace: stable ID, name, update time, cwd,
+  live/idle/running state, and effective provider/model where known.
+- Rust owns picker layout, fuzzy name/ID filtering, selection, loading/empty/
+  error states, and delete confirmation. Elixir validates create/resume/name/
+  delete operations. Observers cannot gain control through a picker action.
+- Switching detaches and attaches explicitly; no socket silently changes session
+  identity. A running session remains server-owned. Preserve separate drafts,
+  attachments, editor position, viewport, search, folds, and reasoning visibility.
+- Extend TUI-4's action registry with new, sessions, name, tree, fork, clone,
+  reload, why, interrupt, detach, help, appearance, and model/effort controls.
+  Available actions, help, footer hints, and slash/action discovery agree.
+- Support saved-session startup when no server is running, not just `new`.
+  Document embedded versus long-lived server lifetime and show which is in use.
+  Exiting an embedded VM is not background continuation; a persistent server is
+  required for work to continue with no TUI. Do not silently change that contract.
+- From one TUI create/name two sessions, switch while one runs, observe it,
+  detach, restart the server, and resume correct transcripts. Delete confirmation
+  binds the exact selected identity even if filtering/list updates occur.
+- Reject deletion of active work with a clear stop-first path. Preserve old
+  session-file readability, fork/clone behavior, and hydration/patch ordering.
+  Incompatible clients fail explicitly. Complete shared checks.
+
+### Non-goals
+
+No imported foreign histories, generated titles, cloud session hosting,
+multiplayer, or dynamic backend command marketplace. Thread references and
+parent/child navigation follow in THREAD-2; model controls ship in PROV-2.
+
+## CTRL-1 — Durable input queue, steering, and execution preferences
+
+**Status:** BLOCKED on TUI-6
+
+### Outcome
+
+Send follow-ups while work continues, delete pending input, or steer the agent
+without losing the message or confusing interruption with completion.
+
+### Scope and acceptance
+
+- Add an Elixir-owned durable inbox with stable submission IDs and canonical
+  queued/accepted/consumed/cancelled/failed states. Define acknowledgements so a
+  lost reply and reconnect cannot duplicate a logical submission. Keep sender
+  and target identity available for future thread messages.
+- While busy, ordinary submit queues FIFO for the next turn; show queue count
+  and content. Each entry is delivered once in order when the prior turn ends.
+  Deleting an entry races atomically with consumption: either cancelled or
+  already consumed, never silently both. Editing queued messages is not required.
+- Provide a discoverable steer action that prioritizes the selected instruction
+  after the current safe model/tool boundary without waiting for the full turn.
+  This means cancel/settle an active provider request as appropriate and let
+  already-dispatched tool effects settle; do not dispatch further stale calls.
+  Keep a separate immediate interrupt for explicit stop/cancel. Advertise
+  different bindings for queue, steer, and stop with terminal fallbacks.
+- Specify remaining-queue behavior after steer and stop: steer overtakes normal
+  queued inputs but does not delete them; explicit stop pauses automatic queue
+  draining until the owner resumes/sends again. Tool failures and cancellation
+  remain truthful; a steering message does not prove a command was undone.
+- Preserve draft/attachments until authoritative acceptance, and inbox entries
+  across detach, server restart, and model errors. A disconnected acknowledgement
+  is resolved by submission ID, not resending under a fresh ID.
+- Default to trusted local execution with no per-command/file-edit approval
+  prompts. Keep effective restrictions visible and enforce existing capability
+  limits. A read-only preset may be added later; this item must not grow into
+  a broad approval-policy engine. Queue/handoff never invent new approval gates.
+- Test FIFO, multiple steers, deletion/consumption race, input during a long tool,
+  stop with pending entries, reconnect/restart, provider failure, and observers'
+  rejected mutation commands through the real protocol and TUI. Shared checks.
+
+## THREAD-1 — Persistent delegated threads and preserved workspaces
+
+**Status:** BLOCKED on CTRL-1
+
+### Outcome
+
+A parent can start independent child work that remains inspectable and resumable
+instead of disappearing with a batch coordinator or temporary checkout.
+
+### Scope and acceptance
+
+- Build on sessions, Store, and existing coordinator primitives; do not add a
+  parallel model loop. Persist child identity, parent/delegation relationship,
+  assignment, effective provider/model/effort, workspace, and lifecycle state.
+  Parentage is a product relationship, not a requirement to link crash fate.
+- Add a model-callable start-child operation and user action. Give each child
+  selected task context by default, with an explicit fork/history option rather
+  than cloning the entire parent for every task. Load applicable instructions
+  and skills in the child's actual workspace. Preserve explicit tool limits.
+- Keep bounded concurrency and visible resource limits. Existing prompt/answer
+  byte-derived token estimates are not total subscription usage accounting;
+  use PROV-2 telemetry where available and label estimates honestly.
+- Children can run concurrently while the parent continues. Completion/failure
+  preserves their transcript and results; no automatic restart may replay
+  uncertain mutations. Recovery reports interrupted/indeterminate state and
+  reconciles already-recorded outcomes before issuing further work.
+- Independent coding children get managed durable worktrees with a recorded
+  base revision. Uncommitted parent changes are not silently included: transfer
+  selected inputs explicitly when needed. Research may share a checkout with
+  read-only capabilities. Process isolation alone is not edit isolation.
+- Preserve child changes through completion, parent failure, coordinator stop,
+  and server restart. Integrate selected child results through a recorded patch/
+  commit operation that detects conflicts and never overwrites parent changes.
+  Cleanup is separate from stopping and refuses to discard unintegrated work.
+- Long-lived server operation supports children with no attached TUI. The
+  embedded mode still ends with its VM; persisted recovery is not uninterrupted
+  background execution. Parent stop does not implicitly stop children; provide
+  an explicit stop-subtree operation with honest outcomes.
+- Test two children (including coding), one child failure with sibling survival,
+  parent exit, full restart, child resume, result integration/conflict, and
+  preservation of uncommitted work. Shared checks plus real subscription smoke.
+
+## THREAD-2 — Durable thread communication and TUI navigation
+
+**Status:** BLOCKED on THREAD-1
+
+### Outcome
+
+Parents and children exchange instructions and completion reports, and the
+owner can open, inspect, guide, and return from any child inside the TUI.
+
+### Scope and acceptance
+
+- Extend CTRL-1's inbox with sender/recipient thread IDs, message IDs, durable
+  acceptance, deduplication, ordering, and delivery status. Completion reports
+  include result, changed-file/workspace references, tests, failure/uncertainty,
+  and a link to full evidence. Do not silently clip the only retained result.
+- Provide model-callable send/read/status/wait operations and follow-up on an
+  existing child. Parent and child can communicate both ways. A wait yields
+  without repeated model polling; completion can wake an idle parent while an
+  active parent receives the report at a safe boundary. No automatic interruption
+  of active work just because a child finishes.
+- Separate UI notifications from model-visible inbox entries. Reattach and
+  resnapshot do not create duplicate reports or duplicate model turns. Respect
+  paused/stopped parents, bound automatic wakeups, and prevent empty-message
+  ping-pong or unbounded recursive spawning.
+- Add a compact thread tree/list, parent/child links, unread/completion/error
+  indicators, and open/return actions in all layouts. Show the child's transcript,
+  tools, queue, effective model, and available reasoning summaries. Preserve each
+  thread's local state and distinguish control from observation.
+- Support referencing a known thread ID and bounded reading/search for relevant
+  original messages. Return source message references and identify later
+  revisions; a handoff summary is an index into evidence, not the only truth.
+  No hosted URLs, vector database, or cross-project administration required.
+- Keep foreign threads, observers, and thread text from impersonating the owner
+  or changing unrelated threads. Agent messages have explicit provenance and
+  respect the receiving thread's current authority and restrictions.
+- Verify messages arriving during tools, duplicate/reordered transport, server
+  restart, parent paused/resumed, child completion while the parent works, and
+  user takeover of a child. Shared checks and real-terminal tree navigation.
+
+## CTX-1 — Automatic handoff and uninterrupted continuation
+
+**Status:** BLOCKED on THREAD-2
+
+### Outcome
+
+Warn before context runs out, then automatically hand off to a linked fresh
+thread and keep working. No approval or manual send is required. Keep original
+threads available for reference; do not silently compact the same history.
+
+### Scope and acceptance
+
+- Use PROV-2 usage/model limits plus conservative request-size estimates to show
+  context occupancy, estimate confidence, and an early non-modal warning.
+  Reserve room for pending tool outcomes, attachments, handoff generation, and
+  response output. Check before each provider request, not only after responses.
+  Model context and the 16 MiB snapshot limit are separate budgets.
+- Trigger before the reserved budget is consumed. At a safe boundary stop new
+  old-thread model work, settle active tool results, and produce a structured
+  handoff: goal, owner decisions/preferences, active instructions, completed
+  changes, exact verification evidence, unresolved problems, file/attachment
+  references, next action, queued instructions, and child assignments/status.
+- Create the successor with a fresh context, selected settings, workspace, and
+  source-thread relationship. Retain access to original messages and durable
+  attachments. Reload applicable instructions/skills; don't copy a stale system
+  prompt or the entire old history into the new request.
+- Preserve instruction provenance: transfer effective execution settings and
+  capabilities from canonical Elixir state, never infer them from a generated
+  summary. Retain source IDs and roles for owner instructions; treat the handoff
+  summary as assistant-authored context. Tool output, retrieved files, and child
+  reports cannot become owner instructions merely by appearing in a handoff.
+- Persist handoff identity and stages before switching: source preparation,
+  successor creation, delivery-owner transfer, and continuation start. Make
+  recovery idempotent: one successor and one logical continuation for a handoff,
+  even after crash or lost acknowledgements. An uncertain external command is
+  reconciled/reported, not automatically re-executed to make progress.
+- Transfer unconsumed queued inputs exactly once and route child reports to the
+  current continuation owner without changing historical parentage. Late child
+  completion during transfer is neither dropped nor delivered to both agents.
+  Keep manually paused inputs paused. Explicit owner stop cancels automatic
+  continuation; automatic handoff must never override a deliberate stop.
+- The controlling TUI follows the successor by explicit attach/snapshot, retaining
+  the owner's unsent draft/attachments and appearance. Preserve useful semantic
+  navigation where entries survive; show a quiet source/successor breadcrumb.
+  Observers receive the link without gaining control. Do not mislabel a network
+  disconnection as successful handoff.
+- If the provider limit is uncertain, use a conservative reserve. Bound handoff
+  retries; if generation/validation fails, preserve the source and surface the
+  failure rather than creating an empty successor or looping. Normal successful
+  handoffs require no approval; unrecoverable errors may need user attention.
+- Deterministic tests force low budgets while streaming, queued input, image
+  attachments, active/late child work, and lost acknowledgements. Kill/restart
+  between every transfer stage and prove no lost input, duplicate continuation,
+  or replayed mutation. Include a too-large single input/tool-result case and
+  prevent immediate successor-to-successor rollover loops.
+- Test malicious instruction claims in tool/child content without authority
+  promotion. Across repeated handoffs, seed a later owner correction, unfinished
+  work, and completed verification evidence; verify correction precedence,
+  retained obligations, and retrieval of original evidence without summary drift.
+- Record one real subscription continuation across a handoff, showing useful
+  retained context and ongoing work, plus shared checks. No generic exactly-once
+  model-request or external-effect guarantee is claimed.
+
+## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
+
+**Status:** BLOCKED on CTX-1 (owner checkpoint)
+
+### Outcome
+
+Judge the complete daily-driver experience and the Rust/Elixir boundary using
+actual work. This checkpoint cannot substitute for unfinished prerequisites.
+
+### Entry criteria
+
+- Every new queue item through CTX-1 is DONE with pushed commits, shared checks,
+  terminal evidence, and item-specific acceptance. All three layouts and four
+  themes, mouse/copy/paste, file/images, model controls, reasoning visibility,
+  instructions/skills, queue/steer, persistent threads, and automatic handoff
+  are usable. Provider limitations are resolved or remain explicit blockers.
+- A representative coding task succeeds on the actual ChatGPT subscription in
+  Ghostty and WezTerm, including tool execution, an image reference, child work,
+  and continuation. Known provider limits cannot be replaced with mock evidence.
+- Forced resnapshot, server restart, interruption, session/layout switching,
+  and handoff neither corrupt history nor silently discard drafts, accepted
+  prompts, attachments, or child results. Claims of seamless continuation apply
+  to successful operation, not unhandled crashes or missing credentials.
+
+### Scope and acceptance
+
+- Use Elara as the primary client for two weeks including five real working
+  days. Record usability defects separately from boundary costs; continue the
+  architecture observation through a full month unless an early reversal signal
+  is met. Do not require the owner to exercise unused features to justify BEAM.
+- Preserve the original five-feature measurement cohort, TUI-2 through TUI-6,
+  despite the inserted items. Record all added items separately and show total
+  authority/presentation/protocol/fixture/debugging effort as well; do not dilute
+  a costly boundary by reclassifying it as feature work or a theme change.
+- Original code-based signal: reverse if at least 3 of that cohort's 5 features
+  duplicated session policy, or its aggregate protocol/DTO synchronization
+  exceeded 30% of implementation time. Report missing measurements as unknown,
+  not passing. Report the expanded workload's costs beside this baseline.
+- For the one-month usefulness signal, evaluate detached concurrent work,
+  persistent parent/child communication, plugin reload, remote workers, and
+  durable recovery. These are alternative benefits, not a requirement to use
+  every feature. If the product is effectively one local interactive session
+  and none of those advantages proves useful, retain the original reversal
+  signal. Intent to build threads alone is not usage evidence.
+- Record the keep/reverse recommendation, evidence, usability gaps, and next
+  executable queue. A rewrite is a separately scoped implementation decision,
+  not an automatic mutation performed by this checkpoint. Without an early
+  signal SPLIT-5 stays open until the month of usage is observable.
 
 ### Feature evidence
 
-| Feature                        | Rust duplicated policy / transitions | Protocol/DTO share             |
-| ------------------------------ | ------------------------------------ | ------------------------------ |
-| 1. TUI-2 assistant Markdown    | No; presentation only                | 0%; no protocol or DTO changes |
-| 2. TUI-3 daily-driver composer | Pending                              | Pending                        |
-| 3. TUI-4 transcript controller | Pending                              | Pending                        |
-| 4. TUI-5 typed tool blocks     | Pending                              | Pending                        |
-| 5. TUI-6 session lifecycle     | Pending                              | Pending                        |
+| Baseline feature | Rust duplicated policy / transitions | Protocol/DTO share |
+| --- | --- | --- |
+| TUI-2 assistant Markdown | No; presentation only | 0%; no protocol or DTO changes |
+| TUI-3 composer | Pending | Pending |
+| TUI-4 transcript controller | Pending | Pending |
+| TUI-5 typed tool blocks | Pending | Pending |
+| TUI-6 session lifecycle | Pending | Pending |
+
+Also record TUI-7, PROV-2, INPUT-1, INST-1, CTRL-1, THREAD-1, THREAD-2, and
+CTX-1 costs and outcomes without changing the baseline denominator.
 
 ### Result
 
-**BLOCKED (2026-09-04).** The owner reported that the existing TUI lacks the
-interaction features required to serve as a primary client. A gap review against
-Grok Build's editor, scrollback, tool-view, session-picker, and discovery
-patterns confirmed that beginning daily-use measurement now would test missing
-basics rather than the split architecture. TUI-3 through TUI-6 were inserted as
-prerequisites; no keep/reverse decision has been made.
+**BLOCKED (2026-09-04).** The owner expanded the daily-driver contract after
+reviewing Grok screenshots and three visual prototypes, adding independent
+layouts/themes, provider reasoning and controls, file/image input, standard
+instructions/skills, mouse interaction, durable queue/steer, communicating
+threads, and automatic handoff with no approval. The queue now delivers those
+requirements before primary-use measurement. No implementation completion or
+architecture keep/reverse decision is claimed by this roadmap revision.

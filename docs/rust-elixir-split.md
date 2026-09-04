@@ -4,6 +4,43 @@
 > (SPLIT-1 … SPLIT-5); this file holds the decision, evidence, architecture, and
 > reversal signals. Do not track status here.
 
+## 2026-09-04 product-contract addendum
+
+The original decision and spike descriptions below are dated architectural
+evidence, not a current feature inventory. Streaming, the execution stub, and
+the initial projection TUI have since shipped; their exact Results live in
+`ROADMAP.md`. The original five-slice sequence no longer describes the full
+daily-driver prerequisites.
+
+The owner has chosen three switchable Rust layouts and four independent dark
+themes, ChatGPT subscription use, visible provider reasoning summaries,
+file/image input, standard instructions/skills, durable queue/steer, persistent
+communicating child threads, and automatic handoff with automatic continuation.
+The current queue and acceptance criteria are exclusively in `ROADMAP.md`.
+
+These choices retain the split: Rust owns editor/view/selection state, clipboard
+interaction, and local appearance preferences; Elixir owns content and settings,
+inbox delivery, thread relationships, workspaces, and handoff transitions.
+New authority facts may require versioned protocol extensions. The old
+no-direct-file-access TUI scope does not prohibit local presentation preferences
+or clipboard handling; it still prohibits Rust from owning session persistence
+or bypassing authority for workspace mutations.
+
+Section 9's original 3-of-5 and 30% signals keep the declared TUI-2 through TUI-6
+cohort; added work is measured separately and reported alongside it. The
+one-month usefulness signal includes persistent communicating child sessions
+as a concrete use of concurrent session ownership. Its listed benefits are
+alternatives, not an obligation to use remote workers or plugins to justify
+BEAM. A keep/reverse result is an evidence-based recommendation; any rewrite
+requires a separately scoped implementation item. Full current measurement
+and entry rules are in SPLIT-5 of the roadmap.
+
+Durable inboxes do not establish exactly-once external effects. Receipt-backed
+write remains the only production receipt scope. Persistent child work and
+handoff must preserve and reconcile uncertain outcomes rather than rerunning
+commands on process restart. BEAM process monitoring does not itself provide
+durable message delivery or worktree isolation.
+
 ## 1. Decision
 
 **Elixir stays the single authority. Rust owns the edges, across process

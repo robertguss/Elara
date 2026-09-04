@@ -1,0 +1,24 @@
+┌ transcript · protocol v2 projection ─────────────────────────────────────────┐
+│you inspect the build                                                         │
+│ai  I’ll check it.                                                            │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste ──────────────────────────────────┐
+│Unicode é 👩‍💻  中  with spaces Unicode é 👩‍💻  中  with spaces Unicode é 👩‍💻  中  with s│
+│paces Unicode é 👩‍💻  中  with spaces                                             │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -

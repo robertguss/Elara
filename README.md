@@ -155,6 +155,35 @@ long-lived mode. Assistant responses and in-progress content render as terminal
 Markdown, including styled headings, emphasis, code, lists, quotes, links, and
 tables. User prompts and tool output remain literal.
 
+The composer edits multiline text with a visible cursor and keyboard selection.
+Enter sends when idle; **Ctrl-J** inserts a newline in both legacy and enhanced
+keyboard modes. Alt-Enter works when the terminal transmits it distinctly
+(for example, Escape followed by Enter). Shift-Enter works with enhanced keys;
+the client probes support and shows the bindings it can advertise. Ghostty and
+WezTerm settings can change what modified keys send: use Ctrl-J if they arrive
+as plain Enter. Press F1 for all bindings, including word movement/deletion,
+Home/End, Shift-selection, and Alt-Up/Down history. Returning past the newest
+history prompt restores your original draft, cursor, and selection.
+
+Bracketed clipboard paste preserves newlines without sending. If paste framing
+is unavailable, press **F2 before pasting**: safe paste mode inserts Enter as a
+newline and disables application commands; F2 exits that mode without sending.
+In safe mode adjacent Enter/Ctrl-J events normalize CRLF to one newline.
+Review the draft, then Enter to send. Unframed pasted Enter is indistinguishable
+from typed Enter, so this mode must be enabled in advance. This fallback handles
+text, not arbitrary terminal key escape sequences. Tabs remain tabs (displayed
+at four-column stops), CRLF/CR become LF, and other C0/C1 controls are removed.
+An insert over the 64 KiB draft limit is rejected as a whole.
+
+Drafts stay editable while the session streams. Busy/rejected submissions retain
+the draft. Only the corresponding server acceptance clears an unchanged draft;
+edits made while waiting survive. A lost or delayed acknowledgement is shown as
+uncertain and repeat submission is blocked. Inspect the session before retrying
+from a new attachment; this is not a durable queue or reconnect deduplication.
+Ctrl-X interrupts, Esc/Ctrl-C detaches. Drafts live in this client window and are
+not saved after it exits. Local history recalls up to 200 canonical prompts that
+fit the editor limit; it does not change persisted conversation history.
+
 ## Built-in tools
 
 - `read` reads a file.
@@ -210,6 +239,7 @@ cd native/exec-stub && cargo fmt --check && cargo clippy && cargo test
 cd ../elara-tui && cargo fmt --check && cargo clippy && cargo test
 ```
 
-Tests use `Elara.Provider.Scripted` and do not call the network. One
+The interactive TUI tests also require Python 3 and a Unix PTY. Tests use
+`Elara.Provider.Scripted` and do not call external networks. One
 crash-recovery test intentionally logs a `RuntimeError) boom` error; the final
 test result determines whether the run passed.

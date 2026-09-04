@@ -132,6 +132,58 @@ defmodule Elara.TuiTest do
     GenServer.stop(external)
   end
 
+  @tag timeout: 60_000
+  test "interactive composer retains exact text through terminal events", context do
+    provider =
+      script(
+        List.duplicate(
+          {:stream, ["working", {:sleep, 5_000}], {:ok, asst("complete")}},
+          3
+        )
+      )
+
+    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+
+    python =
+      System.find_executable("python3") ||
+        flunk("python3 is required for interactive PTY coverage")
+
+    {output, status} =
+      System.cmd(
+        python,
+        [
+          Path.expand("../support/tui_pty.py", __DIR__),
+          context.binary,
+          Integer.to_string(Elara.Server.port(server)),
+          session
+        ],
+        env: [{"ELARA_TUI_STATE_DIR", context.state_dir}],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+    assert output =~ "PTY passed"
+  end
+
+  test "headless empty asks fail without waiting for an unsent turn", context do
+    {:ok, session} = Elara.start_session(provider: script([]), tools: [], persist: false)
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+
+    assert {output, 1} =
+             run_tui(context.binary, context.state_dir, Elara.Server.port(server), [
+               session,
+               "--headless",
+               "--ask",
+               "  \n",
+               "--timeout-ms",
+               "100"
+             ])
+
+    assert output =~ "prompt must contain text"
+    refute output =~ "timed out"
+  end
+
   test "cold snapshot, create, and live session list use the Rust client", context do
     {:ok, session} =
       Elara.start_session(

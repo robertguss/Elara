@@ -1,4 +1,7 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
+
+mod editor;
+pub use editor::Editor;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -113,13 +116,27 @@ pub struct Metrics {
     pub ask_to_first_delta_ms: Option<f64>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum PendingReply {
+    Ask,
+    Interrupt,
+    Snapshot,
+}
+
 #[derive(Clone, Debug)]
 pub struct Model {
     pub session_id: String,
     pub mode: String,
     pub projection: Projection,
     pub connection: ConnectionState,
-    pub input: String,
+    pub editor: Editor,
+    pub safe_paste: bool,
+    safe_paste_cr: bool,
+    pub enhanced_keyboard: bool,
+    pub show_help: bool,
+    pending_replies: VecDeque<PendingReply>,
+    // Acceptance can remain uncertain after the turn's metrics have finished.
+    pending_ask: Option<(u64, Instant)>,
     pub last_outcome: Option<String>,
     pub notice: Option<String>,
     pub metrics: Metrics,
@@ -128,17 +145,119 @@ pub struct Model {
 
 impl Model {
     pub fn new(session_id: String, mode: String, projection: Projection) -> Self {
+        let mut editor = Editor::default();
+        editor.set_history(user_prompts(&projection.view));
         Self {
             session_id,
             mode,
             projection,
             connection: ConnectionState::Connected,
-            input: String::new(),
+            editor,
+            safe_paste: false,
+            safe_paste_cr: false,
+            enhanced_keyboard: false,
+            show_help: false,
+            pending_replies: VecDeque::new(),
+            pending_ask: None,
             last_outcome: None,
             notice: None,
             metrics: Metrics::default(),
             ask_sent_at: None,
         }
+    }
+
+    pub fn prepare_submit(&mut self) -> Option<Value> {
+        if self.pending_ask.is_some() {
+            self.notice = Some(
+                "Acceptance pending or uncertain; draft retained. Do not retry blindly.".into(),
+            );
+            return None;
+        }
+        if self.connection != ConnectionState::Connected || self.mode != "control" {
+            self.notice = Some(
+                "Cannot send while detached, resynchronizing, or observing; draft retained.".into(),
+            );
+            return None;
+        }
+        if self.turn_state() != "idle" {
+            self.notice =
+                Some("Session busy; draft retained. Wait for idle before sending.".into());
+            return None;
+        }
+        if self.editor.text().trim().is_empty() {
+            return None;
+        }
+        let request = ask_command(self.editor.text());
+        self.pending_ask = Some((self.editor.revision(), Instant::now()));
+        self.pending_replies.push_back(PendingReply::Ask);
+        self.mark_ask_sent();
+        Some(request)
+    }
+
+    pub fn track_interrupt(&mut self) -> bool {
+        if self.connection == ConnectionState::Detached
+            || self.mode != "control"
+            || self.pending_replies.contains(&PendingReply::Interrupt)
+        {
+            return false;
+        }
+        self.pending_replies.push_back(PendingReply::Interrupt);
+        true
+    }
+
+    pub fn track_resnapshot(&mut self) {
+        self.pending_replies.push_back(PendingReply::Snapshot);
+    }
+
+    // Protocol v2 responds serially on one connection; patches are not replies.
+    // This is connection-local correlation, not durable submission identity.
+    pub fn command_reply(&mut self, error: Option<&str>) {
+        if self.pending_replies.pop_front() == Some(PendingReply::Ask)
+            && let Some((revision, _)) = self.pending_ask.take()
+        {
+            if error.is_none() {
+                if self.editor.revision() == revision {
+                    self.editor.clear();
+                }
+                self.notice = None;
+            } else {
+                self.ask_sent_at = None;
+            }
+        }
+        if let Some(error) = error {
+            self.notice = Some(format!("Server rejected command: {error}; draft retained."));
+        }
+    }
+
+    pub fn snapshot_reply(&mut self) {
+        if self.pending_replies.front() == Some(&PendingReply::Snapshot) {
+            self.pending_replies.pop_front();
+        }
+    }
+
+    pub fn check_acceptance_timeout(&mut self) -> bool {
+        if self
+            .pending_ask
+            .is_some_and(|(_, sent)| sent.elapsed() >= Duration::from_secs(5))
+        {
+            let notice = "Acceptance uncertain; draft retained. Inspect session before retrying.";
+            if self.notice.as_deref() != Some(notice) {
+                self.notice = Some(notice.into());
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn mark_disconnected(&mut self, error: &str) {
+        self.connection = ConnectionState::Detached;
+        self.notice = Some(if self.pending_ask.is_some() {
+            format!(
+                "Acceptance uncertain: {error}. Draft retained; inspect session before retrying."
+            )
+        } else {
+            format!("Disconnected: {error}. Draft retained in this window; Esc exits.")
+        });
     }
 
     pub fn mark_ask_sent(&mut self) {
@@ -160,6 +279,12 @@ impl Model {
             Ingest::Applied => {
                 self.connection = ConnectionState::Connected;
                 self.observe_ops(ops);
+                if ops.as_array().is_some_and(|ops| {
+                    ops.iter()
+                        .any(|op| op["op"] == "append_message" && op["message"]["role"] == "user")
+                }) {
+                    self.editor.set_history(user_prompts(&self.projection.view));
+                }
             }
             Ingest::Ignored => {}
             Ingest::Resnapshot => self.connection = ConnectionState::Resynchronizing,
@@ -181,6 +306,7 @@ impl Model {
         self.projection
             .install_snapshot(snapshot, incarnation, head)?;
         self.connection = ConnectionState::Connected;
+        self.editor.set_history(user_prompts(&self.projection.view));
         Ok(())
     }
 
@@ -223,6 +349,109 @@ impl Model {
             }
         }
     }
+}
+
+fn user_prompts(view: &Value) -> Vec<String> {
+    view["messages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|message| message["role"] == "user")
+        .filter_map(|message| message["text"].as_str().map(str::to_owned))
+        .collect()
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum InputAction {
+    None,
+    Submit,
+    Interrupt,
+    Detach,
+}
+
+pub fn handle_input(
+    model: &mut Model,
+    event: crossterm::event::Event,
+    width: usize,
+) -> InputAction {
+    use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+    let insert = |model: &mut Model, text: &str| {
+        if !model.editor.insert(text) {
+            model.notice =
+                Some("Draft limit: 64 KiB. Insert rejected; existing text retained.".into());
+        }
+    };
+    match event {
+        Event::Paste(text) => {
+            model.safe_paste_cr = false;
+            insert(model, &text);
+        }
+        Event::Key(key) if key.kind != KeyEventKind::Release => {
+            if key.code == KeyCode::F(2) && key.kind == KeyEventKind::Press {
+                model.safe_paste = !model.safe_paste;
+                model.safe_paste_cr = false;
+                return InputAction::None;
+            }
+            // Unframed pasted controls must never invoke application commands.
+            if model.safe_paste {
+                let lf = key.code == KeyCode::Char('j') && key.modifiers == KeyModifiers::CONTROL;
+                // Safe mode opts into paste semantics: decoded CR + LF is one newline.
+                let crlf = model.safe_paste_cr && lf;
+                model.safe_paste_cr = key.code == KeyCode::Enter;
+                if crlf {
+                    return InputAction::None;
+                }
+                match key.code {
+                    KeyCode::Enter => insert(model, "\n"),
+                    KeyCode::Char('j') if key.modifiers == KeyModifiers::CONTROL => {
+                        insert(model, "\n")
+                    }
+                    KeyCode::Tab => insert(model, "\t"),
+                    KeyCode::Char(c)
+                        if !key.modifiers.intersects(
+                            KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER,
+                        ) =>
+                    {
+                        insert(model, &c.to_string())
+                    }
+                    _ => {}
+                }
+                return InputAction::None;
+            }
+            if key.code == KeyCode::F(1) && key.kind == KeyEventKind::Press {
+                model.show_help = !model.show_help;
+                return InputAction::None;
+            }
+            if model.show_help {
+                if key.code == KeyCode::Esc {
+                    model.show_help = false;
+                }
+                return InputAction::None;
+            }
+            match (key.code, key.modifiers) {
+                (KeyCode::Esc, _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+                    return InputAction::Detach;
+                }
+                (KeyCode::Char('x'), KeyModifiers::CONTROL) if key.kind == KeyEventKind::Press => {
+                    return InputAction::Interrupt;
+                }
+                (KeyCode::Enter, modifiers)
+                    if modifiers.intersects(KeyModifiers::ALT | KeyModifiers::SHIFT) =>
+                {
+                    insert(model, "\n")
+                }
+                (KeyCode::Char('j'), KeyModifiers::CONTROL) => insert(model, "\n"),
+                (KeyCode::Enter, KeyModifiers::NONE) if key.kind == KeyEventKind::Press => {
+                    return InputAction::Submit;
+                }
+                _ => {
+                    model.editor.handle_key(key, width);
+                }
+            }
+        }
+        _ => {}
+    }
+    InputAction::None
 }
 
 pub struct ClientConnection {
@@ -462,11 +691,31 @@ pub fn render_frame(model: &Model, width: u16, height: u16) -> Result<String, St
 
 pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
     let area = frame.area();
+    if model.show_help {
+        frame.render_widget(
+            Paragraph::new(composer_help(model))
+                .wrap(Wrap { trim: false })
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(" Composer help · F1/Esc close "),
+                ),
+            area,
+        );
+        return;
+    }
+    let editor_layout = model
+        .editor
+        .layout(area.width.saturating_sub(2).max(1) as usize);
+    let editor_height = editor_layout
+        .rows
+        .len()
+        .clamp(1, (area.height as usize / 3).max(1)) as u16;
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(4),
-            Constraint::Length(3),
+            Constraint::Length(editor_height + 2),
             Constraint::Length(1),
         ])
         .split(area);
@@ -483,12 +732,54 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
         );
     frame.render_widget(transcript, chunks[0]);
 
-    let input = Paragraph::new(model.input.as_str()).block(
+    let visible = chunks[1].height.saturating_sub(2) as usize;
+    let first_row = editor_layout
+        .cursor_row
+        .saturating_sub(visible.saturating_sub(1));
+    let input_lines: Vec<Line<'_>> = editor_layout
+        .rows
+        .iter()
+        .skip(first_row)
+        .take(visible)
+        .map(|row| {
+            Line::from(
+                row.cells
+                    .iter()
+                    .map(|cell| {
+                        let style = if cell.selected {
+                            Style::default().bg(Color::Blue).fg(Color::White)
+                        } else {
+                            Style::default()
+                        };
+                        Span::styled(cell.text.as_ref(), style)
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    let title = if model.safe_paste {
+        " SAFE PASTE · Enter newline · F2 finish (does not send) "
+    } else {
+        " ask · Enter send · F1 help · F2 safe paste "
+    };
+    let bindings = if model.enhanced_keyboard {
+        " Alt/Shift-Enter or Ctrl-J newline · Alt-↑/↓ history "
+    } else {
+        " Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history "
+    };
+    let input = Paragraph::new(input_lines).block(
         Block::default()
             .borders(Borders::ALL)
-            .title(" ask · Enter send · Ctrl-X interrupt · Esc detach "),
+            .title(title)
+            .title_bottom(bindings),
     );
     frame.render_widget(input, chunks[1]);
+    if visible > 0 && chunks[1].width > 2 {
+        frame.set_cursor_position((
+            chunks[1].x + 1 + (editor_layout.cursor_column as u16).min(chunks[1].width - 3),
+            chunks[1].y + 1 + (editor_layout.cursor_row - first_row) as u16,
+        ));
+    }
 
     let connection = match model.connection {
         ConnectionState::Connected => "connected",
@@ -496,15 +787,21 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
         ConnectionState::Detached => "detached",
     };
     let outcome = model.last_outcome.as_deref().unwrap_or("-");
-    let status = format!(
-        " {} · {} · {} · head {} · {} · outcome {} ",
-        model.session_id,
-        model.mode,
-        connection,
-        model.projection.head,
-        model.turn_state(),
-        outcome
-    );
+    let status = if let Some(notice) = &model.notice {
+        format!(" {notice}")
+    } else if model.pending_ask.is_some() {
+        " Awaiting acceptance · draft retained · no automatic retry ".to_string()
+    } else {
+        format!(
+            " {} · {} · {} · head {} · {} · outcome {} ",
+            model.session_id,
+            model.mode,
+            connection,
+            model.projection.head,
+            model.turn_state(),
+            outcome
+        )
+    };
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             status,
@@ -512,6 +809,34 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
         ))),
         chunks[2],
     );
+}
+
+fn composer_help(model: &Model) -> Vec<Line<'static>> {
+    let mut lines = vec![
+        "Composer · F1/Esc closes help",
+        "Enter sends only when idle; rejected/uncertain sends retain the draft.",
+        "Ctrl-J inserts newline in both terminals. Alt-Enter also works when",
+        "the terminal sends Esc+Enter; Shift-Enter needs enhanced keys.",
+        "Arrows move by grapheme / wrapped row; Shift selects.",
+        "Ctrl/Alt-Left/Right moves by word; Ctrl/Alt-Backspace/Delete deletes.",
+        "Home/End: logical line; Ctrl-Home/End: entire draft. Ctrl-A: select all.",
+        "Alt-Up/Down: prompt history; newest restores your original draft.",
+        "Bracketed paste keeps newlines. F2 safe paste: Enter never sends,",
+        "commands are disabled; F2 finishes, then inspect and Enter to send.",
+        "Unframed Enter cannot be identified as paste. Enable F2 BEFORE paste.",
+        "Tabs preserved (4-column display); control bytes are removed.",
+        "Draft limit 64 KiB; oversized insert is rejected, never truncated.",
+        "Ctrl-X interrupts; Esc/Ctrl-C detaches. Draft is local to this window.",
+    ]
+    .into_iter()
+    .map(Line::from)
+    .collect::<Vec<_>>();
+    lines.push(Line::from(if model.enhanced_keyboard {
+        "Enhanced keys detected: Alt/Shift-Enter enabled."
+    } else {
+        "Legacy keys: Ctrl-J fallback; modified Enter depends on terminal mapping."
+    }));
+    lines
 }
 
 fn transcript_lines(model: &Model) -> Vec<Line<'static>> {
@@ -1037,6 +1362,218 @@ pub fn fixture_model(name: &str) -> Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn delayed_acceptance_is_visible_and_late_reply_clears_only_the_submitted_draft() {
+        let mut model = fixture_model("idle");
+        model.editor.insert("waiting draft");
+        model.prepare_submit().unwrap();
+        model.pending_ask.as_mut().unwrap().1 = Instant::now() - Duration::from_secs(6);
+        assert!(model.check_acceptance_timeout());
+        assert!(!model.check_acceptance_timeout());
+        assert!(
+            render_frame(&model, 80, 24)
+                .unwrap()
+                .lines()
+                .last()
+                .unwrap()
+                .contains("Acceptance uncertain")
+        );
+        assert_eq!(model.editor.text(), "waiting draft");
+        assert!(model.prepare_submit().is_none());
+        model.snapshot_reply(); // a snapshot is not acceptance of the ask
+        assert_eq!(model.editor.text(), "waiting draft");
+        model.command_reply(None);
+        assert_eq!(model.editor.text(), "");
+    }
+
+    #[test]
+    fn acceptance_notice_is_visible_even_when_transcript_is_full() {
+        let mut model = fixture_model("idle");
+        model.projection.view["messages"][0]["text"] = json!("long text ".repeat(1_000));
+        model.editor.insert("next prompt");
+        model.prepare_submit().unwrap();
+        let frame = render_frame(&model, 80, 24).unwrap();
+        assert!(
+            frame
+                .lines()
+                .last()
+                .unwrap()
+                .contains("Awaiting acceptance")
+        );
+        model.mark_disconnected("socket lost");
+        let frame = render_frame(&model, 80, 24).unwrap();
+        assert!(
+            frame
+                .lines()
+                .last()
+                .unwrap()
+                .contains("Acceptance uncertain")
+        );
+    }
+
+    #[test]
+    fn composer_frames_cover_empty_wrapped_selected_and_tall_drafts() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens");
+        for name in ["empty", "wrapped", "selected", "tall"] {
+            let mut model = fixture_model("idle");
+            match name {
+                "wrapped" => {
+                    model
+                        .editor
+                        .insert(&"Unicode e\u{301} 👩‍💻 中 with spaces ".repeat(4));
+                }
+                "selected" => {
+                    model.editor.insert("replace this selection");
+                    model.editor.handle_key(
+                        KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT | KeyModifiers::CONTROL),
+                        78,
+                    );
+                    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+                    terminal.draw(|frame| draw_model(frame, &model)).unwrap();
+                    assert!(
+                        terminal
+                            .backend()
+                            .buffer()
+                            .content
+                            .iter()
+                            .any(|cell| cell.bg == Color::Blue)
+                    );
+                }
+                "tall" => {
+                    model.editor.insert(&"multiline draft row\n".repeat(20));
+                }
+                _ => {}
+            }
+            let actual = render_frame(&model, 80, 24).unwrap();
+            let path = root.join(format!("composer-{name}.txt"));
+            if std::env::var_os("ELARA_UPDATE_GOLDENS").is_some() {
+                fs::write(&path, &actual).unwrap();
+            }
+            assert_eq!(actual, fs::read_to_string(path).unwrap(), "composer {name}");
+        }
+    }
+
+    #[test]
+    fn paste_and_safe_fallback_never_submit_or_interrupt() {
+        use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+        let mut model = fixture_model("idle");
+        let key = |code, modifiers| Event::Key(KeyEvent::new(code, modifiers));
+        assert_eq!(
+            handle_input(&mut model, Event::Paste("a\r\nb\t👩‍💻\u{1b}[31m".into()), 78),
+            InputAction::None
+        );
+        assert_eq!(model.editor.text(), "a\nb\t👩‍💻[31m");
+        handle_input(&mut model, key(KeyCode::F(2), KeyModifiers::NONE), 78);
+        assert_eq!(
+            handle_input(&mut model, key(KeyCode::Enter, KeyModifiers::NONE), 78),
+            InputAction::None
+        );
+        assert_eq!(
+            handle_input(
+                &mut model,
+                key(KeyCode::Char('x'), KeyModifiers::CONTROL),
+                78
+            ),
+            InputAction::None
+        );
+        assert_eq!(
+            handle_input(&mut model, key(KeyCode::Esc, KeyModifiers::NONE), 78),
+            InputAction::None
+        );
+        handle_input(
+            &mut model,
+            key(KeyCode::Char('j'), KeyModifiers::CONTROL),
+            78,
+        );
+        assert!(model.editor.text().ends_with("\n\n"));
+        handle_input(&mut model, key(KeyCode::F(2), KeyModifiers::NONE), 78);
+        for modifiers in [KeyModifiers::ALT, KeyModifiers::SHIFT] {
+            assert_eq!(
+                handle_input(&mut model, key(KeyCode::Enter, modifiers), 78),
+                InputAction::None
+            );
+        }
+        assert_eq!(
+            handle_input(&mut model, key(KeyCode::Enter, KeyModifiers::NONE), 78),
+            InputAction::Submit
+        );
+    }
+
+    #[test]
+    fn snapshots_streaming_interruptions_and_resize_preserve_selection_and_history_draft() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let mut model = fixture_model("idle");
+        model.editor.insert("local\ndraft");
+        model
+            .editor
+            .handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT), 78);
+        let cursor = model.editor.cursor();
+        let selection = model.editor.selection();
+        model.editor.history_previous();
+        let frame = json!({"session_id": model.session_id, "incarnation": "inc-demo", "head": 6,
+            "snapshot": model.projection.view});
+        model.install_snapshot_frame(&frame).unwrap();
+        let patch = json!({"incarnation": "inc-demo", "seq": 7, "ops": [{"op":"set_turn_state", "turn":{"state":"idle", "outcome":{"kind":"interrupted"}}}]});
+        assert_eq!(model.apply_patch_frame(&patch).unwrap(), Ingest::Applied);
+        model.editor.history_next();
+        assert_eq!(model.editor.text(), "local\ndraft");
+        assert_eq!(model.editor.cursor(), cursor);
+        assert_eq!(model.editor.selection(), selection);
+        for (width, height) in [(80, 24), (120, 40), (180, 45)] {
+            render_frame(&model, width, height).unwrap();
+            assert_eq!(model.editor.cursor(), cursor);
+            assert_eq!(model.editor.selection(), selection);
+        }
+    }
+
+    #[test]
+    fn tall_editor_keeps_cursor_in_bounds_and_transcript_at_80_columns() {
+        let mut model = fixture_model("idle");
+        model
+            .editor
+            .insert(&("a long wrapped line ".repeat(10) + "\n").repeat(12));
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal.draw(|frame| draw_model(frame, &model)).unwrap();
+        let cursor = terminal.get_cursor_position().unwrap();
+        assert!(cursor.x > 0 && cursor.x < 79 && cursor.y > 0 && cursor.y < 23);
+        let rendered = render_frame(&model, 80, 24).unwrap();
+        assert!(rendered.contains("you inspect the build"));
+        assert!(rendered.contains("F2 safe paste"));
+    }
+
+    #[test]
+    fn submitted_editor_waits_for_its_own_acceptance() {
+        let mut model = fixture_model("idle");
+        model.editor.insert("first\nsecond 👩‍💻");
+        model.track_interrupt();
+        let request = model.prepare_submit().unwrap();
+        assert_eq!(request["prompt"], "first\nsecond 👩‍💻");
+        model.command_reply(None); // interrupt reply, not ask acceptance
+        assert_eq!(model.editor.text(), "first\nsecond 👩‍💻");
+        model.command_reply(None);
+        assert_eq!(model.editor.text(), "");
+    }
+
+    #[test]
+    fn rejection_and_newer_draft_survive_replies() {
+        let mut model = fixture_model("idle");
+        model.editor.insert("draft");
+        model.prepare_submit().unwrap();
+        assert!(model.prepare_submit().is_none());
+        model.command_reply(Some("busy"));
+        assert_eq!(model.editor.text(), "draft");
+        model.prepare_submit().unwrap();
+        model.editor.insert(" changed while waiting");
+        model.command_reply(None);
+        assert_eq!(model.editor.text(), "draft changed while waiting");
+        model.prepare_submit().unwrap();
+        model.mark_disconnected("lost socket");
+        assert!(model.prepare_submit().is_none());
+        assert!(model.notice.as_deref().unwrap().contains("uncertain"));
+        assert_eq!(model.editor.text(), "draft changed while waiting");
+    }
 
     #[test]
     fn projection_applies_closed_patch_set_and_clears_stream() {

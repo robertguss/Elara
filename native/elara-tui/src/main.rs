@@ -2,14 +2,18 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    self, DisableBracketedPaste, EnableBracketedPaste, KeyboardEnhancementFlags,
+    PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    supports_keyboard_enhancement,
 };
 use elara_tui::{
-    ClientConnection, ConnectionState, Cursor, CursorStore, DEFAULT_PORT, Ingest, Model,
-    ask_command, attach_request, attached_model, command, draw_model, render_frame,
+    ClientConnection, ConnectionState, Cursor, CursorStore, DEFAULT_PORT, Ingest, InputAction,
+    Model, attach_request, attached_model, command, draw_model, handle_input, render_frame,
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
@@ -151,8 +155,17 @@ fn run(args: Args) -> Result<(), String> {
     let mut model = attached_model(&attached, mode)?;
     save_cursor(&cursors, &model);
     if let Some(prompt) = &args.ask {
-        model.mark_ask_sent();
-        connection.send(&ask_command(prompt))?;
+        if !model.editor.insert(prompt) {
+            return Err("prompt exceeds the 64 KiB editor limit".into());
+        }
+        if let Some(request) = model.prepare_submit() {
+            connection.send(&request)?;
+        } else if args.headless {
+            return Err(model
+                .notice
+                .clone()
+                .unwrap_or_else(|| "prompt must contain text".into()));
+        }
     }
 
     if args.headless {
@@ -227,14 +240,23 @@ fn run_headless(
                 && let Some(after) = args.interrupt_after
                 && started.elapsed() >= after
             {
-                connection.send(&command("interrupt"))?;
+                if model.track_interrupt() {
+                    connection.send(&command("interrupt"))?;
+                }
                 interrupt_sent = true;
             }
 
             match connection.recv_timeout(Duration::from_millis(25)) {
                 Ok(frame) => {
                     dump_frame(args.event_dump, started, &frame);
+                    let rejected = frame["type"] == "error";
                     handle_frame(connection, model, cursors, frame)?;
+                    if rejected {
+                        return Err(model
+                            .notice
+                            .clone()
+                            .unwrap_or_else(|| "command rejected".into()));
+                    }
                     saw_active |= model.turn_state() != "idle";
                     if saw_active && model.turn_state() == "idle" && model.last_outcome.is_some() {
                         break;
@@ -272,7 +294,8 @@ fn run_interactive(
     cursors: &CursorStore,
     started: Instant,
 ) -> Result<(), String> {
-    let _guard = TerminalGuard::enter()?;
+    let guard = TerminalGuard::enter()?;
+    model.enhanced_keyboard = guard.enhanced_keyboard;
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal =
         Terminal::new(backend).map_err(|error| format!("terminal failed: {error}"))?;
@@ -289,53 +312,41 @@ fn run_interactive(
             dirty = false;
         }
 
-        loop {
+        while model.connection != ConnectionState::Detached {
             match connection.try_recv() {
                 Ok(Some(frame)) => {
                     dump_frame(args.event_dump, started, &frame);
-                    handle_frame(connection, model, cursors, frame)?;
+                    if let Err(error) = handle_frame(connection, model, cursors, frame) {
+                        model.mark_disconnected(&error);
+                    }
                     dirty = true;
                 }
                 Ok(None) => break,
                 Err(error) => {
-                    model.connection = ConnectionState::Detached;
-                    model.notice = Some(error);
-                    terminal
-                        .draw(|frame| draw_model(frame, model))
-                        .map_err(|draw_error| format!("terminal failed: {draw_error}"))?;
-                    return Err("server disconnected".to_string());
+                    model.mark_disconnected(&error);
+                    dirty = true;
                 }
             }
         }
+        dirty |= model.check_acceptance_timeout();
 
         if event::poll(Duration::from_millis(30))
             .map_err(|error| format!("terminal input failed: {error}"))?
-            && let Event::Key(key) =
-                event::read().map_err(|error| format!("terminal input failed: {error}"))?
-            && key.kind == KeyEventKind::Press
         {
+            let event = event::read().map_err(|error| format!("terminal input failed: {error}"))?;
+            let width = terminal.size().map_err(|error| error.to_string())?.width;
             dirty = true;
-            match (key.code, key.modifiers) {
-                (KeyCode::Esc, _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => return Ok(()),
-                (KeyCode::Char('x'), KeyModifiers::CONTROL) => {
-                    connection.send(&command("interrupt"))?;
-                }
-                (KeyCode::Enter, _) => {
-                    let prompt = std::mem::take(&mut model.input);
-                    if !prompt.trim().is_empty() {
-                        model.mark_ask_sent();
-                        connection.send(&ask_command(&prompt))?;
-                    }
-                }
-                (KeyCode::Backspace, _) => {
-                    model.input.pop();
-                }
-                (KeyCode::Char(character), modifiers)
-                    if !modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-                {
-                    model.input.push(character);
-                }
-                _ => {}
+            let request = match handle_input(model, event, width.saturating_sub(2).max(1) as usize)
+            {
+                InputAction::Detach => return Ok(()),
+                InputAction::Submit => model.prepare_submit(),
+                InputAction::Interrupt if model.track_interrupt() => Some(command("interrupt")),
+                _ => None,
+            };
+            if let Some(request) = request
+                && let Err(error) = connection.send(&request)
+            {
+                model.mark_disconnected(&error);
             }
         }
     }
@@ -352,20 +363,19 @@ fn handle_frame(
             match model.apply_patch_frame(&frame)? {
                 Ingest::Applied => save_cursor(cursors, model),
                 Ingest::Ignored => {}
-                Ingest::Resnapshot => connection.send(&command("resnapshot"))?,
+                Ingest::Resnapshot => {
+                    model.track_resnapshot();
+                    connection.send(&command("resnapshot"))?;
+                }
             }
         }
         Some("snapshot") if frame["version"].as_u64() == Some(2) => {
             model.install_snapshot_frame(&frame)?;
+            model.snapshot_reply();
             save_cursor(cursors, model);
         }
-        Some("ok") => {}
-        Some("error") => {
-            model.notice = Some(format!(
-                "Server error: {}",
-                frame["error"].as_str().unwrap_or("unknown")
-            ));
-        }
+        Some("ok") => model.command_reply(None),
+        Some("error") => model.command_reply(Some(frame["error"].as_str().unwrap_or("unknown"))),
         Some("status") => model.notice = Some(format!("Status: {}", frame["status"])),
         _ => return Err("server returned an invalid protocol v2 frame".to_string()),
     }
@@ -391,23 +401,42 @@ fn dump_frame(enabled: bool, started: Instant, frame: &Value) {
     }
 }
 
-struct TerminalGuard;
+struct TerminalGuard {
+    enhanced_keyboard: bool,
+}
 
 impl TerminalGuard {
     fn enter() -> Result<Self, String> {
         enable_raw_mode().map_err(|error| format!("cannot enable terminal raw mode: {error}"))?;
-        if let Err(error) = execute!(io::stdout(), EnterAlternateScreen) {
-            let _ = disable_raw_mode();
-            return Err(format!("cannot enter alternate screen: {error}"));
+        let mut guard = Self {
+            enhanced_keyboard: false,
+        };
+        execute!(io::stdout(), EnterAlternateScreen, EnableBracketedPaste)
+            .map_err(|error| format!("cannot initialize terminal: {error}"))?;
+        if supports_keyboard_enhancement().unwrap_or(false) {
+            execute!(
+                io::stdout(),
+                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+            )
+            .map_err(|error| format!("cannot enable enhanced keyboard: {error}"))?;
+            guard.enhanced_keyboard = true;
         }
-        Ok(Self)
+        Ok(guard)
     }
 }
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
+        if self.enhanced_keyboard {
+            let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
+        }
+        let _ = execute!(
+            io::stdout(),
+            DisableBracketedPaste,
+            LeaveAlternateScreen,
+            crossterm::cursor::Show
+        );
         let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), LeaveAlternateScreen);
         let _ = io::stdout().flush();
     }
 }

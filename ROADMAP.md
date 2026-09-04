@@ -8,6 +8,42 @@ This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
+## Progress at a glance
+
+**Current:** [TUI-3 — multiline composer](#tui-3--cursor-aware-multiline-daily-driver-composer)
+is implemented and pushed through `0e1cbda`; acceptance is still IN PROGRESS.
+The checklist below is the current handoff. Update it and the item's Result
+after each verified milestone; end each work session with the next concrete
+action and who can perform it. Close test terminal windows after testing.
+
+| Checkpoint | State | Evidence or next action |
+| --- | --- | --- |
+| Composer, selection, history, safe paste, acceptance handling | Complete | 25 Rust tests; 6 TUI product tests |
+| Multiline transcript rendering | Complete | Regression and native WezTerm frames; pushed `0e1cbda` |
+| WezTerm native rendering and live resize | Complete | 80x24, 120x40, 180x45; draft/cursor/selection retained |
+| Ghostty native paste and modified Enter | Complete for API path | Exact canonical text; Alt-Enter and Shift-Enter insert newlines |
+| System clipboard data path in both terminals | Complete for API path | Native paste actions preserve Unicode, newlines, and tabs; Enter alone submits |
+| Physical keys with the owner's terminal settings | Open — owner input needed | Check Ctrl-J, Alt/Shift-Enter, Cmd-V, history, and safe paste in both terminals |
+| Ghostty resize and visual check | Open — owner input needed | Exercise 80x24, 120x40, 180x45 while editing/selected; confirm cursor and draft survive |
+| Full suite on supported host | Open — agent work | No GitHub Actions runs found for this branch; run Linux checks or separately scope the three baseline macOS process-state test failures |
+| TUI-4 transcript navigation | Blocked | Start only after TUI-3 acceptance and recorded completion |
+
+**Next action:** conduct the short physical-key and Ghostty resize exercise
+below with the owner. The agent can launch the scripted-provider session and
+verify canonical submitted text; the owner must operate the physical keys and
+window resizing because native computer-control tools are unavailable.
+
+1. In each terminal, paste a prompt containing a newline, `é`, `👩‍💻`, and a tab
+   using Cmd-V. Confirm nothing is submitted.
+2. Try Ctrl-J, Alt-Enter, and Shift-Enter separately. Record which insert a
+   newline and whether the displayed hints match. Only plain Enter should send.
+3. Enter a fresh draft, recall the last prompt with Alt-Up, then restore the
+   draft with Alt-Down. Select text and resize Ghostty through the three sizes;
+   confirm draft, selection, and cursor remain usable.
+4. Enable F2 before unframed multiline paste; Enter must insert newlines until
+   F2 exits safe paste. Report any mismatch; the agent records results here,
+   verifies submission, and closes the test terminals.
+
 ## Working rules
 
 - Keep at most one item `IN PROGRESS`. Normally exactly one item is executable
@@ -1236,12 +1272,29 @@ Verification recorded so far:
   Evidence is under `/tmp/elara-tui3-check/followup-wezterm-*.txt` and
   `live-resize-*.txt`. Tests used stock/isolated configuration, not the owner's
   keymap. CLI input injection does not verify physical modifier mappings or
-  system clipboard paste. Ghostty has launch evidence only. No subscription
+  system clipboard paste. Subsequent native-API checks below add clipboard
+  evidence. No subscription
   calls or screenshots were used for this item. A temporary scripted-provider
   stream/final-text mismatch was corrected before the follow-up checks.
+- Ghostty's installed `Ghostty.sdef` provides `input text`, `send key`, and
+  `perform action`. Native API tests confirmed multiline Unicode/tab paste
+  stays unsubmitted, and Alt-Enter/Shift-Enter insert newlines in canonical
+  submitted text. `paste_from_clipboard` also preserved exact system clipboard
+  text until Enter. Synthetic Ctrl-J emitted no bytes in a separate raw-terminal
+  capture, while Alt-Enter emitted CSI `13;3u` and Shift-Enter emitted LF; this
+  leaves physical Ctrl-J unverified rather than establishing an Elara defect.
+  Ghostty's API rejected the attempted arrow-key names, so its history check
+  remains part of the physical-key exercise.
+- WezTerm's native [clipboard action](https://wezterm.org/config/lua/keyassignment/PasteFrom.html)
+  preserved exact multiline
+  Unicode/tab text in canonical submission. Its temporary Lua driver initially
+  repeated the paste because callback state did not persist as expected; a
+  file guard and a fresh session corrected the fixture before the successful check. Clipboard
+  action evidence is recorded in `/tmp/elara-tui3-check/clipboard-results.txt`.
+  These API actions do not verify the physical Cmd-V shortcut in either app.
 
 Remaining acceptance: Ghostty interaction/resize, physical modifier mappings
-and system clipboard checks in both terminals,
+and clipboard shortcuts in both terminals,
 full-suite passing evidence on a supported host (or a separately scoped fix for
 the baseline macOS tests). Keep TUI-4 BLOCKED.
 

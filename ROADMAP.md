@@ -11,7 +11,7 @@ roadmaps or archived planning documents in the working tree.
 ## Progress at a glance
 
 **Current:** [TUI-5 — tool inspection](#tui-5--inspectable-typed-tool-blocks)
-is next. TUI-4 implementation and review fixes pass shared checks. TUI-3 and
+is IN PROGRESS. TUI-4 implementation and review fixes are pushed in `de46872`. TUI-3 and
 TUI-4 hands-on acceptance are DEFERRED by the owner's 2026-09-04 instruction
 while away. Those checks remain unverified and do not block later implementation.
 
@@ -30,7 +30,7 @@ with the next concrete action. Close test terminal windows after testing.
 | TUI-4 anchored scrolling, focus, and follow-tail | Implementation verified | Semantic anchors, cached wrapping, explicit follow-tail; 45 Rust tests |
 | TUI-4 search, selection, and clipboard | Implementation verified | Search paste preserves draft; review fixes cover reverse/stale drags and focus |
 | TUI-4 actions, help, product checks | Complete | 7 TUI product tests; 339 full Linux tests; both Rust crates pass checks |
-| TUI-5 tool inspection | Next | Compact/expanded/fullscreen typed tool views |
+| TUI-5 tool inspection | In progress | Compact/expanded/fullscreen typed tool views |
 
 **Next action:** implement and verify TUI-5 typed tool inspection. Manual-only
 acceptance that requires the absent owner stays explicitly deferred, not passed.
@@ -197,7 +197,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | TUI-2   | DONE     | Render assistant Markdown in the Rust TUI                     | MAC-1            |
 | TUI-3   | DEFERRED | Cursor-aware multiline daily-driver composer                  | TUI-2            |
 | TUI-4   | DEFERRED | Navigable transcript controller                               | TUI-3            |
-| TUI-5   | TODO     | Inspectable typed tool blocks                                 | TUI-4            |
+| TUI-5   | IN PROGRESS | Inspectable typed tool blocks                                 | TUI-4            |
 | TUI-7   | BLOCKED  | Three layouts and four independent dark themes               | TUI-5            |
 | PROV-2  | BLOCKED  | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
 | INPUT-1 | BLOCKED  | File references and image attachments from disk               | PROV-2           |
@@ -1378,7 +1378,7 @@ unless profiling shows synchronous search stalls interaction.
 ### Result
 
 **DEFERRED (2026-09-04): implementation verified and reviewed; hands-on
-acceptance postponed by owner.** Semantic message/tool/stream entries now support
+acceptance postponed by owner. Implementation pushed in `de46872`.** Semantic message/tool/stream entries now support
 independent transcript focus, wrapped line/page/user-turn navigation, explicit
 follow-tail, case-insensitive search, drag selection, and selection/entry copy.
 A shared action registry supplies dispatch and help. Rendering and wrapping are
@@ -1417,7 +1417,7 @@ detaches while searching; safe-paste mode retains precedence.
 
 ## TUI-5 — Inspectable typed tool blocks
 
-**Status:** TODO — TUI-4 hands-on acceptance deferred by owner
+**Status:** IN PROGRESS — TUI-4 pushed; hands-on acceptance deferred by owner
 
 ### Outcome
 
@@ -1452,8 +1452,8 @@ renderer for every plugin, or removal of source byte limits.
 
 ### Result
 
-**TODO (2026-09-04).** Implement compact, expanded, and fullscreen typed tool
-inspection after the TUI-4 commit is pushed. Reuse transcript navigation/search/
+**IN PROGRESS (2026-09-04).** TUI-4 pushed in `de46872`. Implement compact,
+expanded, and fullscreen typed tool inspection. Reuse transcript navigation/search/
 selection; preserve canonical outcomes and explicitly distinguish retained text
 from upstream truncation. Physical acceptance remains owner-deferred while away.
 

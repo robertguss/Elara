@@ -10,41 +10,36 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** [TUI-3 — multiline composer](#tui-3--cursor-aware-multiline-daily-driver-composer)
-is implemented and pushed through `0e1cbda`; acceptance is still IN PROGRESS.
-The checklist below is the current handoff. Update it and the item's Result
-after each verified milestone; end each work session with the next concrete
-action and who can perform it. Continue available agent work autonomously,
-committing and pushing completed changes; pause only for necessary owner input
-or an external blocker. Close test terminal windows after testing.
+**Current:** [TUI-4 — transcript navigation](#tui-4--navigable-transcript-controller)
+is IN PROGRESS. TUI-3 implementation is pushed through `0e1cbda`; Linux
+acceptance passed in `434f3c3`. On 2026-09-04 the owner explicitly deferred the
+remaining hands-on terminal checks and authorized continuing the later items.
+Those checks remain unverified and do not block implementation of successors.
+
+Update this handoff and each item's Result after verified milestones. Continue
+available agent work autonomously, committing and pushing completed changes;
+pause only for necessary owner input or an external blocker. End each session
+with the next concrete action. Close test terminal windows after testing.
 
 | Checkpoint | State | Evidence or next action |
 | --- | --- | --- |
-| Composer, selection, history, safe paste, acceptance handling | Complete | 25 Rust tests; 6 TUI product tests |
-| Multiline transcript rendering | Complete | Regression and native WezTerm frames; pushed `0e1cbda` |
-| WezTerm native rendering and live resize | Complete | 80x24, 120x40, 180x45; draft/cursor/selection retained |
-| Ghostty native paste and modified Enter | Complete for API path | Exact canonical text; Alt-Enter and Shift-Enter insert newlines |
-| System clipboard data path in both terminals | Complete for API path | Native paste actions preserve Unicode, newlines, and tabs; Enter alone submits |
-| Physical keys with the owner's terminal settings | Open — owner input needed | Check Ctrl-J, Alt/Shift-Enter, Cmd-V, history, and safe paste in both terminals |
-| Ghostty resize and visual check | Open — owner input needed | Exercise 80x24, 120x40, 180x45 while editing/selected; confirm cursor and draft survive |
-| Full suite on supported host | Complete | Linux ARM64: 338/338 Mix tests; both Rust crates pass format/Clippy/tests; container network disconnected |
-| TUI-4 transcript navigation | Blocked | Start only after TUI-3 acceptance and recorded completion |
+| TUI-3 composer and multiline transcript | Implementation complete | 25 Rust tests; 6 TUI product tests; pushed `0e1cbda` |
+| TUI-3 Linux shared checks | Complete | 338/338 Mix tests; both Rust crates pass format/Clippy/tests offline |
+| TUI-3 WezTerm rendering and live resize | Verified | 80x24, 120x40, 180x45; draft/cursor/selection retained |
+| TUI-3 native clipboard actions and Ghostty modified Enter | Verified for API path | Exact canonical text; physical shortcuts remain unverified |
+| TUI-3 physical keys and Ghostty resize | Deferred by owner | Revisit when owner returns; does not gate later implementation |
+| TUI-4 anchored scrolling, focus, and follow-tail | In progress | Add semantic entries and wrapping-aware viewport |
+| TUI-4 search, selection, and clipboard | Pending | Add Unicode-safe search/selection and honest clipboard delivery |
+| TUI-4 actions, help, product checks | Pending | One action registry; automated and available native checks |
+| TUI-5 tool inspection | Next after TUI-4 | Compact/expanded/fullscreen typed tool views |
 
-**Next action:** conduct the short physical-key and Ghostty resize exercise
-below with the owner. The agent can launch the scripted-provider session and
-verify canonical submitted text; the owner must operate the physical keys and
-window resizing because native computer-control tools are unavailable.
+**Next action:** implement and verify TUI-4, then proceed to TUI-5. Manual-only
+acceptance that requires the absent owner stays explicitly deferred, not passed.
 
-1. In each terminal, paste a prompt containing a newline, `é`, `👩‍💻`, and a tab
-   using Cmd-V. Confirm nothing is submitted.
-2. Try Ctrl-J, Alt-Enter, and Shift-Enter separately. Record which insert a
-   newline and whether the displayed hints match. Only plain Enter should send.
-3. Enter a fresh draft, recall the last prompt with Alt-Up, then restore the
-   draft with Alt-Down. Select text and resize Ghostty through the three sizes;
-   confirm draft, selection, and cursor remain usable.
-4. Enable F2 before unframed multiline paste; Enter must insert newlines until
-   F2 exits safe paste. Report any mismatch; the agent records results here,
-   verifies submission, and closes the test terminals.
+**Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
+Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
+through 80x24, 120x40, and 180x45 while editing selected Unicode text; confirm
+cursor, draft, and selection remain usable. Record results when performed.
 
 ## Working rules
 
@@ -61,7 +56,7 @@ window resizing because native computer-control tools are unavailable.
 - Commit and push each completed item before starting its successor.
 
 Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, and
-`INVALID`.
+`INVALID`, and `DEFERRED` (implementation available; named acceptance postponed).
 
 ## Current direction
 
@@ -86,7 +81,7 @@ versioned line protocol; no NIFs. That document holds the architecture,
 evidence, and reversal signals; this file holds the queue and status.
 
 The foundations are shipped, but the current Rust client is not yet a credible
-daily driver. TUI-3 is implementing the multiline composer; the transcript is still
+daily driver. TUI-3 implements the multiline composer; the transcript is still
 always-following, tool output is truncated, and session selection is CLI-oriented. Starting SPLIT-5 in that state would measure missing product basics
 rather than the Elixir/Rust boundary.
 
@@ -99,7 +94,7 @@ HTML prototypes or existing batch coordinator already implement them.
 
 Build the TUI foundations first, then provider/input and session controls, then
 persistent communicating threads and automatic handoff. Both the TUI and threads
-must be usable before SPLIT-5. TUI-3 remains the next executable item. Later
+must be usable before SPLIT-5. TUI-4 is the next executable item; TUI-3 manual acceptance is owner-deferred. Later
 slices are bounded vertical deliveries; the expanded scope must not be hidden
 inside the composer or session picker.
 
@@ -201,8 +196,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | TUI-1   | DONE     | One-command embedded server for new TUI sessions              | PROV-1           |
 | MAC-1   | DONE     | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
 | TUI-2   | DONE     | Render assistant Markdown in the Rust TUI                     | MAC-1            |
-| TUI-3   | IN PROGRESS | Cursor-aware multiline daily-driver composer                  | TUI-2            |
-| TUI-4   | BLOCKED  | Navigable transcript controller                               | TUI-3            |
+| TUI-3   | DEFERRED | Cursor-aware multiline daily-driver composer                  | TUI-2            |
+| TUI-4   | IN PROGRESS | Navigable transcript controller                               | TUI-3            |
 | TUI-5   | BLOCKED  | Inspectable typed tool blocks                                 | TUI-4            |
 | TUI-7   | BLOCKED  | Three layouts and four independent dark themes               | TUI-5            |
 | PROV-2  | BLOCKED  | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
@@ -1172,12 +1167,12 @@ interaction baseline required for primary use. Proceed to TUI-3.
 
 ## TUI-3 — Cursor-aware multiline daily-driver composer
 
-**Status:** IN PROGRESS
+**Status:** DEFERRED — remaining hands-on checks postponed by owner
 
 ### Outcome
 
 Compose and revise realistic multiline prompts while a session streams, without
-losing text, cursor, or selection. This is the next executable item.
+losing text, cursor, or selection.
 
 ### Scope and acceptance
 
@@ -1211,7 +1206,7 @@ Vim mode, configurable keymaps, and fuzzy prompt-history search remain deferred.
 
 ### Result
 
-**IN PROGRESS (2026-09-04).** Implementation commit `dd9d80b` and evidence
+**IMPLEMENTED; MANUAL ACCEPTANCE DEFERRED (2026-09-04).** Implementation commit `dd9d80b` and evidence
 commit `bb5e3d9` were pushed to `origin/codex/tui-3-composer`. Native terminal
 acceptance remains open. The approved six-file roadmap/research
 revision was imported byte-for-byte from the owner's original checkout before
@@ -1313,7 +1308,8 @@ Verification recorded so far:
 Remaining acceptance: Ghostty interaction/resize, physical modifier mappings
 and clipboard shortcuts in both terminals. Supported-host full-suite evidence
 is now complete; the existing macOS test portability limitation remains recorded
-above. Keep TUI-4 BLOCKED until the remaining native acceptance is verified.
+above. The owner explicitly deferred those checks on 2026-09-04 and authorized later
+items to proceed. TUI-4 is unblocked; these checks are not claimed as passed.
 
 Review: completed `ce-code-review` run `tui3-206f19d8`, including independent
 Claude review and a fresh validator. No remaining actionable findings after
@@ -1336,7 +1332,7 @@ tracked and remain unknown; no percentage is inferred from changed-line counts.
 
 ## TUI-4 — Navigable transcript controller
 
-**Status:** BLOCKED on TUI-3
+**Status:** IN PROGRESS — TUI-3 manual acceptance deferred by owner
 
 ### Outcome
 
@@ -1379,6 +1375,14 @@ IDs and fold state stay Rust-owned. Session switching always namespaces anchors.
 
 No persisted bookmarks, raw-Markdown mode, Vim navigation, or asynchronous search
 unless profiling shows synchronous search stalls interaction.
+
+### Result
+
+**IN PROGRESS (2026-09-04).** Implement anchored transcript navigation, search,
+selection/copy, mouse support, and a shared Rust action registry. Preserve
+canonical protocol authority and the existing composer. Hands-on checks requiring
+the absent owner are deferred by instruction; automated and available native
+checks remain required.
 
 ## TUI-5 — Inspectable typed tool blocks
 

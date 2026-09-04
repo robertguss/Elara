@@ -83,7 +83,8 @@ write is now an atomic workspace-confined declarative operation with durable
 intent, callback-attempt, and terminal evidence. Resuming a persisted session
 reconciles an unresolved write without blindly retrying it. Custom tools,
 `edit`, `bash`, plugins, and remote execution do not yet use this production
-receipt path.
+receipt path. The confinement is enforced by the session/declarative-write path,
+not by calling the low-level `Elara.Tools.write/2` helper directly.
 
 ## Custom tools
 
@@ -199,7 +200,9 @@ parent:
 Supported patterns are `:parallel`, `:specialists`, `:candidates` with a
 `judge:`, and `:map_reduce` with a `reducer:`. Child specs require `id:` and
 `prompt:`; `role:` defaults to `:general`. Coding roles receive detached git
-worktrees, so the parent `cwd` must be a Git checkout.
+worktrees, so the parent `cwd` must be a Git checkout. Invalid specs return
+`{:error, {:invalid_child_spec, reason}}` without crashing the coordinator;
+`reason` is `:id_required`, `:prompt_required`, or `:map_required`.
 
 `Elara.Coordinator.status/1` reports children and live budgets.
 `Elara.Coordinator.kill_child/2` stops one child without stopping siblings. Call

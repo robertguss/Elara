@@ -410,23 +410,25 @@ defmodule Elara.Effect.ControllerJournal do
          job_binary
        ]) do
     authority_metadata = decode(authority_binary)
-    job = decode(job_binary)
 
-    if match?(%Job{}, job) and
-         job.job_id == job_id and
-         job.job_id_version == job_id_version and
-         job.operation_digest == operation_digest and
-         job.digest_version == digest_version and
-         job.schema_version == schema_version and
-         job.state == :intent and
-         job.workspace_id == workspace_id and
-         authority_metadata == %{
-           required_capabilities: job.required_capabilities,
-           authority_scope: job.authority_scope
-         } do
-      {:ok, job}
+    with {:ok, job} <- Job.decode(job_binary) do
+      if job.job_id == job_id and
+           job.job_id_version == job_id_version and
+           job.operation_digest == operation_digest and
+           job.digest_version == digest_version and
+           job.schema_version == schema_version and
+           job.state == :intent and
+           job.workspace_id == workspace_id and
+           authority_metadata == %{
+             required_capabilities: job.required_capabilities,
+             authority_scope: job.authority_scope
+           } do
+        {:ok, job}
+      else
+        {:error, :invalid_intent_record}
+      end
     else
-      {:error, :invalid_intent_record}
+      {:error, :invalid_job} -> {:error, :invalid_intent_record}
     end
   rescue
     ArgumentError -> {:error, :invalid_intent_record}

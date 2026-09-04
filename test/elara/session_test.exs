@@ -95,6 +95,16 @@ defmodule Elara.SessionTest do
     pid
   end
 
+  defp fresh_vm(code) do
+    System.cmd(
+      System.find_executable("mix"),
+      ["run", "--no-compile", "--no-deps-check", "-e", code],
+      cd: Path.expand("../..", __DIR__),
+      env: [{"MIX_ENV", "test"}],
+      stderr_to_stdout: true
+    )
+  end
+
   test "sync ask returns final text and fans events" do
     provider = script([{:ok, asst("hello")}])
     {:ok, session} = Elara.start_session(provider: provider, tools: [])
@@ -312,6 +322,61 @@ defmodule Elara.SessionTest do
 
     assert request_messages == prior ++ [Message.user("q3")]
     assert persisted_messages == request_messages
+  end
+
+  test "a fresh VM resumes a completed session after read and bash tools" do
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "elara-fresh-vm-resume-#{System.unique_integer([:positive])}"
+      )
+
+    sessions_root = Path.join(root, "sessions")
+    cwd = Path.join(root, "workspace")
+    File.mkdir_p!(cwd)
+    File.write!(Path.join(cwd, "input.txt"), "input")
+    on_exit(fn -> File.rm_rf!(root) end)
+
+    create = """
+    Application.put_env(:elara, :sessions_root, #{inspect(sessions_root)})
+    alias Elara.Message
+    alias Elara.Message.ToolCall
+
+    calls = [
+      %ToolCall{id: "read-1", name: "read", args: {:ok, %{"path" => "input.txt"}}},
+      %ToolCall{id: "bash-1", name: "bash", args: {:ok, %{"command" => "printf shell"}}}
+    ]
+
+    {:ok, tool_turn} = Message.assistant(nil, calls)
+    {:ok, final} = Message.assistant("done", [])
+    {:ok, agent} = Agent.start_link(fn -> [{:ok, tool_turn}, {:ok, final}] end)
+    {:ok, session} =
+      Elara.start_session(provider: {Elara.Provider.Scripted, agent}, cwd: #{inspect(cwd)}, plugins: [])
+
+    {:ok, "done"} = Elara.ask(session, "use both tools")
+    {:ok, pid} = Elara.session_pid(session)
+    :ok = GenServer.stop(pid)
+    """
+
+    assert {"", 0} = fresh_vm(create)
+
+    resume = """
+    Application.put_env(:elara, :sessions_root, #{inspect(sessions_root)})
+    {:ok, agent} = Agent.start_link(fn -> [] end)
+    {:ok, session} =
+      Elara.start_session(
+        provider: {Elara.Provider.Scripted, agent},
+        cwd: #{inspect(cwd)},
+        plugins: [],
+        resume: :latest
+      )
+
+    results = Enum.filter(Elara.transcript(session), &is_struct(&1, Elara.Message.ToolResult))
+    true = Enum.map(results, & &1.name) == ["read", "bash"]
+    IO.puts("resumed read and bash")
+    """
+
+    assert {"resumed read and bash\n", 0} = fresh_vm(resume)
   end
 
   test "start_session rejects missing and invalid resume targets" do

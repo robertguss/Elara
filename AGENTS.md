@@ -14,6 +14,9 @@ things that are non-obvious in the Cloud environment.
   refreshes project deps with `mix deps.get`.
 - Hex/Rebar are already installed in `~/.mix`, so `mix deps.get` runs
   non-interactively.
+- Rust 1.88 or newer is required for both native crates. `rustfmt` and Clippy
+  are required for development checks; `.agents/setup` installs a pinned Rust
+  toolchain with both components in cloud environments.
 
 ### Lint / test / build / run
 

@@ -43,7 +43,9 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 - [ ] I am testing in a disposable clean checkout (`git status --short` is empty
       before testing).
-- [ ] Elixir 1.20, Erlang/OTP 29, Cargo, Rust, and `flock` are available.
+- [ ] Elixir 1.20, Erlang/OTP 29, Rust 1.88 or newer, Cargo, rustfmt, Clippy,
+      and `flock` are available. Distribution Rust 1.85 is insufficient for the
+      TUI; with rustup, run `rustup component add rustfmt clippy`.
 - [ ] I will not paste tokens into this file, logs, prompts, or issue reports.
 
 Cleanup after testing:
@@ -58,7 +60,8 @@ git worktree remove --force /tmp/elara-manual-test
 These checks are deterministic and credential-free. The first Mix compile builds
 `native/exec-stub`; the first TUI invocation builds `native/elara-tui`. A
 missing Cargo executable must fail with actionable setup guidance rather than
-silently omitting either Rust program.
+silently omitting either Rust program. Both Cargo manifests declare the minimum
+supported Rust version so an older compiler fails with a direct version error.
 
 - [ ] `mix deps.get` succeeds.
 - [ ] `mix format --check-formatted` exits 0.
@@ -191,8 +194,10 @@ Daily smoke notes (date, task, terminal, latency, friction):
 
 - [ ] `mix elara.ask "summarize this repository"` prints tool activity and a
       final answer, then exits 0.
-- [ ] A provider error, explicit interruption, wait timeout, or 12-iteration
-      turn limit exits nonzero rather than reporting success.
+- [ ] A provider error, explicit interruption, CLI wait timeout, or 12-iteration
+      turn limit exits nonzero rather than reporting success. A tool's default
+      30-second timeout is instead a tool error; if the model handles it and
+      completes the turn, the ask exits 0.
 - [ ] The one-shot conversation is not offered by a later `--continue`.
 
 ### `mix elara.chat`
@@ -217,7 +222,10 @@ mix elara.chat --continue "continue with one concise observation"
 - [ ] A provider error ends only the current turn and returns to the `> `
       prompt.
 - [ ] Submitting another prompt while a turn is active reports busy/refused.
-- [ ] Session files under `~/.elara/sessions/<cwd-key>/` are mode `600`.
+- [ ] Durable session JSONL, effects SQLite, `.flight`, and `.lock` artifacts
+      under `~/.elara/sessions/` are mode `600`. Transient SQLite `-wal` and
+      `-shm` sidecars may use SQLite/umask-derived modes while the database is
+      open and are not durable-artifact mode checks.
 - [ ] **Multi-terminal:** a second process cannot concurrently take the same
       persisted session lock.
 
@@ -273,6 +281,12 @@ mix elara.tui SESSION_ID
 mix elara.tui SESSION_ID --observe
 ```
 
+Compile before starting the long-lived processes. The compiler skips replacing
+an unchanged running exec stub. If the stub source changes while a server or
+worker uses the same build, stop it before recompiling or assign a separate
+`MIX_BUILD_PATH` to each process. `--no-compile` is an option to `mix run` and
+`mix eval`, not a global option such as `mix --no-compile elara.worker`.
+
 - [ ] A running server is reused; `new` does not start a competing server.
 - [ ] `list` shows each live session's ID, state, head, and working directory.
 - [ ] Escape/Ctrl-C detaches without interrupting an active turn.
@@ -304,6 +318,10 @@ mix elara.tui SESSION_ID --headless --event-dump \
 mix elara.tui SESSION_ID --headless --ask "run sleep 30" \
   --interrupt-after-ms 250 --timeout-ms 5000
 ```
+
+Run the `mix elara.tui` task directly for exit-code checks. A wrapper such as
+`mix eval --no-compile 'Mix.Tasks.Elara.Tui.run(...)'` may report the
+evaluator's status instead of the nested TUI status.
 
 - [ ] `--port` works for both server and TUI.
 - [ ] `ELARA_SERVER_PORT` is used when `--port` is absent.
@@ -339,7 +357,9 @@ mix elara.tui SESSION_ID --headless --ask "run sleep 30" \
 
 `read` and `edit` expand paths and `bash` is unrestricted; unlike default local
 `write`, they are not workspace confinement boundaries. There is no shell
-approval layer or OS sandbox.
+approval layer or OS sandbox. The `write` checks above exercise the default
+session/declarative-write path; a direct call to the low-level
+`Elara.Tools.write/2` helper is not confined.
 
 ### Rust execution-stub guarantees (**destructive**)
 

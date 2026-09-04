@@ -13,10 +13,12 @@ existing agents.
 ## Run from source
 
 Elara currently runs from this Mix project; it does not install a standalone
-`elara` executable. You need Elixir 1.20, Erlang/OTP 29, Rust with Cargo, and
-the `flock` command. Mix builds the Rust execution stub automatically and builds
-the Rust TUI on first use; a missing Cargo installation fails with setup
-instructions.
+`elara` executable. You need Elixir 1.20, Erlang/OTP 29, Rust 1.88 or newer with
+Cargo, rustfmt, and Clippy, plus the `flock` command. The Rust components can be
+installed with `rustup component add rustfmt clippy`; distribution-provided Rust
+1.85 is too old for the TUI dependencies. Mix builds the Rust execution stub
+automatically and builds the Rust TUI on first use; a missing Cargo installation
+fails with setup instructions.
 
 ```bash
 git clone https://github.com/robertguss/elixir-harness.git
@@ -98,7 +100,10 @@ mix elara.ask "summarize this repository"
 
 The command prints tool activity and the answer. It exits with status 1 on a
 provider error, interruption, timeout waiting for the turn, or turn limit. This
-one-shot command does not persist its session.
+one-shot command does not persist its session. A tool's 30-second timeout is
+reported to the model as a tool error; if the model then completes the turn,
+`mix elara.ask` exits 0. This differs from the CLI timing out while waiting for
+the turn itself.
 
 Start a persistent conversation:
 
@@ -167,7 +172,9 @@ rejects absolute paths, `..`, symlink path components, and non-file targets so
 its observed preimage and atomic replacement stay inside that workspace. `read`
 and `edit` still call `Path.expand/2`, and `bash` is unrestricted, so those
 tools can reach outside the working directory. Use a container or other OS
-sandbox when the model or workspace is not trusted.
+sandbox when the model or workspace is not trusted. This confinement belongs to
+the default session's declarative-write path; the low-level
+`Elara.Tools.write/2` helper is not itself a workspace-confinement boundary.
 
 The local write executor stores its durable ledger under
 `~/.elara/sessions/_effect_executors/`; persistent sessions keep their

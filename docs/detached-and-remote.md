@@ -25,6 +25,13 @@ a long-lived server in one terminal:
 mix elara.server
 ```
 
+Compile once before starting a multi-terminal server/worker setup. Concurrent
+Mix commands safely skip reinstalling the exec-stub binary when its bytes are
+unchanged. If you modify the Rust stub while a server or worker is running from
+the same build, stop those processes before recompiling or give them separate
+`MIX_BUILD_PATH` values. For diagnostic Elixir snippets, `--no-compile` belongs
+after `mix run` or `mix eval`; it is not a global `mix` flag.
+
 The server process owns provider configuration. For a ChatGPT/Codex subscription
 login, start it with `ELARA_PROVIDER=openai-codex` in its environment; setting
 that variable only on the TUI process does not change an existing server.
@@ -96,6 +103,9 @@ with its arrival latency:
 ```bash
 mix elara.tui SESSION_ID --headless --event-dump --ask "check the build"
 ```
+
+Run `mix elara.tui` directly when its exit status is part of the check. Wrapping
+the task in `mix eval` can hide the nested task's nonzero exit status.
 
 ### Session protocol
 

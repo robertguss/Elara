@@ -34,9 +34,31 @@ defmodule Mix.Tasks.Compile.ExecStub do
     source = Path.join([target, profile, "exec-stub"])
     destination = Path.join(Mix.Project.app_path(), "priv/native/exec-stub")
     File.mkdir_p!(Path.dirname(destination))
-    File.cp!(source, destination)
+    copy_if_changed!(source, destination)
     File.chmod!(destination, 0o755)
     {:ok, []}
+  end
+
+  defp copy_if_changed!(source, destination) do
+    source_contents = File.read!(source)
+
+    unless File.read(destination) == {:ok, source_contents} do
+      case File.cp(source, destination) do
+        :ok ->
+          :ok
+
+        {:error, :etxtbsy} ->
+          Mix.raise("""
+          cannot replace the running native exec stub at #{destination}.
+          Stop long-lived Elara processes using this build, or give concurrent
+          processes separate MIX_BUILD_PATH values, then compile again.
+          """)
+
+        {:error, reason} ->
+          message = reason |> :file.format_error() |> List.to_string()
+          Mix.raise("cannot install native exec stub: #{message}")
+      end
+    end
   end
 end
 

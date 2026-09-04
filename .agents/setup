@@ -3,11 +3,14 @@ set -euo pipefail
 
 readonly OTP_VERSION="29.0.5"
 readonly ELIXIR_VERSION="1.20.3"
+readonly RUST_VERSION="1.98.1"
 readonly OTP_SHA256="da6f05c7b292f7726cdee6794e7a48542cc47384c3fdaeeb737df8aa5de24acf"
 readonly ELIXIR_SHA256="51f799b78374d569a5df659bdedeb0dd9ef8251230bcdaef00c533019086e625"
 readonly INSTALL_ROOT="$HOME/.elixir-install"
 readonly OTP_DIR="$INSTALL_ROOT/installs/otp/$OTP_VERSION"
 readonly ELIXIR_DIR="$INSTALL_ROOT/installs/elixir/$ELIXIR_VERSION-otp-29"
+readonly CARGO_HOME="$HOME/.cargo"
+readonly RUSTUP_HOME="$HOME/.rustup"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -55,6 +58,25 @@ fi
 
 export PATH="$ELIXIR_DIR/bin:$PATH"
 
+echo "==> Installing Rust $RUST_VERSION with rustfmt and clippy"
+export CARGO_HOME RUSTUP_HOME
+export PATH="$CARGO_HOME/bin:$PATH"
+
+if [[ ! -x "$CARGO_HOME/bin/rustup" ]]; then
+  rustup_init="$tmp_dir/rustup-init"
+  curl --retry 3 --proto '=https' --tlsv1.2 -fsSLo "$rustup_init" \
+    https://sh.rustup.rs
+  chmod +x "$rustup_init"
+  "$rustup_init" -y --profile minimal --default-toolchain none --no-modify-path
+fi
+
+if ! rustup run "$RUST_VERSION" rustc --version 2>/dev/null | grep -q "^rustc $RUST_VERSION "; then
+  rustup toolchain install "$RUST_VERSION" --profile minimal
+fi
+
+rustup component add --toolchain "$RUST_VERSION" rustfmt clippy
+rustup default "$RUST_VERSION"
+
 profile_marker="# elixir-elara toolchain"
 if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile" 2>/dev/null; then
   cat >>"$HOME/.bash_profile" <<EOF
@@ -77,5 +99,10 @@ echo "==> Verifying toolchain"
 [[ "$(elixir --short-version)" == "$ELIXIR_VERSION" ]]
 [[ "$(<"$OTP_DIR/releases/29/OTP_VERSION")" == "$OTP_VERSION" ]]
 [[ "$(erl -noshell -eval 'io:put_chars(erlang:system_info(otp_release)), halt().')" == "29" ]]
+[[ "$(rustc --version)" == "rustc $RUST_VERSION "* ]]
+command -v cargo >/dev/null
+command -v rustfmt >/dev/null
+cargo clippy --version >/dev/null
 command -v flock >/dev/null
-printf 'Elixir %s and Erlang/OTP %s are ready.\n' "$ELIXIR_VERSION" "$OTP_VERSION"
+printf 'Elixir %s, Erlang/OTP %s, and Rust %s are ready.\n' \
+  "$ELIXIR_VERSION" "$OTP_VERSION" "$RUST_VERSION"

@@ -310,6 +310,12 @@ defmodule Elara.CoordinatorTest do
                %{id: "duplicate", prompt: "second"}
              ])
 
+    assert {:error, {:invalid_child_spec, :prompt_required}} =
+             Coordinator.run(raising, :parallel, [%{id: "missing-prompt"}])
+
+    assert Process.alive?(raising)
+    refute Coordinator.status(raising).running?
+
     blocking_factory = fn _spec ->
       send(test_pid, :factory_entered_after_worktree)
 

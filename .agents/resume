@@ -6,4 +6,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/env"
 command -v elixir >/dev/null
 command -v erl >/dev/null
+command -v cargo >/dev/null
+command -v rustfmt >/dev/null
+cargo clippy --version >/dev/null
 command -v flock >/dev/null

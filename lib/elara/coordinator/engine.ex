@@ -7,7 +7,8 @@ defmodule Elara.Coordinator.Engine do
     started_at = now_ms()
     opts = Keyword.put(opts, :run_deadline, started_at + config.time_budget_ms)
 
-    with :ok <- validate_unique_ids(pattern, specs, opts),
+    with :ok <- validate_child_specs(pattern, specs, opts),
+         :ok <- validate_unique_ids(pattern, specs, opts),
          {:ok, history} <- seed_history(config.parent, Keyword.get(opts, :history, :clone)),
          {:ok, phase} <-
            run_phase(owner, run_id, run_root, child_sup, config, specs, history, opts, 0) do
@@ -577,6 +578,40 @@ defmodule Elara.Coordinator.Engine do
     spec
     |> Map.put_new(:role, :general)
     |> Map.put_new(:coding, Map.get(spec, :role) == :coding)
+  end
+
+  defp validate_child_specs(pattern, specs, opts) do
+    pattern
+    |> additional_specs(opts)
+    |> Kernel.++(specs)
+    |> Enum.reduce_while(:ok, fn spec, :ok ->
+      case validate_child_spec(spec) do
+        :ok -> {:cont, :ok}
+        {:error, reason} -> {:halt, {:error, {:invalid_child_spec, reason}}}
+      end
+    end)
+  end
+
+  defp additional_specs(:candidates, opts), do: optional_spec(Keyword.get(opts, :judge))
+  defp additional_specs(:map_reduce, opts), do: optional_spec(Keyword.get(opts, :reducer))
+  defp additional_specs(_pattern, _opts), do: []
+
+  defp optional_spec(nil), do: []
+  defp optional_spec(spec), do: [spec]
+
+  defp validate_child_spec(spec) when not is_map(spec), do: {:error, :map_required}
+
+  defp validate_child_spec(spec) do
+    cond do
+      not (is_binary(Map.get(spec, :id)) and Map.get(spec, :id) != "") ->
+        {:error, :id_required}
+
+      not (is_binary(Map.get(spec, :prompt)) and Map.get(spec, :prompt) != "") ->
+        {:error, :prompt_required}
+
+      true ->
+        :ok
+    end
   end
 
   defp validate_unique_ids(pattern, specs, opts) do

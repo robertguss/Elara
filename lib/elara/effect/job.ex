@@ -5,6 +5,8 @@ defmodule Elara.Effect.Job do
   @job_id_version 1
   @digest_version 1
   @marker_schema_version 1
+  @operation_kinds [:declarative_write, :literal_patch, :opaque_shell, :run_tool]
+  @placements [:local, :remote, :any]
 
   @enforce_keys [
     :job_id,
@@ -128,6 +130,24 @@ defmodule Elara.Effect.Job do
 
   @spec schema_version() :: pos_integer()
   def schema_version, do: @schema_version
+
+  @doc false
+  @spec decode(binary()) :: {:ok, t()} | {:error, :invalid_job}
+  def decode(binary) when is_binary(binary) do
+    case :erlang.binary_to_term(binary, [:safe]) do
+      %__MODULE__{
+        operation_kind: operation_kind,
+        authority_scope: %{placement: placement}
+      } = job
+      when operation_kind in @operation_kinds and placement in @placements ->
+        {:ok, job}
+
+      _term ->
+        {:error, :invalid_job}
+    end
+  rescue
+    ArgumentError -> {:error, :invalid_job}
+  end
 
   defp canonical_capabilities(capabilities) when is_list(capabilities) do
     capabilities

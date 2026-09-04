@@ -19,9 +19,11 @@ mix elara.chat --continue "continue the previous investigation"
 ```
 
 Session files live under `~/.elara/sessions/<cwd-key>/`. They are scoped by the
-session working directory and created with mode `0600`. Starting plain
-`mix elara.chat` creates a new session; it does not silently continue an old
-one.
+session working directory. Durable JSONL, effects SQLite, `.flight`, and `.lock`
+artifacts are created with mode `0600`. SQLite's transient `-wal` and `-shm`
+sidecars exist only while a database is open and may have a mode determined by
+SQLite and the process umask. Starting plain `mix elara.chat` creates a new
+session; it does not silently continue an old one.
 
 Only one turn runs in a session at a time. A second prompt and commands that
 change history are refused until the active turn finishes or you run

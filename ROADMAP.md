@@ -14,7 +14,9 @@ roadmaps or archived planning documents in the working tree.
 is implemented and pushed through `0e1cbda`; acceptance is still IN PROGRESS.
 The checklist below is the current handoff. Update it and the item's Result
 after each verified milestone; end each work session with the next concrete
-action and who can perform it. Close test terminal windows after testing.
+action and who can perform it. Continue available agent work autonomously,
+committing and pushing completed changes; pause only for necessary owner input
+or an external blocker. Close test terminal windows after testing.
 
 | Checkpoint | State | Evidence or next action |
 | --- | --- | --- |
@@ -25,7 +27,7 @@ action and who can perform it. Close test terminal windows after testing.
 | System clipboard data path in both terminals | Complete for API path | Native paste actions preserve Unicode, newlines, and tabs; Enter alone submits |
 | Physical keys with the owner's terminal settings | Open — owner input needed | Check Ctrl-J, Alt/Shift-Enter, Cmd-V, history, and safe paste in both terminals |
 | Ghostty resize and visual check | Open — owner input needed | Exercise 80x24, 120x40, 180x45 while editing/selected; confirm cursor and draft survive |
-| Full suite on supported host | Open — agent work | No GitHub Actions runs found for this branch; run Linux checks or separately scope the three baseline macOS process-state test failures |
+| Full suite on supported host | Complete | Linux ARM64: 338/338 Mix tests; both Rust crates pass format/Clippy/tests; container network disconnected |
 | TUI-4 transcript navigation | Blocked | Start only after TUI-3 acceptance and recorded completion |
 
 **Next action:** conduct the short physical-key and Ghostty resize exercise
@@ -1258,6 +1260,21 @@ Verification recorded so far:
   Isolated rerun and an unchanged archive of baseline
   `cc6e778fd3f1951fe7fcdc68fc3a2c1f79b094ae` both reproduced 17/20 passing with
   the same three failures. No effect code or assertions were altered.
+- Supported-host acceptance subsequently passed on Linux ARM64 against exact
+  commit `7aa6bd5` (product code through `0e1cbda`): **338/338 Mix tests** in
+  19.9 seconds, seed 422801. Mix format and warnings-as-errors compile passed.
+  Both Rust crates passed format and all-target Clippy with `-D warnings`;
+  TUI tests: 25 passed; exec-stub tests: 3 passed. Environment: OrbStack container
+  using `hexpm/elixir:1.20.2-erlang-29.0.3-ubuntu-noble-20260610`, Elixir 1.20.2,
+  OTP 29.0.3, Rust 1.98.1. Dependencies were fetched before disconnecting the
+  container network; all verification then ran offline with no provider credentials.
+  The first container run exposed fixture prerequisites: root bypasses the
+  unreadable-file test and a plain source archive lacks Git history needed by
+  coordinator worktrees. Importing the exact commit via a local Git bundle and
+  running as an unprivileged user resolved both; the 25 affected tests passed
+  before the full rerun. No product code or tests were changed or skipped.
+  Logs: `/tmp/elara-tui3-check/linux-mix-final.log`, `linux-rust.log`, and
+  `linux-targeted.log`. The disposable container was removed after verification.
 - Installed terminal versions: Ghostty 1.3.1; WezTerm
   20240203-110809-5046fc22. Computer Use denied access to both apps, including
   a retry requested by the owner. The subsequently requested built-in shell
@@ -1294,9 +1311,9 @@ Verification recorded so far:
   These API actions do not verify the physical Cmd-V shortcut in either app.
 
 Remaining acceptance: Ghostty interaction/resize, physical modifier mappings
-and clipboard shortcuts in both terminals,
-full-suite passing evidence on a supported host (or a separately scoped fix for
-the baseline macOS tests). Keep TUI-4 BLOCKED.
+and clipboard shortcuts in both terminals. Supported-host full-suite evidence
+is now complete; the existing macOS test portability limitation remains recorded
+above. Keep TUI-4 BLOCKED until the remaining native acceptance is verified.
 
 Review: completed `ce-code-review` run `tui3-206f19d8`, including independent
 Claude review and a fresh validator. No remaining actionable findings after

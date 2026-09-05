@@ -1,14 +1,18 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-05 (CTRL-1 and
-> THREAD-1/THREAD-2 pushed; CTX-1 next) · **Owner:** solo development with AI
-> collaborators
+> THREAD-1/THREAD-2 pushed; CTX-1 verified, publication pending) · **Owner:**
+> solo development with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**CTX-1:** IN PROGRESS on `ctx-1`, not committed or pushed. Implementation,
+offline checks and real subscription continuation acceptance passed. Publication
+awaits owner approval; SPLIT-5 remains blocked until publication.
 
 **THREAD-2:** DONE and pushed on `thread-2`: 434 Mix tests, 111 Rust TUI tests
 and 6 execution-stub tests pass. See its Result for the published commit,
@@ -43,8 +47,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** begin CTX-1. No CTX-1 implementation is included here. Manual
-acceptance requiring the absent owner stays deferred.
+**Next action:** obtain CTX-1 publication approval. Physical-terminal acceptance
+requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -218,7 +222,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | CTRL-1   | DONE     | Durable input queue, steering, and execution preferences      | TUI-6            |
 | THREAD-1 | DONE     | Persistent delegated threads and preserved workspaces         | CTRL-1           |
 | THREAD-2 | DONE     | Durable thread communication and TUI navigation               | THREAD-1         |
-| CTX-1    | TODO     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
+| CTX-1    | IN PROGRESS | Automatic handoff and uninterrupted continuation              | THREAD-2         |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -2187,7 +2191,7 @@ remains deferred. Next: CTX-1.
 
 ## CTX-1 — Automatic handoff and uninterrupted continuation
 
-**Status:** TODO
+**Status:** IN PROGRESS
 
 ### Outcome
 
@@ -2247,6 +2251,71 @@ threads available for reference; do not silently compact the same history.
 - Record one real subscription continuation across a handoff, showing useful
   retained context and ongoing work, plus shared checks. No generic exactly-once
   model-request or external-effect guarantee is claimed.
+
+### Result (2026-09-05, implementation and subscription acceptance passed)
+
+Implemented on local `ctx-1`, not committed or pushed. Pre-request accounting
+uses catalog limits, conservative UTF-8/image estimates, a reported-usage floor,
+and explicit output/tool/handoff/uncertainty reserves. The non-modal warning is
+labeled as an estimate; the 16 MiB protocol budget remains separate.
+
+The existing Session loop freezes source model work at a safe boundary, saves a
+fixed successor identity, creates it paused, transfers delivery ownership, and
+durably activates one logical continuation. Current instructions and skill
+discovery reload; canonical settings/capabilities are independent of text.
+Handoff text is a deterministic assistant-authored evidence index, not a lossy
+replacement history or an invented completion narrative. Original IDs, roles,
+attachments, owner corrections, tool outcomes, queued inputs, and child records
+remain retrievable. Repeated handoffs reread originals. Child waits, completion
+recovery, navigation and late delivery follow continuation ownership while
+historical parentage stays unchanged.
+
+The controlling Rust TUI explicitly attaches a fresh snapshot, retaining its
+unsent Unicode draft, attachments and appearance. Observers do not auto-control;
+failed attachments retain the draft and surface a retry path. Paused inputs and
+deliberate stop are preserved. Failed generation/validation keeps the source;
+impossible fresh contexts and eight-handoff chains are bounded. A consumed
+continuation interrupted by VM loss is failed/paused rather than replayed.
+
+Offline evidence: 448 Mix tests pass, including 14 CTX tests covering streaming,
+real read-tool settlement, queued input ownership, immutable images, late child
+reports, child rollover waits, malicious instruction claims, repeated owner
+corrections, and impossible budgets. Separate BEAMs halt at prepared, created,
+transferred, activation-persisted, activated and started stages, proving one
+successor and no consumed-request replay. The actual TUI/PTY submits its
+retained draft after observing successor-only output; this is not just a frame
+fixture. `mix format --check-formatted`, `mix compile --warnings-as-errors`, and
+`mix test` pass. Both Rust crates pass `cargo fmt --check`,
+`cargo clippy --all-targets -- -D warnings`, and `cargo test`: 112 TUI tests (94
+library, 2 binary, 13 attachment, 3 lifecycle) and 6 execution-stub tests.
+Inspected actual-terminal captures under `.amp/in/artifacts/ctx-warning.png` and
+`.amp/in/artifacts/ctx-continuation.png` show the non-modal estimate and
+automatic successor with retained Unicode draft. These are rasterized terminal
+captures, not physical-terminal color/keyboard acceptance.
+
+Real subscription acceptance passed after owner device login: gpt-5.5 source
+`hX2KvmNB3ODfZcOGGTDc2w` read the ORBIT brief and computed 17 × 23 = 391. A
+second owner message corrected red to BLUE and included explicitly nonsemantic
+padding to force the configured 100,000-token preflight budget (not the
+provider's actual context limit). Automatic successor `_My_P8YzHkQ1JzCvKXfEiQ`
+retrieved original source evidence with `thread_read`, wrote `report.txt`, and
+read it back. The verified report retained ORBIT, `cedar-417`, 17 seats, unit
+price 23, total 391, and BLUE. Exactly one handoff inbox entry was consumed; no
+approval or manual continuation send occurred. The successor made 14 real
+provider requests, with reported input usage from 2,132 to 5,028 tokens. Its
+initial read used a transport message ID instead of a source-message selector;
+it recovered using bounded transcript offsets. Final answer: "Created and
+verified `report.txt` with corrected color BLUE and total 391." The sanitized
+call/usage/result record is `.amp/in/artifacts/ctx-live-subscription.json`;
+original sessions remain in the session store. This is live-provider evidence,
+separate from the offline PTY rendering evidence above.
+
+Limits: this bounded live task is not a long-running daily-driver trial. The
+legacy synchronous ask returns `:interrupted` for the frozen source while the
+successor continues through its own event stream. No generic exactly-once model
+request/external effect guarantee is claimed. Physical-terminal owner acceptance
+remains deferred. CTX-1 is not DONE until its verified changes are published
+with approval; SPLIT-5 remains BLOCKED.
 
 ## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
 

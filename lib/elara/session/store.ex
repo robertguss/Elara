@@ -58,6 +58,7 @@ defmodule Elara.Session.Store do
     :provider_settings,
     :lock_path,
     :lock_handle,
+    context: %{},
     entries: [],
     inbox: [],
     agent_wake_count: 0,
@@ -126,6 +127,7 @@ defmodule Elara.Session.Store do
          name: header.name,
          parent_session: header.parent_session,
          provider_settings: header.provider_settings,
+         context: header.context,
          inbox: header.inbox,
          agent_wake_count: header.agent_wake_count,
          inputs_paused: header.inputs_paused,
@@ -521,10 +523,11 @@ defmodule Elara.Session.Store do
           {:ok, t()} | {:error, term()}
   def set_provider_settings(store, settings), do: save(%{store | provider_settings: settings})
 
-  defp save(%__MODULE__{persist?: false} = store), do: {:ok, store}
-  defp save(%__MODULE__{path: nil}), do: {:error, :no_path}
+  @doc false
+  def save(%__MODULE__{persist?: false} = store), do: {:ok, store}
+  def save(%__MODULE__{path: nil}), do: {:error, :no_path}
 
-  defp save(store) do
+  def save(store) do
     lines = [encode_header(store) | Enum.map(store.entries, &encode_entry/1)]
     payload = Enum.map_join(lines, "\n", &JSON.encode!/1) <> "\n"
     dir = Path.dirname(store.path)
@@ -547,6 +550,7 @@ defmodule Elara.Session.Store do
     |> put_optional("name", store.name)
     |> put_optional("parentSession", store.parent_session)
     |> put_optional("providerSettings", store.provider_settings)
+    |> put_optional("context", if(store.context != %{}, do: store.context))
     |> put_optional("agentWakeCount", if(store.agent_wake_count > 0, do: store.agent_wake_count))
     |> put_optional(
       "inbox",
@@ -663,6 +667,7 @@ defmodule Elara.Session.Store do
         "name",
         "parentSession",
         "providerSettings",
+        "context",
         "agentWakeCount",
         "inbox"
       ])
@@ -694,6 +699,7 @@ defmodule Elara.Session.Store do
 
       true ->
         with count when is_integer(count) and count >= 0 <- Map.get(header, "agentWakeCount", 0),
+             context when is_map(context) <- Map.get(header, "context", %{}),
              {:ok, inbox, paused, active_id} <- decode_inbox(Map.get(header, "inbox")),
              true <- Enum.all?(inbox, &(&1.session_id == id)) do
           {:ok,
@@ -705,6 +711,7 @@ defmodule Elara.Session.Store do
              name: Map.get(header, "name"),
              parent_session: Map.get(header, "parentSession"),
              provider_settings: Map.get(header, "providerSettings"),
+             context: context,
              inbox: inbox,
              agent_wake_count: count,
              inputs_paused: paused,

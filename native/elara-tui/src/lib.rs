@@ -247,6 +247,31 @@ impl Model {
         sessions::reply(self, frame)
     }
 
+    /// A link is not an attachment. The driver must obtain a fresh snapshot first.
+    pub fn handoff_target(&self) -> Option<String> {
+        let h = &self.projection.view["inbox"]["handoff"];
+        (self.connection == ConnectionState::Connected
+            && self.mode == "control"
+            && self.inbox.pending.is_none()
+            && h["stage"] == "started")
+            .then(|| h["id"].as_str().map(str::to_owned))
+            .flatten()
+    }
+
+    pub fn inherit_handoff_draft(&mut self, source: &Model) {
+        self.editor = source.editor.clone();
+        self.editor.set_history(user_prompts(&self.projection.view));
+        let supported = self.attachments.supported;
+        self.attachments = source.attachments.clone();
+        self.attachments.reconnect(supported);
+        self.appearance = source.appearance;
+        self.thinking_visible = source.thinking_visible;
+        self.notice = Some(format!(
+            "Continued from {} · original evidence retained",
+            source.session_id
+        ));
+    }
+
     fn selected_tool(&self) -> Option<String> {
         let selected = self.transcript.borrow().selected.clone()?;
         selected
@@ -1420,7 +1445,15 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
     } else {
         &prompt_title
     };
-    let bindings = if model.enhanced_keyboard {
+    let continuity = &model.projection.view["inbox"];
+    let bindings = if !model.safe_paste
+        && chunks[2].width < 120
+        && (continuity["context"]["warning"] == true
+            || continuity["handoff"].is_object()
+            || continuity["source"].is_string())
+    {
+        " Ctrl-X stop · F12 queue · Ctrl-J newline · F1 all bindings "
+    } else if model.enhanced_keyboard {
         " Alt/Shift-Enter or Ctrl-J newline · Alt-↑/↓ history "
     } else {
         " Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history "

@@ -14,7 +14,7 @@ defmodule Elara.Session do
   alias Elara.Protocol
   alias Elara.Provider
   alias Elara.Executor.{Request, Router}
-  alias Elara.Session.{Core, Store}
+  alias Elara.Session.{Context, Core, Handoff, Store}
   alias Elara.Tool
   alias Elara.Tool.{Ctx, PluginRef}
 
@@ -60,6 +60,8 @@ defmodule Elara.Session do
       :effect_executor_explicit?,
       :effect_fault_hook,
       :base_system,
+      :context_limit,
+      :handoff_fault_hook,
       skills: %{skills: %{}, diagnostics: []},
       skill_options: [],
       instructions: %{},
@@ -87,6 +89,10 @@ defmodule Elara.Session do
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts)
+  end
+
+  def start_handoff(id, paused) do
+    with {:ok, pid} <- Elara.session_pid(id), do: GenServer.call(pid, {:start_handoff, paused})
   end
 
   @spec child_spec(keyword()) :: Supervisor.child_spec()
@@ -161,6 +167,8 @@ defmodule Elara.Session do
             skill_options: Keyword.get(opts, :skill_options, []),
             skills: Keyword.get(opts, :skills, %{skills: %{}, diagnostics: []}),
             instructions: Keyword.get(opts, :instructions, %{}),
+            context_limit: Keyword.get(opts, :context_limit),
+            handoff_fault_hook: Keyword.fetch!(opts, :handoff_fault_hook),
             tool_timeout_ms: tool_timeout_ms,
             base_tools: core.config.tools,
             plugins: plugins
@@ -171,6 +179,7 @@ defmodule Elara.Session do
           if recovered?, do: send(self(), :inbox_changed)
           if effect_recovery_pending == [], do: send(self(), :drain_inputs)
           if effect_recovery_pending != [], do: send(self(), :check_effect_recovery)
+          if Handoff.frozen?(store), do: send(self(), :advance_handoff)
           {:ok, %{shell | recorder: recorder}}
         else
           {:error, reason} ->
@@ -193,6 +202,10 @@ defmodule Elara.Session do
   end
 
   @impl true
+  def handle_call({:ask, _}, _from, %{store: %{context: %{"handoff" => h}}} = shell) do
+    {:reply, {:error, {:handoff, Map.take(h, ["id", "stage"])}}, shell}
+  end
+
   def handle_call({:ask, prompt}, from, shell) do
     if Core.idle?(shell.core) do
       {:noreply, feed({:ask, prompt}, %{shell | pending_reply: from})}
@@ -250,6 +263,14 @@ defmodule Elara.Session do
     {:reply, status, shell}
   end
 
+  def handle_call(
+        {:ask_async, _} = command,
+        _from,
+        %{store: %{context: %{"handoff" => _}}} = shell
+      ) do
+    {:reply, forward_handoff(shell, command), shell}
+  end
+
   def handle_call({:ask_async, prompt}, _from, shell) do
     if Core.idle?(shell.core) do
       {:reply, :ok, feed({:ask, prompt}, shell)}
@@ -263,6 +284,24 @@ defmodule Elara.Session do
   end
 
   def handle_call(:thread_store, _from, shell), do: {:reply, shell.store, shell}
+
+  def handle_call({:start_handoff, paused}, _from, shell) do
+    if shell.store.context["activated"] == false do
+      context = Map.put(shell.store.context, "activated", true)
+
+      case Store.save(%{shell.store | context: context, inputs_paused: paused}) do
+        {:ok, store} ->
+          shell.handoff_fault_hook.("activation_persisted")
+          send(self(), :drain_inputs)
+          {:reply, :ok, inbox_changed(%{shell | store: store})}
+
+        error ->
+          {:reply, error, shell}
+      end
+    else
+      {:reply, :ok, shell}
+    end
+  end
 
   def handle_call(:materialized_view, _from, shell) do
     {:reply, materialized_view(shell), shell}
@@ -281,6 +320,14 @@ defmodule Elara.Session do
 
   # Run the Git transaction while this session cannot dispatch a new turn.
   # Git's index checks additionally protect against edits outside this VM.
+  def handle_call(
+        {:workspace_operation, _, _} = command,
+        _from,
+        %{store: %{context: %{"handoff" => _}}} = shell
+      ) do
+    {:reply, forward_handoff(shell, command), shell}
+  end
+
   def handle_call({:workspace_operation, operation, retire?}, _from, shell) do
     uncertain? =
       Enum.any?(
@@ -365,7 +412,7 @@ defmodule Elara.Session do
   end
 
   def handle_call(:clone, _from, shell) do
-    if Elara.Threads.managed?(shell.id) do
+    if Elara.Threads.managed?(shell.id) or shell.store.context != %{} do
       {:reply, {:error, :managed_child_use_delegate_history}, shell}
     else
       idle_store_change(shell, fn store ->
@@ -377,7 +424,7 @@ defmodule Elara.Session do
   end
 
   def handle_call({:fork, id}, _from, shell) do
-    if Elara.Threads.managed?(shell.id) do
+    if Elara.Threads.managed?(shell.id) or shell.store.context != %{} do
       {:reply, {:error, :managed_child_use_delegate_history}, shell}
     else
       idle_store_change(shell, fn store -> Store.fork_before_user(store, id) end)
@@ -397,7 +444,8 @@ defmodule Elara.Session do
 
   def handle_call({:hydrate, store}, _from, shell) do
     cond do
-      Elara.Threads.managed?(shell.id) or Elara.Threads.managed?(store.id) ->
+      Elara.Threads.managed?(shell.id) or Elara.Threads.managed?(store.id) or
+        shell.store.context != %{} or store.context != %{} ->
         {:reply, {:error, :managed_child_open_independently}, shell}
 
       Core.idle?(shell.core) ->
@@ -496,6 +544,10 @@ defmodule Elara.Session do
   def handle_call({:input_status, id}, _from, shell),
     do: {:reply, {:ok, find_input(shell, id)}, shell}
 
+  def handle_call(:resume_inputs, _from, %{store: %{context: %{"handoff" => _}}} = shell) do
+    {:reply, forward_handoff(shell, :resume_inputs), shell}
+  end
+
   def handle_call(:resume_inputs, _from, shell) do
     with {:ok, store} <-
            Store.put_inbox(
@@ -526,6 +578,9 @@ defmodule Elara.Session do
       Path.expand(requesting_cwd) != shell.cwd ->
         {:reply, {:error, :session_not_found}, shell}
 
+      Handoff.frozen?(shell.store) ->
+        {:reply, {:error, :handoff_evidence_retained}, shell}
+
       not Core.idle?(shell.core) ->
         {:reply, {:error, :active_stop_first}, shell}
 
@@ -546,13 +601,32 @@ defmodule Elara.Session do
   @impl true
   def handle_cast(:interrupt, shell) do
     shell = %{abort_running_tasks(shell) | pending_effects: %{}}
-    shell = pause_existing_inputs(shell)
+    shell = shell |> stop_handoff() |> pause_existing_inputs()
     store = shell.store
     {:noreply, feed(:interrupt, if(store.inbox == [], do: shell, else: inbox_changed(shell)))}
   end
 
   def handle_info(:drain_inputs, shell), do: {:noreply, drain_inputs(shell)}
   def handle_info(:inbox_changed, shell), do: {:noreply, inbox_changed(shell)}
+
+  def handle_info(:advance_handoff, shell) do
+    case Handoff.outgoing(shell.store) do
+      %{"stage" => stage} when stage in ["prepared", "created", "transferred", "started"] ->
+        case Handoff.advance(shell) do
+          {:ok, shell} ->
+            shell.handoff_fault_hook.(Handoff.outgoing(shell.store)["stage"])
+            if stage != "started", do: send(self(), :advance_handoff)
+            {:noreply, inbox_changed(shell)}
+
+          {:error, reason} ->
+            {:ok, shell} = Handoff.fail(shell, reason)
+            {:noreply, inbox_changed(shell)}
+        end
+
+      _ ->
+        {:noreply, shell}
+    end
+  end
 
   def handle_info(:check_effect_recovery, shell) do
     case pending_receipt_effects(shell) do
@@ -1275,6 +1349,16 @@ defmodule Elara.Session do
   end
 
   defp run_effect({:call_provider, core_ref, request}, _effect_id, shell, _patch_context) do
+    budget = Context.budget(shell.core, shell.context_limit)
+
+    cond do
+      Handoff.frozen?(shell.store) -> feed(:interrupt, shell)
+      budget["handoff_required"] -> begin_handoff(shell, core_ref)
+      true -> run_effect({:dispatch_provider, core_ref, request}, nil, shell, nil)
+    end
+  end
+
+  defp run_effect({:dispatch_provider, core_ref, request}, _, shell, _) do
     if Elara.Threads.acquire_slot(shell.id) do
       shell = %{shell | presented_instructions: shell.instructions}
       {mod, cfg} = Elara.Provider.Visibility.configure(shell.provider, request.settings)
@@ -1526,9 +1610,10 @@ defmodule Elara.Session do
     patch_ops = Protocol.patch_ops(event, shell.core, patch_context)
 
     patch_ops =
-      if event == :inbox_changed,
-        do: patch_ops ++ [%{"op" => "set_inbox", "inbox" => inbox_view(shell)}],
-        else: patch_ops
+      if event == :inbox_changed or match?({:message_appended, _}, event) or
+           match?({:message_appended, _, :streamed}, event),
+         do: patch_ops ++ [%{"op" => "set_inbox", "inbox" => inbox_view(shell)}],
+         else: patch_ops
 
     Enum.each(shell.attachments, fn
       {pid, %{protocol: 2}} ->
@@ -1559,8 +1644,10 @@ defmodule Elara.Session do
           shell
       end
 
-    Elara.Threads.lifecycle(shell.id, event)
-    Elara.Threads.Communication.lifecycle(shell.store, event)
+    unless Handoff.frozen?(shell.store) do
+      Elara.Threads.lifecycle(shell.id, event)
+      Elara.Threads.Communication.lifecycle(shell.store, event)
+    end
 
     case event do
       {:turn_ended, outcome} -> send(self(), {:finish_input, outcome})
@@ -1768,11 +1855,7 @@ defmodule Elara.Session do
   end
 
   defp handle_attached_command({:ask, prompt}, shell) when is_binary(prompt) do
-    if Core.idle?(shell.core) do
-      {:reply, :ok, feed({:ask, prompt}, shell)}
-    else
-      {:reply, {:error, :busy}, shell}
-    end
+    handle_call({:ask_async, prompt}, nil, shell)
   end
 
   defp handle_attached_command(:input_workspace, shell), do: {:reply, {:ok, shell.cwd}, shell}
@@ -1787,7 +1870,7 @@ defmodule Elara.Session do
   end
 
   defp handle_attached_command(:interrupt, shell) do
-    shell = shell |> abort_running_tasks() |> pause_existing_inputs()
+    shell = shell |> abort_running_tasks() |> stop_handoff() |> pause_existing_inputs()
     store = shell.store
     {:reply, :ok, feed(:interrupt, if(store.inbox == [], do: shell, else: inbox_changed(shell)))}
   end
@@ -1818,6 +1901,9 @@ defmodule Elara.Session do
 
   defp input_ready(shell, images) do
     cond do
+      Handoff.frozen?(shell.store) ->
+        {:error, :handoff_source_open_successor}
+
       not Core.idle?(shell.core) ->
         {:error, :busy}
 
@@ -1828,6 +1914,10 @@ defmodule Elara.Session do
       true ->
         :ok
     end
+  end
+
+  defp change_provider_settings(%{store: %{context: %{"handoff" => _}}} = shell, settings) do
+    {:reply, forward_handoff(shell, {:provider_settings, settings}), shell}
   end
 
   defp change_provider_settings(shell, settings) do
@@ -1871,7 +1961,7 @@ defmodule Elara.Session do
       shell.controller != caller ->
         {:reply, {:error, :not_controller}, shell}
 
-      Elara.Threads.managed?(shell.id) ->
+      Elara.Threads.managed?(shell.id) or shell.store.context != %{} ->
         {:reply, {:error, :managed_child_use_delegate_history}, shell}
 
       not Core.idle?(shell.core) ->
@@ -1909,6 +1999,17 @@ defmodule Elara.Session do
   defp submit_input(%{id: id, sender_id: sender, kind: kind, user: %Message.User{} = user}, shell)
        when is_binary(id) and id != "" and is_binary(sender) and sender != "" and
               kind in [:normal, :steer, :agent, :report] do
+    if Handoff.frozen?(shell.store) do
+      attrs = %{id: id, sender_id: sender, kind: kind, user: user}
+      {:reply, forward_handoff(shell, {:submit_input, attrs}), shell}
+    else
+      accept_input(id, sender, kind, user, shell)
+    end
+  end
+
+  defp submit_input(_, shell), do: {:reply, {:error, :invalid_input}, shell}
+
+  defp accept_input(id, sender, kind, user, shell) do
     case find_input(shell, id) do
       nil ->
         size = byte_size(JSON.encode!(Store.encode_message(user)))
@@ -1966,7 +2067,9 @@ defmodule Elara.Session do
     end
   end
 
-  defp submit_input(_, shell), do: {:reply, {:error, :invalid_input}, shell}
+  defp cancel_input(id, %{store: %{context: %{"handoff" => _}}} = shell) do
+    {:reply, forward_handoff(shell, {:cancel_input, id}), shell}
+  end
 
   defp cancel_input(id, shell) when is_binary(id) do
     case find_input(shell, id) do
@@ -1998,18 +2101,47 @@ defmodule Elara.Session do
   end
 
   defp cancel_input(_, shell), do: {:reply, {:error, :invalid_input}, shell}
-  defp find_input(shell, id), do: Enum.find(shell.store.inbox, &(&1.id == id))
+
+  defp find_input(shell, id) do
+    local = Enum.find(shell.store.inbox, &(&1.id == id))
+
+    if Handoff.frozen?(shell.store) and (is_nil(local) or local.state in [:queued, :accepted]) do
+      case forward_handoff(shell, {:input_status, id}) do
+        {:ok, entry} -> entry
+        _ -> local
+      end
+    else
+      local ||
+        Enum.find_value(shell.store.context["sources"] || [], fn source ->
+          with {:ok, store} <- Store.open(source["path"]) do
+            Enum.find(
+              store.inbox,
+              &(&1.id == id and &1.state in [:consumed, :cancelled, :failed])
+            )
+          else
+            _ -> nil
+          end
+        end)
+    end
+  end
 
   defp drain_inputs(%{effect_recovery_pending: [_ | _]} = shell), do: shell
   defp drain_inputs(%{store: %{inputs_paused: true}} = shell), do: shell
   defp drain_inputs(%{store: %{active_input_id: id}} = shell) when not is_nil(id), do: shell
+  defp drain_inputs(%{store: %{context: %{"handoff" => _}}} = shell), do: shell
 
   defp drain_inputs(shell) do
     if Core.idle?(shell.core) do
       pending = Enum.filter(shell.store.inbox, &(&1.state in [:queued, :accepted]))
       entry = Enum.find(pending, &(&1.kind == :steer)) || List.first(pending)
 
-      if entry && not (entry.kind in [:agent, :report] and shell.store.agent_wake_count >= 8) do
+      continuation? =
+        not is_nil(entry) and is_binary(shell.store.context["source"]) and
+          entry.id == "handoff:" <> shell.id
+
+      if entry &&
+           (continuation? or
+              not (entry.kind in [:agent, :report] and shell.store.agent_wake_count >= 8)) do
         jobs =
           if shell.effect_journal do
             recovery_barrier_jobs(shell.store, shell.core.config.tools, shell.effect_journal, %{
@@ -2030,7 +2162,11 @@ defmodule Elara.Session do
 
           # Commit consumption and the User append together, never separately.
           count =
-            if entry.kind in [:agent, :report], do: shell.store.agent_wake_count + 1, else: 0
+            cond do
+              continuation? -> shell.store.agent_wake_count
+              entry.kind in [:agent, :report] -> shell.store.agent_wake_count + 1
+              true -> 0
+            end
 
           store = %{
             shell.store
@@ -2101,7 +2237,10 @@ defmodule Elara.Session do
         &if(&1.id == id, do: %{&1 | state: :failed, error: "session restarted"}, else: &1)
       )
 
-    case Store.put_inbox(store, inbox, store.inputs_paused) do
+    paused =
+      store.inputs_paused or (is_binary(store.context["source"]) and id == "handoff:" <> store.id)
+
+    case Store.put_inbox(store, inbox, paused) do
       {:ok, store} -> {store, true}
       {:error, _} -> {store, false}
     end
@@ -2146,12 +2285,78 @@ defmodule Elara.Session do
           }
         end),
       "paused" => shell.store.inputs_paused,
+      "context" => Context.budget(shell.core, shell.context_limit),
+      "handoff" =>
+        if(Handoff.outgoing(shell.store), do: Map.drop(Handoff.outgoing(shell.store), ["path"])),
+      "source" => shell.store.context["source"],
       "wake_budget_exhausted" => shell.store.agent_wake_count >= 8,
       "execution" => %{
         "mode" => "trusted_local",
         "allowed_capabilities" => shell.allowed_capabilities
       }
     }
+  end
+
+  defp begin_handoff(shell, core_ref) do
+    jobs =
+      if shell.effect_journal do
+        recovery_barrier_jobs(shell.store, shell.core.config.tools, shell.effect_journal, %{
+          executor_explicit?: shell.effect_executor_explicit?
+        })
+      else
+        []
+      end
+
+    shell = %{
+      shell
+      | effect_recovery_pending: pending_receipt_effects(%{shell | effect_recovery_pending: jobs})
+    }
+
+    case Handoff.prepare(shell) do
+      {:ok, shell} ->
+        shell.handoff_fault_hook.("prepared")
+        shell = feed(:interrupt, shell)
+        send(self(), :advance_handoff)
+        inbox_changed(shell)
+
+      {:error, reason} ->
+        feed(
+          {:provider_result, core_ref,
+           {:error,
+            %Provider.Error{
+              kind: :resource_limit,
+              message: "Context handoff blocked: #{inspect(reason)}; original evidence preserved"
+            }}},
+          shell
+        )
+    end
+  end
+
+  defp stop_handoff(shell) do
+    case Handoff.outgoing(shell.store) do
+      nil ->
+        shell
+
+      %{"id" => id} ->
+        if id, do: Elara.interrupt(id)
+        {:ok, shell} = Handoff.stage(shell, "stopped")
+        shell
+
+      _ ->
+        shell
+    end
+  end
+
+  defp forward_handoff(shell, command) do
+    case Handoff.outgoing(shell.store) do
+      %{"delivery_owner" => id} ->
+        with {:ok, pid} <- Elara.session_pid(id), do: GenServer.call(pid, command)
+
+      _ ->
+        {:error, :handoff_not_ready}
+    end
+  catch
+    :exit, _ -> {:error, :handoff_successor_unavailable}
   end
 
   defp grant_control(:observe, _pid, _shell), do: :ok

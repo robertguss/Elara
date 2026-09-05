@@ -422,8 +422,27 @@ fn run_interactive(
         .map_err(|error| format!("terminal failed: {error}"))?;
     let mut dirty = true;
     let mut session_models: HashMap<String, Model> = HashMap::new();
+    let mut attempted_handoff = None;
 
     loop {
+        if let Some(target) = model.handoff_target()
+            && attempted_handoff.as_ref() != Some(&target)
+        {
+            attempted_handoff = Some(target.clone());
+            let source = model.clone();
+            match reconnect(args.port, &target, model, cursors, &mut session_models) {
+                Ok(new_connection) => {
+                    *connection = new_connection;
+                    model.inherit_handoff_draft(&source);
+                }
+                Err(error) => {
+                    model.notice = Some(format!(
+                        "Handoff link exists, but attach failed: {error}. Draft retained; use /sessions to retry."
+                    ))
+                }
+            }
+            dirty = true;
+        }
         if dirty {
             terminal
                 .draw(|frame| draw_model(frame, model))

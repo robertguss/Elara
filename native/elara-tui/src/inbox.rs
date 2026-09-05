@@ -266,6 +266,28 @@ pub(crate) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
 
 pub(crate) fn summary(model: &Model) -> String {
     let view = &model.projection.view["inbox"];
+    let context = if view["handoff"]["stage"] == "failed" {
+        format!(
+            "handoff failed: {} · ",
+            view["handoff"]["error"].as_str().unwrap_or("unknown error")
+        )
+    } else if let Some(stage) = view["handoff"]["stage"].as_str() {
+        format!(
+            "handoff {stage} → {} · ",
+            view["handoff"]["id"].as_str().unwrap_or("unavailable")
+        )
+    } else if view["context"]["warning"] == true {
+        format!(
+            "context warning: estimate ~{}/{} ({}) · ",
+            view["context"]["estimate_tokens"],
+            view["context"]["limit"],
+            view["context"]["confidence"].as_str().unwrap_or("low")
+        )
+    } else if let Some(source) = view["source"].as_str() {
+        format!("from {source} · ")
+    } else {
+        String::new()
+    };
     let count = view["entries"].as_array().map_or(0, |entries| {
         entries
             .iter()
@@ -273,7 +295,7 @@ pub(crate) fn summary(model: &Model) -> String {
             .count()
     });
     format!(
-        "{count} queued{} · F12 queue · Ctrl-S steer · Ctrl-X stop",
+        "{context}{count} queued{} · F12 queue · Ctrl-S steer · Ctrl-X stop",
         if view["paused"] == true {
             " (paused)"
         } else if view["wake_budget_exhausted"] == true {

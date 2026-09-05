@@ -18,8 +18,12 @@ defmodule Elara.Threads do
 
   @doc "Canonical direct relationships; text and supplied workspace paths never grant access."
   def related?(a, b) when is_binary(a) and is_binary(b) do
-    a == b or match?({:ok, %{"parent_id" => ^a}}, read(b)) or
-      match?({:ok, %{"parent_id" => ^b}}, read(a))
+    Enum.any?(Elara.Session.Handoff.lineage(a), fn source_a ->
+      Enum.any?(Elara.Session.Handoff.lineage(b), fn source_b ->
+        source_a == source_b or match?({:ok, %{"parent_id" => ^source_a}}, read(source_b)) or
+          match?({:ok, %{"parent_id" => ^source_b}}, read(source_a))
+      end)
+    end)
   end
 
   def related?(_, _), do: false
@@ -28,6 +32,23 @@ defmodule Elara.Threads do
 
   def navigation(id) do
     children = list(id).children
+
+    children =
+      case Elara.Session.Handoff.store(id) do
+        {:ok, %{context: %{"source" => source}, cwd: cwd}} ->
+          [
+            %{
+              "id" => source,
+              "assignment" => "↑ Handoff source",
+              "state" => "source",
+              "cwd" => cwd
+            }
+            | children
+          ]
+
+        _ ->
+          children
+      end
 
     case read(id) do
       {:ok, r} ->
@@ -90,7 +111,8 @@ defmodule Elara.Threads do
 
   @doc false
   def acquire_slot(id) do
-    not managed?(id) or Registry.keys(Elara.ThreadSlots, self()) != [] or
+    not Enum.any?(Elara.Session.Handoff.lineage(id), &managed?/1) or
+      Registry.keys(Elara.ThreadSlots, self()) != [] or
       Enum.any?(1..@limit, fn slot ->
         match?({:ok, _}, Registry.register(Elara.ThreadSlots, slot, id))
       end)
@@ -117,8 +139,11 @@ defmodule Elara.Threads do
         _ -> nil
       end
 
-    if status && managed?(id) do
-      if pid = Process.whereis(__MODULE__), do: send(pid, {:lifecycle, id, status})
+    if status do
+      original = Enum.find(Elara.Session.Handoff.lineage(id), &managed?/1)
+
+      if original && Process.whereis(__MODULE__),
+        do: send(Process.whereis(__MODULE__), {:lifecycle, original, status})
     end
 
     :ok
@@ -165,7 +190,9 @@ defmodule Elara.Threads do
     {:reply,
      %{
        limit: @limit,
-       children: Enum.filter(records(), &(&1["parent_id"] == parent)) |> Enum.map(&view/1)
+       children:
+         Enum.filter(records(), &(&1["parent_id"] in Elara.Session.Handoff.lineage(parent)))
+         |> Enum.map(&view/1)
      }, state}
   end
 
@@ -495,7 +522,9 @@ defmodule Elara.Threads do
   end
 
   defp depth(id) do
-    case read(id) do
+    original = Enum.find(Elara.Session.Handoff.lineage(id), &managed?/1) || id
+
+    case read(original) do
       {:ok, r} -> 1 + depth(r["parent_id"])
       _ -> 0
     end
@@ -522,21 +551,26 @@ defmodule Elara.Threads do
   end
 
   defp descendants(parent, records) do
-    Enum.flat_map(Enum.filter(records, &(&1["parent_id"] == parent)), fn r ->
-      [r["id"] | descendants(r["id"], records)]
-    end)
+    Enum.flat_map(
+      Enum.filter(records, &(&1["parent_id"] in Elara.Session.Handoff.lineage(parent))),
+      fn r ->
+        [r["id"] | descendants(r["id"], records)]
+      end
+    )
   end
 
   defp owned(parent, id) do
     with {:ok, r} <- read(id) do
-      if r["parent_id"] == parent, do: {:ok, r}, else: {:error, :not_child_of_parent}
+      if r["parent_id"] in Elara.Session.Handoff.lineage(parent),
+        do: {:ok, r},
+        else: {:error, :not_child_of_parent}
     end
   end
 
   defp view(r) do
     r = Map.delete(r, "options")
 
-    case Elara.status(r["id"]) do
+    case Elara.status(Elara.Session.Handoff.owner(r["id"])) do
       %{phase: phase} ->
         Map.put(
           r,

@@ -23,7 +23,8 @@ defmodule Elara do
   @spec start_session_under(Supervisor.supervisor(), keyword()) ::
           {:ok, String.t()} | {:error, term()}
   def start_session_under(supervisor, opts) do
-    with {:ok, opts} <- Elara.Threads.resume_options(opts) do
+    with {:ok, opts} <- Elara.Threads.resume_options(opts),
+         {:ok, opts} <- Elara.Session.Handoff.resume_options(opts) do
       do_start_session_under(supervisor, opts)
     end
   end
@@ -67,6 +68,8 @@ defmodule Elara do
         instructions: instructions,
         store: store,
         pause_inputs: Keyword.get(opts, :pause_inputs, false),
+        context_limit: Keyword.get(opts, :context_limit),
+        handoff_fault_hook: Keyword.get(opts, :handoff_fault_hook, fn _ -> :ok end),
         tool_timeout_ms: tool_timeout_ms,
         plugin_paths: plugin_paths,
         router: router,

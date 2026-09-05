@@ -72,6 +72,7 @@ defmodule Elara.MixProject do
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
       compilers: [:exec_stub] ++ Mix.compilers(),
+      test_ignore_filters: [~r"test/support/context_restart\.exs$"],
       deps: deps()
     ]
   end

@@ -82,7 +82,13 @@ defmodule Elara.Threads.Communication do
 
   def read_messages(sender, target, %{"message_id" => id} = opts) when is_binary(id) do
     with true <- Threads.related?(sender, target),
-         {:ok, message} <- load(Path.join(root(), digest({target, sender, id}) <> ".json")),
+         {:ok, message} <-
+           load(
+             Path.join(
+               root(),
+               digest({target, Elara.Session.Handoff.logical_id(sender), id}) <> ".json"
+             )
+           ),
          offset when is_integer(offset) and offset >= 0 <- Map.get(opts, "character_offset", 0) do
       text = JSON.encode!(message["evidence"] || %{"text" => message["text"]})
       page = String.slice(text, offset, 2048)
@@ -203,7 +209,7 @@ defmodule Elara.Threads.Communication do
           _ ->
             case Enum.find(Threads.all_records(), &(&1["parent_id"] == id)) do
               nil ->
-                {:error, :unknown_thread}
+                Elara.Session.Handoff.store(id)
 
               r ->
                 with {:ok, info} <- Store.find(r["parent_invocation_cwd"] || r["parent_cwd"], id),
@@ -251,7 +257,7 @@ defmodule Elara.Threads.Communication do
         {:reply, {:error, :thread_unavailable}, state}
 
       {:ok, _} when sender != recipient ->
-        case Elara.session_pid(recipient) do
+        case Elara.session_pid(Elara.Session.Handoff.owner(recipient)) do
           {:ok, target_pid} ->
             ref = Process.monitor(pid)
             target_ref = Process.monitor(target_pid)
@@ -278,7 +284,9 @@ defmodule Elara.Threads.Communication do
   def handle_info(:recover, state) do
     # Reconcile persisted completion after a crash between transcript and notification.
     for r <- Threads.all_records(),
-        {:ok, store} <- [Store.open(r["session_path"])],
+        {:ok, store} <- [thread_store(Elara.Session.Handoff.owner(r["id"]))],
+        not Elara.Session.Handoff.frozen?(store),
+        store.context["source"] == nil or store.context["activated"] == true,
         %Store.Entry{message: %Message.Assistant{tool_calls: [], text: text} = assistant} <- [
           Enum.find(store.entries, &(&1.id == store.leaf))
         ],
@@ -324,7 +332,7 @@ defmodule Elara.Threads.Communication do
   defp wake(state, id) do
     waiters =
       Enum.reduce(state.waiters, %{}, fn {ref, {from, sender, target, target_ref}} = item, acc ->
-        if target == id do
+        if Elara.Session.Handoff.logical_id(target) == Elara.Session.Handoff.logical_id(id) do
           Process.demonitor(ref, [:flush])
           Process.demonitor(target_ref, [:flush])
           GenServer.reply(from, status_view(sender, target))
@@ -346,7 +354,11 @@ defmodule Elara.Threads.Communication do
         (last_user &&
            Enum.any?(store.inbox, &(&1.kind == :report and &1.user == last_user.message)))
 
-    with false <- !!report_input?, {:ok, r} <- Threads.record(store.id) do
+    original = Enum.find(Elara.Session.Handoff.lineage(store.id), &Threads.managed?/1)
+
+    with false <- !!report_input?,
+         true <- not is_nil(original),
+         {:ok, r} <- Threads.record(original) do
       result =
         case outcome do
           {:completed, text} -> text
@@ -387,13 +399,14 @@ defmodule Elara.Threads.Communication do
       }
 
       id = "completion:#{store.leaf}"
-      key = digest({store.id, r["parent_id"], id})
+      recipient = Elara.Session.Handoff.logical_id(r["parent_id"])
+      key = digest({store.id, recipient, id})
       path = Path.join([root(), "completions", key <> ".json"])
 
       if not File.exists?(path) do
         write_json(path, %{
           "sender" => store.id,
-          "recipient" => r["parent_id"],
+          "recipient" => recipient,
           "id" => id,
           "text" => result || "No textual result",
           "evidence" => evidence
@@ -411,6 +424,7 @@ defmodule Elara.Threads.Communication do
   end
 
   defp accept(sender, recipient, id, text, kind, evidence) do
+    recipient = Elara.Session.Handoff.logical_id(recipient)
     key = digest({sender, recipient, id})
     existing = load(Path.join(root(), key <> ".json"))
 
@@ -479,7 +493,7 @@ defmodule Elara.Threads.Communication do
         }
 
         case session_call(
-               target,
+               Elara.Session.Handoff.owner(target),
                {:submit_input,
                 %{
                   id: "thread:" <> message["key"],
@@ -514,7 +528,7 @@ defmodule Elara.Threads.Communication do
         end
 
       phase =
-        case session_call(recipient, :status) do
+        case session_call(Elara.Session.Handoff.owner(recipient), :status) do
           %{phase: :idle} ->
             if(record["state"] in ["completed", "failed", "interrupted"],
               do: record["state"],
@@ -528,11 +542,12 @@ defmodule Elara.Threads.Communication do
             "unavailable"
         end
 
+      participants =
+        Elara.Session.Handoff.lineage(sender) ++ Elara.Session.Handoff.lineage(recipient)
+
       receipts =
         messages()
-        |> Enum.filter(
-          &(&1["sender"] in [sender, recipient] and &1["recipient"] in [sender, recipient])
-        )
+        |> Enum.filter(&(&1["sender"] in participants and &1["recipient"] in participants))
         |> Enum.sort_by(& &1["sequence"])
         |> Enum.map(&receipt/1)
 
@@ -546,12 +561,12 @@ defmodule Elara.Threads.Communication do
     id = "thread:" <> message["key"]
 
     entry =
-      case session_call(message["recipient"], {:input_status, id}) do
+      case session_call(Elara.Session.Handoff.owner(message["recipient"]), {:input_status, id}) do
         {:ok, entry} ->
           entry
 
         _ ->
-          case thread_store(message["recipient"]) do
+          case thread_store(Elara.Session.Handoff.owner(message["recipient"])) do
             {:ok, store} -> Enum.find(store.inbox, &(&1.id == id))
             _ -> nil
           end

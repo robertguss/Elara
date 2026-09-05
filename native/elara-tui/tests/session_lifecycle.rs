@@ -9,7 +9,8 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 fn attached(mode: &str, extensions: Value) -> elara_tui::Model {
-    let fixture = fixture_model("idle");
+    let mut fixture = fixture_model("idle");
+    fixture.projection.view["inbox"] = json!({"entries":[],"paused":false,"execution":{}});
     attached_model(
         &json!({
             "version": 2,
@@ -133,5 +134,32 @@ fn reconnect_preserves_editor_and_reingests_images_but_accepts_fresh_authority()
     let retry = model.next_attachment_request().unwrap();
     assert_eq!(retry["name"], "shot.png");
     assert_eq!(retry["base64"], reingest["base64"]);
+    let mut successor = attached("control", json!(["input_attachments_v1"]));
+    successor.session_id = "successor".into();
+    successor.inherit_handoff_draft(&model);
+    assert_eq!(successor.editor.text(), model.editor.text());
+    assert_eq!(successor.editor.cursor(), model.editor.cursor());
+    let transferred = successor.next_attachment_request().unwrap();
+    assert_eq!(transferred["base64"], retry["base64"]);
+    assert_eq!(transferred["name"], "shot.png");
     std::fs::remove_file(image).unwrap();
+}
+
+#[test]
+fn handoff_links_never_grant_observers_control_or_claim_disconnected_success() {
+    let mut model = attached("control", json!(["input_queue_v1"]));
+    model.projection.view["inbox"] = json!({"handoff":{"stage":"started","id":"next"}});
+    model.mode = "observe".into();
+    assert_eq!(model.handoff_target(), None);
+    model.mode = "control".into();
+    assert_eq!(model.handoff_target(), Some("next".into()));
+    model.mark_disconnected("lost socket");
+    assert_eq!(model.handoff_target(), None);
+    model.connection = ConnectionState::Connected;
+    model.projection.view["inbox"]["handoff"]["stage"] = json!("failed");
+    assert_eq!(model.handoff_target(), None);
+    model.projection.view["inbox"]["handoff"]["error"] = json!("fresh context cannot fit");
+    let frame = elara_tui::render_frame(&model, 80, 24).unwrap();
+    assert!(frame.contains("handoff failed: fresh context cannot fit"));
+    assert!(frame.contains("Ctrl-X stop · F12 queue · Ctrl-J newline"));
 }

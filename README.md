@@ -517,8 +517,45 @@ The additive `thread_communication_v1` extension exposes agent/report inbox
 kinds. Older queue clients see only their supported ordinary/steer entries;
 agent provenance remains explicit in transcript text. Saved agent provenance and
 wake-budget headers require this build for resume. This is trusted local thread
-communication, not hosted sharing or an OS sandbox. CTX-1 automatic handoff
-remains separate work.
+communication, not hosted sharing or an OS sandbox.
+
+### Automatic context handoff
+
+Persistent sessions check a conservative context budget before every model
+request. The footer warns early with an **estimate**, not exact tokenizer
+occupancy. Accounting uses the selected model's catalog limit (128K fallback
+when unknown), UTF-8 request bytes, provider-reported usage as a floor, and an
+image allowance. Output, tool results, handoff, and uncertainty reserves are
+included in the warning threshold. This is independent of the 16 MiB protocol
+and attachment/snapshot admission limits; a warning can appear well below the
+model's nominal limit because of those reserves.
+
+At a safe boundary, Elara freezes the source and automatically continues in a
+linked fresh session. Original messages and durable attachments remain available
+through `thread_read`. The handoff is an assistant-authored, extractive evidence
+index, not a claim that every obligation has been summarized: it points to the
+goal, recent owner decisions, tool/test outcomes, unresolved work, attachments,
+queued inputs, and children. The successor is instructed to retrieve originals;
+later owner corrections override earlier requests. Tool and child text do not
+gain owner authority. Execution settings/capabilities transfer separately from
+the index; current workspace instructions and skill discovery are reloaded.
+
+The controlling TUI explicitly attaches the successor and retains the unsent
+draft, attachments, layout, and theme. Observers see a link without gaining
+control. A failed attach keeps the draft and offers `/sessions` for retry.
+Paused inputs stay paused; explicit stop prevents automatic continuation. Queue
+IDs and late child reports follow the current delivery owner without rewriting
+historical parentage. Durable stages recover the same successor and logical
+continuation after restart. A consumed continuation interrupted by VM loss is
+reported failed and paused, not blindly replayed. This is **not** a generic
+exactly-once model-request or external-effect guarantee.
+
+Generation/validation failures preserve the source and surface an error. A fresh
+context that cannot fit is rejected; automatic chains are bounded to eight
+handoffs. Nonpersistent sessions cannot hand off. The legacy synchronous
+`Elara.ask/2` call returns `:interrupted` when its source hands off; automatic
+continuation is delivered through the successor's session/events, not that old
+call. Saved handoff headers require this build for resume.
 
 ## Built-in tools
 

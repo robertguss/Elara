@@ -2,6 +2,7 @@ use std::collections::{HashSet, VecDeque};
 
 mod actions;
 pub mod appearance;
+mod attachments;
 mod presentation;
 pub use appearance::{Appearance, Theme, ViewLayout};
 mod clipboard;
@@ -142,6 +143,7 @@ pub struct Model {
     pub projection: Projection,
     pub connection: ConnectionState,
     pub editor: Editor,
+    attachments: attachments::Draft,
     pub safe_paste: bool,
     safe_paste_cr: bool,
     pub enhanced_keyboard: bool,
@@ -175,6 +177,7 @@ impl Model {
             projection,
             connection: ConnectionState::Connected,
             editor,
+            attachments: attachments::Draft::default(),
             safe_paste: false,
             safe_paste_cr: false,
             enhanced_keyboard: false,
@@ -254,10 +257,15 @@ impl Model {
                 Some("Session busy; draft retained. Wait for idle before sending.".into());
             return None;
         }
-        if self.editor.text().trim().is_empty() {
+        if self.editor.text().trim().is_empty() && self.attachments.selections.is_empty() {
             return None;
         }
-        let request = ask_command(self.editor.text());
+        let mut request = ask_command(self.editor.text());
+        if let Err(error) = self.attachments.augment(&mut request) {
+            self.notice = Some(error.into());
+            return None;
+        }
+        self.attachments.submitted_revision = Some(self.attachments.revision);
         self.pending_ask = Some((self.editor.revision(), Instant::now()));
         self.pending_replies.push_back(PendingReply::Ask);
         self.mark_ask_sent();
@@ -286,8 +294,11 @@ impl Model {
             && let Some((revision, _)) = self.pending_ask.take()
         {
             if error.is_none() {
-                if self.editor.revision() == revision {
+                if self.editor.revision() == revision
+                    && self.attachments.submitted_revision == Some(self.attachments.revision)
+                {
                     self.editor.clear();
+                    self.attachments.clear_accepted();
                 }
                 self.notice = None;
             } else {
@@ -297,6 +308,14 @@ impl Model {
         if let Some(error) = error {
             self.notice = Some(format!("Server rejected command: {error}; draft retained."));
         }
+    }
+
+    pub fn next_attachment_request(&mut self) -> Option<Value> {
+        self.attachments.outbox.pop_front()
+    }
+
+    pub fn attachment_reply(&mut self, frame: &Value) -> bool {
+        attachments::reply(self, frame)
     }
 
     pub fn snapshot_reply(&mut self) {
@@ -438,6 +457,7 @@ pub enum InputAction {
     Interrupt,
     Detach,
     ProviderSettings(Value),
+    Attachment(Value),
 }
 
 fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<InputAction> {
@@ -533,6 +553,9 @@ pub fn handle_input(
             }
             _ => {}
         }
+    }
+    if let Some(action) = attachments::input(model, &event) {
+        return action;
     }
     if let Some(action) = provider_input(model, &event) {
         return action;
@@ -982,7 +1005,13 @@ pub fn attached_model(frame: &Value, mode: &str) -> Result<Model, String> {
         .ok_or_else(|| "attached frame is missing snapshot".to_string())?;
     validate_snapshot_identity(&snapshot, &session, &incarnation)?;
     let projection = Projection::new(snapshot, incarnation, head)?;
-    Ok(Model::new(session, mode.to_string(), projection))
+    let mut model = Model::new(session, mode.to_string(), projection);
+    model.attachments.supported = frame["extensions"].as_array().is_some_and(|extensions| {
+        extensions
+            .iter()
+            .any(|extension| extension == attachments::EXTENSION)
+    });
+    Ok(model)
 }
 
 pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
@@ -990,7 +1019,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "create",
-            "extensions": ["provider_visibility_v1"],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION],
             "mode": mode,
             "cwd": std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).to_string_lossy()
         })
@@ -998,7 +1027,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "attach",
-            "extensions": ["provider_visibility_v1"],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION],
             "session_id": target,
             "mode": mode,
             "cursor": cursor.cursor,
@@ -1039,6 +1068,7 @@ pub fn render_frame(model: &Model, width: u16, height: u16) -> Result<String, St
 pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
     draw_content(frame, model);
     presentation::finish(frame, model);
+    attachments::draw(frame, model);
 }
 
 fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
@@ -1140,6 +1170,7 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(4),
+            Constraint::Length(model.attachments.selections.len() as u16),
             Constraint::Length(editor_height + 2),
             Constraint::Length(1),
         ])
@@ -1188,7 +1219,9 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
     frame.render_widget(transcript, transcript_area);
     drop(state);
 
-    let visible = chunks[1].height.saturating_sub(2) as usize;
+    frame.render_widget(Paragraph::new(model.attachments.lines()), chunks[1]);
+
+    let visible = chunks[2].height.saturating_sub(2) as usize;
     let first_row = editor_layout
         .cursor_row
         .saturating_sub(visible.saturating_sub(1));
@@ -1230,11 +1263,11 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             .title(title)
             .title_bottom(bindings),
     );
-    frame.render_widget(input, chunks[1]);
-    if visible > 0 && chunks[1].width > 2 && !model.transcript.borrow().focused {
+    frame.render_widget(input, chunks[2]);
+    if visible > 0 && chunks[2].width > 2 && !model.transcript.borrow().focused {
         frame.set_cursor_position((
-            chunks[1].x + 1 + (editor_layout.cursor_column as u16).min(chunks[1].width - 3),
-            chunks[1].y + 1 + (editor_layout.cursor_row - first_row) as u16,
+            chunks[2].x + 1 + (editor_layout.cursor_column as u16).min(chunks[2].width - 3),
+            chunks[2].y + 1 + (editor_layout.cursor_row - first_row) as u16,
         ));
     }
 
@@ -1264,7 +1297,7 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             status,
             Style::default().bg(Color::DarkGray).fg(Color::White),
         ))),
-        chunks[2],
+        chunks[3],
     );
 }
 
@@ -1324,6 +1357,15 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
                         })
                         .collect();
                     entries.push(Entry::rendered(id.clone(), lines, true, false));
+                    if let Some(attachments) = message["attachments"].as_array() {
+                        for (attachment_index, metadata) in attachments.iter().take(4).enumerate() {
+                            entries.push(Entry::plain(
+                                &format!("{id}:attachment:{attachment_index}"),
+                                &attachments::history_label(metadata),
+                                false,
+                            ));
+                        }
+                    }
                     if let Some(thinking) =
                         presentation::inline_thinking(model, &id, summary_turns.contains(&index))
                     {

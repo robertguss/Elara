@@ -1,8 +1,9 @@
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::env;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::os::fd::{FromRawFd, RawFd};
+use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::process::{Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
@@ -35,6 +36,19 @@ enum Trigger {
 }
 
 fn main() {
+    let args: Vec<_> = env::args_os().collect();
+    if args.len() == 3 && args[1] == "--read-attachment" {
+        match read_attachment(std::path::Path::new(&args[2])) {
+            Ok(bytes) => {
+                if io::stdout().write_all(&bytes).is_err() {
+                    std::process::exit(1);
+                }
+            }
+            Err(_) => std::process::exit(1),
+        }
+        return;
+    }
+
     unsafe {
         libc::signal(libc::SIGPIPE, libc::SIG_IGN);
     }
@@ -43,6 +57,27 @@ fn main() {
         let _ = writeln!(io::stderr(), "exec-stub: {error}");
         std::process::exit(1);
     }
+}
+
+// Run as a managed child so even a stalled filesystem read is killable without
+// occupying a BEAM dirty-I/O scheduler. Never follow a replaced leaf symlink or
+// wait for a FIFO writer; validate the opened descriptor before reading.
+fn read_attachment(path: &std::path::Path) -> io::Result<Vec<u8>> {
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW)
+        .open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "not a regular file",
+        ));
+    }
+    let mut bytes = Vec::with_capacity(65_545);
+    bytes.extend_from_slice(&metadata.len().to_be_bytes());
+    file.take(65_537).read_to_end(&mut bytes)?;
+    Ok(bytes)
 }
 
 fn manager_loop() -> io::Result<()> {
@@ -774,6 +809,36 @@ fn close_fd(fd: RawFd) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attachment_reader_rejects_replaced_fifo_and_symlink_without_waiting() {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+        let path = env::temp_dir().join(format!("elara-attachment-{}", std::process::id()));
+        std::fs::write(&path, b"selected before replacement").unwrap();
+        assert!(std::fs::metadata(&path).unwrap().is_file());
+        std::fs::remove_file(&path).unwrap();
+        let cpath = CString::new(path.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(cpath.as_ptr(), 0o600) }, 0);
+        let started = Instant::now();
+        assert!(read_attachment(&path).is_err());
+        assert!(started.elapsed() < Duration::from_secs(1));
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink("/dev/zero", &path).unwrap();
+        assert!(read_attachment(&path).is_err());
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn attachment_reader_caps_bytes_and_uses_opened_file_size() {
+        let path = env::temp_dir().join(format!("elara-attachment-bounded-{}", std::process::id()));
+        std::fs::write(&path, vec![255; 100_000]).unwrap();
+        let bytes = read_attachment(&path).unwrap();
+        assert_eq!(&bytes[..8], &100_000_u64.to_be_bytes());
+        assert_eq!(bytes.len(), 8 + 65_537);
+        assert!(bytes[8..].iter().all(|byte| *byte == 255));
+        std::fs::remove_file(path).unwrap();
+    }
 
     #[test]
     fn parses_run_with_environment() {

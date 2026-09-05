@@ -178,6 +178,15 @@ defmodule Elara.Session do
     end
   end
 
+  def handle_call({:ask_input, prompt, references, images}, from, shell) do
+    with :ok <- input_ready(shell, images),
+         {:ok, user} <- Elara.Attachment.prepare(shell.cwd, prompt, references, images) do
+      {:noreply, feed({:ask_input, user}, %{shell | pending_reply: from})}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, shell}
+    end
+  end
+
   def handle_call(:session_id, _from, shell), do: {:reply, shell.id, shell}
 
   def handle_call(:listing, _from, shell) do
@@ -1420,6 +1429,17 @@ defmodule Elara.Session do
     end
   end
 
+  defp handle_attached_command(:input_workspace, shell), do: {:reply, {:ok, shell.cwd}, shell}
+
+  defp handle_attached_command({:ask_input, prompt, references, images}, shell) do
+    with :ok <- input_ready(shell, images),
+         {:ok, user} <- Elara.Attachment.prepare(shell.cwd, prompt, references, images) do
+      {:reply, :ok, feed({:ask_input, user}, shell)}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, shell}
+    end
+  end
+
   defp handle_attached_command(:interrupt, shell) do
     {:reply, :ok, feed(:interrupt, abort_running_tasks(shell))}
   end
@@ -1428,6 +1448,20 @@ defmodule Elara.Session do
     do: change_provider_settings(shell, settings)
 
   defp handle_attached_command(_command, shell), do: {:reply, {:error, :invalid_command}, shell}
+
+  defp input_ready(shell, images) do
+    cond do
+      not Core.idle?(shell.core) ->
+        {:error, :busy}
+
+      images != [] and
+          elem(shell.provider, 0) not in [Elara.Provider.OpenAICodex, Elara.Provider.Scripted] ->
+        {:error, :images_unsupported_by_provider}
+
+      true ->
+        :ok
+    end
+  end
 
   defp change_provider_settings(shell, settings) do
     with true <- shell.core.config.provider_settings != nil,

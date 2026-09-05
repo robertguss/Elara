@@ -3,6 +3,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers as M};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Action {
     Appearance,
+    Files,
+    Image,
+    Attachments,
     ProviderSettings,
     Thinking,
     ThinkingView,
@@ -53,6 +56,15 @@ const fn binding(
     }
 }
 static BINDINGS: &[Binding] = &[
+    binding(KeyCode::F(8), M::NONE, false, Action::Files, "F8 @files"),
+    binding(KeyCode::F(9), M::NONE, false, Action::Image, "F9 image"),
+    binding(
+        KeyCode::F(10),
+        M::NONE,
+        false,
+        Action::Attachments,
+        "F10 attachments/remove",
+    ),
     binding(
         KeyCode::F(7),
         M::NONE,

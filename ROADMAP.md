@@ -1721,13 +1721,43 @@ model actually receives, while keeping input inspectable and recoverable.
 
 ### Result
 
-**IN PROGRESS (2026-09-04).** Build explicit selected file references and disk
-image attachments through the existing composer, session authority, persistence,
-and Codex provider. Keep bounded immutable attachment content outside snapshots;
-show selected name/type/size and preserve the draft on ingestion errors. Use
-the verified subscription image capability for the final synthetic delivery
-check. No physical terminal acceptance or owner interaction is required to
-implement this item.
+**IN PROGRESS (2026-09-04; implementation verified, publication pending).**
+F8 and explicit `@path` selection discover workspace references; F9 ingests a
+local PNG, including paths outside the workspace; F10 inspects/removes selected
+items. Elixir owns bounded discovery, validation, immutable submission content,
+persistence, and provider conversion. Rust owns selection, attachment RPCs,
+metadata rendering, and draft preservation. The negotiated
+`input_attachments_v1` extension keeps image content out of snapshots and
+recordings; a remote client uploads bytes rather than requesting arbitrary
+server-side image paths.
+
+Limits are four selections, 64 KiB UTF-8 text per reference with visible clipping,
+and 2 MiB per PNG. Supported PNGs are 8-bit non-interlaced grayscale, RGB,
+gray-alpha, or RGBA, bounded to 4096 pixels per dimension and 16M pixels.
+The initial client retains disconnected drafts but requires relaunch to reconnect.
+Other image formats and clipboard image paste are outside this slice.
+
+Verification: 381 offline Linux Mix tests; 95 Rust TUI tests; five exec-stub
+tests; both crates' format/Clippy checks; Mix format and warnings-as-errors
+compile. Twelve macOS product tests pass. The new real-PTY product flow covers
+Unicode/spaced file selection by mouse, unchanged editor selection, image removal,
+invalid input, all layouts, submission-time text, immutable image delivery,
+and persisted restart with the original files changed/deleted. The actual
+subscription returned `left=blue; right=yellow` for the synthetic PNG through
+Elara's production adapter; credentials remained unchanged and snapshots omitted
+image bytes. See the sanitized image proof in
+`docs/fixtures/subscription-image-product-proof-2026-09-04.json`.
+
+Simplification applied two small behavior-preserving cleanups. Independent review
+completed with nine local lenses and a separate Claude Opus 5 pass. Four validated
+findings were addressed: image-bearing context estimates are explicitly unknown
+and avoid image reserialization; text ingestion uses a bounded native read with
+regular-file verification; file discovery coalesces outstanding queries; provider
+and attachment pickers have exclusive keyboard ownership. Final post-fix shared
+checks and all twelve macOS product tests pass; publication remains pending.
+Physical terminal acceptance stays owner-deferred. Authority, Rust presentation, protocol,
+fixtures, and cross-runtime debugging all required work; exact time shares were
+not measured and remain unknown.
 
 ## INST-1 — Standard project instructions and Agent Skills
 

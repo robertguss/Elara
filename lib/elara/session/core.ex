@@ -53,6 +53,7 @@ defmodule Elara.Session.Core do
 
   @type fact ::
           {:ask, String.t()}
+          | {:ask_input, User.t()}
           | {:provider_delta, ref(), Provider.delta()}
           | {:provider_settings, Elara.Provider.Visibility.settings()}
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
@@ -118,7 +119,11 @@ defmodule Elara.Session.Core do
 
   @spec step(State.t(), fact()) :: {State.t(), [effect()]}
   def step(%State{phase: :idle} = state, {:ask, prompt}) when is_binary(prompt) do
-    user = Message.user(prompt)
+    step(state, {:ask_input, Message.user(prompt)})
+  end
+
+  def step(%State{phase: :idle} = state, {:ask_input, %User{} = user}) do
+    prompt = user.text
     history = state.history ++ [user]
     {ref, state} = take_ref(%{state | history: history})
 

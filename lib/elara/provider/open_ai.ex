@@ -20,6 +20,10 @@ defmodule Elara.Provider.OpenAI do
 
   @impl true
   def chat(%__MODULE__{} = config, %Provider.Request{} = request) do
+    if image_input?(request), do: unsupported_images(config), else: chat_text(config, request)
+  end
+
+  defp chat_text(%__MODULE__{} = config, %Provider.Request{} = request) do
     url = String.trim_trailing(config.base_url, "/") <> "/chat/completions"
     body = build_body(config, request)
 
@@ -40,6 +44,12 @@ defmodule Elara.Provider.OpenAI do
   @impl true
   def stream(%__MODULE__{} = config, %Provider.Request{} = request, sink)
       when is_function(sink, 1) do
+    if image_input?(request),
+      do: unsupported_images(config),
+      else: stream_text_request(config, request, sink)
+  end
+
+  defp stream_text_request(%__MODULE__{} = config, %Provider.Request{} = request, sink) do
     url = String.trim_trailing(config.base_url, "/") <> "/chat/completions"
     body = config |> build_body(request) |> Map.put("stream", true)
     state_key = {__MODULE__, :stream, make_ref()}
@@ -88,6 +98,21 @@ defmodule Elara.Provider.OpenAI do
       {:error, error} -> {:error, error, config}
     end
   end
+
+  defp image_input?(request) do
+    Enum.any?(request.messages, fn
+      %User{attachments: attachments} -> Enum.any?(attachments, &(&1["kind"] == "image"))
+      _ -> false
+    end)
+  end
+
+  defp unsupported_images(config),
+    do:
+      {:error,
+       %Error{
+         kind: :bad_response,
+         message: "Image attachments require the OpenAI Codex provider"
+       }, config}
 
   @doc false
   @spec parse_stream_chunks([binary()], Provider.delta_sink()) ::
@@ -147,7 +172,8 @@ defmodule Elara.Provider.OpenAI do
     end
   end
 
-  defp encode_message(%User{text: text}), do: %{"role" => "user", "content" => text}
+  defp encode_message(%User{} = user),
+    do: %{"role" => "user", "content" => Elara.Attachment.provider_text(user)}
 
   defp encode_message(%Assistant{text: text, tool_calls: calls}) do
     # xAI rejects assistant tool-call messages with content: null.

@@ -101,6 +101,13 @@ defmodule Elara.Server do
     extensions = Map.get(request, "extensions", [])
 
     Process.put(
+      :input_attachments,
+      version == 2 and is_list(extensions) and "input_attachments_v1" in extensions
+    )
+
+    Process.put(:input_images, %{})
+
+    Process.put(
       :provider_visibility,
       version == 2 and is_list(extensions) and "provider_visibility_v1" in extensions
     )
@@ -118,7 +125,10 @@ defmodule Elara.Server do
             Map.put(
               attached_message(version, mode, attachment),
               "extensions",
-              if(Process.get(:provider_visibility), do: ["provider_visibility_v1"], else: [])
+              Enum.filter(["provider_visibility_v1", "input_attachments_v1"], fn
+                "provider_visibility_v1" -> Process.get(:provider_visibility)
+                "input_attachments_v1" -> Process.get(:input_attachments)
+              end)
             )
           )
 
@@ -299,9 +309,42 @@ defmodule Elara.Server do
     end
   end
 
-  defp handle_versioned_command(session, version, %{"command" => "ask", "prompt" => prompt})
+  defp handle_versioned_command(
+         session,
+         2,
+         %{"command" => command, "extension" => "input_attachments_v1"} = request
+       )
+       when command in ["discover_files", "ingest_image", "discard_attachment", "ask"] do
+    result =
+      if Process.get(:input_attachments) do
+        with {:ok, cwd} <- Elara.attached_command(session, :input_workspace) do
+          input_command(session, cwd, command, request)
+        end
+      else
+        {:error, :unsupported_extension}
+      end
+
+    response =
+      case result do
+        {:ok, payload} -> Map.merge(%{"type" => "ok", "version" => 2}, payload)
+        :ok -> %{"type" => "ok", "version" => 2}
+        {:error, reason} -> error_message(reason, 2)
+      end
+
+    response |> Map.put("command", command) |> Map.put("request_id", request["request_id"])
+  end
+
+  defp handle_versioned_command(
+         session,
+         version,
+         %{"command" => "ask", "prompt" => prompt} = request
+       )
        when is_binary(prompt) do
-    command_result(Elara.attached_command(session, {:ask, prompt}), version)
+    if Map.has_key?(request, "references") or Map.has_key?(request, "attachment_ids") do
+      error_message(:unsupported_extension, version)
+    else
+      command_result(Elara.attached_command(session, {:ask, prompt}), version)
+    end
   end
 
   defp handle_versioned_command(session, version, %{"command" => "interrupt"}) do
@@ -327,6 +370,48 @@ defmodule Elara.Server do
 
   defp handle_versioned_command(_session, version, _request),
     do: error_message(:invalid_command, version)
+
+  defp input_command(_session, cwd, "discover_files", request) do
+    with {:ok, result} <- Elara.Attachment.discover(cwd, request["query"] || "") do
+      {:ok, %{"files" => result.files, "truncated" => result.truncated}}
+    end
+  end
+
+  defp input_command(_session, _cwd, "ingest_image", request) do
+    with {:ok, image} <- Elara.Attachment.ingest_image(request["name"], request["base64"]) do
+      images = Process.get(:input_images, %{})
+
+      if map_size(images) < 16 or Map.has_key?(images, image["id"]) do
+        Process.put(:input_images, Map.put(images, image["id"], image))
+        {:ok, %{"attachment" => Elara.Attachment.metadata(image)}}
+      else
+        {:error, :image_draft_limit_reconnect_to_clear}
+      end
+    end
+  end
+
+  defp input_command(_session, _cwd, "discard_attachment", request) do
+    Process.put(
+      :input_images,
+      Map.delete(Process.get(:input_images, %{}), request["attachment_id"])
+    )
+
+    :ok
+  end
+
+  defp input_command(session, _cwd, "ask", request) do
+    ids = request["attachment_ids"] || []
+    images = Process.get(:input_images, %{})
+
+    if is_list(ids) and length(ids) <= 4 and Enum.all?(ids, &Map.has_key?(images, &1)) do
+      Elara.attached_command(
+        session,
+        {:ask_input, request["prompt"], request["references"] || [], Enum.map(ids, &images[&1])}
+      )
+    else
+      {:error, :unknown_attachment_reselect_image}
+    end
+  end
 
   defp command_result(:ok, version), do: %{"type" => "ok", "version" => version}
   defp command_result({:error, reason}, version), do: error_message(reason, version)

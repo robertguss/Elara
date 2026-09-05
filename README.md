@@ -198,6 +198,33 @@ Context size is a labeled conservative byte estimate, with an advertised model
 limit; it is not exact tokenizer occupancy. See the [subscription evidence](docs/subscription-capability-preflight.md)
 for tested capabilities and limitations.
 
+Use **F8** to find workspace text files, **F9** to attach a PNG from a local disk
+path, and **F10** to inspect or remove draft selections. Typing `@` at a word
+boundary also offers file discovery; Enter or a mouse click explicitly selects
+a reference. Esc keeps literal `@query` text. Ordinary mentions and pasted `@`
+text do not cause file reads. File discovery supports fuzzy matching, spaces,
+and Unicode; narrow the query when results are truncated.
+
+Up to four files/images can accompany a prompt. Text references are read when
+the prompt is submitted, with at most 64 KiB of UTF-8 content per file; submitted
+metadata labels clipping and included bytes. PNG images may be outside the
+workspace and are limited to 2 MiB, 4096 pixels per dimension, and 16M pixels.
+Supported PNGs are 8-bit, non-interlaced grayscale, RGB, gray-alpha, or RGBA.
+Invalid, missing, or oversized inputs leave the draft intact. Selecting images
+requires a connected controlling client; disconnected drafts remain visible,
+but this client currently requires a new launch to reconnect.
+
+Accepted content is immutable in the saved conversation, so moving or editing
+the original file does not change later requests. The transcript shows attachment
+metadata, including included/original text sizes; image bytes stay out of screen
+snapshots and diagnostic recordings. Context estimates are shown as unknown when
+images are present, because encoded image bytes do not measure model token usage.
+PNG delivery requires the Codex provider;
+other providers explicitly reject image input. Text references remain available
+through the existing OpenAI-compatible provider. Programmatic callers can use
+`Elara.Attachment.ingest_image(name, base64)` and
+`Elara.ask_input(session, prompt, references, images)`.
+
 The composer edits multiline text with a visible cursor and keyboard selection.
 Enter sends when idle; **Ctrl-J** inserts a newline in both legacy and enhanced
 keyboard modes. Alt-Enter works when the terminal transmits it distinctly

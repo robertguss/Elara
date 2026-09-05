@@ -83,6 +83,10 @@ defmodule Elara do
     call(session, {:ask_async, prompt})
   end
 
+  @doc "Submit explicit workspace references and validated image DTOs; plain ask remains literal."
+  def ask_input(session, prompt, references, images, timeout \\ :infinity),
+    do: call(session, {:ask_input, prompt, references, images}, timeout)
+
   @doc "Accept model and effort for the next provider request; an in-flight request is unchanged."
   def set_provider_settings(session, settings), do: call(session, {:provider_settings, settings})
 

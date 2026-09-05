@@ -349,7 +349,10 @@ defmodule Elara.Session.Store do
   end
 
   @doc false
-  def encode_message(%User{text: text}), do: %{"user" => %{"text" => text}}
+  def encode_message(%User{text: text, attachments: []}), do: %{"user" => %{"text" => text}}
+
+  def encode_message(%User{text: text, attachments: attachments}),
+    do: %{"user" => %{"text" => text, "attachments" => attachments}}
 
   def encode_message(
         %Assistant{
@@ -384,6 +387,16 @@ defmodule Elara.Session.Store do
   def decode_message(%{"user" => %{"text" => text} = user} = encoded)
       when map_size(encoded) == 1 and map_size(user) == 1 and is_binary(text),
       do: {:ok, %User{text: text}}
+
+  def decode_message(
+        %{"user" => %{"text" => text, "attachments" => attachments} = user} = encoded
+      )
+      when map_size(encoded) == 1 and map_size(user) == 2 and is_binary(text) and
+             is_list(attachments) do
+    if Elara.Attachment.valid_persisted?(attachments),
+      do: {:ok, %User{text: text, attachments: attachments}},
+      else: {:error, :invalid_message}
+  end
 
   def decode_message(%{"assistant" => payload} = encoded) when map_size(encoded) == 1 do
     with %{"text" => text, "toolCalls" => calls} = assistant

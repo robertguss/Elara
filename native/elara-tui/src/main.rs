@@ -431,6 +431,15 @@ fn run_interactive(
                 }
             }
         }
+        while model.connection == ConnectionState::Connected {
+            let Some(request) = model.next_attachment_request() else {
+                break;
+            };
+            if let Err(error) = connection.send(&request) {
+                model.mark_disconnected(&error);
+                dirty = true;
+            }
+        }
         dirty |= model.check_acceptance_timeout();
 
         if event::poll(Duration::from_millis(30))
@@ -443,7 +452,9 @@ fn run_interactive(
             {
                 InputAction::Detach => return Ok(()),
                 InputAction::Submit => model.prepare_submit(),
-                InputAction::ProviderSettings(request) => Some(request),
+                InputAction::ProviderSettings(request) | InputAction::Attachment(request) => {
+                    Some(request)
+                }
                 InputAction::Interrupt if model.track_interrupt() => Some(command("interrupt")),
                 _ => None,
             };
@@ -462,6 +473,9 @@ fn handle_frame(
     cursors: &CursorStore,
     frame: Value,
 ) -> Result<(), String> {
+    if model.attachment_reply(&frame) {
+        return Ok(());
+    }
     match frame["type"].as_str() {
         Some("patch") if frame["version"].as_u64() == Some(2) => {
             match model.apply_patch_frame(&frame)? {

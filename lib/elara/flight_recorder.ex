@@ -521,6 +521,8 @@ defmodule Elara.FlightRecorder do
   defp normalize_fact({:provider_settings, settings}),
     do: %{kind: :provider_settings, settings: settings}
 
+  defp normalize_fact({:ask_input, user}), do: %{kind: :ask_input, user: normalize_message(user)}
+
   defp normalize_fact({:ask, prompt}), do: %{kind: :ask, prompt: prompt}
 
   defp normalize_fact({:provider_delta, ref, text}),
@@ -543,6 +545,9 @@ defmodule Elara.FlightRecorder do
 
   defp denormalize_fact(%{kind: :provider_settings, settings: settings}),
     do: {:provider_settings, settings}
+
+  defp denormalize_fact(%{kind: :ask_input, user: user}),
+    do: {:ask_input, denormalize_message(user)}
 
   defp denormalize_fact(%{kind: :ask, prompt: prompt}), do: {:ask, prompt}
 
@@ -610,7 +615,14 @@ defmodule Elara.FlightRecorder do
      Enum.map(phase.remaining, &denormalize_call/1), phase.iteration}
   end
 
-  defp normalize_message(%User{text: text}), do: %{kind: :user, text: text}
+  defp normalize_message(%User{text: text, attachments: []}), do: %{kind: :user, text: text}
+
+  defp normalize_message(%User{text: text, attachments: attachments}),
+    do: %{
+      kind: :user,
+      text: text,
+      attachments: Enum.map(attachments, &Elara.Attachment.metadata/1)
+    }
 
   defp normalize_message(%Assistant{} = message) do
     %{
@@ -633,6 +645,9 @@ defmodule Elara.FlightRecorder do
       outcome: normalize_outcome(result.outcome)
     }
   end
+
+  defp denormalize_message(%{kind: :user, text: text, attachments: attachments}),
+    do: %User{text: text, attachments: attachments}
 
   defp denormalize_message(%{kind: :user, text: text}), do: %User{text: text}
 

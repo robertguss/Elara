@@ -162,8 +162,18 @@ defmodule Elara.Provider.OpenAICodex do
     ]
   end
 
-  defp encode_message(%User{text: text}) do
-    [%{"role" => "user", "content" => [%{"type" => "input_text", "text" => text}]}]
+  defp encode_message(%User{} = user) do
+    images =
+      for %{"kind" => "image", "mime_type" => mime, "base64" => data} <- user.attachments,
+          do: %{"type" => "input_image", "image_url" => "data:#{mime};base64,#{data}"}
+
+    [
+      %{
+        "role" => "user",
+        "content" =>
+          [%{"type" => "input_text", "text" => Elara.Attachment.provider_text(user)}] ++ images
+      }
+    ]
   end
 
   defp encode_message(%Assistant{} = assistant) do

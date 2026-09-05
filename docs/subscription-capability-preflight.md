@@ -78,6 +78,19 @@ blockers. It does not expand the tested model/effort matrix or prove a saturated
 context limit. Image capability remains established by the earlier synthetic
 red/blue-image route probe; attachment delivery belongs to INPUT-1.
 
+## Live image delivery through Elara
+
+On 2026-09-04, `Elara.Attachment.ingest_image` and `Elara.ask_input` delivered a
+validated synthetic PNG through the production adapter to `gpt-5.5` at `low`
+effort. The prompt asked for the left and right colors without naming them.
+The answer was `left=blue; right=yellow`, matching the 160×80 test image.
+The credential file stayed unchanged, and the public snapshot excluded the
+image bytes. The [sanitized image proof](fixtures/subscription-image-product-proof-2026-09-04.json)
+records metadata, requested/served settings, the answer, and reported usage.
+
+This verifies model delivery for the implemented PNG path. It does not establish
+support for other image formats, which the initial ingestion path rejects.
+
 ## Official documentation context
 
 The [reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)

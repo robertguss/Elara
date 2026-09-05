@@ -63,17 +63,18 @@ defmodule Elara.Provider.Visibility do
       |> Enum.reverse()
       |> Enum.find(&is_struct(&1, Elara.Message.Assistant))
 
-    estimate =
-      4096 + byte_size(core.config.system) +
-        (core.history
-         |> Enum.map(&Elara.Session.Store.encode_message/1)
-         |> JSON.encode!()
-         |> byte_size()) +
-        (core.config.tools
-         |> Map.values()
-         |> Enum.map(&Map.take(&1, [:name, :description, :parameters]))
-         |> JSON.encode!()
-         |> byte_size())
+    images? =
+      Enum.any?(core.history, fn
+        %Elara.Message.User{attachments: attachments} ->
+          Enum.any?(attachments, &(&1["kind"] == "image"))
+
+        _ ->
+          false
+      end)
+
+    # Image token cost depends on provider preprocessing, not encoded blob size.
+    # Do not serialize image-bearing history on each streaming patch.
+    estimate = if images?, do: nil, else: text_estimate(core)
 
     %{
       "extension" => "provider_visibility_v1",
@@ -89,11 +90,28 @@ defmodule Elara.Provider.Visibility do
         "occupancy" => nil,
         "estimate_tokens" => estimate,
         "estimate_basis" =>
-          "UTF-8 serialized history, system and tool schemas plus 4096 framing reserve; conservative byte estimate, not exact provider request or tokenizer occupancy"
+          if(images?,
+            do: "Unknown: history contains images whose provider token cost is unavailable",
+            else:
+              "UTF-8 serialized history, system and tool schemas plus 4096 framing reserve; conservative byte estimate, not exact provider request or tokenizer occupancy"
+          )
       },
       "streaming" =>
         if(core.streaming, do: Map.take(core.streaming, [:id, :public_content]), else: nil)
     }
+  end
+
+  defp text_estimate(core) do
+    4096 + byte_size(core.config.system) +
+      (core.history
+       |> Enum.map(&Elara.Session.Store.encode_message/1)
+       |> JSON.encode!()
+       |> byte_size()) +
+      (core.config.tools
+       |> Map.values()
+       |> Enum.map(&Map.take(&1, [:name, :description, :parameters]))
+       |> JSON.encode!()
+       |> byte_size())
   end
 
   def key(part), do: {part["output_index"], part["part_index"], part["kind"]}

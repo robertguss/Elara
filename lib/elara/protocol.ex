@@ -475,7 +475,14 @@ defmodule Elara.Protocol do
     end
   end
 
-  defp encode_message(%User{text: text}), do: %{"role" => "user", "text" => text}
+  defp encode_message(%User{text: text, attachments: []}), do: %{"role" => "user", "text" => text}
+
+  defp encode_message(%User{text: text, attachments: attachments}),
+    do: %{
+      "role" => "user",
+      "text" => text,
+      "attachments" => Enum.map(attachments, &Elara.Attachment.metadata/1)
+    }
 
   defp encode_message(%Assistant{text: text, tool_calls: calls} = message) do
     %{

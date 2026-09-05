@@ -10,14 +10,14 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** THREAD-1 implementation is verified locally, pending
-integration/push and credentialed subscription smoke: 422 Mix tests, 108 Rust
-TUI tests and 6 execution-stub tests pass. CTRL-1 is DONE and pushed. TUI-6 is
-DONE and pushed. INST-1 is DONE and pushed, including the shared-check cleanup
-repair. INPUT-1 is DONE and pushed. PROV-2 is pushed in `fb7a6a3`. TUI-7 is
-pushed in `0c968dc`; its hands-on acceptance remains owner-deferred. TUI-5 is
-pushed in `e7c67bf`; TUI-4 in `de46872`. TUI-3/TUI-4/TUI-5/TUI-7 hands-on
-acceptance remains deferred while away and does not block later implementation.
+**Current:** THREAD-1 implementation is verified locally, pending push and
+credentialed subscription smoke: 422 Mix tests, 108 Rust TUI tests and 6
+execution-stub tests pass. CTRL-1 is DONE and pushed. TUI-6 is DONE and pushed.
+INST-1 is DONE and pushed, including the shared-check cleanup repair. INPUT-1 is
+DONE and pushed. PROV-2 is pushed in `fb7a6a3`. TUI-7 is pushed in `0c968dc`;
+its hands-on acceptance remains owner-deferred. TUI-5 is pushed in `e7c67bf`;
+TUI-4 in `de46872`. TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred
+while away and does not block later implementation.
 
 Update this handoff and each item's Result after verified milestones. Continue
 available agent work autonomously, committing and pushing completed changes;
@@ -39,7 +39,7 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** integrate/push the verified THREAD-1 local commit and run real
+**Next action:** push the verified THREAD-1 local commit and run real
 subscription smoke when credentials are available, then unblock THREAD-2. Manual
 acceptance requiring the absent owner stays deferred.
 
@@ -2077,11 +2077,12 @@ children, inspect/open, server restart/resume, sibling failure survival, parent
 exit, clean/dirty/conflicting integration, nested parent cwd and a separate-BEAM
 abrupt exit/restart without replay. Inspected real tmux captures at 80x24 and
 120x40 cover child states, resource limit, workspace/base and full metadata.
-Live subscription smoke is **unavailable**: no provider credentials in this orb;
-offline scripted-provider evidence is not subscription proof. Local
-implementation is delivered as a Git bundle for parent integration, not pushed
-from this thread. Previously owner-deferred physical-terminal acceptance remains
-deferred.
+Live subscription smoke is **unavailable**: no configured ChatGPT subscription
+login in this orb; an OpenAI API key does not establish subscription access.
+Offline scripted-provider evidence is not subscription proof. The implementation
+has been integrated into `codex/tui-3-composer` locally and all shared checks
+rerun there; it is not pushed yet. Previously owner-deferred physical-terminal
+acceptance remains deferred.
 
 ## THREAD-2 — Durable thread communication and TUI navigation
 

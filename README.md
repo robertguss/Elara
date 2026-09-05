@@ -214,6 +214,27 @@ long-lived mode. Assistant responses and in-progress content render as terminal
 Markdown, including styled headings, emphasis, code, lists, quotes, links, and
 tables. User prompts and tool output remain literal.
 
+Press **F11** or enter `/sessions` to find live and saved sessions in the
+current workspace. Type a fuzzy name/ID filter, use arrows to select, and Enter
+to switch. `/new` creates and opens another session; `/name TEXT` names the
+current one. Switching preserves each session's unsent draft, attachments, and
+transcript view. Observers stay read-only when switching. Delete asks for
+confirmation bound to the selected ID; switch away from the current session
+before deleting it, and stop running work first. Another controller must detach
+before deletion.
+
+`/tree` and `/fork` show branch points (Enter creates and opens a fork);
+`/clone` copies the current path without changing its source. `/reload`
+refreshes the authoritative snapshot; `/why` opens scrollable transition
+diagnostics. `/help`, `/appearance`, `/model`, `/effort`, `/interrupt`, and
+`/detach` expose the other controls. Type `/` for matching actions, or `//` for
+a literal slash.
+
+Saved startup also works without a running server:
+`mix elara.tui -- SESSION_ID`. The footer explicitly identifies an embedded
+server (exits with the TUI) versus a long-lived server. F11 retries attachment
+after a disconnect; press it again after reconnecting to open the picker.
+
 Choose appearance before attaching with `mix elara.tui new --appearance`, or
 press **F3** during a session. Left/Right chooses the layout (Ember inline,
 Observatory side pane, Workbench turn rail and strip); Up/Down chooses one of
@@ -254,13 +275,14 @@ text do not cause file reads. File discovery supports fuzzy matching, spaces,
 and Unicode; narrow the query when results are truncated.
 
 Up to four files/images can accompany a prompt. Text references are read when
-the prompt is submitted, with at most 64 KiB of UTF-8 content per file; submitted
-metadata labels clipping and included bytes. PNG images may be outside the
-workspace and are limited to 2 MiB, 4096 pixels per dimension, and 16M pixels.
-Supported PNGs are 8-bit, non-interlaced grayscale, RGB, gray-alpha, or RGBA.
-Invalid, missing, or oversized inputs leave the draft intact. Selecting images
-requires a connected controlling client; disconnected drafts remain visible,
-but this client currently requires a new launch to reconnect.
+the prompt is submitted, with at most 64 KiB of UTF-8 content per file;
+submitted metadata labels clipping and included bytes. PNG images may be outside
+the workspace and are limited to 2 MiB, 4096 pixels per dimension, and 16M
+pixels. Supported PNGs are 8-bit, non-interlaced grayscale, RGB, gray-alpha, or
+RGBA. Invalid, missing, or oversized inputs leave the draft intact. Selecting
+images requires a connected controlling client; disconnected drafts remain
+visible. F11 reconnects and revalidates retained images without resending
+prompts.
 
 Accepted content is immutable in the saved conversation, so moving or editing
 the original file does not change later requests. The transcript shows attachment

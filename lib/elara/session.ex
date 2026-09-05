@@ -205,6 +205,10 @@ defmodule Elara.Session do
        id: shell.id,
        incarnation: shell.incarnation,
        cwd: shell.cwd,
+       name: shell.store.name,
+       updated_at: listing_updated_at(shell.store),
+       model: shell.core.config.provider_settings && shell.core.config.provider_settings["model"],
+       provider: shell.provider |> elem(0) |> inspect(),
        phase: shell.core.phase,
        event_head: shell.next_event_seq - 1
      }, shell}
@@ -434,6 +438,33 @@ defmodule Elara.Session do
       handle_attached_command(command, shell)
     else
       {:reply, {:error, :not_controller}, shell}
+    end
+  end
+
+  def handle_call(:session_clone, {caller, _}, shell) do
+    controlled_store_copy(caller, shell, &Store.clone/1)
+  end
+
+  def handle_call({:session_fork, entry_id}, {caller, _}, shell) do
+    controlled_store_copy(caller, shell, fn store -> Store.fork_before_user(store, entry_id) end)
+  end
+
+  def handle_call({:session_delete, requesting_cwd}, _from, shell) do
+    cond do
+      Path.expand(requesting_cwd) != shell.cwd ->
+        {:reply, {:error, :session_not_found}, shell}
+
+      not Core.idle?(shell.core) ->
+        {:reply, {:error, :active_stop_first}, shell}
+
+      not is_nil(shell.controller) ->
+        {:reply, {:error, :control_taken}, shell}
+
+      true ->
+        case Store.delete(shell.store) do
+          :ok -> {:stop, :normal, :ok, shell}
+          {:error, reason} -> {:reply, {:error, reason}, shell}
+        end
     end
   end
 
@@ -1519,6 +1550,17 @@ defmodule Elara.Session do
     {:reply, :ok, feed(:interrupt, abort_running_tasks(shell))}
   end
 
+  defp handle_attached_command({:name, name}, shell) when is_binary(name) and name != "" do
+    if Core.idle?(shell.core) do
+      case Store.rename(shell.store, name) do
+        {:ok, store} -> {:reply, :ok, %{shell | store: store}}
+        {:error, reason} -> {:reply, {:error, reason}, shell}
+      end
+    else
+      {:reply, {:error, :busy}, shell}
+    end
+  end
+
   defp handle_attached_command({:provider_settings, settings}, shell),
     do: change_provider_settings(shell, settings)
 
@@ -1573,6 +1615,39 @@ defmodule Elara.Session do
       snapshot: materialized_view(shell)
     }
   end
+
+  defp controlled_store_copy(caller, shell, copy) do
+    cond do
+      shell.controller != caller ->
+        {:reply, {:error, :not_controller}, shell}
+
+      not Core.idle?(shell.core) ->
+        {:reply, {:error, :busy}, shell}
+
+      true ->
+        case copy.(shell.store) do
+          {:ok, store} ->
+            Store.release(store)
+            {:reply, {:ok, store.id, nil}, shell}
+
+          {:ok, store, prompt} ->
+            Store.release(store)
+            {:reply, {:ok, store.id, prompt}, shell}
+
+          {:error, reason} ->
+            {:reply, {:error, reason}, shell}
+        end
+    end
+  end
+
+  defp listing_updated_at(%Store{path: path}) when is_binary(path) do
+    case File.stat(path, time: :posix) do
+      {:ok, stat} -> stat.mtime * 1_000
+      _ -> System.system_time(:millisecond)
+    end
+  end
+
+  defp listing_updated_at(_store), do: System.system_time(:millisecond)
 
   defp materialized_view(shell) do
     Protocol.snapshot(shell.id, shell.incarnation, shell.core)

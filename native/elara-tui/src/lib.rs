@@ -4,6 +4,7 @@ mod actions;
 pub mod appearance;
 mod attachments;
 mod presentation;
+mod sessions;
 pub use appearance::{Appearance, Theme, ViewLayout};
 mod clipboard;
 mod editor;
@@ -139,6 +140,7 @@ enum PendingReply {
 #[derive(Clone, Debug)]
 pub struct Model {
     pub session_id: String,
+    pub cwd: Option<String>,
     pub mode: String,
     pub projection: Projection,
     pub connection: ConnectionState,
@@ -163,6 +165,10 @@ pub struct Model {
     pending_ask: Option<(u64, Instant)>,
     pub last_outcome: Option<String>,
     pub notice: Option<String>,
+    pub lifetime: String,
+    session_picker: Option<sessions::Picker>,
+    session_detail: Option<String>,
+    session_detail_scroll: u16,
     pub metrics: Metrics,
     ask_sent_at: Option<Instant>,
 }
@@ -196,9 +202,38 @@ impl Model {
             pending_ask: None,
             last_outcome: None,
             notice: None,
+            lifetime: "embedded".into(),
+            cwd: None,
+            session_picker: None,
+            session_detail: None,
+            session_detail_scroll: 0,
             metrics: Metrics::default(),
             ask_sent_at: None,
         }
+    }
+
+    /// Install authoritative connection state while retaining this session's Rust-owned UI state.
+    pub fn reconnect_from(&mut self, fresh: Model) {
+        self.projection = fresh.projection;
+        self.editor.set_history(user_prompts(&self.projection.view));
+        self.last_outcome = fresh.last_outcome;
+        self.connection = ConnectionState::Connected;
+        self.mode = fresh.mode;
+        self.cwd = fresh.cwd;
+        self.lifetime = fresh.lifetime;
+        self.attachments.reconnect(fresh.attachments.supported);
+        self.pending_replies.clear();
+        self.pending_ask = None;
+        self.ask_sent_at = None;
+        self.provider_picker = None;
+        self.session_picker = None;
+        self.viewer = None;
+        self.transcript.borrow_mut().source_key = None;
+        self.notice = Some("Reattached; local draft and view restored.".into());
+    }
+
+    pub fn session_reply(&mut self, frame: &Value) -> bool {
+        sessions::reply(self, frame)
     }
 
     fn selected_tool(&self) -> Option<String> {
@@ -458,6 +493,8 @@ pub enum InputAction {
     Detach,
     ProviderSettings(Value),
     Attachment(Value),
+    Session(Value),
+    Reconnect(String),
 }
 
 fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<InputAction> {
@@ -538,6 +575,39 @@ pub fn handle_input(
     width: usize,
 ) -> InputAction {
     use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+    if model.session_detail.is_some() {
+        if let Event::Key(key) = &event
+            && key.kind != KeyEventKind::Release
+        {
+            match key.code {
+                KeyCode::Esc => model.session_detail = None,
+                KeyCode::Up => {
+                    model.session_detail_scroll = model.session_detail_scroll.saturating_sub(1)
+                }
+                KeyCode::Down => {
+                    model.session_detail_scroll = model.session_detail_scroll.saturating_add(1)
+                }
+                KeyCode::PageUp => {
+                    model.session_detail_scroll = model.session_detail_scroll.saturating_sub(10)
+                }
+                KeyCode::PageDown => {
+                    model.session_detail_scroll = model.session_detail_scroll.saturating_add(10)
+                }
+                _ => {}
+            }
+        }
+        return InputAction::None;
+    }
+    if let Event::Key(key) = &event
+        && !model.safe_paste
+        && key.kind == KeyEventKind::Press
+        && actions::lookup(*key, false) == Some(actions::Action::Sessions)
+    {
+        return sessions::open(model);
+    }
+    if let Some(action) = sessions::input(model, &event) {
+        return action;
+    }
     if model.safe_paste && model.viewer.is_some() {
         model.close_tool();
     }
@@ -809,6 +879,9 @@ pub fn handle_input(
                 }
                 Some(Action::Newline) => insert(model, "\n"),
                 Some(Action::Submit) if key.kind == KeyEventKind::Press => {
+                    if let Some(action) = sessions::palette_command(model) {
+                        return action;
+                    }
                     return InputAction::Submit;
                 }
                 _ if !focused => {
@@ -825,6 +898,14 @@ pub fn handle_input(
 pub struct ClientConnection {
     writer: TcpStream,
     receiver: Receiver<Result<Value, String>>,
+}
+
+impl Drop for ClientConnection {
+    fn drop(&mut self) {
+        // The reader owns a cloned descriptor: dropping only the writer would
+        // leave the old attachment (and its controller lease) alive forever.
+        let _ = self.writer.shutdown(std::net::Shutdown::Both);
+    }
 }
 
 impl ClientConnection {
@@ -1006,6 +1087,8 @@ pub fn attached_model(frame: &Value, mode: &str) -> Result<Model, String> {
     validate_snapshot_identity(&snapshot, &session, &incarnation)?;
     let projection = Projection::new(snapshot, incarnation, head)?;
     let mut model = Model::new(session, mode.to_string(), projection);
+    model.cwd = frame["cwd"].as_str().map(str::to_owned);
+    model.lifetime = frame["lifetime"].as_str().unwrap_or("unknown").to_string();
     model.attachments.supported = frame["extensions"].as_array().is_some_and(|extensions| {
         extensions
             .iter()
@@ -1031,7 +1114,8 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
             "session_id": target,
             "mode": mode,
             "cursor": cursor.cursor,
-            "incarnation": cursor.incarnation
+            "incarnation": cursor.incarnation,
+            "cwd": std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).to_string_lossy()
         })
     }
 }
@@ -1069,6 +1153,28 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
     draw_content(frame, model);
     presentation::finish(frame, model);
     attachments::draw(frame, model);
+    sessions::draw(frame, model);
+    if let Some(text) = &model.session_detail {
+        let area = frame.area();
+        let rect = ratatui::layout::Rect::new(
+            area.x + area.width / 10,
+            area.y + area.height / 8,
+            area.width * 4 / 5,
+            area.height * 3 / 4,
+        );
+        frame.render_widget(ratatui::widgets::Clear, rect);
+        frame.render_widget(
+            Paragraph::new(text.as_str())
+                .wrap(ratatui::widgets::Wrap { trim: false })
+                .scroll((model.session_detail_scroll, 0))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(" Inspection · ↑/↓ scroll · Esc closes "),
+                ),
+            rect,
+        );
+    }
 }
 
 fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
@@ -1283,15 +1389,21 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
         " Awaiting acceptance · draft retained · no automatic retry ".to_string()
     } else {
         format!(
-            " {} · {} · {} · head {} · {} · outcome {} ",
-            model.session_id,
+            " {} · {} · head {} · {} · outcome {} · {} ",
             model.mode,
             connection,
             model.projection.head,
             model.turn_state(),
-            outcome
+            outcome,
+            model.session_id
         )
     };
+    let lifetime = match model.lifetime.as_str() {
+        "embedded" => "embedded · exits with TUI",
+        "long_lived" => "long-lived server",
+        _ => "server lifetime unknown",
+    };
+    let status = format!(" {lifetime} ·{status}");
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             status,

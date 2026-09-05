@@ -19,10 +19,10 @@
 │                                                                              │
 │                                                                              │
 └ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · s
 
 === idle 120x40 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
@@ -61,10 +61,10 @@
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 └ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
 
 === idle 180x45 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
@@ -108,10 +108,10 @@
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 └ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
 
 === composing 80x24 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
@@ -133,11 +133,11 @@
 │                                                                              │
 │                                                                              │
 └ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
 │Unicode draft 👩‍💻  中                                                            │
 │Keep this visible                                                             │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · s
 
 === composing 120x40 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
@@ -175,11 +175,11 @@
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 └ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
 │Unicode draft 👩‍💻  中                                                                                                    │
 │Keep this visible                                                                                                     │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
 
 === composing 180x45 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
@@ -222,11 +222,11 @@
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 └ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │Unicode draft 👩‍💻  中                                                                                                                                                                │
 │Keep this visible                                                                                                                                                                 │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
 
 === streaming 80x24 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
@@ -249,10 +249,10 @@
 │                                                                              │
 │                                                                              │
 └ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- session-demo · control · connected · head 7 · calling_provider · outcome -
+ embedded · exits with TUI · control · connected · head 7 · calling_provider · o
 
 === streaming 120x40 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
@@ -291,10 +291,10 @@
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 └ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 7 · calling_provider · outcome -
+ embedded · exits with TUI · control · connected · head 7 · calling_provider · outcome - · session-demo
 
 === streaming 180x45 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
@@ -338,10 +338,10 @@
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 └ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 7 · calling_provider · outcome -
+ embedded · exits with TUI · control · connected · head 7 · calling_provider · outcome - · session-demo
 
 === reasoning-open 80x24 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
@@ -364,10 +364,10 @@
 │                                                                              │
 │                                                                              │
 └ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · s
 
 === reasoning-open 120x40 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
@@ -406,10 +406,10 @@
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 └ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
 
 === reasoning-open 180x45 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
@@ -453,10 +453,10 @@
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 └ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
 
 === reasoning-hidden 80x24 ===
 ┌ observatory / ember · F4 thinking hidden ·  transcript · prompt focus · FOLLO┐
@@ -479,10 +479,10 @@
 │                                                                              │
 │                                                                              │
 └ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · s
 
 === reasoning-hidden 120x40 ===
 ┌ observatory / ember · F4 thinking hidden ·  transcript · prompt focus · FOLLOW  ─────────────────────────────────────┐
@@ -521,10 +521,10 @@
 │                                                                                                                      │
 │                                                                                                                      │
 └ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
 
 === reasoning-hidden 180x45 ===
 ┌ observatory / ember · F4 thinking hidden ·  transcript · prompt focus · FOLLOW  ─────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -568,10 +568,10 @@
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
 └ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
 
 === tool-failed 80x24 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
@@ -594,10 +594,10 @@
 │                                                                              │
 │                                                                              │
 └ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- session-demo · control · connected · head 8 · running_tool · outcome -
+ embedded · exits with TUI · control · connected · head 8 · running_tool · outco
 
 === tool-failed 120x40 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
@@ -636,10 +636,10 @@
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 └ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 8 · running_tool · outcome -
+ embedded · exits with TUI · control · connected · head 8 · running_tool · outcome - · session-demo
 
 === tool-failed 180x45 ===
 ┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
@@ -683,8 +683,8 @@
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 └ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- session-demo · control · connected · head 8 · running_tool · outcome -
+ embedded · exits with TUI · control · connected · head 8 · running_tool · outcome - · session-demo
 

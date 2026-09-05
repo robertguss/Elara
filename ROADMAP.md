@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-05 (INST-1
-> shipped; shared checks passing) · **Owner:** solo development with AI
+> **Canonical roadmap and status source** · **Updated:** 2026-09-05 (TUI-6
+> implemented; shared checks passing) · **Owner:** solo development with AI
 > collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -10,10 +10,10 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** [INST-1](#inst-1--standard-project-instructions-and-agent-skills)
-is DONE and pushed, including the attachment-timeout cleanup repair. All 395 Mix
-tests pass. TUI-6 is next (TODO). INPUT-1 is DONE and pushed. PROV-2 is pushed
-in `fb7a6a3`. TUI-7 is pushed in `0c968dc`; its hands-on acceptance remains
+**Current:** TUI-6 is DONE locally; all 401 Mix tests and 101 Rust TUI tests
+pass. CTRL-1 is next (TODO). INST-1 is DONE and pushed, including the
+shared-check cleanup repair. INPUT-1 is DONE and pushed. PROV-2 is pushed in
+`fb7a6a3`. TUI-7 is pushed in `0c968dc`; its hands-on acceptance remains
 owner-deferred. TUI-5 is pushed in `e7c67bf`; TUI-4 in `de46872`.
 TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred while away and does
 not block later implementation.
@@ -38,9 +38,9 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** implement TUI-6 in-TUI session lifecycle and action discovery.
-No TUI-6 implementation has started. Manual acceptance requiring the absent
-owner stays deferred.
+**Next action:** implement CTRL-1 durable input queue, steering, and execution
+preferences. TUI-6 is implemented and verified locally. Manual acceptance
+requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -100,7 +100,7 @@ HTML prototypes or existing batch coordinator already implement them.
 
 Build the TUI foundations first, then provider/input and session controls, then
 persistent communicating threads and automatic handoff. Both the TUI and threads
-must be usable before SPLIT-5. TUI-6 is the next executable item;
+must be usable before SPLIT-5. CTRL-1 is the next executable item;
 TUI-3/TUI-4/TUI-5/TUI-7 manual acceptance is owner-deferred. Later slices are
 bounded vertical deliveries; the expanded scope must not be hidden inside the
 composer or session picker.
@@ -210,8 +210,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | PROV-2   | DONE     | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
 | INPUT-1  | DONE     | File references and image attachments from disk               | PROV-2           |
 | INST-1   | DONE     | Standard project instructions and Agent Skills                | INPUT-1          |
-| TUI-6    | TODO     | In-TUI session lifecycle and action discovery                 | INST-1           |
-| CTRL-1   | BLOCKED  | Durable input queue, steering, and execution preferences      | TUI-6            |
+| TUI-6    | DONE     | In-TUI session lifecycle and action discovery                 | INST-1           |
+| CTRL-1   | TODO     | Durable input queue, steering, and execution preferences      | TUI-6            |
 | THREAD-1 | BLOCKED  | Persistent delegated threads and preserved workspaces         | CTRL-1           |
 | THREAD-2 | BLOCKED  | Durable thread communication and TUI navigation               | THREAD-1         |
 | CTX-1    | BLOCKED  | Automatic handoff and uninterrupted continuation              | THREAD-2         |
@@ -1865,7 +1865,7 @@ Decision: unblock TUI-6. The shared-check gate is clear and INST-1 is published.
 
 ## TUI-6 — In-TUI session lifecycle and action discovery
 
-**Status:** TODO
+**Status:** DONE
 
 ### Prerequisite repaired during PROV-2 verification
 
@@ -1916,13 +1916,33 @@ parent/child navigation follow in THREAD-2; model controls ship in PROV-2.
 
 ### Result
 
-**TODO (2026-09-05).** INST-1 and its shared-check repair are pushed and the
-full suite passes. This is the next executable item; implementation has not
-started. Earlier owner-deferred terminal acceptance remains deferred.
+**DONE locally (2026-09-05).** Elixir owns workspace-scoped live/saved
+discovery, stable-ID hydration, naming, controlled clone/fork, and locked
+deletion. Rust provides F11 fuzzy discovery, exact-ID confirmation, slash
+actions and branch selection. Switching closes the old socket, installs a fresh
+snapshot, and retains separate drafts, attachments (images re-ingested), and
+view state. Observers remain read-only. Current-session deletion requires
+switching away; running work must stop and another controller must detach before
+removal.
+
+Saved startup starts an embedded server when necessary; the footer identifies
+embedded versus long-lived lifetime. `/reload` refreshes the snapshot and `/why`
+shows scrollable diagnostics. Legacy chat saved-session ordering and explicit
+live-ID attachment from another cwd remain compatible.
+
+Verification: 401 Mix tests; 101 Rust TUI tests; 6 native execution-helper
+tests; Mix format/compile and both Rust format/Clippy gates pass. Actual
+scripted TUI interaction at 120x40 created/named two sessions, switched during
+provider work, restored separate drafts, restarted the server and resumed the
+transcript. Inspected captures cover picker metadata, exact-ID deletion
+confirmation, and 80x24 observe mode. Regression tests cover saved resume,
+clone/fork source invariance, observer rejection, busy deletion, socket closure,
+and draft/image restoration. Earlier owner-deferred physical-terminal acceptance
+stays deferred.
 
 ## CTRL-1 — Durable input queue, steering, and execution preferences
 
-**Status:** BLOCKED on TUI-6
+**Status:** TODO
 
 ### Outcome
 

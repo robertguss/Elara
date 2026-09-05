@@ -27,9 +27,11 @@ defmodule Elara.Session.Store do
             id: String.t(),
             cwd: String.t(),
             timestamp: integer(),
-            name: String.t() | nil
+            name: String.t() | nil,
+            head: non_neg_integer(),
+            model: String.t() | nil
           }
-    defstruct [:path, :id, :cwd, :timestamp, :name]
+    defstruct [:path, :id, :cwd, :timestamp, :name, :head, :model]
   end
 
   @type t :: %__MODULE__{
@@ -212,8 +214,8 @@ defmodule Elara.Session.Store do
     save(%{store | name: name})
   end
 
-  @spec list(String.t()) :: [Info.t()]
-  def list(cwd) when is_binary(cwd) do
+  @spec list(String.t(), keyword()) :: [Info.t()]
+  def list(cwd, opts \\ []) when is_binary(cwd) do
     cwd = Path.expand(cwd)
 
     with {:ok, root} <- root(),
@@ -222,7 +224,9 @@ defmodule Elara.Session.Store do
 
       names
       |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
-      |> Enum.flat_map(&info_for_path(Path.join(dir, &1), cwd))
+      |> Enum.flat_map(
+        &info_for_path(Path.join(dir, &1), cwd, Keyword.get(opts, :include_empty, false))
+      )
       |> Enum.sort_by(fn info -> {-info.timestamp, info.path} end)
     else
       _ -> []
@@ -236,6 +240,35 @@ defmodule Elara.Session.Store do
       [] -> {:error, :no_session}
     end
   end
+
+  @spec find(String.t(), String.t()) :: {:ok, Info.t()} | {:error, :session_not_found}
+  def find(cwd, id) when is_binary(cwd) and is_binary(id) do
+    case Enum.find(list(cwd, include_empty: true), &(&1.id == id)) do
+      nil -> {:error, :session_not_found}
+      info -> {:ok, info}
+    end
+  end
+
+  @spec delete(t()) :: :ok | {:error, term()}
+  def delete(%__MODULE__{persist?: true, path: path, lock_handle: handle} = store)
+      when is_binary(path) and is_port(handle) do
+    with {:ok, root} <- root(),
+         expected = Path.join([root, cwd_key(store.cwd), "#{store.id}.jsonl"]),
+         true <- Path.expand(expected) == Path.expand(path),
+         {:ok, persisted} <- open(path, store.cwd),
+         true <- persisted.id == store.id do
+      case File.rm(path) do
+        :ok -> :ok
+        {:error, :enoent} -> {:error, :session_not_found}
+        error -> error
+      end
+    else
+      false -> {:error, :session_not_found}
+      error -> error
+    end
+  end
+
+  def delete(_store), do: {:error, :invalid_session}
 
   @spec claim(t()) :: {:ok, t()} | {:error, term()}
   def claim(%__MODULE__{persist?: false} = store), do: {:ok, store}
@@ -510,11 +543,23 @@ defmodule Elara.Session.Store do
     if is_nil(entry.parent_id), do: acc, else: walk_entries(by_id, entry.parent_id, acc)
   end
 
-  defp info_for_path(path, cwd) do
+  defp info_for_path(path, cwd, include_empty) do
     with {:ok, %{type: :regular, mtime: timestamp}} <- File.stat(path, time: :posix),
          {:ok, store} <- open(path, cwd),
-         true <- listable?(store) do
-      [%Info{path: path, id: store.id, cwd: store.cwd, timestamp: timestamp, name: store.name}]
+         true <- include_empty or listable?(store) do
+      model = store.provider_settings && store.provider_settings["model"]
+
+      [
+        %Info{
+          path: path,
+          id: store.id,
+          cwd: store.cwd,
+          timestamp: timestamp,
+          name: store.name,
+          head: length(store.entries),
+          model: model
+        }
+      ]
     else
       _ -> []
     end

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
@@ -287,8 +288,13 @@ fn pick_appearance(original: Appearance) -> Result<Appearance, String> {
 
 fn list_sessions(port: u16, event_dump: bool) -> Result<(), String> {
     let started = Instant::now();
-    let (_connection, frame) =
-        ClientConnection::connect(port, json!({"version": 2, "command": "list"}))?;
+    let (_connection, frame) = ClientConnection::connect(
+        port,
+        json!({
+            "version": 2, "command": "list",
+            "cwd": std::env::current_dir().map_err(|error| error.to_string())?.to_string_lossy()
+        }),
+    )?;
     dump_frame(event_dump, started, &frame);
     if frame["type"].as_str() == Some("error") {
         return Err(format!(
@@ -307,7 +313,12 @@ fn list_sessions(port: u16, event_dump: bool) -> Result<(), String> {
             .ok_or_else(|| "session list has an invalid id".to_string())?;
         let state = session["state"]
             .as_str()
-            .filter(|state| matches!(*state, "idle" | "calling_provider" | "running_tool"))
+            .filter(|state| {
+                matches!(
+                    *state,
+                    "saved" | "idle" | "calling_provider" | "running_tool"
+                )
+            })
             .ok_or_else(|| "session list has an invalid state".to_string())?;
         let head = session["head"]
             .as_u64()
@@ -406,6 +417,7 @@ fn run_interactive(
         .clear()
         .map_err(|error| format!("terminal failed: {error}"))?;
     let mut dirty = true;
+    let mut session_models: HashMap<String, Model> = HashMap::new();
 
     loop {
         if dirty {
@@ -419,8 +431,25 @@ fn run_interactive(
             match connection.try_recv() {
                 Ok(Some(frame)) => {
                     dump_frame(args.event_dump, started, &frame);
+                    let created = (frame["type"] == "session_created")
+                        .then(|| frame["session_id"].as_str().map(str::to_owned))
+                        .flatten();
+                    let fork_prompt = frame["prompt"].as_str().map(str::to_owned);
                     if let Err(error) = handle_frame(connection, model, cursors, frame) {
                         model.mark_disconnected(&error);
+                    } else if let Some(target) = created {
+                        match reconnect(args.port, &target, model, cursors, &mut session_models) {
+                            Ok(new_connection) => {
+                                *connection = new_connection;
+                                if let Some(prompt) = fork_prompt {
+                                    model.editor.insert(&prompt);
+                                }
+                            }
+                            Err(error) => {
+                                model.notice =
+                                    Some(format!("Session created, but attachment failed: {error}"))
+                            }
+                        }
                     }
                     dirty = true;
                 }
@@ -452,8 +481,18 @@ fn run_interactive(
             {
                 InputAction::Detach => return Ok(()),
                 InputAction::Submit => model.prepare_submit(),
-                InputAction::ProviderSettings(request) | InputAction::Attachment(request) => {
-                    Some(request)
+                InputAction::ProviderSettings(request)
+                | InputAction::Attachment(request)
+                | InputAction::Session(request) => Some(request),
+                InputAction::Reconnect(target) => {
+                    match reconnect(args.port, &target, model, cursors, &mut session_models) {
+                        Ok(new_connection) => *connection = new_connection,
+                        Err(error) => {
+                            model.notice =
+                                Some(format!("Switch failed: {error}; current draft retained."))
+                        }
+                    }
+                    None
                 }
                 InputAction::Interrupt if model.track_interrupt() => Some(command("interrupt")),
                 _ => None,
@@ -473,7 +512,24 @@ fn handle_frame(
     cursors: &CursorStore,
     frame: Value,
 ) -> Result<(), String> {
-    if model.attachment_reply(&frame) {
+    if model.attachment_reply(&frame) || model.session_reply(&frame) {
+        return Ok(());
+    }
+    if frame["type"] == "session_created" && frame["version"] == 2 {
+        model.notice = Some(format!(
+            "Session {} created; use /sessions to open it.",
+            frame["session_id"].as_str().unwrap_or("?")
+        ));
+        return Ok(());
+    }
+    if frame["type"] == "session_result" && frame["version"] == 2 {
+        if frame["command"] == "session_delete" {
+            connection.send(&json!({"version":2,"command":"session_list"}))?;
+        }
+        model.notice = Some(format!(
+            "{} completed.",
+            frame["command"].as_str().unwrap_or("session action")
+        ));
         return Ok(());
     }
     match frame["type"].as_str() {
@@ -498,6 +554,41 @@ fn handle_frame(
         _ => return Err("server returned an invalid protocol v2 frame".to_string()),
     }
     Ok(())
+}
+
+fn reconnect(
+    port: u16,
+    target: &str,
+    model: &mut Model,
+    cursors: &CursorStore,
+    cache: &mut HashMap<String, Model>,
+) -> Result<ClientConnection, String> {
+    let mut request = attach_request(target, &model.mode, &cursors.load(target));
+    if let Some(cwd) = &model.cwd {
+        request["cwd"] = json!(cwd);
+    }
+    let (connection, attached) = ClientConnection::connect(port, request)?;
+    let fresh = attached_model(&attached, &model.mode)?;
+    if fresh.session_id != target {
+        return Err("attachment identity does not match selected session".into());
+    }
+    if target == model.session_id {
+        model.reconnect_from(fresh);
+        save_cursor(cursors, model);
+        return Ok(connection);
+    }
+    let old_id = model.session_id.clone();
+    let mut next = cache.remove(target).unwrap_or_else(|| {
+        let mut fresh = fresh.clone();
+        fresh.appearance = model.appearance;
+        fresh.enhanced_keyboard = model.enhanced_keyboard;
+        fresh
+    });
+    next.reconnect_from(fresh);
+    let old = std::mem::replace(model, next);
+    cache.insert(old_id, old);
+    save_cursor(cursors, model);
+    Ok(connection)
 }
 
 fn save_cursor(cursors: &CursorStore, model: &Model) {

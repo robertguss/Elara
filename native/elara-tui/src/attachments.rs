@@ -67,10 +67,61 @@ pub(super) struct Draft {
     deferred_discards: Vec<Value>,
     serial: u64,
     pub outbox: VecDeque<Value>,
+    reconnect_images: VecDeque<(String, Vec<u8>)>,
     status: String,
     rect: Cell<Rect>,
 }
 impl Draft {
+    pub fn reconnect(&mut self, supported: bool) {
+        self.supported = supported;
+        self.discovery = None;
+        if let Some(pending) = self.ingestion.take()
+            && !pending.cancelled
+        {
+            self.reconnect_images
+                .push_back((pending.query, pending.data));
+        }
+        self.outbox.clear();
+        self.deferred_discards.clear();
+        self.submitted_revision = None;
+        // Image IDs are connection-scoped. Re-ingest retained immutable payloads.
+        let mut images = Vec::new();
+        self.selections = std::mem::take(&mut self.selections)
+            .into_iter()
+            .filter_map(|selection| match selection {
+                Selection::Image { metadata, _data } => {
+                    images.push((metadata, _data));
+                    None
+                }
+                other => Some(other),
+            })
+            .collect();
+        for (metadata, data) in images {
+            self.reconnect_images.push_back((
+                metadata["name"].as_str().unwrap_or("image.png").into(),
+                data,
+            ));
+        }
+        self.next_reconnect_image();
+        self.revision += 1;
+    }
+    fn next_reconnect_image(&mut self) {
+        if self.ingestion.is_some() {
+            return;
+        }
+        if let Some((name, data)) = self.reconnect_images.pop_front() {
+            let mut request = self.request("ingest_image");
+            request["name"] = json!(name);
+            request["base64"] = json!(base64::engine::general_purpose::STANDARD.encode(&data));
+            self.ingestion = Some(PendingImage {
+                request_id: request["request_id"].as_str().unwrap().into(),
+                data,
+                cancelled: false,
+                query: name,
+            });
+            self.outbox.push_back(request);
+        }
+    }
     fn request(&mut self, command: &str) -> Value {
         self.serial += 1;
         json!({"version":2,"command":command,"extension":EXTENSION,"request_id":format!("input-{}",self.serial)})
@@ -511,6 +562,7 @@ pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
                 "Cannot attach image: invalid reply or four selections already present.".into();
             model.notice = Some(draft.status.clone());
         }
+        draft.next_reconnect_image();
     }
     if draft.ingestion.is_none() {
         for metadata in std::mem::take(&mut draft.deferred_discards) {

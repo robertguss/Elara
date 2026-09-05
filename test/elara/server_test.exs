@@ -163,4 +163,173 @@ defmodule Elara.ServerTest do
     assert {:error, :invalid_cursor} = Elara.attach(session, :observe, 1, first.incarnation)
     assert {:error, :stale_incarnation} = Elara.attach(session, :observe, 0, "old")
   end
+
+  test "v2 lifecycle names, lists, resumes, and deletes a stable saved session" do
+    root = Path.join(System.tmp_dir!(), "elara-lifecycle-#{System.unique_integer([:positive])}")
+    cwd = Path.join(root, "workspace")
+    File.mkdir_p!(cwd)
+    previous_root = Application.get_env(:elara, :sessions_root)
+    Application.put_env(:elara, :sessions_root, Path.join(root, "sessions"))
+
+    on_exit(fn ->
+      if previous_root,
+        do: Application.put_env(:elara, :sessions_root, previous_root),
+        else: Application.delete_env(:elara, :sessions_root)
+
+      File.rm_rf!(root)
+    end)
+
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]), lifetime: :embedded)
+    socket = connect(Elara.Server.port(server))
+    send_json(socket, %{"version" => 2, "command" => "create", "cwd" => cwd})
+
+    assert %{"type" => "attached", "session_id" => id, "lifetime" => "embedded"} =
+             recv_json(socket)
+
+    send_json(socket, %{"version" => 2, "command" => "session_name", "name" => "first"})
+    assert %{"type" => "session_result", "command" => "session_name"} = recv_json(socket)
+    send_json(socket, %{"version" => 2, "command" => "session_list"})
+    assert %{"type" => "session_list", "sessions" => sessions} = recv_json(socket)
+
+    assert %{"id" => ^id, "name" => "first", "state" => "idle"} =
+             Enum.find(sessions, &(&1["id"] == id))
+
+    listing = connect(Elara.Server.port(server))
+    send_json(listing, %{"version" => 2, "command" => "list", "cwd" => cwd})
+    assert %{"type" => "sessions", "sessions" => legacy_sessions} = recv_json(listing)
+    assert %{"incarnation" => incarnation} = Enum.find(legacy_sessions, &(&1["id"] == id))
+    assert is_binary(incarnation)
+
+    {:ok, pid} = Elara.session_pid(id)
+    :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+    :gen_tcp.close(socket)
+
+    resumed = connect(Elara.Server.port(server))
+    send_json(resumed, %{"version" => 2, "command" => "attach", "session_id" => id, "cwd" => cwd})
+    assert %{"type" => "attached", "session_id" => ^id} = recv_json(resumed)
+    send_json(resumed, %{"version" => 2, "command" => "session_create"})
+    assert %{"type" => "session_created", "session_id" => disposable} = recv_json(resumed)
+
+    send_json(resumed, %{
+      "version" => 2,
+      "command" => "session_delete",
+      "session_id" => disposable
+    })
+
+    assert %{
+             "type" => "session_result",
+             "command" => "session_delete",
+             "session_id" => ^disposable
+           } =
+             recv_json(resumed)
+
+    assert {:error, :session_not_found} = Elara.Session.Store.find(cwd, disposable)
+
+    send_json(resumed, %{"version" => 2, "command" => "session_delete", "session_id" => id})
+    assert %{"type" => "session_error", "error" => "switch_first"} = recv_json(resumed)
+  end
+
+  test "observers can list and tree but cannot mutate" do
+    assistant = asst("done")
+    provider = script([{:stream, [{:sleep, 300}], {:ok, assistant}}])
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: provider)
+    port = Elara.Server.port(server)
+    owner = connect(port)
+    send_json(owner, %{"version" => 2, "command" => "create", "cwd" => File.cwd!()})
+    assert %{"session_id" => id} = recv_json(owner)
+
+    observer = connect(port)
+
+    send_json(observer, %{
+      "version" => 2,
+      "command" => "attach",
+      "session_id" => id,
+      "mode" => "observe",
+      "cwd" => File.cwd!()
+    })
+
+    assert %{"type" => "attached"} = recv_json(observer)
+    send_json(observer, %{"version" => 2, "command" => "session_list"})
+    assert %{"type" => "session_list"} = recv_json(observer)
+    send_json(observer, %{"version" => 2, "command" => "session_tree"})
+    assert %{"type" => "session_tree", "entries" => []} = recv_json(observer)
+    send_json(observer, %{"version" => 2, "command" => "session_create"})
+
+    assert %{
+             "type" => "session_error",
+             "command" => "session_create",
+             "error" => "not_controller"
+           } = recv_json(observer)
+
+    send_json(observer, %{"version" => 2, "command" => "session_clone"})
+
+    assert %{
+             "type" => "session_error",
+             "command" => "session_clone",
+             "error" => "not_controller"
+           } = recv_json(observer)
+  end
+
+  test "live deletion is workspace-scoped and empty unnamed sessions remain discoverable" do
+    root = Path.join(System.tmp_dir!(), "elara-workspaces-#{System.unique_integer([:positive])}")
+    cwd_a = Path.join(root, "a")
+    cwd_b = Path.join(root, "b")
+    File.mkdir_p!(cwd_a)
+    File.mkdir_p!(cwd_b)
+    previous_root = Application.get_env(:elara, :sessions_root)
+    Application.put_env(:elara, :sessions_root, Path.join(root, "sessions"))
+
+    on_exit(fn ->
+      if previous_root,
+        do: Application.put_env(:elara, :sessions_root, previous_root),
+        else: Application.delete_env(:elara, :sessions_root)
+
+      File.rm_rf!(root)
+    end)
+
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+    a = connect(Elara.Server.port(server))
+    send_json(a, %{"version" => 2, "command" => "create", "cwd" => cwd_a})
+    assert %{"session_id" => a_id} = recv_json(a)
+    b = connect(Elara.Server.port(server))
+    send_json(b, %{"version" => 2, "command" => "create", "cwd" => cwd_b})
+    assert %{"session_id" => b_id} = recv_json(b)
+
+    # Detaching the target removes controller authority but leaves it live.
+    :gen_tcp.close(b)
+    Process.sleep(20)
+    send_json(a, %{"version" => 2, "command" => "session_delete", "session_id" => b_id})
+    assert %{"type" => "session_error", "error" => "session_not_found"} = recv_json(a)
+    assert {:ok, _pid} = Elara.session_pid(b_id)
+
+    {:ok, a_pid} = Elara.session_pid(a_id)
+    :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, a_pid)
+    :gen_tcp.close(a)
+    assert {:ok, _info} = Elara.Session.Store.find(cwd_a, a_id)
+
+    resumed = connect(Elara.Server.port(server))
+
+    send_json(resumed, %{
+      "version" => 2,
+      "command" => "attach",
+      "session_id" => a_id,
+      "cwd" => cwd_a
+    })
+
+    assert %{"type" => "attached", "session_id" => ^a_id} = recv_json(resumed)
+  end
+
+  test "invalid cwd values return invalid_cwd" do
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+
+    for request <- [
+          %{"version" => 2, "command" => "list", "cwd" => 1},
+          %{"version" => 2, "command" => "create", "cwd" => []},
+          %{"version" => 2, "command" => "attach", "session_id" => "missing", "cwd" => %{}}
+        ] do
+      socket = connect(Elara.Server.port(server))
+      send_json(socket, request)
+      assert %{"type" => "error", "error" => "invalid_cwd"} = recv_json(socket)
+    end
+  end
 end

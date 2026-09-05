@@ -12,7 +12,7 @@
 │                                                                                      │
 │                                                                                      │
 └ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────┐
+┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────┐
 │                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────┘
- session-demo · control · connected · head 4 · idle · outcome -
+ embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-d

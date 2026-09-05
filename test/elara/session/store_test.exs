@@ -171,6 +171,13 @@ defmodule Elara.Session.StoreTest do
     second_id = List.last(source.entries).id
     source_history = Store.history(source)
 
+    assert {:ok, clone} = Store.clone(source)
+    assert clone.id != source.id
+    assert clone.path != source.path
+    assert clone.parent_session == source.path
+    assert Store.history(clone) == source_history
+    assert Store.history(source) == source_history
+
     assert {:ok, fork, "second"} = Store.fork_before_user(source, second_id)
     assert fork.path != source.path
     assert fork.parent_session == source.path
@@ -298,15 +305,30 @@ defmodule Elara.Session.StoreTest do
     File.touch!(no_user.path, 1_700_000_400)
     File.touch!(empty.path, 1_700_000_500)
 
-    infos = Store.list(cwd)
+    infos = Store.list(cwd, include_empty: true)
 
-    assert Enum.map(infos, & &1.path) == [newer_path, incomplete.path, older_path]
-    assert Enum.map(infos, & &1.timestamp) == [1_700_000_300, 1_700_000_200, 1_700_000_100]
+    assert Enum.map(infos, & &1.path) == [
+             empty.path,
+             no_user.path,
+             newer_path,
+             incomplete.path,
+             older_path
+           ]
+
+    assert Enum.map(infos, & &1.timestamp) == [
+             1_700_000_500,
+             1_700_000_400,
+             1_700_000_300,
+             1_700_000_200,
+             1_700_000_100
+           ]
+
     assert Enum.all?(infos, &(&1.cwd == Path.expand(cwd)))
+    assert Enum.map(Store.list(cwd), & &1.path) == [newer_path, incomplete.path, older_path]
     assert {:ok, %{path: ^newer_path}} = Store.newest(cwd)
   end
 
-  test "new stores remain unborn until first append", %{root: root, cwd: cwd} do
+  test "new stores remain unborn until first save", %{root: root, cwd: cwd} do
     store = Store.new(cwd)
 
     refute File.exists?(store.path)

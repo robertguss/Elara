@@ -33,6 +33,7 @@ defmodule Elara.Server do
   def init(opts) do
     port = Keyword.get(opts, :port, @default_port)
     provider = Keyword.get(opts, :provider)
+    lifetime = Keyword.get(opts, :lifetime, :long_lived)
 
     listen_opts = [
       :binary,
@@ -46,7 +47,7 @@ defmodule Elara.Server do
     case :gen_tcp.listen(port, listen_opts) do
       {:ok, listen} ->
         {:ok, actual_port} = :inet.port(listen)
-        acceptor = spawn_link(fn -> accept_loop(listen, provider) end)
+        acceptor = spawn_link(fn -> accept_loop(listen, provider, lifetime) end)
         {:ok, %{listen: listen, port: actual_port, acceptor: acceptor}}
 
       {:error, reason} ->
@@ -63,32 +64,32 @@ defmodule Elara.Server do
     :ok
   end
 
-  defp accept_loop(listen, provider) do
+  defp accept_loop(listen, provider, lifetime) do
     case :gen_tcp.accept(listen) do
       {:ok, socket} ->
         {:ok, pid} =
           Task.Supervisor.start_child(Elara.TaskSup, fn ->
             receive do
-              {:socket, socket} -> connection(socket, provider)
+              {:socket, socket} -> connection(socket, provider, lifetime)
             end
           end)
 
         :ok = :gen_tcp.controlling_process(socket, pid)
         send(pid, {:socket, socket})
-        accept_loop(listen, provider)
+        accept_loop(listen, provider, lifetime)
 
       {:error, :closed} ->
         :ok
 
       {:error, _reason} ->
-        accept_loop(listen, provider)
+        accept_loop(listen, provider, lifetime)
     end
   end
 
-  defp connection(socket, provider) do
+  defp connection(socket, provider, lifetime) do
     with {:ok, line} <- recv_line(socket, 30_000),
          {:ok, request} <- Protocol.decode(line) do
-      establish_connection(socket, provider, request)
+      establish_connection(socket, provider, lifetime, request)
     else
       {:error, reason} -> send_error(socket, reason, Protocol.version())
     end
@@ -96,7 +97,7 @@ defmodule Elara.Server do
     :gen_tcp.close(socket)
   end
 
-  defp establish_connection(socket, provider, request) do
+  defp establish_connection(socket, provider, lifetime, request) do
     version = response_version(request)
     extensions = Map.get(request, "extensions", [])
 
@@ -113,17 +114,24 @@ defmodule Elara.Server do
     )
 
     case request do
-      %{"version" => 2, "command" => "list"} ->
-        send_json(socket, sessions_message())
+      %{"version" => 2, "command" => "list"} = request ->
+        case decode_cwd(Map.get(request, "cwd", File.cwd!())) do
+          {:ok, cwd} -> send_json(socket, legacy_sessions_message(cwd))
+          {:error, reason} -> send_error(socket, reason, version)
+        end
 
       _request ->
         with {:ok, version, session, mode, cursor, incarnation} <-
                prepare_attachment(request, provider),
-             {:ok, attachment} <- attach(version, session, mode, cursor, incarnation) do
+             {:ok, session_pid} <- Elara.session_pid(session),
+             {:ok, attachment} <- attach(version, session_pid, mode, cursor, incarnation) do
+          Process.monitor(session_pid)
+
           send_json(
             socket,
             Map.put(
-              attached_message(version, mode, attachment),
+              attached_message(version, mode, attachment, lifetime)
+              |> Map.put("cwd", Elara.cwd(session)),
               "extensions",
               Enum.filter(["provider_visibility_v1", "input_attachments_v1"], fn
                 "provider_visibility_v1" -> Process.get(:provider_visibility)
@@ -139,7 +147,7 @@ defmodule Elara.Server do
           end
 
           :ok = :inet.setopts(socket, active: :once)
-          connection_loop(socket, session, version, Protocol.line_buffer())
+          connection_loop(socket, session, version, Protocol.line_buffer(), provider, lifetime)
         else
           {:error, reason} -> send_error(socket, reason, version)
         end
@@ -152,9 +160,9 @@ defmodule Elara.Server do
 
   defp prepare_attachment(%{"version" => version, "command" => "create"} = request, provider) do
     mode = decode_mode(Map.get(request, "mode", "control"))
-    cwd = Map.get(request, "cwd", File.cwd!())
 
     with {:ok, mode} <- mode,
+         {:ok, cwd} <- decode_cwd(Map.get(request, "cwd", File.cwd!())),
          {:ok, provider} <- resolve_provider(provider),
          {:ok, session} <- Elara.start_session(provider: provider, cwd: cwd) do
       {:ok, version, session, mode, 0, nil}
@@ -163,11 +171,13 @@ defmodule Elara.Server do
 
   defp prepare_attachment(
          %{"version" => version, "command" => "attach", "session_id" => session} = request,
-         _provider
+         provider
        )
        when is_binary(session) do
     with {:ok, mode} <- decode_mode(Map.get(request, "mode", "control")),
-         {:ok, cursor} <- decode_cursor(Map.get(request, "cursor", 0)) do
+         {:ok, cursor} <- decode_cursor(Map.get(request, "cursor", 0)),
+         {:ok, cwd} <- decode_optional_cwd(Map.get(request, "cwd")),
+         {:ok, session} <- ensure_live_session(session, cwd, provider) do
       {:ok, version, session, mode, cursor, Map.get(request, "incarnation")}
     end
   end
@@ -180,18 +190,19 @@ defmodule Elara.Server do
   defp attach(2, session, mode, cursor, incarnation),
     do: Elara.attach_v2(session, mode, cursor, incarnation)
 
-  defp attached_message(1, mode, attachment) do
+  defp attached_message(1, mode, attachment, lifetime) do
     %{
       "type" => "attached",
       "version" => 1,
       "session_id" => attachment.id,
       "incarnation" => attachment.incarnation,
       "head" => attachment.head,
-      "mode" => Atom.to_string(mode)
+      "mode" => Atom.to_string(mode),
+      "lifetime" => Atom.to_string(lifetime)
     }
   end
 
-  defp attached_message(2, mode, attachment) do
+  defp attached_message(2, mode, attachment, lifetime) do
     %{
       "type" => "attached",
       "version" => 2,
@@ -199,42 +210,78 @@ defmodule Elara.Server do
       "incarnation" => attachment.incarnation,
       "head" => attachment.head,
       "mode" => Atom.to_string(mode),
-      "snapshot" => negotiated_snapshot(attachment.snapshot)
+      "snapshot" => negotiated_snapshot(attachment.snapshot),
+      "lifetime" => Atom.to_string(lifetime)
     }
   end
 
-  defp sessions_message do
-    sessions =
-      Enum.map(Elara.live_sessions(), fn status ->
-        %{
-          "id" => status.id,
-          "incarnation" => status.incarnation,
-          "cwd" => status.cwd,
-          "state" => phase_name(status.phase),
-          "head" => status.event_head
-        }
+  defp legacy_sessions_message(cwd) do
+    sessions = lifecycle_sessions(cwd)
+    %{"type" => "sessions", "version" => 2, "sessions" => sessions}
+  end
+
+  defp lifecycle_sessions(cwd) do
+    cwd = Path.expand(cwd)
+
+    saved =
+      Map.new(Elara.Session.Store.list(cwd, include_empty: true), fn info ->
+        {info.id,
+         %{
+           "id" => info.id,
+           "name" => info.name,
+           "cwd" => info.cwd,
+           "state" => "saved",
+           "updated_at" => info.timestamp * 1_000,
+           "head" => info.head,
+           "model" => info.model
+         }}
       end)
 
-    %{"type" => "sessions", "version" => 2, "sessions" => sessions}
+    sessions =
+      Elara.live_sessions()
+      |> Enum.filter(&(&1.cwd == cwd))
+      |> Enum.reduce(saved, fn status, sessions ->
+        Map.put(sessions, status.id, %{
+          "id" => status.id,
+          "incarnation" => status.incarnation,
+          "name" => status.name,
+          "cwd" => status.cwd,
+          "state" => phase_name(status.phase),
+          "updated_at" => status.updated_at,
+          "head" => status.event_head,
+          "provider" => status.provider,
+          "model" => status.model
+        })
+      end)
+
+    sessions |> Map.values() |> Enum.sort_by(&{-&1["updated_at"], &1["id"]})
   end
 
   defp phase_name(:idle), do: "idle"
   defp phase_name({:calling_provider, _ref, _iteration}), do: "calling_provider"
   defp phase_name({:running_tool, _ref, _call, _remaining, _iteration}), do: "running_tool"
 
-  defp connection_loop(socket, session, version, line_buffer) do
+  defp connection_loop(socket, session, version, line_buffer, provider, lifetime) do
     receive do
       {:tcp, ^socket, chunk} ->
         case Protocol.push_line(line_buffer, chunk) do
           {:ok, line} ->
-            response = handle_command(session, version, Protocol.decode(line))
+            response =
+              handle_command(
+                session,
+                version,
+                Protocol.decode(line),
+                provider,
+                lifetime
+              )
+
             send_json(socket, response)
             :ok = :inet.setopts(socket, active: :once)
-            connection_loop(socket, session, version, Protocol.line_buffer())
+            connection_loop(socket, session, version, Protocol.line_buffer(), provider, lifetime)
 
           {:more, line_buffer} ->
             :ok = :inet.setopts(socket, active: :once)
-            connection_loop(socket, session, version, line_buffer)
+            connection_loop(socket, session, version, line_buffer, provider, lifetime)
 
           {:error, reason} ->
             send_error(socket, reason, version)
@@ -246,9 +293,12 @@ defmodule Elara.Server do
       {:tcp_error, ^socket, _reason} ->
         :ok
 
+      {:DOWN, _ref, :process, _pid, _reason} ->
+        :ok
+
       {:elara_event, ^session, incarnation, seq, event} ->
         case send_v1_event(socket, seq, event, incarnation) do
-          :ok -> connection_loop(socket, session, version, line_buffer)
+          :ok -> connection_loop(socket, session, version, line_buffer, provider, lifetime)
           {:error, _} -> :ok
         end
 
@@ -261,7 +311,7 @@ defmodule Elara.Server do
         message = Protocol.patch(seq, ops) |> Map.put("incarnation", incarnation)
 
         case send_json(socket, message) do
-          :ok -> connection_loop(socket, session, version, line_buffer)
+          :ok -> connection_loop(socket, session, version, line_buffer, provider, lifetime)
           {:error, _} -> :ok
         end
     end
@@ -282,20 +332,47 @@ defmodule Elara.Server do
       else: Map.delete(snapshot, "provider_view")
   end
 
-  defp handle_command(session, version, {:ok, %{"version" => version} = request}),
-    do: handle_versioned_command(session, version, request)
+  defp handle_command(
+         session,
+         version,
+         {:ok, %{"version" => version} = request},
+         provider,
+         lifetime
+       ),
+       do: handle_versioned_command(session, version, request, provider, lifetime)
 
-  defp handle_command(_session, version, {:ok, _request}),
+  defp handle_command(_session, version, {:ok, _request}, _provider, _lifetime),
     do: error_message(:unsupported_version, version)
 
-  defp handle_command(_session, version, {:error, reason}), do: error_message(reason, version)
+  defp handle_command(_session, version, {:error, reason}, _provider, _lifetime),
+    do: error_message(reason, version)
 
-  defp handle_versioned_command(session, 2, %{
-         "command" => "set_provider_settings",
-         "extension" => "provider_visibility_v1",
-         "model" => model,
-         "effort" => effort
-       }) do
+  defp handle_versioned_command(session, 2, %{"command" => command} = request, provider, lifetime)
+       when command in [
+              "session_list",
+              "session_create",
+              "session_name",
+              "session_delete",
+              "session_tree",
+              "session_fork",
+              "session_clone",
+              "session_reload"
+            ] do
+    lifecycle_command(session, command, request, provider, lifetime)
+  end
+
+  defp handle_versioned_command(
+         session,
+         2,
+         %{
+           "command" => "set_provider_settings",
+           "extension" => "provider_visibility_v1",
+           "model" => model,
+           "effort" => effort
+         },
+         _provider,
+         _lifetime
+       ) do
     if Process.get(:provider_visibility) do
       command_result(
         Elara.attached_command(
@@ -312,7 +389,9 @@ defmodule Elara.Server do
   defp handle_versioned_command(
          session,
          2,
-         %{"command" => command, "extension" => "input_attachments_v1"} = request
+         %{"command" => command, "extension" => "input_attachments_v1"} = request,
+         _provider,
+         _lifetime
        )
        when command in ["discover_files", "ingest_image", "discard_attachment", "ask"] do
     result =
@@ -337,7 +416,9 @@ defmodule Elara.Server do
   defp handle_versioned_command(
          session,
          version,
-         %{"command" => "ask", "prompt" => prompt} = request
+         %{"command" => "ask", "prompt" => prompt} = request,
+         _provider,
+         _lifetime
        )
        when is_binary(prompt) do
     if Map.has_key?(request, "references") or Map.has_key?(request, "attachment_ids") do
@@ -347,29 +428,188 @@ defmodule Elara.Server do
     end
   end
 
-  defp handle_versioned_command(session, version, %{"command" => "interrupt"}) do
+  defp handle_versioned_command(
+         session,
+         version,
+         %{"command" => "interrupt"},
+         _provider,
+         _lifetime
+       ) do
     command_result(Elara.attached_command(session, :interrupt), version)
   end
 
-  defp handle_versioned_command(session, version, %{"command" => "inspect"}) do
+  defp handle_versioned_command(session, version, %{"command" => "inspect"}, _provider, _lifetime) do
     case Elara.status(session) do
       %{} = status ->
-        %{"type" => "status", "version" => version, "status" => json_status(status)}
+        %{
+          "type" => "status",
+          "version" => version,
+          "status" => json_status(status),
+          "why" => inspect(Elara.why(session), pretty: true, limit: 100)
+        }
 
       {:error, reason} ->
         error_message(reason, version)
     end
   end
 
-  defp handle_versioned_command(session, 2, %{"command" => "resnapshot"}) do
+  defp handle_versioned_command(session, 2, %{"command" => "resnapshot"}, _provider, _lifetime) do
     case Elara.snapshot(session) do
       %{} = snapshot -> snapshot_message(snapshot)
       {:error, reason} -> error_message(reason, 2)
     end
   end
 
-  defp handle_versioned_command(_session, version, _request),
+  defp handle_versioned_command(_session, version, _request, _provider, _lifetime),
     do: error_message(:invalid_command, version)
+
+  defp lifecycle_command(session, command, request, provider, lifetime) do
+    result =
+      with {:ok, cwd} <- lifecycle_cwd(session, command) do
+        run_lifecycle_command(session, command, request, provider, cwd, lifetime)
+      end
+
+    case result do
+      {:ok, response} -> response
+      {:error, reason} -> session_error(command, reason)
+    end
+  end
+
+  defp lifecycle_cwd(session, command) when command in ["session_list", "session_tree"],
+    do: {:ok, Elara.cwd(session)}
+
+  defp lifecycle_cwd(session, _command),
+    do: Elara.attached_command(session, :input_workspace)
+
+  defp run_lifecycle_command(_session, "session_list", _request, _provider, cwd, lifetime) do
+    {:ok,
+     %{
+       "type" => "session_list",
+       "version" => 2,
+       "sessions" => lifecycle_sessions(cwd),
+       "lifetime" => Atom.to_string(lifetime)
+     }}
+  end
+
+  defp run_lifecycle_command(_session, "session_create", _request, provider, cwd, _lifetime) do
+    with {:ok, provider} <- resolve_provider(provider),
+         {:ok, id} <- Elara.start_session(provider: provider, cwd: cwd) do
+      {:ok, %{"type" => "session_created", "version" => 2, "session_id" => id}}
+    end
+  end
+
+  defp run_lifecycle_command(
+         session,
+         "session_name",
+         %{"name" => name},
+         _provider,
+         _cwd,
+         _lifetime
+       )
+       when is_binary(name) and name != "" do
+    with true <-
+           String.valid?(name) and String.length(name) <= 128 and String.trim(name) != "" and
+             not String.contains?(name, ["\n", "\r", "\e"]),
+         :ok <- Elara.attached_command(session, {:name, String.trim(name)}) do
+      {:ok, session_result("session_name", %{})}
+    else
+      false -> {:error, :invalid_name}
+      error -> error
+    end
+  end
+
+  defp run_lifecycle_command(_session, "session_name", _request, _provider, _cwd, _lifetime),
+    do: {:error, :invalid_name}
+
+  defp run_lifecycle_command(
+         session,
+         "session_delete",
+         %{"session_id" => id},
+         _provider,
+         cwd,
+         _lifetime
+       )
+       when is_binary(id) do
+    with :ok <- reject_current_session(session, id),
+         :ok <- delete_session(cwd, id) do
+      {:ok, session_result("session_delete", %{"session_id" => id})}
+    end
+  end
+
+  defp run_lifecycle_command(session, "session_tree", _request, _provider, _cwd, _lifetime) do
+    {:ok, %{"type" => "session_tree", "version" => 2, "entries" => Elara.user_entries(session)}}
+  end
+
+  defp run_lifecycle_command(
+         session,
+         "session_fork",
+         %{"entry_id" => id},
+         _provider,
+         _cwd,
+         _lifetime
+       )
+       when is_binary(id) do
+    with {:ok, child, prompt} <-
+           GenServer.call(session_pid!(session), {:session_fork, id}) do
+      response = %{"type" => "session_created", "version" => 2, "session_id" => child}
+      {:ok, if(prompt, do: Map.put(response, "prompt", prompt), else: response)}
+    end
+  end
+
+  defp run_lifecycle_command(session, "session_clone", _request, _provider, _cwd, _lifetime) do
+    with {:ok, child, _prompt} <- GenServer.call(session_pid!(session), :session_clone) do
+      {:ok, %{"type" => "session_created", "version" => 2, "session_id" => child}}
+    end
+  end
+
+  defp run_lifecycle_command(session, "session_reload", _request, _provider, _cwd, _lifetime) do
+    case Elara.snapshot(session) do
+      %{} = snapshot -> {:ok, snapshot_message(snapshot)}
+      error -> error
+    end
+  end
+
+  defp run_lifecycle_command(_session, _command, _request, _provider, _cwd, _lifetime),
+    do: {:error, :invalid_command}
+
+  defp delete_session(cwd, id) do
+    case Elara.session_pid(id) do
+      {:ok, pid} -> GenServer.call(pid, {:session_delete, cwd})
+      {:error, :session_not_found} -> delete_saved_session(cwd, id)
+    end
+  end
+
+  defp reject_current_session(session, id) do
+    if Elara.session_pid(session) == Elara.session_pid(id),
+      do: {:error, :switch_first},
+      else: :ok
+  end
+
+  defp delete_saved_session(cwd, id) do
+    with {:ok, info} <- Elara.Session.Store.find(cwd, id),
+         {:ok, store} <- Elara.Session.Store.open(info.path, cwd),
+         {:ok, store} <- Elara.Session.Store.claim(store) do
+      result = Elara.Session.Store.delete(store)
+      Elara.Session.Store.release(store)
+      result
+    end
+  end
+
+  defp session_pid!(session) do
+    {:ok, pid} = Elara.session_pid(session)
+    pid
+  end
+
+  defp session_result(command, extra),
+    do: Map.merge(%{"type" => "session_result", "version" => 2, "command" => command}, extra)
+
+  defp session_error(command, reason),
+    do: %{
+      "type" => "session_error",
+      "version" => 2,
+      "command" => command,
+      "error" => format_reason(reason)
+    }
 
   defp input_command(_session, cwd, "discover_files", request) do
     with {:ok, result} <- Elara.Attachment.discover(cwd, request["query"] || "") do
@@ -433,6 +673,29 @@ defmodule Elara.Server do
 
   defp decode_cursor(cursor) when is_integer(cursor) and cursor >= 0, do: {:ok, cursor}
   defp decode_cursor(_cursor), do: {:error, :invalid_cursor}
+
+  defp decode_cwd(cwd) when is_binary(cwd), do: {:ok, Path.expand(cwd)}
+  defp decode_cwd(_cwd), do: {:error, :invalid_cwd}
+  defp decode_optional_cwd(nil), do: {:ok, nil}
+  defp decode_optional_cwd(cwd), do: decode_cwd(cwd)
+
+  defp ensure_live_session(id, cwd, provider) do
+    case Elara.session_pid(id) do
+      {:ok, _pid} ->
+        # Explicit live IDs have always been attachable from another cwd.
+        # Discovery and saved-file lookup remain scoped to the workspace.
+        {:ok, id}
+
+      {:error, :session_not_found} ->
+        cwd = cwd || File.cwd!()
+
+        with {:ok, info} <- Elara.Session.Store.find(cwd, id),
+             {:ok, provider} <- resolve_provider(provider),
+             {:ok, ^id} <- Elara.start_session(provider: provider, cwd: cwd, resume: info.path) do
+          {:ok, id}
+        end
+    end
+  end
 
   defp resolve_provider(nil), do: Elara.Config.resolve()
   defp resolve_provider(provider), do: {:ok, provider}

@@ -5,8 +5,8 @@ defmodule Mix.Tasks.Elara.Tui do
   @moduledoc """
   Run the Rust protocol-v2 terminal client.
 
-  `mix elara.tui new` starts an embedded Elara server when the selected port is
-  free. Start `mix elara.server` separately when sessions must outlive this
+  New and saved-session targets start an embedded server when the selected port
+  is free. Start `mix elara.server` separately when sessions must outlive this
   command. Pass options before `-- SESSION` when the session ID starts with `-`.
   """
   @requirements ["app.start"]
@@ -23,6 +23,10 @@ defmodule Mix.Tasks.Elara.Tui do
     timeout_ms: :integer,
     width: :integer,
     height: :integer,
+    appearance: :boolean,
+    layout: :string,
+    theme: :string,
+    preview_reasoning: :boolean,
     help: :boolean
   ]
 
@@ -44,7 +48,7 @@ defmodule Mix.Tasks.Elara.Tui do
 
   defp maybe_start_embedded_server(argv) do
     case OptionParser.parse(argv, strict: @switches, aliases: [o: :observe, h: :help]) do
-      {opts, ["new"], []} ->
+      {opts, command, []} when command != [] ->
         port = Keyword.get(opts, :port, environment_port())
 
         if is_integer(port) and port in 1..65_535 do
@@ -57,7 +61,7 @@ defmodule Mix.Tasks.Elara.Tui do
   end
 
   defp start_embedded_server(port) do
-    case Elara.Server.start(port: port, name: Elara.Server) do
+    case Elara.Server.start(port: port, name: Elara.Server, lifetime: :embedded) do
       {:ok, _server} ->
         :ok
 

@@ -32,7 +32,24 @@ pub(crate) enum Action {
     Newline,
     Interrupt,
     Escape,
+    Sessions,
 }
+pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
+    ("sessions", "find or switch session", false),
+    ("new", "create a session", true),
+    ("name", "name current session", true),
+    ("tree", "choose a branch point", false),
+    ("fork", "choose and fork a branch point", true),
+    ("clone", "clone current path", true),
+    ("reload", "reload this session", true),
+    ("why", "inspect latest event", false),
+    ("interrupt", "stop current turn", true),
+    ("detach", "leave the session", false),
+    ("help", "show all controls", false),
+    ("appearance", "choose layout/theme", false),
+    ("model", "choose model/effort", true),
+    ("effort", "choose model/effort", true),
+];
 struct Binding {
     key: KeyCode,
     modifiers: M,
@@ -56,6 +73,13 @@ const fn binding(
     }
 }
 static BINDINGS: &[Binding] = &[
+    binding(
+        KeyCode::F(11),
+        M::NONE,
+        false,
+        Action::Sessions,
+        "F11 sessions",
+    ),
     binding(KeyCode::F(8), M::NONE, false, Action::Files, "F8 @files"),
     binding(KeyCode::F(9), M::NONE, false, Action::Image, "F9 image"),
     binding(
@@ -244,7 +268,7 @@ pub(crate) fn prompt_title() -> String {
         Action::Submit,
         Action::Help,
         Action::SafePaste,
-        Action::Appearance,
+        Action::Sessions,
     ]
     .map(|action| {
         BINDINGS
@@ -261,8 +285,24 @@ pub(crate) fn help() -> Vec<ratatui::text::Line<'static>> {
         .filter(|b| !b.hint.is_empty())
         .map(|b| b.hint)
         .collect::<Vec<_>>();
-    hints
+    let mut lines: Vec<_> = hints
         .chunks(3)
         .map(|chunk| ratatui::text::Line::from(chunk.join(" · ")))
-        .collect()
+        .collect();
+    lines.push(ratatui::text::Line::from("Slash actions:"));
+    lines.extend(SLASH_ACTIONS.chunks(3).map(|chunk| {
+        ratatui::text::Line::from(
+            chunk
+                .iter()
+                .map(|(name, description, control)| {
+                    format!(
+                        "/{name} {description}{}",
+                        if *control { " [control]" } else { "" }
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" · "),
+        )
+    }));
+    lines
 }

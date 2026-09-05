@@ -557,6 +557,8 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_fact({:tool_timeout, ref}), do: %{kind: :tool_timeout, ref: ref}
   defp normalize_fact(:interrupt), do: %{kind: :interrupt}
+  defp normalize_fact(:steer), do: %{kind: :steer}
+  defp normalize_fact(:inbox_changed), do: %{kind: :inbox_changed}
 
   defp denormalize_fact(%{kind: :provider_settings, settings: settings}),
     do: {:provider_settings, settings}
@@ -589,6 +591,8 @@ defmodule Elara.FlightRecorder do
 
   defp denormalize_fact(%{kind: :tool_timeout, ref: ref}), do: {:tool_timeout, ref}
   defp denormalize_fact(%{kind: :interrupt}), do: :interrupt
+  defp denormalize_fact(%{kind: :steer}), do: :steer
+  defp denormalize_fact(%{kind: :inbox_changed}), do: :inbox_changed
 
   defp normalize_effect({:emit, event}, _tools), do: %{kind: :emit, event: normalize_event(event)}
 
@@ -719,6 +723,7 @@ defmodule Elara.FlightRecorder do
     do: %Provider.Error{kind: error.kind, message: error.message, status: error.status}
 
   defp normalize_event(:provider_view_changed), do: %{kind: :provider_view_changed}
+  defp normalize_event(:inbox_changed), do: %{kind: :inbox_changed}
 
   defp normalize_event({:turn_started, prompt}), do: %{kind: :turn_started, prompt: prompt}
 

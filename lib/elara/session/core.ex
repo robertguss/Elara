@@ -54,7 +54,8 @@ defmodule Elara.Session.Core do
       phase: :idle,
       streaming: nil,
       next_ref: 1,
-      deferred_calls: []
+      deferred_calls: [],
+      steering?: false
     ]
   end
 
@@ -70,6 +71,7 @@ defmodule Elara.Session.Core do
           | {:tool_crashed, ref(), reason :: String.t()}
           | {:tool_timeout, ref()}
           | :interrupt
+          | :steer
 
   @type effect ::
           {:call_provider, ref(), Provider.Request.t()}
@@ -138,7 +140,7 @@ defmodule Elara.Session.Core do
   def step(%State{phase: :idle} = state, {:ask_input, %User{} = user}) do
     prompt = user.text
     history = state.history ++ [user]
-    {ref, state} = take_ref(%{state | history: history, deferred_calls: []})
+    {ref, state} = take_ref(%{state | history: history, deferred_calls: [], steering?: false})
 
     effects = [
       {:emit, {:turn_started, prompt}},
@@ -158,6 +160,8 @@ defmodule Elara.Session.Core do
      [{:emit, :provider_view_changed}]}
   end
 
+  def step(state, :inbox_changed), do: {state, [{:emit, :inbox_changed}]}
+
   def step(%State{phase: :idle} = state, _fact), do: {state, []}
 
   def step(
@@ -174,6 +178,14 @@ defmodule Elara.Session.Core do
     else
       {state, []}
     end
+  end
+
+  def step(%State{phase: {:calling_provider, _, _}, streaming: streaming} = state, :steer) do
+    stop_stream(state, streaming, :interrupted)
+  end
+
+  def step(%State{phase: {:running_tool, _, _, _, _}} = state, :steer) do
+    {%{state | steering?: true}, []}
   end
 
   def step(
@@ -262,7 +274,7 @@ defmodule Elara.Session.Core do
       end)
 
     effects = emits ++ [{:emit, {:turn_ended, :interrupted}}]
-    {%{state | history: history, phase: :idle}, effects}
+    {%{state | history: history, phase: :idle, steering?: false}, effects}
   end
 
   def step(%State{} = state, _fact), do: {state, []}
@@ -319,7 +331,23 @@ defmodule Elara.Session.Core do
     result = Message.tool_result(call, outcome)
     history = state.history ++ [result]
     state = %{state | history: history, phase: :idle}
-    {state, more} = dispatch_next(state, rest, it)
+
+    {state, more} =
+      if state.steering? do
+        {history, emits} =
+          Enum.reduce(rest, {state.history, []}, fn pending, {history, emits} ->
+            result =
+              Message.tool_result(pending, {:error, "not started: superseded by steering input"})
+
+            {history ++ [result], emits ++ [{:emit, {:message_appended, result}}]}
+          end)
+
+        {%{state | history: history, steering?: false},
+         emits ++ [{:emit, {:turn_ended, :interrupted}}]}
+      else
+        dispatch_next(state, rest, it)
+      end
+
     {state, [{:emit, {:message_appended, result}} | more]}
   end
 

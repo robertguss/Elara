@@ -203,6 +203,9 @@ fn run(args: Args) -> Result<(), String> {
     model.set_appearance(appearance);
     model.preview_reasoning = args.preview_reasoning;
     save_cursor(&cursors, &model);
+    if let Some(request) = model.pending_input_status() {
+        connection.send(&request)?;
+    }
     if let Some(prompt) = &args.ask {
         if !model.editor.insert(prompt) {
             return Err("prompt exceeds the 64 KiB editor limit".into());
@@ -363,7 +366,8 @@ fn run_headless(
             match connection.recv_timeout(Duration::from_millis(25)) {
                 Ok(frame) => {
                     dump_frame(args.event_dump, started, &frame);
-                    let rejected = frame["type"] == "error";
+                    let rejected = frame["type"] == "error"
+                        || (frame["type"] == "input_receipt" && frame["error"].is_string());
                     handle_frame(connection, model, cursors, frame)?;
                     if rejected {
                         return Err(model
@@ -481,6 +485,7 @@ fn run_interactive(
             {
                 InputAction::Detach => return Ok(()),
                 InputAction::Submit => model.prepare_submit(),
+                InputAction::Steer => model.prepare_steer(),
                 InputAction::ProviderSettings(request)
                 | InputAction::Attachment(request)
                 | InputAction::Session(request) => Some(request),
@@ -512,7 +517,8 @@ fn handle_frame(
     cursors: &CursorStore,
     frame: Value,
 ) -> Result<(), String> {
-    if model.attachment_reply(&frame) || model.session_reply(&frame) {
+    if model.attachment_reply(&frame) || model.session_reply(&frame) || model.input_receipt(&frame)
+    {
         return Ok(());
     }
     if frame["type"] == "session_created" && frame["version"] == 2 {
@@ -567,10 +573,13 @@ fn reconnect(
     if let Some(cwd) = &model.cwd {
         request["cwd"] = json!(cwd);
     }
-    let (connection, attached) = ClientConnection::connect(port, request)?;
+    let (mut connection, attached) = ClientConnection::connect(port, request)?;
     let fresh = attached_model(&attached, &model.mode)?;
     if fresh.session_id != target {
         return Err("attachment identity does not match selected session".into());
+    }
+    if let Some(request) = fresh.pending_input_status() {
+        connection.send(&request)?;
     }
     if target == model.session_id {
         model.reconnect_from(fresh);

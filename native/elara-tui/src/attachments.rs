@@ -72,6 +72,50 @@ pub(super) struct Draft {
     rect: Cell<Rect>,
 }
 impl Draft {
+    pub fn pending_payload(&self) -> Value {
+        let image = |name: &str, data: &[u8]| json!({"name":name,"base64":base64::engine::general_purpose::STANDARD.encode(data)});
+        let mut entries: Vec<Value> = self
+            .selections
+            .iter()
+            .map(|s| match s {
+                Selection::File { path, bytes } => json!({"path":path,"bytes":bytes}),
+                Selection::Image { metadata, _data } => {
+                    image(metadata["name"].as_str().unwrap_or("image.png"), _data)
+                }
+            })
+            .collect();
+        entries.extend(
+            self.reconnect_images
+                .iter()
+                .map(|(name, data)| image(name, data)),
+        );
+        if let Some(pending) = &self.ingestion {
+            entries.push(image(&pending.query, &pending.data));
+        }
+        entries.sort_by_key(Value::to_string);
+        json!(entries)
+    }
+
+    pub fn restore_pending(&mut self, payload: &Value) {
+        let Some(entries) = payload.as_array() else {
+            return;
+        };
+        for entry in entries {
+            if let (Some(path), Some(bytes)) = (entry["path"].as_str(), entry["bytes"].as_u64()) {
+                self.selections.push(Selection::File {
+                    path: path.into(),
+                    bytes,
+                });
+            } else if let (Some(name), Some(encoded)) =
+                (entry["name"].as_str(), entry["base64"].as_str())
+                && let Ok(data) = base64::engine::general_purpose::STANDARD.decode(encoded)
+            {
+                self.reconnect_images.push_back((name.into(), data));
+            }
+        }
+        self.next_reconnect_image();
+    }
+
     pub fn reconnect(&mut self, supported: bool) {
         self.supported = supported;
         self.discovery = None;
@@ -186,6 +230,10 @@ impl Draft {
         }
     }
     pub fn clear_accepted(&mut self) {
+        self.reconnect_images.clear();
+        if let Some(pending) = &mut self.ingestion {
+            pending.cancelled = true;
+        }
         for selection in std::mem::take(&mut self.selections) {
             self.discard(&selection);
         }

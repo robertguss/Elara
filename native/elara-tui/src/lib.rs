@@ -3,6 +3,7 @@ use std::collections::{HashSet, VecDeque};
 mod actions;
 pub mod appearance;
 mod attachments;
+mod inbox;
 mod presentation;
 mod sessions;
 pub use appearance::{Appearance, Theme, ViewLayout};
@@ -146,6 +147,7 @@ pub struct Model {
     pub connection: ConnectionState,
     pub editor: Editor,
     attachments: attachments::Draft,
+    inbox: inbox::Inbox,
     pub safe_paste: bool,
     safe_paste_cr: bool,
     pub enhanced_keyboard: bool,
@@ -184,6 +186,7 @@ impl Model {
             connection: ConnectionState::Connected,
             editor,
             attachments: attachments::Draft::default(),
+            inbox: inbox::Inbox::default(),
             safe_paste: false,
             safe_paste_cr: false,
             enhanced_keyboard: false,
@@ -222,6 +225,12 @@ impl Model {
         self.cwd = fresh.cwd;
         self.lifetime = fresh.lifetime;
         self.attachments.reconnect(fresh.attachments.supported);
+        self.inbox.supported = fresh.inbox.supported;
+        self.inbox.blocked |= fresh.inbox.blocked;
+        self.inbox.selected = None;
+        if self.inbox.pending.is_none() {
+            self.inbox.pending = fresh.inbox.pending;
+        }
         self.pending_replies.clear();
         self.pending_ask = None;
         self.ask_sent_at = None;
@@ -275,6 +284,13 @@ impl Model {
     }
 
     pub fn prepare_submit(&mut self) -> Option<Value> {
+        if self.inbox.blocked || (!self.inbox.supported && self.inbox.pending.is_some()) {
+            self.notice = Some("Cannot resolve pending input identity; draft retained.".into());
+            return None;
+        }
+        if self.inbox.supported {
+            return inbox::submit(self, false);
+        }
         if self.pending_ask.is_some() {
             self.notice = Some(
                 "Acceptance pending or uncertain; draft retained. Do not retry blindly.".into(),
@@ -316,6 +332,22 @@ impl Model {
         }
         self.pending_replies.push_back(PendingReply::Interrupt);
         true
+    }
+
+    pub fn prepare_steer(&mut self) -> Option<Value> {
+        if self.inbox.supported {
+            inbox::submit(self, true)
+        } else {
+            self.notice = Some("Steering requires input_queue_v1 support.".into());
+            None
+        }
+    }
+
+    pub fn pending_input_status(&self) -> Option<Value> {
+        inbox::status_request(self)
+    }
+    pub fn input_receipt(&mut self, frame: &Value) -> bool {
+        inbox::receipt(self, frame)
     }
 
     pub fn track_resnapshot(&mut self) {
@@ -489,6 +521,7 @@ fn user_prompts(view: &Value) -> Vec<String> {
 pub enum InputAction {
     None,
     Submit,
+    Steer,
     Interrupt,
     Detach,
     ProviderSettings(Value),
@@ -575,6 +608,21 @@ pub fn handle_input(
     width: usize,
 ) -> InputAction {
     use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+    if !model.safe_paste
+        && let Some(action) = inbox::input(model, &event)
+    {
+        return action;
+    }
+    if !model.safe_paste
+        && let Event::Key(key) = &event
+        && key.kind == KeyEventKind::Press
+    {
+        match actions::lookup(*key, false) {
+            Some(actions::Action::Queue) => return inbox::open(model),
+            Some(actions::Action::Steer) => return InputAction::Steer,
+            _ => {}
+        }
+    }
     if model.session_detail.is_some() {
         if let Event::Key(key) = &event
             && key.kind != KeyEventKind::Release
@@ -1094,6 +1142,13 @@ pub fn attached_model(frame: &Value, mode: &str) -> Result<Model, String> {
             .iter()
             .any(|extension| extension == attachments::EXTENSION)
     });
+    model.inbox.supported = frame["extensions"]
+        .as_array()
+        .is_some_and(|extensions| extensions.iter().any(|e| e == inbox::EXTENSION));
+    if model.inbox.supported && model.projection.view.get("inbox").is_none() {
+        return Err("queue extension missing inbox snapshot".into());
+    }
+    inbox::restore(&mut model);
     Ok(model)
 }
 
@@ -1102,7 +1157,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "create",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION],
             "mode": mode,
             "cwd": std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).to_string_lossy()
         })
@@ -1110,7 +1165,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "attach",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION],
             "session_id": target,
             "mode": mode,
             "cursor": cursor.cursor,
@@ -1154,6 +1209,7 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
     presentation::finish(frame, model);
     attachments::draw(frame, model);
     sessions::draw(frame, model);
+    inbox::draw(frame, model);
     if let Some(text) = &model.session_detail {
         let area = frame.area();
         let rect = ratatui::layout::Rect::new(
@@ -1352,7 +1408,11 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             )
         })
         .collect();
-    let prompt_title = actions::prompt_title();
+    let prompt_title = if model.inbox.supported {
+        format!(" Enter send/queue · {} ", inbox::summary(model))
+    } else {
+        actions::prompt_title()
+    };
     let title = if model.safe_paste {
         " SAFE PASTE · Enter newline · F2 finish (does not send) "
     } else {
@@ -1735,6 +1795,9 @@ fn validate_snapshot(view: &Value) -> Result<(), String> {
     if let Some(provider) = object.get("provider_view") {
         validate_provider_view(provider)?;
     }
+    if let Some(inbox) = object.get("inbox") {
+        inbox::validate(inbox, session["id"].as_str().unwrap())?;
+    }
     let deltas = object
         .get("content_deltas")
         .and_then(Value::as_object)
@@ -1858,6 +1921,11 @@ fn apply_patch(view: &Value, ops: &[Value]) -> Result<Value, String> {
 
 fn apply_op(view: &mut Value, op: &Value) -> Result<(), String> {
     match op["op"].as_str() {
+        Some("set_inbox") => {
+            inbox::validate(&op["inbox"], view["session"]["id"].as_str().unwrap_or(""))?;
+            view["inbox"] = op["inbox"].clone();
+            Ok(())
+        }
         Some("append_message") => append_message(view, op),
         Some("set_tool_status") => set_tool_status(view, op),
         Some("set_turn_state") => set_turn_state(view, op),

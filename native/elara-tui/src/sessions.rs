@@ -274,6 +274,18 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
     let argument = words.next().unwrap_or("").trim();
     let control = model.mode == "control";
     let result = match name {
+        "queue" => {
+            model.editor.clear();
+            return Some(crate::inbox::open(model));
+        }
+        "steer" if control && !argument.is_empty() => {
+            model.editor.clear();
+            model.editor.insert(argument);
+            return Some(InputAction::Steer);
+        }
+        "resume-inputs" if control => InputAction::Session(
+            json!({"version":2,"extension":crate::inbox::EXTENSION,"command":"resume_inputs"}),
+        ),
         "sessions" => {
             model.editor.clear();
             return Some(open(model));

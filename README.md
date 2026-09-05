@@ -315,15 +315,32 @@ text, not arbitrary terminal key escape sequences. Tabs remain tabs (displayed
 at four-column stops), CRLF/CR become LF, and other C0/C1 controls are removed.
 An insert over the 64 KiB draft limit is rejected as a whole.
 
-Drafts stay editable while the session streams. Busy/rejected submissions retain
-the draft. Only the corresponding server acceptance clears an unchanged draft;
-edits made while waiting survive. A lost or delayed acknowledgement is shown as
-uncertain and repeat submission is blocked. Inspect the session before retrying
-from a new attachment; this is not a durable queue or reconnect deduplication.
-Ctrl-X interrupts; Ctrl-C detaches. Esc closes search/help or returns transcript
-focus to the prompt before detaching. Drafts live in this client window and are
-not saved after it exits. Local history recalls up to 200 canonical prompts that
-fit the editor limit; it does not change persisted conversation history.
+Drafts stay editable while the session streams. **Enter** durably queues normal
+follow-ups FIFO. **F12** (or `/queue`) opens the inbox; Delete cancels the
+selected pending entry. **Ctrl-S** (or `/steer TEXT`) prioritizes an instruction
+at the next safe boundary: an active provider request is interrupted, but an
+already-started tool settles before steering and unstarted sibling calls are
+suppressed. **Ctrl-X** stops and pauses queue draining without deleting pending
+inputs. Resume with **r** in the inbox, `/resume-inputs`, or a new normal
+submission. The inbox shows effective execution capabilities; trusted local
+execution adds no approval prompts. Observers can inspect the inbox but cannot
+mutate it.
+
+Only authoritative acceptance clears an unchanged draft; edits made while
+waiting survive. Pending submission IDs and image payloads are saved privately
+under the TUI state directory. Reconnect queries the original ID rather than
+resending; an unknown ID retains the draft for explicit submission. Accepted
+inputs and immutable attachments persist with the session. Consumed means
+delivered once, not that a tool effect succeeded. Unsettled durable executor
+receipts block subsequent queued work, including after restart. This does not
+make external commands exactly-once. Legacy servers without `input_queue_v1`
+retain the earlier non-queued ask behavior.
+
+Ctrl-C detaches. Esc closes search/help or returns transcript focus to the
+prompt before detaching. Unsubmitted drafts live in this client window; only
+submissions awaiting acceptance are saved after exit. Local history recalls up
+to 200 canonical prompts that fit the editor limit; it does not change persisted
+history.
 
 Press **Tab** to move between the prompt and transcript. With transcript focus,
 Up/Down scroll by line, PageUp/PageDown by page, Home goes to the beginning, and

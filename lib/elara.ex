@@ -94,6 +94,11 @@ defmodule Elara do
   def ask_input(session, prompt, references, images, timeout \\ :infinity),
     do: call(session, {:ask_input, prompt, references, images}, timeout)
 
+  def submit_input(session, attrs), do: call(session, {:submit_input, attrs})
+  def cancel_input(session, id), do: call(session, {:cancel_input, id})
+  def input_status(session, id), do: call(session, {:input_status, id})
+  def resume_inputs(session), do: call(session, :resume_inputs)
+
   @doc "Accept model and effort for the next provider request; an in-flight request is unchanged."
   def set_provider_settings(session, settings), do: call(session, {:provider_settings, settings})
 

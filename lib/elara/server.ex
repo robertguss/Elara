@@ -109,6 +109,11 @@ defmodule Elara.Server do
     Process.put(:input_images, %{})
 
     Process.put(
+      :input_queue,
+      version == 2 and is_list(extensions) and "input_queue_v1" in extensions
+    )
+
+    Process.put(
       :provider_visibility,
       version == 2 and is_list(extensions) and "provider_visibility_v1" in extensions
     )
@@ -133,9 +138,10 @@ defmodule Elara.Server do
               attached_message(version, mode, attachment, lifetime)
               |> Map.put("cwd", Elara.cwd(session)),
               "extensions",
-              Enum.filter(["provider_visibility_v1", "input_attachments_v1"], fn
+              Enum.filter(["provider_visibility_v1", "input_attachments_v1", "input_queue_v1"], fn
                 "provider_visibility_v1" -> Process.get(:provider_visibility)
                 "input_attachments_v1" -> Process.get(:input_attachments)
+                "input_queue_v1" -> Process.get(:input_queue)
               end)
             )
           )
@@ -308,6 +314,11 @@ defmodule Elara.Server do
             do: ops,
             else: Enum.reject(ops, &(&1["op"] == "set_provider_view"))
 
+        ops =
+          if Process.get(:input_queue),
+            do: ops,
+            else: Enum.reject(ops, &(&1["op"] == "set_inbox"))
+
         message = Protocol.patch(seq, ops) |> Map.put("incarnation", incarnation)
 
         case send_json(socket, message) do
@@ -319,6 +330,7 @@ defmodule Elara.Server do
 
   defp send_v1_event(socket, seq, event, incarnation \\ nil)
   defp send_v1_event(_socket, _seq, :provider_view_changed, _incarnation), do: :ok
+  defp send_v1_event(_socket, _seq, :inbox_changed, _incarnation), do: :ok
 
   defp send_v1_event(socket, seq, event, incarnation) do
     message = Protocol.event(seq, event)
@@ -327,9 +339,12 @@ defmodule Elara.Server do
   end
 
   defp negotiated_snapshot(snapshot) do
-    if Process.get(:provider_visibility),
-      do: snapshot,
-      else: Map.delete(snapshot, "provider_view")
+    snapshot =
+      if Process.get(:provider_visibility),
+        do: snapshot,
+        else: Map.delete(snapshot, "provider_view")
+
+    if Process.get(:input_queue), do: snapshot, else: Map.delete(snapshot, "inbox")
   end
 
   defp handle_command(
@@ -359,6 +374,21 @@ defmodule Elara.Server do
               "session_reload"
             ] do
     lifecycle_command(session, command, request, provider, lifetime)
+  end
+
+  defp handle_versioned_command(
+         session,
+         2,
+         %{"command" => command, "extension" => "input_queue_v1"} = request,
+         _provider,
+         _lifetime
+       )
+       when command in ["submit_input", "cancel_input", "resume_inputs", "input_status"] do
+    if Process.get(:input_queue) do
+      queue_command(session, command, request)
+    else
+      input_receipt(command, request["submission_id"], nil, :unsupported_extension)
+    end
   end
 
   defp handle_versioned_command(
@@ -652,6 +682,105 @@ defmodule Elara.Server do
       {:error, :unknown_attachment_reselect_image}
     end
   end
+
+  defp queue_command(session, "submit_input", request) do
+    kind =
+      case request["kind"] do
+        "normal" -> :normal
+        "steer" -> :steer
+        _ -> :invalid
+      end
+
+    result =
+      with {:ok, cwd} <- Elara.attached_command(session, :input_workspace),
+           ids = request["attachment_ids"] || [],
+           images = Process.get(:input_images, %{}),
+           refs = request["references"] || [],
+           true <- is_binary(request["submission_id"]) and is_binary(request["sender_id"]),
+           true <- is_binary(request["prompt"]),
+           true <- is_list(refs),
+           true <- is_list(ids),
+           true <- length(ids) <= 4 and Enum.all?(ids, &Map.has_key?(images, &1)),
+           true <- kind in [:normal, :steer],
+           {:ok, user} <-
+             Elara.Attachment.prepare(
+               cwd,
+               request["prompt"],
+               refs,
+               Enum.map(ids, &images[&1])
+             ) do
+        Elara.attached_command(
+          session,
+          {:submit_input,
+           %{
+             id: request["submission_id"],
+             sender_id: request["sender_id"],
+             kind: kind,
+             user: user
+           }}
+        )
+      else
+        false -> {:error, :invalid_input}
+        {:error, reason} -> {:error, reason}
+      end
+
+    receipt_result("submit_input", request["submission_id"], result)
+  end
+
+  defp queue_command(session, "cancel_input", request),
+    do:
+      receipt_result(
+        "cancel_input",
+        request["submission_id"],
+        Elara.attached_command(session, {:cancel_input, request["submission_id"]})
+      )
+
+  defp queue_command(session, "input_status", request),
+    do:
+      receipt_result(
+        "input_status",
+        request["submission_id"],
+        Elara.attached_command(session, {:input_status, request["submission_id"]})
+      )
+
+  defp queue_command(session, "resume_inputs", request),
+    do:
+      receipt_result(
+        "resume_inputs",
+        request["submission_id"],
+        Elara.attached_command(session, :resume_inputs)
+      )
+
+  defp receipt_result(command, id, {:ok, entry}), do: input_receipt(command, id, entry, nil)
+  defp receipt_result(command, id, :ok), do: input_receipt(command, id, nil, nil)
+  defp receipt_result(command, id, {:error, reason}), do: input_receipt(command, id, nil, reason)
+
+  defp input_receipt(command, id, entry, error) do
+    %{
+      "type" => "input_receipt",
+      "version" => 2,
+      "command" => command,
+      "submission_id" => id,
+      "entry" => encode_input_entry(entry)
+    }
+    |> then(fn receipt ->
+      if error, do: Map.put(receipt, "error", format_reason(error)), else: receipt
+    end)
+  end
+
+  defp encode_input_entry(nil), do: nil
+
+  defp encode_input_entry(entry),
+    do: %{
+      "id" => entry.id,
+      "session_id" => entry.session_id,
+      "sender_id" => entry.sender_id,
+      "kind" => Atom.to_string(entry.kind),
+      "state" => Atom.to_string(entry.state),
+      "text" => entry.user.text,
+      "attachments" => Enum.map(entry.user.attachments, &Elara.Attachment.metadata/1),
+      "error" => entry.error
+    }
 
   defp command_result(:ok, version), do: %{"type" => "ok", "version" => version}
   defp command_result({:error, reason}, version), do: error_message(reason, version)

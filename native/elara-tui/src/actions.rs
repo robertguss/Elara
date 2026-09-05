@@ -33,8 +33,13 @@ pub(crate) enum Action {
     Interrupt,
     Escape,
     Sessions,
+    Queue,
+    Steer,
 }
 pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
+    ("queue", "inspect/cancel pending input", false),
+    ("steer", "prioritize this draft at a safe boundary", true),
+    ("resume-inputs", "resume a paused queue", true),
     ("sessions", "find or switch session", false),
     ("new", "create a session", true),
     ("name", "name current session", true),
@@ -73,6 +78,14 @@ const fn binding(
     }
 }
 static BINDINGS: &[Binding] = &[
+    binding(KeyCode::F(12), M::NONE, false, Action::Queue, "F12 queue"),
+    binding(
+        KeyCode::Char('s'),
+        M::CONTROL,
+        false,
+        Action::Steer,
+        "Ctrl-S steer",
+    ),
     binding(
         KeyCode::F(11),
         M::NONE,

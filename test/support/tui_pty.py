@@ -19,7 +19,8 @@ binary, server_port, session = sys.argv[1:]
 observer = socket.create_connection(("127.0.0.1", int(server_port)), timeout=5)
 reader = observer.makefile("rb")
 observer.sendall((json.dumps({"version": 2, "command": "attach", "session_id": session,
-                              "mode": "observe", "cursor": 0}) + "\n").encode())
+                              "mode": "observe", "cursor": 0,
+                              "extensions": ["input_queue_v1"]}) + "\n").encode())
 assert json.loads(reader.readline())["type"] == "attached"
 
 
@@ -100,12 +101,16 @@ try:
     resize(180, 45)
     resize(80, 24)
     send(b"X")
-    # Busy Enter keeps the draft; interruption preserves it as well.
+    # Busy Enter durably queues the edited draft; stop preserves and pauses it.
     send(b"\r\x18")
     wait_for(lambda: snapshot()["turn"]["state"] == "idle", "interrupt reaches idle")
-    assert prompts() == [expected], "busy draft was not accepted"
+    assert prompts() == [expected], "paused queue has not been consumed"
+    inbox = snapshot()["inbox"]
+    assert inbox["paused"]
+    assert inbox["entries"][-1]["text"] == "draft while streaminX"
+    assert inbox["entries"][-1]["state"] == "queued"
     send(b"\x1b[1;3A\x1b[1;3B")  # history older/newest restores draft
-    send(b"\r")
+    send(b"/resume-inputs\r")
     wait_for(lambda: prompts() == [expected, "draft while streaminX"], "selected draft survives resize/history/interrupt")
     send(b"\x18")
     wait_for(lambda: snapshot()["turn"]["state"] == "idle", "second interrupt")
@@ -123,7 +128,7 @@ try:
     _, status = os.waitpid(pid, 0)
     pid = None
     assert os.waitstatus_to_exitcode(status) == 0
-    print("PTY passed: exact Unicode multiline text, selection, history, streaming, busy rejection, interrupt, safe paste, 80x24/120x40/180x45, cleanup")
+    print("PTY passed: exact Unicode multiline text, selection, history, streaming, durable queue/stop/resume, safe paste, 80x24/120x40/180x45, cleanup")
 finally:
     if pid is not None:
         os.kill(pid, signal.SIGKILL)

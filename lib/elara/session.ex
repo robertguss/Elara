@@ -5,7 +5,8 @@ defmodule Elara.Session do
 
   use GenServer
 
-  alias Elara.Effect.{ControllerJournal, DeclarativeWrite, Job, Sidecar}
+  alias Elara.Effect.{ControllerJournal, DeclarativeWrite, Executor, Job, Sidecar}
+  alias Elara.Effect.ExecutorLedger.Record
   alias Elara.FlightRecorder
   alias Elara.Message
   alias Elara.Message.{Assistant, ToolResult}
@@ -77,7 +78,9 @@ defmodule Elara.Session do
       pending_reply: nil,
       tasks: %{},
       pending_effects: %{},
-      timers: %{}
+      effect_recovery_pending: [],
+      timers: %{},
+      consuming_id: nil
     ]
   end
 
@@ -127,7 +130,7 @@ defmodule Elara.Session do
     }
 
     case prepare_session(store, core_config, recovery) do
-      {:ok, store, core, effect_journal} ->
+      {:ok, store, core, effect_journal, effect_recovery_pending} ->
         with {:ok, store} <- Store.set_provider_settings(store, core.config.provider_settings),
              {:ok, _} <- Registry.register(Elara.Sessions, store.id, nil),
              {:ok, plugins, tools} <- start_plugins(plugin_paths, cwd, core.config.tools) do
@@ -146,6 +149,7 @@ defmodule Elara.Session do
             effect_executor_explicit?: effect_executor_explicit?,
             effect_fault_hook: effect_fault_hook,
             effect_journal: effect_journal,
+            effect_recovery_pending: effect_recovery_pending,
             provider: provider,
             cwd: cwd,
             base_system: Keyword.get(opts, :base_system, core.config.system),
@@ -157,7 +161,11 @@ defmodule Elara.Session do
             plugins: plugins
           }
 
+          {shell, recovered?} = finish_restart_recovery(shell)
           recorder = FlightRecorder.new(shell.core, shell.id, incarnation, store.path)
+          if recovered?, do: send(self(), :inbox_changed)
+          if effect_recovery_pending == [], do: send(self(), :drain_inputs)
+          if effect_recovery_pending != [], do: send(self(), :check_effect_recovery)
           {:ok, %{shell | recorder: recorder}}
         else
           {:error, reason} ->
@@ -434,10 +442,33 @@ defmodule Elara.Session do
   end
 
   def handle_call({:attached_command, command}, {pid, _}, shell) do
-    if shell.controller == pid do
+    if shell.controller == pid or match?({:input_status, _}, command) do
       handle_attached_command(command, shell)
     else
       {:reply, {:error, :not_controller}, shell}
+    end
+  end
+
+  def handle_call({:submit_input, attrs}, _from, shell), do: submit_input(attrs, shell)
+  def handle_call({:cancel_input, id}, _from, shell), do: cancel_input(id, shell)
+
+  def handle_call({:input_status, id}, _from, shell),
+    do: {:reply, {:ok, find_input(shell, id)}, shell}
+
+  def handle_call(:resume_inputs, _from, shell) do
+    with {:ok, store} <-
+           Store.put_inbox(
+             shell.store,
+             shell.store.inbox,
+             false,
+             nil,
+             shell.store.active_input_id
+           ) do
+      shell = %{shell | store: store}
+      send(self(), :drain_inputs)
+      {:reply, :ok, inbox_changed(shell)}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, shell}
     end
   end
 
@@ -460,6 +491,9 @@ defmodule Elara.Session do
       not is_nil(shell.controller) ->
         {:reply, {:error, :control_taken}, shell}
 
+      Enum.any?(shell.store.inbox, &(&1.state in [:queued, :accepted])) ->
+        {:reply, {:error, :pending_inputs}, shell}
+
       true ->
         case Store.delete(shell.store) do
           :ok -> {:stop, :normal, :ok, shell}
@@ -471,7 +505,33 @@ defmodule Elara.Session do
   @impl true
   def handle_cast(:interrupt, shell) do
     shell = %{abort_running_tasks(shell) | pending_effects: %{}}
-    {:noreply, feed(:interrupt, shell)}
+    shell = pause_existing_inputs(shell)
+    store = shell.store
+    {:noreply, feed(:interrupt, if(store.inbox == [], do: shell, else: inbox_changed(shell)))}
+  end
+
+  def handle_info(:drain_inputs, shell), do: {:noreply, drain_inputs(shell)}
+  def handle_info(:inbox_changed, shell), do: {:noreply, inbox_changed(shell)}
+
+  def handle_info(:check_effect_recovery, shell) do
+    case pending_receipt_effects(shell) do
+      [] ->
+        shell = %{shell | effect_recovery_pending: []}
+        {shell, recovered?} = finish_restart_recovery(shell)
+        if recovered?, do: send(self(), :inbox_changed)
+        send(self(), :drain_inputs)
+        {:noreply, shell}
+
+      pending ->
+        Process.send_after(self(), :check_effect_recovery, 25)
+        {:noreply, %{shell | effect_recovery_pending: pending}}
+    end
+  end
+
+  def handle_info({:finish_input, outcome}, shell) do
+    shell = finish_active_input(shell, outcome)
+    send(self(), :drain_inputs)
+    {:noreply, shell}
   end
 
   @impl true
@@ -598,7 +658,7 @@ defmodule Elara.Session do
 
   defp prepare_session(store, config, %{executor: nil}) do
     case hydrate(store, config) do
-      {:ok, store, core} -> {:ok, store, core, nil}
+      {:ok, store, core} -> {:ok, store, core, nil, []}
       {:error, _reason} = error -> error
     end
   end
@@ -617,7 +677,8 @@ defmodule Elara.Session do
           {:ok, store} ->
             case persist_repairs(store, Core.new(config, Store.history(store))) do
               {:ok, store, core} ->
-                {:ok, store, core, journal}
+                pending = recovery_barrier_jobs(store, config.tools, journal, recovery)
+                {:ok, store, core, journal, pending}
 
               {:error, reason} ->
                 close_effect_journal(journal)
@@ -660,6 +721,66 @@ defmodule Elara.Session do
         end
       end)
     end
+  end
+
+  # Input receipts make restarting an active turn observable. Do not fail that
+  # receipt (and thereby release the next queued input) while a durable effect
+  # from the interrupted turn can still complete in its executor. This includes
+  # jobs for which an indeterminate ToolResult was already written.
+  defp recovery_barrier_jobs(_store, tools, journal, recovery) do
+    # New submissions must obey the same barrier as inputs restored at startup.
+    case ControllerJournal.all(journal) do
+      {:ok, jobs} ->
+        Enum.filter(jobs, fn job ->
+          declarative_write_job?(job) or
+            (recovery.executor_explicit? and receipt_routed_job?(job, tools))
+        end)
+
+      {:error, _reason} ->
+        [:journal_unavailable]
+    end
+  end
+
+  defp receipt_routed_job?(%Job{operation_kind: :run_tool, tool_name: name}, tools) do
+    match?(%Tool{plugin: nil, mutating: true}, Map.get(tools, name))
+  end
+
+  defp receipt_routed_job?(%Job{}, _tools), do: false
+
+  defp pending_receipt_effects(%Shell{effect_recovery_pending: pending} = shell) do
+    Enum.reject(pending, &receipt_effect_terminal?(shell, &1))
+  end
+
+  defp receipt_effect_terminal?(_shell, :journal_unavailable), do: false
+
+  defp receipt_effect_terminal?(shell, %Job{} = job) do
+    case ControllerJournal.observation(shell.effect_journal, job.job_id) do
+      {:ok, %{executor_record: %Record{state: state, operation_digest: digest}}}
+      when state in [:completed, :failed] and digest == job.operation_digest ->
+        true
+
+      _ ->
+        query_receipt_terminal?(shell, job)
+    end
+  end
+
+  defp query_receipt_terminal?(shell, job) do
+    case safe_executor_query(shell.effect_executor, job.job_id) do
+      {state, %Record{operation_digest: digest} = record}
+      when state in [:completed, :failed] and digest == job.operation_digest ->
+        match?({:ok, _}, ControllerJournal.observe(shell.effect_journal, record))
+
+      _not_terminal_or_authoritative ->
+        false
+    end
+  end
+
+  defp safe_executor_query(nil, _job_id), do: :unavailable
+
+  defp safe_executor_query(executor, job_id) do
+    Executor.query(executor, job_id)
+  catch
+    :exit, _reason -> :unavailable
   end
 
   defp persist_not_started(store, call, tools) do
@@ -1065,9 +1186,24 @@ defmodule Elara.Session do
          shell,
          patch_context
        ) do
-    case Store.append(shell.store, message) do
+    consuming? = shell.consuming_id != nil and is_struct(message, Message.User)
+
+    result =
+      if consuming?,
+        do:
+          Store.put_inbox(
+            shell.store,
+            shell.store.inbox,
+            shell.store.inputs_paused,
+            message,
+            shell.store.active_input_id
+          ),
+        else: Store.append(shell.store, message)
+
+    case result do
       {:ok, store} ->
-        emit(event, effect_id, %{shell | store: store}, patch_context)
+        shell = emit(event, effect_id, %{shell | store: store, consuming_id: nil}, patch_context)
+        if consuming?, do: inbox_changed(shell), else: shell
 
       {:error, reason} ->
         raise "session persistence failed: #{inspect(reason)}"
@@ -1305,30 +1441,47 @@ defmodule Elara.Session do
 
     patch_ops = Protocol.patch_ops(event, shell.core, patch_context)
 
+    patch_ops =
+      if event == :inbox_changed,
+        do: patch_ops ++ [%{"op" => "set_inbox", "inbox" => inbox_view(shell)}],
+        else: patch_ops
+
     Enum.each(shell.attachments, fn
       {pid, %{protocol: 2}} ->
         send(pid, {:elara_patch, shell.id, shell.incarnation, seq, patch_ops})
+
+      {_pid, %{protocol: 1}} when event == :inbox_changed ->
+        :ok
 
       {pid, _attachment} ->
         send(pid, {:elara_event, shell.id, shell.incarnation, seq, event})
     end)
 
-    case {event, shell.pending_reply} do
-      {{:turn_ended, {:completed, text}}, from} when from != nil ->
-        GenServer.reply(from, {:ok, text})
-        %{shell | pending_reply: nil}
+    shell =
+      case {event, shell.pending_reply} do
+        {{:turn_ended, {:completed, text}}, from} when from != nil ->
+          GenServer.reply(from, {:ok, text})
+          %{shell | pending_reply: nil}
 
-      {{:turn_ended, outcome, :streamed}, from} when from != nil ->
-        GenServer.reply(from, {:error, outcome})
-        %{shell | pending_reply: nil}
+        {{:turn_ended, outcome, :streamed}, from} when from != nil ->
+          GenServer.reply(from, {:error, outcome})
+          %{shell | pending_reply: nil}
 
-      {{:turn_ended, outcome}, from} when from != nil ->
-        GenServer.reply(from, {:error, outcome})
-        %{shell | pending_reply: nil}
+        {{:turn_ended, outcome}, from} when from != nil ->
+          GenServer.reply(from, {:error, outcome})
+          %{shell | pending_reply: nil}
 
-      _ ->
-        shell
+        _ ->
+          shell
+      end
+
+    case event do
+      {:turn_ended, outcome} -> send(self(), {:finish_input, outcome})
+      {:turn_ended, outcome, _} -> send(self(), {:finish_input, outcome})
+      _ -> :ok
     end
+
+    shell
   end
 
   defp track_task(shell, %Task{ref: ref, pid: pid}, kind, core_ref, plugin_lease \\ nil) do
@@ -1547,8 +1700,18 @@ defmodule Elara.Session do
   end
 
   defp handle_attached_command(:interrupt, shell) do
-    {:reply, :ok, feed(:interrupt, abort_running_tasks(shell))}
+    shell = shell |> abort_running_tasks() |> pause_existing_inputs()
+    store = shell.store
+    {:reply, :ok, feed(:interrupt, if(store.inbox == [], do: shell, else: inbox_changed(shell)))}
   end
+
+  defp handle_attached_command({:submit_input, attrs}, shell), do: submit_input(attrs, shell)
+  defp handle_attached_command({:cancel_input, id}, shell), do: cancel_input(id, shell)
+
+  defp handle_attached_command({:input_status, id}, shell),
+    do: {:reply, {:ok, find_input(shell, id)}, shell}
+
+  defp handle_attached_command(:resume_inputs, shell), do: handle_call(:resume_inputs, nil, shell)
 
   defp handle_attached_command({:name, name}, shell) when is_binary(name) and name != "" do
     if Core.idle?(shell.core) do
@@ -1612,7 +1775,7 @@ defmodule Elara.Session do
       id: shell.id,
       incarnation: shell.incarnation,
       head: shell.next_event_seq - 1,
-      snapshot: materialized_view(shell)
+      snapshot: materialized_view(shell) |> Map.put("inbox", inbox_view(shell))
     }
   end
 
@@ -1651,6 +1814,241 @@ defmodule Elara.Session do
 
   defp materialized_view(shell) do
     Protocol.snapshot(shell.id, shell.incarnation, shell.core)
+  end
+
+  defp submit_input(%{id: id, sender_id: sender, kind: kind, user: %Message.User{} = user}, shell)
+       when is_binary(id) and id != "" and is_binary(sender) and sender != "" and
+              kind in [:normal, :steer] do
+    case find_input(shell, id) do
+      nil ->
+        size = byte_size(JSON.encode!(Store.encode_message(user)))
+
+        if input_admissible(shell, user) != :ok do
+          {:reply, input_admissible(shell, user), shell}
+        else
+          if size > Protocol.max_line_bytes() do
+            {:reply, {:error, :message_too_large}, shell}
+          else
+            entry = %{
+              id: id,
+              session_id: shell.id,
+              sender_id: sender,
+              kind: kind,
+              state: if(Core.idle?(shell.core), do: :accepted, else: :queued),
+              user: user,
+              created_at: System.system_time(:millisecond),
+              error: nil
+            }
+
+            paused = if kind == :normal, do: false, else: shell.store.inputs_paused
+
+            prospective = shell.store.inbox ++ [entry]
+
+            with true <- durable_input_size(shell, prospective) <= Protocol.max_line_bytes(),
+                 {:ok, store} <-
+                   Store.put_inbox(
+                     shell.store,
+                     prospective,
+                     paused,
+                     nil,
+                     shell.store.active_input_id
+                   ) do
+              shell = inbox_changed(%{shell | store: store})
+              shell = if kind == :steer, do: steer(shell), else: shell
+              send(self(), :drain_inputs)
+              {:reply, {:ok, entry}, shell}
+            else
+              false -> {:reply, {:error, :message_too_large}, shell}
+              {:error, reason} -> {:reply, {:error, reason}, shell}
+            end
+          end
+        end
+
+      existing ->
+        if existing.sender_id == sender and existing.kind == kind and existing.user == user,
+          do: {:reply, {:ok, existing}, shell},
+          else: {:reply, {:error, :submission_conflict}, shell}
+    end
+  end
+
+  defp submit_input(_, shell), do: {:reply, {:error, :invalid_input}, shell}
+
+  defp cancel_input(id, shell) when is_binary(id) do
+    case find_input(shell, id) do
+      nil ->
+        {:reply, {:ok, nil}, shell}
+
+      %{state: state} = entry when state in [:consumed, :cancelled, :failed] ->
+        {:reply, {:ok, entry}, shell}
+
+      entry ->
+        updated = %{entry | state: :cancelled}
+        inbox = Enum.map(shell.store.inbox, &if(&1.id == id, do: updated, else: &1))
+
+        case Store.put_inbox(
+               shell.store,
+               inbox,
+               shell.store.inputs_paused,
+               nil,
+               shell.store.active_input_id
+             ) do
+          {:ok, store} ->
+            shell = inbox_changed(%{shell | store: store})
+            {:reply, {:ok, updated}, shell}
+
+          {:error, reason} ->
+            {:reply, {:error, reason}, shell}
+        end
+    end
+  end
+
+  defp cancel_input(_, shell), do: {:reply, {:error, :invalid_input}, shell}
+  defp find_input(shell, id), do: Enum.find(shell.store.inbox, &(&1.id == id))
+
+  defp drain_inputs(%{effect_recovery_pending: [_ | _]} = shell), do: shell
+  defp drain_inputs(%{store: %{inputs_paused: true}} = shell), do: shell
+  defp drain_inputs(%{store: %{active_input_id: id}} = shell) when not is_nil(id), do: shell
+
+  defp drain_inputs(shell) do
+    if Core.idle?(shell.core) do
+      pending = Enum.filter(shell.store.inbox, &(&1.state in [:queued, :accepted]))
+      entry = Enum.find(pending, &(&1.kind == :steer)) || List.first(pending)
+
+      if entry do
+        jobs =
+          if shell.effect_journal do
+            recovery_barrier_jobs(shell.store, shell.core.config.tools, shell.effect_journal, %{
+              executor_explicit?: shell.effect_executor_explicit?
+            })
+          else
+            []
+          end
+
+        unsettled = pending_receipt_effects(%{shell | effect_recovery_pending: jobs})
+
+        if unsettled != [] do
+          Process.send_after(self(), :check_effect_recovery, 25)
+          %{shell | effect_recovery_pending: unsettled}
+        else
+          consumed = %{entry | state: :consumed}
+          inbox = Enum.map(shell.store.inbox, &if(&1.id == entry.id, do: consumed, else: &1))
+
+          # Commit consumption and the User append together, never separately.
+          store = %{shell.store | inbox: inbox, active_input_id: entry.id}
+          feed({:ask_input, entry.user}, %{shell | store: store, consuming_id: entry.id})
+        end
+      else
+        shell
+      end
+    else
+      shell
+    end
+  end
+
+  defp steer(shell) do
+    case shell.core.phase do
+      {:calling_provider, _, _} -> feed(:steer, abort_running_tasks(shell))
+      {:running_tool, _, _, _, _} -> feed(:steer, shell)
+      _ -> shell
+    end
+  end
+
+  defp inbox_changed(shell) do
+    feed(:inbox_changed, shell)
+  end
+
+  defp pause_existing_inputs(%{store: %{inbox: []}} = shell), do: shell
+
+  defp pause_existing_inputs(shell) do
+    {:ok, store} =
+      Store.put_inbox(shell.store, shell.store.inbox, true, nil, shell.store.active_input_id)
+
+    %{shell | store: store}
+  end
+
+  defp finish_active_input(%{store: %{active_input_id: nil}} = shell, _outcome), do: shell
+
+  defp finish_active_input(shell, outcome) do
+    id = shell.store.active_input_id
+    failed? = match?({:provider_error, _}, outcome)
+    error = if failed?, do: inspect(outcome), else: nil
+
+    inbox =
+      Enum.map(shell.store.inbox, fn
+        %{id: ^id} = entry ->
+          %{entry | state: if(failed?, do: :failed, else: :consumed), error: error}
+
+        entry ->
+          entry
+      end)
+
+    case Store.put_inbox(shell.store, inbox, shell.store.inputs_paused) do
+      {:ok, store} -> inbox_changed(%{shell | store: store})
+      {:error, _} -> shell
+    end
+  end
+
+  defp fail_restarted_input(%{active_input_id: nil} = store), do: {store, false}
+
+  defp fail_restarted_input(store) do
+    id = store.active_input_id
+
+    inbox =
+      Enum.map(
+        store.inbox,
+        &if(&1.id == id, do: %{&1 | state: :failed, error: "session restarted"}, else: &1)
+      )
+
+    case Store.put_inbox(store, inbox, store.inputs_paused) do
+      {:ok, store} -> {store, true}
+      {:error, _} -> {store, false}
+    end
+  end
+
+  defp finish_restart_recovery(%Shell{effect_recovery_pending: [_ | _]} = shell),
+    do: {shell, false}
+
+  defp finish_restart_recovery(shell) do
+    {store, recovered?} = fail_restarted_input(shell.store)
+    {%{shell | store: store}, recovered?}
+  end
+
+  defp input_admissible(shell, user) do
+    images = Enum.filter(user.attachments, &(&1["kind"] == "image"))
+    input_ready(%{shell | core: %{shell.core | phase: :idle}}, images)
+  end
+
+  defp durable_input_size(shell, inbox) do
+    prospective = %{shell | store: %{shell.store | inbox: inbox}}
+    view = Map.put(materialized_view(shell), "inbox", inbox_view(prospective))
+
+    # Include immutable payloads, not just public attachment metadata, and
+    # reserve room for pending User messages when they enter the transcript.
+    byte_size(JSON.encode!(view)) +
+      Enum.sum(Enum.map(inbox, &byte_size(JSON.encode!(Store.encode_message(&1.user)))))
+  end
+
+  defp inbox_view(shell) do
+    %{
+      "entries" =>
+        Enum.map(shell.store.inbox, fn e ->
+          %{
+            "id" => e.id,
+            "session_id" => e.session_id,
+            "sender_id" => e.sender_id,
+            "kind" => Atom.to_string(e.kind),
+            "state" => Atom.to_string(e.state),
+            "text" => e.user.text,
+            "attachments" => Enum.map(e.user.attachments, &Elara.Attachment.metadata/1),
+            "error" => e.error
+          }
+        end),
+      "paused" => shell.store.inputs_paused,
+      "execution" => %{
+        "mode" => "trusted_local",
+        "allowed_capabilities" => shell.allowed_capabilities
+      }
+    }
   end
 
   defp grant_control(:observe, _pid, _shell), do: :ok

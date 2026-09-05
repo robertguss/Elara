@@ -253,6 +253,7 @@ defmodule Elara.Protocol do
   end
 
   defp event_ops(:provider_view_changed, _offset, _messages, _supersedes), do: []
+  defp event_ops(:inbox_changed, _offset, _messages, _supersedes), do: []
 
   defp event_ops({:turn_started, _prompt}, _offset, _messages, _supersedes), do: []
 
@@ -380,6 +381,9 @@ defmodule Elara.Protocol do
 
   defp maybe_supersedes(op, nil), do: op
   defp maybe_supersedes(op, id) when is_binary(id), do: Map.put(op, "supersedes", id)
+
+  defp apply_op(view, %{"op" => "set_inbox", "inbox" => inbox}) when is_map(inbox),
+    do: {:ok, Map.put(view, "inbox", inbox)}
 
   defp apply_op(view, %{"op" => "set_provider_view", "provider_view" => provider_view})
        when is_map(provider_view),

@@ -59,6 +59,9 @@ defmodule Elara.Session.Store do
     :lock_path,
     :lock_handle,
     entries: [],
+    inbox: [],
+    inputs_paused: false,
+    active_input_id: nil,
     persist?: true
   ]
 
@@ -121,7 +124,10 @@ defmodule Elara.Session.Store do
          leaf: leaf,
          name: header.name,
          parent_session: header.parent_session,
-         provider_settings: header.provider_settings
+         provider_settings: header.provider_settings,
+         inbox: header.inbox,
+         inputs_paused: header.inputs_paused,
+         active_input_id: header.active_input_id
        }}
     end
   end
@@ -138,6 +144,13 @@ defmodule Elara.Session.Store do
     }
 
     save(%{store | entries: store.entries ++ [entry], leaf: entry.id})
+  end
+
+  @doc "Atomically persist an inbox change, optionally with a consumed user message."
+  def put_inbox(%__MODULE__{} = store, inbox, paused, user \\ nil, active_id \\ nil)
+      when is_list(inbox) and is_boolean(paused) do
+    store = %{store | inbox: inbox, inputs_paused: paused, active_input_id: active_id}
+    if user, do: append(store, user), else: save(store)
   end
 
   @spec history(t()) :: [Message.t()]
@@ -515,6 +528,30 @@ defmodule Elara.Session.Store do
     |> put_optional("name", store.name)
     |> put_optional("parentSession", store.parent_session)
     |> put_optional("providerSettings", store.provider_settings)
+    |> put_optional(
+      "inbox",
+      encode_inbox(store.inbox, store.inputs_paused, store.active_input_id)
+    )
+  end
+
+  defp encode_inbox([], false, nil), do: nil
+
+  defp encode_inbox(entries, paused, active_id) do
+    %{"paused" => paused, "entries" => Enum.map(entries, &encode_inbox_entry/1)}
+    |> put_optional("activeId", active_id)
+  end
+
+  defp encode_inbox_entry(entry) do
+    %{
+      "id" => entry.id,
+      "sessionId" => entry.session_id,
+      "senderId" => entry.sender_id,
+      "kind" => Atom.to_string(entry.kind),
+      "state" => Atom.to_string(entry.state),
+      "user" => encode_message(entry.user),
+      "createdAt" => entry.created_at
+    }
+    |> put_optional("error", Map.get(entry, :error))
   end
 
   defp put_optional(map, _key, nil), do: map
@@ -598,7 +635,16 @@ defmodule Elara.Session.Store do
 
   defp decode_header(%{"version" => version, "id" => id, "cwd" => cwd} = header) do
     allowed =
-      MapSet.new(["version", "id", "cwd", "leaf", "name", "parentSession", "providerSettings"])
+      MapSet.new([
+        "version",
+        "id",
+        "cwd",
+        "leaf",
+        "name",
+        "parentSession",
+        "providerSettings",
+        "inbox"
+      ])
 
     cond do
       not Enum.all?(Map.keys(header), &MapSet.member?(allowed, &1)) ->
@@ -626,20 +672,95 @@ defmodule Elara.Session.Store do
         {:error, :bad_header}
 
       true ->
-        {:ok,
-         %{
-           id: id,
-           cwd: cwd,
-           leaf: Map.get(header, "leaf", :legacy),
-           legacy?: not Map.has_key?(header, "leaf"),
-           name: Map.get(header, "name"),
-           parent_session: Map.get(header, "parentSession"),
-           provider_settings: Map.get(header, "providerSettings")
-         }}
+        with {:ok, inbox, paused, active_id} <- decode_inbox(Map.get(header, "inbox")),
+             true <- Enum.all?(inbox, &(&1.session_id == id)) do
+          {:ok,
+           %{
+             id: id,
+             cwd: cwd,
+             leaf: Map.get(header, "leaf", :legacy),
+             legacy?: not Map.has_key?(header, "leaf"),
+             name: Map.get(header, "name"),
+             parent_session: Map.get(header, "parentSession"),
+             provider_settings: Map.get(header, "providerSettings"),
+             inbox: inbox,
+             inputs_paused: paused,
+             active_input_id: active_id
+           }}
+        else
+          _ -> {:error, :bad_header}
+        end
     end
   end
 
   defp decode_header(_header), do: {:error, :bad_header}
+
+  defp decode_inbox(nil), do: {:ok, [], false, nil}
+
+  defp decode_inbox(%{"entries" => entries, "paused" => paused} = inbox)
+       when map_size(inbox) in [2, 3] and is_list(entries) and is_boolean(paused) do
+    active_id = Map.get(inbox, "activeId")
+
+    with true <- Enum.all?(Map.keys(inbox), &(&1 in ["entries", "paused", "activeId"])),
+         true <- is_nil(active_id) or (is_binary(active_id) and active_id != ""),
+         {:ok, decoded} <- decode_inbox_entries(entries, []) do
+      ids = Enum.map(decoded, & &1.id)
+
+      if Enum.uniq(ids) == ids and (is_nil(active_id) or active_id in ids),
+        do: {:ok, decoded, paused, active_id},
+        else: {:error, :bad_header}
+    else
+      _ -> {:error, :bad_header}
+    end
+  end
+
+  defp decode_inbox(_), do: {:error, :bad_header}
+
+  defp decode_inbox_entries([], acc), do: {:ok, Enum.reverse(acc)}
+
+  defp decode_inbox_entries(
+         [
+           %{
+             "id" => id,
+             "sessionId" => sid,
+             "senderId" => sender,
+             "kind" => kind,
+             "state" => state,
+             "user" => encoded,
+             "createdAt" => created
+           } = raw
+           | rest
+         ],
+         acc
+       )
+       when is_binary(id) and id != "" and is_binary(sid) and is_binary(sender) and
+              kind in ["normal", "steer"] and
+              state in ["queued", "accepted", "consumed", "cancelled", "failed"] and
+              is_integer(created) do
+    allowed = ~w(id sessionId senderId kind state user createdAt error)
+
+    with true <- Enum.all?(Map.keys(raw), &(&1 in allowed)),
+         {:ok, %User{} = user} <- decode_message(encoded),
+         true <- is_nil(raw["error"]) or is_binary(raw["error"]) do
+      entry = %{
+        id: id,
+        session_id: sid,
+        sender_id: sender,
+        kind: String.to_existing_atom(kind),
+        state: String.to_existing_atom(state),
+        user: user,
+        created_at: created,
+        error: raw["error"]
+      }
+
+      decode_inbox_entries(rest, [entry | acc])
+    else
+      _ -> {:error, :bad_header}
+    end
+  end
+
+  defp decode_inbox_entries(_, _), do: {:error, :bad_header}
+
   defp valid_optional_string?(nil), do: true
   defp valid_optional_string?(value), do: is_binary(value) and value != ""
 

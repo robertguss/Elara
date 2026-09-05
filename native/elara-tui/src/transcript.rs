@@ -313,6 +313,13 @@ impl Transcript {
             .filter(|(_, r)| r.id == point.id && r.start <= point.byte)
             .map(|(i, _)| i)
             .next_back()
+            .or_else(|| {
+                // A presentation-only entry can move into a pane without losing its anchor.
+                let rank = self.entry_ranks.get(&point.id)?;
+                self.rows
+                    .iter()
+                    .rposition(|row| self.entry_ranks.get(&row.id).is_some_and(|r| r < rank))
+            })
     }
     fn pin(&mut self) {
         self.follow = false;
@@ -341,6 +348,20 @@ impl Transcript {
         self.anchor = None;
         self.top = self.rows.len().saturating_sub(self.height);
         self.selected = self.entries.last().map(|e| e.id.clone());
+    }
+    pub fn selected_user_turn(&self) -> usize {
+        let selected = self
+            .selected
+            .as_ref()
+            .or(self.anchor.as_ref().map(|p| &p.id));
+        let end = selected
+            .and_then(|id| self.entry_ranks.get(id))
+            .map_or(0, |i| i + 1);
+        self.entries
+            .iter()
+            .take(end)
+            .filter(|entry| entry.user)
+            .count()
     }
     pub fn user_turn(&mut self, direction: isize) {
         let current = self

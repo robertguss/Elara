@@ -155,6 +155,23 @@ long-lived mode. Assistant responses and in-progress content render as terminal
 Markdown, including styled headings, emphasis, code, lists, quotes, links, and
 tables. User prompts and tool output remain literal.
 
+Choose appearance before attaching with `mix elara.tui new --appearance`, or
+press **F3** during a session. Left/Right chooses the layout (Ember inline,
+Observatory side pane, Workbench turn rail and strip); Up/Down chooses one of
+four independent themes (Ember, Observatory, Workbench, Forest). Enter applies;
+**s** applies and saves defaults to `~/.elara/tui-appearance.json`; Esc cancels.
+`--layout workbench --theme forest` overrides defaults for one launch.
+`ELARA_TUI_APPEARANCE_FILE` selects a separate preferences file.
+
+**F4** hides/shows thinking and retains that choice through layout switches.
+**F5** opens its full view; **F6** opens turn navigation. Esc closes either view
+and restores focus. Turn navigation shows short summaries; the transcript
+retains each full prompt. Optional side panes collapse on narrow terminals;
+these keys keep them accessible. Thinking identifies the inspected historical turn
+or live-following turn. Live reasoning is unavailable until the provider
+integration lands. `--preview-reasoning` explicitly shows a labeled, synthetic
+presentation fixture; it is not saved in preferences or conversation history.
+
 The composer edits multiline text with a visible cursor and keyboard selection.
 Enter sends when idle; **Ctrl-J** inserts a newline in both legacy and enhanced
 keyboard modes. Alt-Enter works when the terminal transmits it distinctly

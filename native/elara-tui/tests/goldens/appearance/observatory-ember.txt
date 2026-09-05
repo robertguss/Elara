@@ -1,0 +1,690 @@
+=== idle 80x24 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
+│you inspect the build                                                         │
+│ai  I’ll check it.                                                            │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+│                                                                              │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== idle 120x40 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
+│you inspect the build                                                      ││Thinking · turn 1 · live follow ·        │
+│ai  I’ll check it.                                                         ││complete                                 │
+│                                                                           ││Live reasoning unavailable until PROV-2. │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ─────────────────┘└─────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+│                                                                                                                      │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== idle 180x45 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
+│you inspect the build                                                                                            ││Thinking · turn 1 · live follow · complete                     │
+│ai  I’ll check it.                                                                                               ││Live reasoning unavailable until PROV-2.                       │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ───────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== composing 80x24 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
+│you inspect the build                                                         │
+│ai  I’ll check it.                                                            │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+│Unicode draft 👩‍💻  中                                                            │
+│Keep this visible                                                             │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== composing 120x40 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
+│you inspect the build                                                      ││Thinking · turn 1 · live follow ·        │
+│ai  I’ll check it.                                                         ││complete                                 │
+│                                                                           ││Live reasoning unavailable until PROV-2. │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ─────────────────┘└─────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+│Unicode draft 👩‍💻  中                                                                                                    │
+│Keep this visible                                                                                                     │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== composing 180x45 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
+│you inspect the build                                                                                            ││Thinking · turn 1 · live follow · complete                     │
+│ai  I’ll check it.                                                                                               ││Live reasoning unavailable until PROV-2.                       │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ───────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│Unicode draft 👩‍💻  中                                                                                                                                                                │
+│Keep this visible                                                                                                                                                                 │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== streaming 80x24 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
+│you inspect the build                                                         │
+│ai  I’ll check it.                                                            │
+│ai  Streaming the answer▌                                                     │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+│                                                                              │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+ session-demo · control · connected · head 7 · calling_provider · outcome -
+
+=== streaming 120x40 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
+│you inspect the build                                                      ││Thinking · turn 1 · live follow · active │
+│ai  I’ll check it.                                                         ││Live reasoning unavailable until PROV-2. │
+│ai  Streaming the answer▌                                                  ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ─────────────────┘└─────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+│                                                                                                                      │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 7 · calling_provider · outcome -
+
+=== streaming 180x45 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
+│you inspect the build                                                                                            ││Thinking · turn 1 · live follow · active                       │
+│ai  I’ll check it.                                                                                               ││Live reasoning unavailable until PROV-2.                       │
+│ai  Streaming the answer▌                                                                                        ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ───────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 7 · calling_provider · outcome -
+
+=== reasoning-open 80x24 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
+│you inspect the build                                                         │
+│ai  I’ll check it.                                                            │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+│                                                                              │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== reasoning-open 120x40 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
+│you inspect the build                                                      ││Thinking · turn 1 · live follow ·        │
+│ai  I’ll check it.                                                         ││complete                                 │
+│                                                                           ││PREVIEW fixture · subscription preflight │
+│                                                                           ││sample                                   │
+│                                                                           ││Evaluating three-digit numbers with digit│
+│                                                                           ││sum 19                                   │
+│                                                                           ││Finding smallest 3-digit multiple 469    │
+│                                                                           ││Illustrative binding; not this turn's    │
+│                                                                           ││live reasoning.                          │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ─────────────────┘└─────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+│                                                                                                                      │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== reasoning-open 180x45 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
+│you inspect the build                                                                                            ││Thinking · turn 1 · live follow · complete                     │
+│ai  I’ll check it.                                                                                               ││PREVIEW fixture · subscription preflight sample                │
+│                                                                                                                 ││Evaluating three-digit numbers with digit sum 19               │
+│                                                                                                                 ││Finding smallest 3-digit multiple 469                          │
+│                                                                                                                 ││Illustrative binding; not this turn's live reasoning.          │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ───────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== reasoning-hidden 80x24 ===
+┌ observatory / ember · F4 thinking hidden ·  transcript · prompt focus · FOLLO┐
+│you inspect the build                                                         │
+│ai  I’ll check it.                                                            │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+│                                                                              │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== reasoning-hidden 120x40 ===
+┌ observatory / ember · F4 thinking hidden ·  transcript · prompt focus · FOLLOW  ─────────────────────────────────────┐
+│you inspect the build                                                                                                 │
+│ai  I’ll check it.                                                                                                    │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+│                                                                                                                      │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== reasoning-hidden 180x45 ===
+┌ observatory / ember · F4 thinking hidden ·  transcript · prompt focus · FOLLOW  ─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│you inspect the build                                                                                                                                                             │
+│ai  I’ll check it.                                                                                                                                                                │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 4 · idle · outcome -
+
+=== tool-failed 80x24 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
+│you inspect the build                                                         │
+│[+] bash · failed                                                             │
+│$ mix test                                                                    │
+│Display folded · Space expand · f viewer                                      │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
+│                                                                              │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+ session-demo · control · connected · head 8 · running_tool · outcome -
+
+=== tool-failed 120x40 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
+│you inspect the build                                                      ││Thinking · turn 1 · live follow · active │
+│[+] bash · failed                                                          ││Live reasoning unavailable until PROV-2. │
+│$ mix test                                                                 ││                                         │
+│Display folded · Space expand · f viewer                                   ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+│                                                                           ││                                         │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ─────────────────┘└─────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
+│                                                                                                                      │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 8 · running_tool · outcome -
+
+=== tool-failed 180x45 ===
+┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
+│you inspect the build                                                                                            ││Thinking · turn 1 · live follow · active                       │
+│[+] bash · failed                                                                                                ││Live reasoning unavailable until PROV-2.                       │
+│$ mix test                                                                                                       ││                                                               │
+│Display folded · Space expand · f viewer                                                                         ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+│                                                                                                                 ││                                                               │
+└ Tab transcript · F5 reasoning (unavailable until PROV-2) ───────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
+┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ session-demo · control · connected · head 8 · running_tool · outcome -
+

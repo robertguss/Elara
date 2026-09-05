@@ -73,10 +73,18 @@ defmodule Elara.TuiTest do
   setup do
     tmp = Path.join(System.tmp_dir!(), "elara-tui-#{System.unique_integer([:positive])}")
     File.mkdir_p!(tmp)
+    previous_appearance = System.get_env("ELARA_TUI_APPEARANCE_FILE")
+    System.put_env("ELARA_TUI_APPEARANCE_FILE", Path.join(tmp, "appearance.json"))
     previous_root = Application.get_env(:elara, :sessions_root)
     Application.put_env(:elara, :sessions_root, Path.join(tmp, "sessions"))
 
     on_exit(fn ->
+      if previous_appearance do
+        System.put_env("ELARA_TUI_APPEARANCE_FILE", previous_appearance)
+      else
+        System.delete_env("ELARA_TUI_APPEARANCE_FILE")
+      end
+
       if previous_root do
         Application.put_env(:elara, :sessions_root, previous_root)
       else
@@ -273,6 +281,41 @@ defmodule Elara.TuiTest do
 
     assert status == 0, output
     assert output =~ "Tool inspection PTY passed"
+  end
+
+  @tag timeout: 90_000
+  test "appearance changes preserve prompt selection and save local defaults", context do
+    {:ok, session} =
+      Elara.start_session(
+        provider:
+          script([
+            {:ok, asst("historical answer")},
+            {:ok, asst("second historical answer")},
+            {:ok, asst("accepted")}
+          ]),
+        tools: [],
+        persist: false
+      )
+
+    assert {:ok, "historical answer"} = Elara.ask(session, "HIST_MARKER earlier prompt")
+    assert {:ok, "second historical answer"} = Elara.ask(session, "SECOND_TURN later prompt")
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+
+    {output, status} =
+      System.cmd(
+        System.find_executable("python3") || flunk("python3 is required"),
+        [
+          Path.expand("../support/appearance_pty.py", __DIR__),
+          context.binary,
+          Integer.to_string(Elara.Server.port(server)),
+          session
+        ],
+        env: [{"ELARA_TUI_STATE_DIR", context.state_dir}],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+    assert output =~ "Appearance PTY passed"
   end
 
   test "cold snapshot, create, and live session list use the Rust client", context do

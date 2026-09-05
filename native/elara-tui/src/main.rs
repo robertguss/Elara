@@ -12,14 +12,19 @@ use crossterm::terminal::{
     supports_keyboard_enhancement,
 };
 use elara_tui::{
-    ClientConnection, ConnectionState, Cursor, CursorStore, DEFAULT_PORT, Ingest, InputAction,
-    Model, attach_request, attached_model, command, draw_model, handle_input, render_frame,
+    Appearance, ClientConnection, ConnectionState, Cursor, CursorStore, DEFAULT_PORT, Ingest,
+    InputAction, Model, Theme, ViewLayout, attach_request, attached_model, command, draw_model,
+    handle_input, render_frame,
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use serde_json::{Value, json};
 
 struct Args {
+    appearance: bool,
+    layout: Option<ViewLayout>,
+    theme: Option<Theme>,
+    preview_reasoning: bool,
     target: String,
     port: u16,
     observe: bool,
@@ -34,6 +39,10 @@ struct Args {
 
 impl Args {
     fn parse() -> Result<Self, String> {
+        let mut appearance = false;
+        let mut layout = None;
+        let mut theme = None;
+        let mut preview_reasoning = false;
         let mut target = None;
         let mut port = environment_port();
         let mut observe = false;
@@ -48,6 +57,12 @@ impl Args {
 
         while let Some(argument) = arguments.next() {
             match argument.as_str() {
+                "--appearance" => appearance = true,
+                "--layout" => {
+                    layout = Some(ViewLayout::parse(&next_value(&mut arguments, "--layout")?)?)
+                }
+                "--theme" => theme = Some(Theme::parse(&next_value(&mut arguments, "--theme")?)?),
+                "--preview-reasoning" => preview_reasoning = true,
                 "--port" => port = parse_next(&mut arguments, "--port")?,
                 "--observe" | "-o" => observe = true,
                 "--headless" => headless = true,
@@ -83,7 +98,14 @@ impl Args {
             return Err("an observing client cannot ask or interrupt".to_string());
         }
 
+        if appearance && headless {
+            return Err("--appearance requires an interactive terminal; use --layout/--theme with --headless".into());
+        }
         Ok(Self {
+            appearance,
+            layout,
+            theme,
+            preview_reasoning,
             target,
             port,
             observe,
@@ -123,7 +145,7 @@ fn environment_port() -> u16 {
 
 fn usage() -> &'static str {
     "usage: elara-tui SESSION|new|list [--port PORT] [--observe] [--ask PROMPT] \
-     [--headless] [--event-dump]"
+     [--headless] [--event-dump] [--appearance] [--layout ember|observatory|workbench] [--theme ember|observatory|workbench|forest] [--preview-reasoning]"
 }
 
 fn main() -> ExitCode {
@@ -141,6 +163,19 @@ fn run(args: Args) -> Result<(), String> {
         return list_sessions(args.port, args.event_dump);
     }
 
+    let mut appearance = Appearance::load().unwrap_or_else(|error| {
+        eprintln!("warning: {error}; using appearance defaults");
+        Appearance::default()
+    });
+    if let Some(layout) = args.layout {
+        appearance.layout = layout;
+    }
+    if let Some(theme) = args.theme {
+        appearance.theme = theme;
+    }
+    if args.appearance {
+        appearance = pick_appearance(appearance)?;
+    }
     let mode = if args.observe { "observe" } else { "control" };
     let cursors = CursorStore::from_environment();
     let saved = if args.target == "new" {
@@ -153,6 +188,8 @@ fn run(args: Args) -> Result<(), String> {
     let (mut connection, attached) = ClientConnection::connect(args.port, request)?;
     dump_frame(args.event_dump, started, &attached);
     let mut model = attached_model(&attached, mode)?;
+    model.set_appearance(appearance);
+    model.preview_reasoning = args.preview_reasoning;
     save_cursor(&cursors, &model);
     if let Some(prompt) = &args.ask {
         if !model.editor.insert(prompt) {
@@ -179,6 +216,61 @@ fn run(args: Args) -> Result<(), String> {
         )
     } else {
         run_interactive(&args, &mut connection, &mut model, &cursors, started)
+    }
+}
+
+fn pick_appearance(original: Appearance) -> Result<Appearance, String> {
+    use crossterm::event::{Event, KeyCode, KeyEventKind};
+    use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+    let _guard = TerminalGuard::enter()?;
+    let mut terminal =
+        Terminal::new(CrosstermBackend::new(io::stdout())).map_err(|e| e.to_string())?;
+    let mut choice = original;
+    let mut notice = String::new();
+    loop {
+        terminal
+            .draw(|frame| {
+                let t = choice.theme.tokens();
+                let mut lines = choice.lines();
+                lines.push(ratatui::text::Line::from(notice.clone()));
+                frame.render_widget(
+                    Paragraph::new(lines)
+                        .style(ratatui::style::Style::default().fg(t.text).bg(t.background))
+                        .wrap(Wrap { trim: false })
+                        .block(
+                            Block::default()
+                                .borders(Borders::ALL)
+                                .title(" Before session · Appearance "),
+                        ),
+                    frame.area(),
+                );
+            })
+            .map_err(|e| e.to_string())?;
+        if let Event::Key(key) = event::read().map_err(|e| e.to_string())? {
+            if key.kind == KeyEventKind::Release {
+                continue;
+            }
+            match key.code {
+                KeyCode::Left => choice.layout = choice.layout.previous(),
+                KeyCode::Right | KeyCode::Char('l') => choice.layout = choice.layout.next(),
+                KeyCode::Up => choice.theme = choice.theme.previous(),
+                KeyCode::Down | KeyCode::Char('t') => choice.theme = choice.theme.next(),
+                KeyCode::Enter => return Ok(choice),
+                KeyCode::Esc => return Ok(original),
+                KeyCode::Char('c')
+                    if key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                {
+                    return Err("appearance canceled before attachment".into());
+                }
+                KeyCode::Char('s') => match choice.save() {
+                    Ok(()) => return Ok(choice),
+                    Err(error) => notice = error,
+                },
+                _ => {}
+            }
+        }
     }
 }
 

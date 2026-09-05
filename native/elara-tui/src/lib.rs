@@ -1,6 +1,9 @@
 use std::collections::{HashSet, VecDeque};
 
 mod actions;
+pub mod appearance;
+mod presentation;
+pub use appearance::{Appearance, Theme, ViewLayout};
 mod clipboard;
 mod editor;
 mod tools;
@@ -142,6 +145,12 @@ pub struct Model {
     safe_paste_cr: bool,
     pub enhanced_keyboard: bool,
     pub show_help: bool,
+    pub appearance: Appearance,
+    pub appearance_picker: Option<Appearance>,
+    pub thinking_visible: bool,
+    pub preview_reasoning: bool,
+    presentation_overlay: Option<presentation::Overlay>,
+    overlay_scroll: usize,
     transcript: RefCell<transcript::Transcript>,
     expanded_tools: HashSet<String>,
     viewer: Option<(String, transcript::Transcript)>,
@@ -168,6 +177,12 @@ impl Model {
             safe_paste_cr: false,
             enhanced_keyboard: false,
             show_help: false,
+            appearance: Appearance::default(),
+            appearance_picker: None,
+            thinking_visible: true,
+            preview_reasoning: false,
+            presentation_overlay: None,
+            overlay_scroll: 0,
             transcript: RefCell::new(transcript::Transcript::default()),
             expanded_tools: HashSet::new(),
             viewer: None,
@@ -429,6 +444,9 @@ pub fn handle_input(
     use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
     if model.safe_paste && model.viewer.is_some() {
         model.close_tool();
+    }
+    if presentation::input(model, &event) {
+        return InputAction::None;
     }
     let insert = |model: &mut Model, text: &str| {
         if !model.editor.insert(text) {
@@ -925,6 +943,11 @@ pub fn render_frame(model: &Model, width: u16, height: u16) -> Result<String, St
 }
 
 pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
+    draw_content(frame, model);
+    presentation::finish(frame, model);
+}
+
+fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
     let area = frame.area();
     if model.show_help {
         frame.render_widget(
@@ -1028,8 +1051,9 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
         ])
         .split(area);
 
+    let transcript_area = presentation::panes(frame, model, chunks[0]);
     let mut state = model.transcript.borrow_mut();
-    state.rect = chunks[0].inner(ratatui::layout::Margin::new(1, 1));
+    state.rect = transcript_area.inner(ratatui::layout::Margin::new(1, 1));
     let source_key = (
         model.session_id.clone(),
         model.projection.incarnation.clone(),
@@ -1044,20 +1068,30 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
     };
     state.update(
         entries,
-        state_width(chunks[0].width),
-        chunks[0].height.saturating_sub(2) as usize,
+        state_width(transcript_area.width),
+        transcript_area.height.saturating_sub(2) as usize,
     );
     let transcript = Paragraph::new(state.visible_lines()).block(
         Block::default()
             .borders(Borders::ALL)
-            .title(state.title())
+            .title(format!(
+                " {} / {} · F4 thinking {} · {} ",
+                model.appearance.layout.name(),
+                model.appearance.theme.name(),
+                if model.thinking_visible {
+                    "open"
+                } else {
+                    "hidden"
+                },
+                state.title()
+            ))
             .title_bottom(if state.focused {
                 actions::hints(true)
             } else {
-                " Tab transcript ".into()
+                " Tab transcript · F5 reasoning (unavailable until PROV-2) ".into()
             }),
     );
-    frame.render_widget(transcript, chunks[0]);
+    frame.render_widget(transcript, transcript_area);
     drop(state);
 
     let visible = chunks[1].height.saturating_sub(2) as usize;
@@ -1194,7 +1228,10 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
                             ])
                         })
                         .collect();
-                    entries.push(Entry::rendered(id, lines, true, false));
+                    entries.push(Entry::rendered(id.clone(), lines, true, false));
+                    if let Some(thinking) = presentation::inline_thinking(model, &id) {
+                        entries.push(thinking);
+                    }
                 }
                 Some("assistant") => {
                     if let Some(text) = message["text"].as_str()
@@ -1754,7 +1791,7 @@ mod tests {
                             .buffer()
                             .content
                             .iter()
-                            .any(|cell| cell.bg == Color::Blue)
+                            .any(|cell| cell.bg == model.appearance.theme.tokens().selection)
                     );
                 }
                 "tall" => {

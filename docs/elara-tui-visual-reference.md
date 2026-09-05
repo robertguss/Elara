@@ -49,3 +49,11 @@ focus, tool expansion, and narrow-window behavior against these references.
 Browser prototype approval is visual evidence only; no terminal implementation
 or interaction acceptance is implied. Original palettes are starting points,
 not a requirement to reproduce low-contrast text or browser-only geometry.
+
+The terminal implementation defines its concrete tokens in
+[`appearance.rs`](../native/elara-tui/src/appearance.rs). Automated
+[reference frames](../native/elara-tui/tests/goldens/appearance/) cover every
+layout/theme pair at 80×24, 120×40, and 180×45 for idle, composing, streaming,
+reasoning shown/hidden, and failed-tool states. They record terminal cell text;
+Rust tests separately check token contrast and state preservation. These frames
+are not screenshots or evidence of physical keyboard/mouse acceptance.

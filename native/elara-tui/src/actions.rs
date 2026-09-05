@@ -2,6 +2,10 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers as M};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Action {
+    Appearance,
+    Thinking,
+    ThinkingView,
+    Turns,
     Focus,
     ToggleTool,
     ToolViewer,
@@ -48,6 +52,28 @@ const fn binding(
     }
 }
 static BINDINGS: &[Binding] = &[
+    binding(
+        KeyCode::F(3),
+        M::NONE,
+        false,
+        Action::Appearance,
+        "F3 appearance",
+    ),
+    binding(
+        KeyCode::F(4),
+        M::NONE,
+        false,
+        Action::Thinking,
+        "F4 thinking hide/show",
+    ),
+    binding(
+        KeyCode::F(5),
+        M::NONE,
+        false,
+        Action::ThinkingView,
+        "F5 thinking view",
+    ),
+    binding(KeyCode::F(6), M::NONE, false, Action::Turns, "F6 turns"),
     binding(
         KeyCode::Char(' '),
         M::NONE,
@@ -194,7 +220,13 @@ pub(crate) fn hints(transcript: bool) -> String {
         .join(" · ")
 }
 pub(crate) fn prompt_title() -> String {
-    let labels = [Action::Submit, Action::Help, Action::SafePaste].map(|action| {
+    let labels = [
+        Action::Submit,
+        Action::Help,
+        Action::SafePaste,
+        Action::Appearance,
+    ]
+    .map(|action| {
         BINDINGS
             .iter()
             .find(|b| b.action == action)

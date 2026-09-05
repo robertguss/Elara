@@ -10,10 +10,11 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** [TUI-7 — layouts and themes](#tui-7--three-layouts-and-four-independent-dark-themes)
-is IN PROGRESS after the completed subscription-capability preflight. TUI-5 is
-pushed in `e7c67bf`; TUI-4 is pushed in `de46872`. TUI-3/TUI-4/TUI-5 hands-on
-acceptance remains owner-deferred while away and does not block later work.
+**Current:** TUI-7 implementation and review are complete; its hands-on
+acceptance is owner-deferred. [PROV-2](#prov-2--chatgpt-reasoning-visibility-model-controls-and-usage)
+is the next executable item. TUI-5 is pushed in `e7c67bf`; TUI-4 in `de46872`.
+TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred while away and does
+not block later implementation.
 
 Update this handoff and each item's Result after verified milestones. Continue
 available agent work autonomously, committing and pushing completed changes;
@@ -31,10 +32,11 @@ with the next concrete action. Close test terminal windows after testing.
 | TUI-4 search, selection, and clipboard | Implementation verified | Search paste preserves draft; review fixes cover reverse/stale drags and focus |
 | TUI-4 actions, help, product checks | Complete | 7 TUI product tests; 339 full Linux tests; both Rust crates pass checks |
 | TUI-5 tool inspection | Implementation verified | 59 Rust TUI tests; 8 product tests; 340 offline Linux tests |
+| TUI-7 layouts, themes, and appearance | Implementation verified | 72 Rust TUI tests; 9 product tests; 341 offline Linux tests; all five review findings fixed |
 
-**Next action:** implement TUI-7 layouts, themes, and appearance controls using
-explicitly labeled reasoning fixtures until PROV-2 connects live content. Manual-only
-acceptance that requires the absent owner stays explicitly deferred, not passed.
+**Next action:** implement PROV-2 using the recorded subscription preflight:
+public reasoning content, model/effort selection, usage, and explicit credential
+integration. Manual acceptance requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -94,8 +96,8 @@ HTML prototypes or existing batch coordinator already implement them.
 
 Build the TUI foundations first, then provider/input and session controls, then
 persistent communicating threads and automatic handoff. Both the TUI and threads
-must be usable before SPLIT-5. TUI-7 is the current executable item; TUI-3/TUI-4/TUI-5 manual acceptance is owner-deferred. Later
-slices are bounded vertical deliveries; the expanded scope must not be hidden
+must be usable before SPLIT-5. PROV-2 is the current executable item;
+TUI-3/TUI-4/TUI-5/TUI-7 manual acceptance is owner-deferred. Later slices are bounded vertical deliveries; the expanded scope must not be hidden
 inside the composer or session picker.
 
 Rust owns presentation and interaction state; Elixir owns canonical content,
@@ -199,8 +201,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | TUI-3   | DEFERRED | Cursor-aware multiline daily-driver composer                  | TUI-2            |
 | TUI-4   | DEFERRED | Navigable transcript controller                               | TUI-3            |
 | TUI-5   | DEFERRED | Inspectable typed tool blocks                                 | TUI-4            |
-| TUI-7   | IN PROGRESS | Three layouts and four independent dark themes               | TUI-5            |
-| PROV-2  | BLOCKED  | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
+| TUI-7   | DEFERRED | Three layouts and four independent dark themes               | TUI-5            |
+| PROV-2  | TODO     | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
 | INPUT-1 | BLOCKED  | File references and image attachments from disk               | PROV-2           |
 | INST-1  | BLOCKED  | Standard project instructions and Agent Skills               | INPUT-1          |
 | TUI-6   | BLOCKED  | In-TUI session lifecycle and action discovery                 | INST-1           |
@@ -1498,7 +1500,7 @@ old/new arguments, never workspace rereads or invented full-file prior contents.
 
 ## TUI-7 — Three layouts and four independent dark themes
 
-**Status:** IN PROGRESS — capability preflight complete; live-adapter blockers recorded
+**Status:** DEFERRED — implementation verified; physical terminal acceptance postponed by owner
 
 ### Outcome
 
@@ -1553,7 +1555,7 @@ the preserved prototype, original screenshots, and limits of that evidence.
 
 ### Result
 
-**IN PROGRESS (2026-09-04).** The bounded [subscription capability preflight](docs/subscription-capability-preflight.md)
+**IMPLEMENTED; hands-on acceptance deferred (2026-09-04).** The bounded [subscription capability preflight](docs/subscription-capability-preflight.md)
 is complete, with sanitized request/response evidence. Existing Codex subscription
 authentication worked without refresh, credential copying, or changing project
 defaults. Four synthetic requests completed: gpt-5.5 low/high reasoning summaries,
@@ -1567,13 +1569,33 @@ default and absent Elara-specific login block a claim of a working live Elara
 subscription experience; PROV-2 owns migration/selection and credential
 integration. They do not block fixture-backed TUI-7 presentation explicitly
 specified above. Do not fabricate live reasoning or silently change billing.
-Next implement all three layouts/four themes, saved appearance controls, and
-stable thinking visibility/turn binding. Physical acceptance remains
-owner-deferred while away.
+The implementation now provides all three layouts/four themes, F3 appearance,
+explicitly saved local defaults, and F4/F5/F6 thinking/turn controls. A real
+session/PTY check passes all 12 combinations while preserving a Unicode draft
+selection, historical search and source binding, and sticky hidden state; a
+second client launch confirms saved defaults and excludes preview content.
+The Rust matrix covers 216 state/size frames and theme-token contrast. Final
+verification passes: 72 Rust TUI tests, 3 execution-stub tests,
+9 macOS PTY product tests, and all 341 offline Linux Mix tests. Formatting,
+Clippy, and compilation with warnings treated as errors pass. Simplification
+applied three bounded changes (named overlay states, borrowed prompt summaries,
+and conditional overlay layout); the shared color pass remains deliberately
+centralized. Independent review completed (seven local lenses and a served
+Claude Opus 5 peer; high effort requested, actual effort unverified). Review
+run `20260904-211017-c3cf99a3` identified five fixes: bounded turn summaries,
+short-terminal modal visibility, wrapped-row accessibility, F4 in the thinking
+view, and fresh F6 scroll state. All five reproduced in regression tests and
+were fixed before publication. Turn summaries occupy bounded single rows; full
+prompt content and copy ranges remain in the transcript. Product coverage also exercises F6
+navigation, CLI precedence, malformed preferences, failed-save recovery, and
+isolation from personal defaults. Physical screenshots and keyboard/mouse
+acceptance remain owner-deferred. No WezTerm test windows remain open. Live
+reasoning remains explicitly unavailable until PROV-2; preview content is never
+persisted as canonical conversation content.
 
 ## PROV-2 — ChatGPT reasoning visibility, model controls, and usage
 
-**Status:** BLOCKED on TUI-7
+**Status:** TODO — TUI-7 implementation verified; subscription preflight recorded
 
 ### Outcome
 

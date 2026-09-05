@@ -10,11 +10,10 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** TUI-5 implementation is verified and reviewed. The next action is
-the subscription-capability preflight required before
-[TUI-7 — layouts and themes](#tui-7--three-layouts-and-four-independent-dark-themes).
-TUI-3/TUI-4/TUI-5 hands-on acceptance is DEFERRED by the owner's instruction while
-away. Those checks remain unverified and do not block later implementation.
+**Current:** [TUI-7 — layouts and themes](#tui-7--three-layouts-and-four-independent-dark-themes)
+is IN PROGRESS after the completed subscription-capability preflight. TUI-5 is
+pushed in `e7c67bf`; TUI-4 is pushed in `de46872`. TUI-3/TUI-4/TUI-5 hands-on
+acceptance remains owner-deferred while away and does not block later work.
 
 Update this handoff and each item's Result after verified milestones. Continue
 available agent work autonomously, committing and pushing completed changes;
@@ -33,7 +32,8 @@ with the next concrete action. Close test terminal windows after testing.
 | TUI-4 actions, help, product checks | Complete | 7 TUI product tests; 339 full Linux tests; both Rust crates pass checks |
 | TUI-5 tool inspection | Implementation verified | 59 Rust TUI tests; 8 product tests; 340 offline Linux tests |
 
-**Next action:** run the TUI-7 provider-capability preflight after publishing TUI-5. Manual-only
+**Next action:** implement TUI-7 layouts, themes, and appearance controls using
+explicitly labeled reasoning fixtures until PROV-2 connects live content. Manual-only
 acceptance that requires the absent owner stays explicitly deferred, not passed.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -94,7 +94,7 @@ HTML prototypes or existing batch coordinator already implement them.
 
 Build the TUI foundations first, then provider/input and session controls, then
 persistent communicating threads and automatic handoff. Both the TUI and threads
-must be usable before SPLIT-5. TUI-7 preflight is next; TUI-3/TUI-4/TUI-5 manual acceptance is owner-deferred. Later
+must be usable before SPLIT-5. TUI-7 is the current executable item; TUI-3/TUI-4/TUI-5 manual acceptance is owner-deferred. Later
 slices are bounded vertical deliveries; the expanded scope must not be hidden
 inside the composer or session picker.
 
@@ -199,7 +199,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | TUI-3   | DEFERRED | Cursor-aware multiline daily-driver composer                  | TUI-2            |
 | TUI-4   | DEFERRED | Navigable transcript controller                               | TUI-3            |
 | TUI-5   | DEFERRED | Inspectable typed tool blocks                                 | TUI-4            |
-| TUI-7   | TODO     | Three layouts and four independent dark themes               | TUI-5            |
+| TUI-7   | IN PROGRESS | Three layouts and four independent dark themes               | TUI-5            |
 | PROV-2  | BLOCKED  | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
 | INPUT-1 | BLOCKED  | File references and image attachments from disk               | PROV-2           |
 | INST-1  | BLOCKED  | Standard project instructions and Agent Skills               | INPUT-1          |
@@ -1454,7 +1454,7 @@ renderer for every plugin, or removal of source byte limits.
 ### Result
 
 **DEFERRED (2026-09-04): implementation verified and reviewed; hands-on
-acceptance postponed by owner.** Tool blocks use canonical call IDs and states, with typed bash/
+acceptance postponed by owner. Implementation pushed in `e7c67bf`.** Tool blocks use canonical call IDs and states, with typed bash/
 read/write/edit summaries and a generic fallback. Space or the left gutter
 expands/collapses; `f` or right-click opens fullscreen; Esc or right-click restores
 the transcript viewport. Expanded/viewer copies include retained JSON arguments
@@ -1498,7 +1498,7 @@ old/new arguments, never workspace rereads or invented full-file prior contents.
 
 ## TUI-7 — Three layouts and four independent dark themes
 
-**Status:** TODO — provider-capability preflight before implementation
+**Status:** IN PROGRESS — capability preflight complete; live-adapter blockers recorded
 
 ### Outcome
 
@@ -1513,7 +1513,7 @@ the preserved prototype, original screenshots, and limits of that evidence.
   preflight: verify reasoning summaries, model/effort controls, disk image input,
   usage, and context-limit evidence. Record unsupported or unknown capabilities
   as blockers before building dependent presentation; full adapter work remains
-  in PROV-2. This preflight does not change TUI-3 as the next executable item.
+  in PROV-2. The observed preflight and remaining live-adapter blockers are recorded below.
 - Layouts: **Ember**, inline thinking in a restrained single-column conversation;
   **Observatory**, conversation beside a dedicated thinking pane; **Workbench**,
   turn navigation plus a thinking strip and inspectable work.
@@ -1553,12 +1553,23 @@ the preserved prototype, original screenshots, and limits of that evidence.
 
 ### Result
 
-**TODO (2026-09-04).** Begin with the bounded capability preflight after TUI-5 is
-pushed. Elara has no saved subscription login; Codex has an existing local
-subscription token set available for a bounded check. Do not expose credentials,
-change billing route, or treat API documentation as proof of subscription
-capabilities. Record observed, unsupported, and unknown results before building
-dependent presentation. Physical acceptance remains owner-deferred while away.
+**IN PROGRESS (2026-09-04).** The bounded [subscription capability preflight](docs/subscription-capability-preflight.md)
+is complete, with sanitized request/response evidence. Existing Codex subscription
+authentication worked without refresh, credential copying, or changing project
+defaults. Four synthetic requests completed: gpt-5.5 low/high reasoning summaries,
+gpt-5.4-mini image input, and combined gpt-5.5 image/reasoning input. Returned
+usage and the authenticated catalog establish available fields and advertised
+272,000-token limits for the tested models; exact occupancy/enforcement remains
+unverified. Summary parts and final-answer phase must remain distinct.
+
+The current default gpt-5.3-codex returned HTTP 400 unsupported. The unsupported
+default and absent Elara-specific login block a claim of a working live Elara
+subscription experience; PROV-2 owns migration/selection and credential
+integration. They do not block fixture-backed TUI-7 presentation explicitly
+specified above. Do not fabricate live reasoning or silently change billing.
+Next implement all three layouts/four themes, saved appearance controls, and
+stable thinking visibility/turn binding. Physical acceptance remains
+owner-deferred while away.
 
 ## PROV-2 — ChatGPT reasoning visibility, model controls, and usage
 
@@ -1571,6 +1582,9 @@ summaries, in-TUI model/effort selection, and usable context accounting.
 
 ### Scope and acceptance
 
+- Resolve the observed unsupported gpt-5.3-codex default and Elara credential
+  integration explicitly; the preflight used existing Codex authentication only
+  in memory and did not change production settings.
 - Use the capability preflight recorded before TUI-7; refresh it if the route or
   model contract has changed. Verify the actual subscription route for visible reasoning summaries,
   model/effort options, image-input support, usage fields, and model context

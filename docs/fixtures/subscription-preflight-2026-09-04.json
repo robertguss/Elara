@@ -1,0 +1,470 @@
+{
+  "observed_date": "2026-09-04",
+  "route": "https://chatgpt.com/backend-api/codex/responses",
+  "catalog_route": "https://chatgpt.com/backend-api/codex/models?client_version=0.153.2",
+  "originator": "elara",
+  "scope": "One authenticated subscription account; synthetic requests only. No production settings changed.",
+  "catalog_models": [
+    {
+      "slug": "gpt-5.5",
+      "display_name": "GPT-5.5",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Fast responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balances speed and reasoning depth for everyday tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Greater reasoning depth for complex problems"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning depth for complex problems"
+        }
+      ],
+      "default_reasoning_level": "medium",
+      "supports_reasoning_summaries": true,
+      "context_window": 272000,
+      "max_context_window": 272000,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "visibility": "list",
+      "supported_in_api": true
+    },
+    {
+      "slug": "gpt-5.4-mini",
+      "display_name": "GPT-5.4-Mini",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Fast responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balances speed and reasoning depth for everyday tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Greater reasoning depth for complex problems"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Extra high reasoning depth for complex problems"
+        }
+      ],
+      "default_reasoning_level": "medium",
+      "supports_reasoning_summaries": true,
+      "context_window": 272000,
+      "max_context_window": 272000,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "visibility": "list",
+      "supported_in_api": true
+    }
+  ],
+  "image": {
+    "width": 256,
+    "height": 128,
+    "left": "red",
+    "right": "blue",
+    "sha256": "1c8bed001809ffd620bec5e6907f12545a55322179f76e6129683de5b8598570"
+  },
+  "probes": [
+    {
+      "label": "legacy-low",
+      "requested_model": "gpt-5.3-codex",
+      "requested_reasoning": {
+        "effort": "low",
+        "summary": "auto"
+      },
+      "disk_image": false,
+      "route": "chatgpt.com/backend-api/codex/responses",
+      "events": [],
+      "http_status": 400,
+      "error": "{\"detail\":\"The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account.\"}",
+      "elapsed_seconds": 0.44
+    },
+    {
+      "label": "supported-low",
+      "requested_model": "gpt-5.5",
+      "requested_reasoning": {
+        "effort": "low",
+        "summary": "auto"
+      },
+      "disk_image": false,
+      "route": "chatgpt.com/backend-api/codex/responses",
+      "events": [
+        "response.created",
+        "response.in_progress",
+        "response.output_item.added",
+        "response.reasoning_summary_part.added",
+        "response.reasoning_summary_text.delta",
+        "response.reasoning_summary_text.done",
+        "response.reasoning_summary_part.done",
+        "response.output_item.done",
+        "response.content_part.added",
+        "response.output_text.delta",
+        "response.output_text.done",
+        "response.content_part.done",
+        "response.completed"
+      ],
+      "http_status": 200,
+      "summary": "**Evaluating three-digit numbers with digit sum 19****Finding smallest 3-digit multiple 469**",
+      "text": "469. Check: \\(4+6+9=19\\) and \\(469=7\\times67\\).",
+      "model": "gpt-5.5",
+      "status": "completed",
+      "reasoning": {
+        "context": "current_turn",
+        "effort": "low",
+        "mode": "standard",
+        "summary": "detailed"
+      },
+      "usage": {
+        "input_tokens": 45,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 293,
+        "output_tokens_details": {
+          "reasoning_tokens": 263
+        },
+        "total_tokens": 338
+      },
+      "elapsed_seconds": 7.04
+    },
+    {
+      "label": "supported-high",
+      "requested_model": "gpt-5.5",
+      "requested_reasoning": {
+        "effort": "high",
+        "summary": "auto"
+      },
+      "disk_image": false,
+      "route": "chatgpt.com/backend-api/codex/responses",
+      "events": [
+        "response.created",
+        "response.in_progress",
+        "response.output_item.added",
+        "response.reasoning_summary_part.added",
+        "response.reasoning_summary_text.delta",
+        "response.reasoning_summary_text.done",
+        "response.reasoning_summary_part.done",
+        "response.output_item.done",
+        "response.content_part.added",
+        "response.output_text.delta",
+        "response.output_text.done",
+        "response.content_part.done",
+        "response.completed"
+      ],
+      "http_status": 200,
+      "summary": "**Planning minimal divisible number search****Identifying smallest 3-digit divisible by 7 with digit sum 19**",
+      "text": "469. Check: \\(4+6+9=19\\) and \\(469=7\\times67\\).",
+      "model": "gpt-5.5",
+      "status": "completed",
+      "reasoning": {
+        "context": "current_turn",
+        "effort": "high",
+        "mode": "standard",
+        "summary": "detailed"
+      },
+      "usage": {
+        "input_tokens": 45,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 546,
+        "output_tokens_details": {
+          "reasoning_tokens": 516
+        },
+        "total_tokens": 591
+      },
+      "elapsed_seconds": 11.91
+    },
+    {
+      "label": "image-low",
+      "requested_model": "gpt-5.4-mini",
+      "requested_reasoning": {
+        "effort": "low",
+        "summary": "auto"
+      },
+      "disk_image": true,
+      "route": "chatgpt.com/backend-api/codex/responses",
+      "events": [
+        "response.created",
+        "response.in_progress",
+        "response.output_item.added",
+        "response.reasoning_summary_part.added",
+        "response.reasoning_summary_text.delta",
+        "response.reasoning_summary_text.done",
+        "response.reasoning_summary_part.done",
+        "response.output_item.done",
+        "response.content_part.added",
+        "response.output_text.delta",
+        "response.output_text.done",
+        "response.content_part.done",
+        "response.completed"
+      ],
+      "http_status": 200,
+      "summary": "**Identifying left and right colors**",
+      "text": "left=red, right=blue",
+      "model": "gpt-5.4-mini-2026-03-17",
+      "status": "completed",
+      "reasoning": {
+        "context": "current_turn",
+        "effort": "low",
+        "mode": "standard",
+        "summary": "detailed"
+      },
+      "usage": {
+        "input_tokens": 79,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 34,
+        "output_tokens_details": {
+          "reasoning_tokens": 21
+        },
+        "total_tokens": 113
+      },
+      "elapsed_seconds": 1.78
+    },
+    {
+      "label": "image-primary",
+      "requested_model": "gpt-5.5",
+      "requested_reasoning": {
+        "effort": "low",
+        "summary": "auto"
+      },
+      "disk_image": true,
+      "route": "chatgpt.com/backend-api/codex/responses",
+      "events": [
+        "response.created",
+        "response.in_progress",
+        "response.output_item.added",
+        "response.reasoning_summary_part.added",
+        "response.reasoning_summary_text.delta",
+        "response.reasoning_summary_text.done",
+        "response.reasoning_summary_part.done",
+        "response.output_item.done",
+        "response.content_part.added",
+        "response.output_text.delta",
+        "response.output_text.done",
+        "response.content_part.done",
+        "response.completed"
+      ],
+      "http_status": 200,
+      "summary": "**Searching smallest 3-digit divisible by 7 with digit sum 19****Identifying 469 as smallest 3-digit divisible by 7 with digit sum 19**",
+      "text": "left=red, right=blue\nn=469",
+      "model": "gpt-5.5",
+      "status": "completed",
+      "reasoning": {
+        "context": "current_turn",
+        "effort": "low",
+        "mode": "standard",
+        "summary": "detailed"
+      },
+      "usage": {
+        "input_tokens": 102,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 359,
+        "output_tokens_details": {
+          "reasoning_tokens": 342
+        },
+        "total_tokens": 461
+      },
+      "public_events": [
+        {
+          "type": "response.created"
+        },
+        {
+          "type": "response.in_progress"
+        },
+        {
+          "type": "response.output_item.added",
+          "output_index": 0,
+          "item": {
+            "type": "reasoning"
+          }
+        },
+        {
+          "type": "response.reasoning_summary_part.added",
+          "output_index": 0,
+          "summary_index": 0,
+          "part": {
+            "type": "summary_text",
+            "text": ""
+          }
+        },
+        {
+          "type": "response.reasoning_summary_text.delta",
+          "output_index": 0,
+          "summary_index": 0,
+          "delta": "**Searching smallest 3-digit divisible by 7 with digit sum 19**"
+        },
+        {
+          "type": "response.reasoning_summary_text.done",
+          "output_index": 0,
+          "summary_index": 0,
+          "text": "**Searching smallest 3-digit divisible by 7 with digit sum 19**"
+        },
+        {
+          "type": "response.reasoning_summary_part.done",
+          "output_index": 0,
+          "summary_index": 0,
+          "part": {
+            "type": "summary_text",
+            "text": "**Searching smallest 3-digit divisible by 7 with digit sum 19**"
+          }
+        },
+        {
+          "type": "response.reasoning_summary_part.added",
+          "output_index": 0,
+          "summary_index": 1,
+          "part": {
+            "type": "summary_text",
+            "text": ""
+          }
+        },
+        {
+          "type": "response.reasoning_summary_text.delta",
+          "output_index": 0,
+          "summary_index": 1,
+          "delta": "**Identifying 469 as smallest 3-digit divisible by 7 with digit sum 19**"
+        },
+        {
+          "type": "response.reasoning_summary_text.done",
+          "output_index": 0,
+          "summary_index": 1,
+          "text": "**Identifying 469 as smallest 3-digit divisible by 7 with digit sum 19**"
+        },
+        {
+          "type": "response.reasoning_summary_part.done",
+          "output_index": 0,
+          "summary_index": 1,
+          "part": {
+            "type": "summary_text",
+            "text": "**Identifying 469 as smallest 3-digit divisible by 7 with digit sum 19**"
+          }
+        },
+        {
+          "type": "response.output_item.done",
+          "output_index": 0
+        },
+        {
+          "type": "response.output_item.added",
+          "output_index": 1,
+          "item": {
+            "type": "message",
+            "role": "assistant",
+            "phase": "final_answer"
+          }
+        },
+        {
+          "type": "response.content_part.added",
+          "output_index": 1,
+          "content_index": 0
+        },
+        {
+          "type": "response.output_text.delta",
+          "output_index": 1,
+          "content_index": 0,
+          "delta": "left"
+        },
+        {
+          "type": "response.output_text.delta",
+          "output_index": 1,
+          "content_index": 0,
+          "delta": "="
+        },
+        {
+          "type": "response.output_text.delta",
+          "output_index": 1,
+          "content_index": 0,
+          "delta": "red"
+        },
+        {
+          "type": "response.output_text.delta",
+          "output_index": 1,
+          "content_index": 0,
+          "delta": ","
+        },
+        {
+          "type": "response.output_text.delta",
+          "output_index": 1,
+          "content_index": 0,
+          "delta": " right"
+        },
+        {
+          "type": "response.output_text.delta",
+          "output_index": 1,
+          "content_index": 0,
+          "delta": "="
+        },
+        {
+          "type": "response.output_text.delta",
+          "output_index": 1,
+          "content_index": 0,
+          "delta": "blue"
+        },
+        {
+          "type": "response.output_text.delta",
+          "output_index": 1,
+          "content_index": 0,
+          "delta": "\n"
+        },
+        {
+          "type": "response.output_text.delta",
+          "output_index": 1,
+          "content_index": 0,
+          "delta": "n"
+        },
+        {
+          "type": "response.output_text.delta",
+          "output_index": 1,
+          "content_index": 0,
+          "delta": "="
+        },
+        {
+          "type": "response.output_text.delta",
+          "output_index": 1,
+          "content_index": 0,
+          "delta": "469"
+        },
+        {
+          "type": "response.output_text.done",
+          "output_index": 1,
+          "content_index": 0,
+          "text": "left=red, right=blue\nn=469"
+        },
+        {
+          "type": "response.content_part.done",
+          "output_index": 1,
+          "content_index": 0
+        },
+        {
+          "type": "response.output_item.done",
+          "output_index": 1
+        },
+        {
+          "type": "response.completed"
+        }
+      ],
+      "elapsed_seconds": 7.7
+    }
+  ],
+  "sanitization": "Omitted account/token values, all response/item IDs, usage attribution IDs, encrypted/private reasoning, and hidden catalog entries; retained public reasoning summaries and synthetic answers."
+}

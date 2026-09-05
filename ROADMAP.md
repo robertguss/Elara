@@ -1,8 +1,8 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-05 (CTRL-1
-> pushed; THREAD-1 verified locally, pending push) · **Owner:** solo development
-> with AI collaborators
+> **Canonical roadmap and status source** · **Updated:** 2026-09-05 (CTRL-1 and
+> THREAD-1 pushed; THREAD-2 next) · **Owner:** solo development with AI
+> collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
@@ -10,12 +10,12 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** THREAD-1 implementation and live subscription smoke are verified,
-pending push: 422 Mix tests, 108 Rust TUI tests and 6 execution-stub tests pass.
-CTRL-1 is DONE and pushed. TUI-6 is DONE and pushed. INST-1 is DONE and pushed,
-including the shared-check cleanup repair. INPUT-1 is DONE and pushed. PROV-2 is
-pushed in `fb7a6a3`. TUI-7 is pushed in `0c968dc`; its hands-on acceptance
-remains owner-deferred. TUI-5 is pushed in `e7c67bf`; TUI-4 in `de46872`.
+**Current:** THREAD-1 is DONE and pushed; live subscription smoke passed. 422
+Mix tests, 108 Rust TUI tests and 6 execution-stub tests pass. CTRL-1 is DONE
+and pushed. TUI-6 is DONE and pushed. INST-1 is DONE and pushed, including the
+shared-check cleanup repair. INPUT-1 is DONE and pushed. PROV-2 is pushed in
+`fb7a6a3`. TUI-7 is pushed in `0c968dc`; its hands-on acceptance remains
+owner-deferred. TUI-5 is pushed in `e7c67bf`; TUI-4 in `de46872`.
 TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred while away and does
 not block later implementation.
 
@@ -39,9 +39,9 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** push the verified THREAD-1 local commits, then unblock
-THREAD-2. Live subscription smoke passed. Manual acceptance requiring the absent
-owner stays deferred.
+**Next action:** implement THREAD-2 durable thread communication and TUI
+navigation. Live subscription smoke passed. Manual acceptance requiring the
+absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -101,7 +101,7 @@ HTML prototypes or existing batch coordinator already implement them.
 
 Build the TUI foundations first, then provider/input and session controls, then
 persistent communicating threads and automatic handoff. Both the TUI and threads
-must be usable before SPLIT-5. THREAD-1 is the next executable item;
+must be usable before SPLIT-5. THREAD-2 is the next executable item;
 TUI-3/TUI-4/TUI-5/TUI-7 manual acceptance is owner-deferred. Later slices are
 bounded vertical deliveries; the expanded scope must not be hidden inside the
 composer or session picker.
@@ -213,8 +213,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | INST-1   | DONE     | Standard project instructions and Agent Skills                | INPUT-1          |
 | TUI-6    | DONE     | In-TUI session lifecycle and action discovery                 | INST-1           |
 | CTRL-1   | DONE     | Durable input queue, steering, and execution preferences      | TUI-6            |
-| THREAD-1 | IN PROGRESS | Persistent delegated threads and preserved workspaces         | CTRL-1           |
-| THREAD-2 | BLOCKED  | Durable thread communication and TUI navigation               | THREAD-1         |
+| THREAD-1 | DONE     | Persistent delegated threads and preserved workspaces         | CTRL-1           |
+| THREAD-2 | TODO     | Durable thread communication and TUI navigation               | THREAD-1         |
 | CTX-1    | BLOCKED  | Automatic handoff and uninterrupted continuation              | THREAD-2         |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
 
@@ -2011,8 +2011,7 @@ Physical-terminal acceptance previously deferred by the owner remains deferred.
 
 ## THREAD-1 — Persistent delegated threads and preserved workspaces
 
-**Status:** IN PROGRESS — implementation and live subscription smoke verified;
-pending push
+**Status:** DONE
 
 ### Outcome
 
@@ -2086,13 +2085,15 @@ integration applied the expected bytes to the parent. A second BEAM process
 resumed the same coding child with a paused inbox and preserved files, performed
 another successful live read, and retained exactly one original assignment.
 Credentials were saved privately with mode 0600 and were not copied into the
-repo. The implementation is integrated into `codex/tui-3-composer` locally; it
-is not pushed yet. Previously owner-deferred physical-terminal acceptance
-remains deferred.
+repo. Implementation
+[`bd4fa99`](https://github.com/robertguss/Elara/commit/bd4fa99) and smoke
+evidence [`99482a2`](https://github.com/robertguss/Elara/commit/99482a2) are
+pushed on `codex/tui-3-composer`. Previously owner-deferred physical-terminal
+acceptance remains deferred.
 
 ## THREAD-2 — Durable thread communication and TUI navigation
 
-**Status:** BLOCKED on THREAD-1
+**Status:** TODO
 
 ### Outcome
 

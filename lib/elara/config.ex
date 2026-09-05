@@ -19,8 +19,11 @@ defmodule Elara.Config do
   def resolve(env \\ System.get_env()) do
     case present(env, "ELARA_PROVIDER") do
       "openai-codex" ->
-        with {:ok, tokens} <- OpenAICodexAuth.load_tokens() do
-          {:ok, {OpenAICodex, OpenAICodex.new(tokens, model: openai_codex_model(env))}}
+        with {:ok, source} <- codex_auth_source(env),
+             {:ok, effort} <- codex_effort(env),
+             {:ok, tokens} <- OpenAICodexAuth.load_tokens(source, env) do
+          {:ok,
+           {OpenAICodex, OpenAICodex.new(tokens, model: openai_codex_model(env), effort: effort)}}
         end
 
       "grok" ->
@@ -33,6 +36,20 @@ defmodule Elara.Config do
         {:error, {:unknown_provider, provider}}
     end
   end
+
+  def error_message(:codex_not_logged_in),
+    do:
+      "No reusable Codex login found. Sign in through Codex, then retry with ELARA_CODEX_AUTH_SOURCE=codex."
+
+  def error_message(:invalid_codex_auth_file),
+    do:
+      "The Codex login file is invalid or unsupported. Sign in again through Codex; Elara will only read this file."
+
+  def error_message(:codex_login_refresh_required),
+    do:
+      "Refresh your login in Codex, then retry Elara. Elara does not refresh or rotate borrowed Codex credentials."
+
+  def error_message(reason), do: inspect(reason)
 
   defp resolve_default(env) do
     cond do
@@ -48,7 +65,23 @@ defmodule Elara.Config do
     end
   end
 
-  defp openai_codex_model(env), do: present(env, "ELARA_MODEL") || "gpt-5.3-codex"
+  defp openai_codex_model(env), do: present(env, "ELARA_MODEL") || OpenAICodex.default_model()
+
+  defp codex_auth_source(env) do
+    case present(env, "ELARA_CODEX_AUTH_SOURCE") do
+      nil -> {:ok, :elara}
+      "elara" -> {:ok, :elara}
+      "codex" -> {:ok, :codex}
+      source -> {:error, {:unknown_codex_auth_source, source}}
+    end
+  end
+
+  defp codex_effort(env) do
+    case present(env, "ELARA_REASONING_EFFORT") || "low" do
+      effort when effort in ["low", "medium", "high", "xhigh"] -> {:ok, effort}
+      effort -> {:error, {:invalid_reasoning_effort, effort}}
+    end
+  end
 
   defp env_openai(env, key) do
     %OpenAI{

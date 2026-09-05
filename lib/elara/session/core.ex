@@ -12,10 +12,17 @@ defmodule Elara.Session.Core do
     @type t :: %__MODULE__{
             system: String.t(),
             tools: %{String.t() => Tool.t()},
+            provider_settings: Elara.Provider.Visibility.settings() | nil,
             max_iterations: pos_integer(),
             max_tool_output_bytes: pos_integer()
           }
-    defstruct [:system, :tools, max_iterations: 12, max_tool_output_bytes: 16_384]
+    defstruct [
+      :system,
+      :tools,
+      :provider_settings,
+      max_iterations: 12,
+      max_tool_output_bytes: 16_384
+    ]
   end
 
   @type ref :: pos_integer()
@@ -26,7 +33,12 @@ defmodule Elara.Session.Core do
           | {:running_tool, ref(), current :: ToolCall.t(), remaining :: [ToolCall.t()],
              iteration :: pos_integer()}
 
-  @type streaming :: %{id: String.t(), text: String.t()}
+  @type streaming :: %{
+          id: String.t(),
+          text: String.t(),
+          public_content: [Elara.Provider.Visibility.public_part()],
+          settings: Elara.Provider.Visibility.settings() | nil
+        }
 
   defmodule State do
     @type t :: %__MODULE__{
@@ -41,7 +53,8 @@ defmodule Elara.Session.Core do
 
   @type fact ::
           {:ask, String.t()}
-          | {:provider_delta, ref(), String.t()}
+          | {:provider_delta, ref(), Provider.delta()}
+          | {:provider_settings, Elara.Provider.Visibility.settings()}
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
           | {:tool_result, ref(), Tool.outcome()}
           | {:tool_crashed, ref(), reason :: String.t()}
@@ -115,10 +128,35 @@ defmodule Elara.Session.Core do
       call_provider_effect(state, ref)
     ]
 
-    {%{state | phase: {:calling_provider, ref, 1}, streaming: new_stream(ref)}, effects}
+    {%{
+       state
+       | phase: {:calling_provider, ref, 1},
+         streaming: new_stream(ref, state.config.provider_settings)
+     }, effects}
+  end
+
+  def step(state, {:provider_settings, settings}) do
+    {%{state | config: %{state.config | provider_settings: settings}},
+     [{:emit, :provider_view_changed}]}
   end
 
   def step(%State{phase: :idle} = state, _fact), do: {state, []}
+
+  def step(
+        %State{phase: {:calling_provider, r, _}, streaming: streaming} = state,
+        {:provider_delta, r, {:public_content, part}}
+      ) do
+    if Elara.Provider.Visibility.valid_part?(part) do
+      streaming = %{
+        streaming
+        | public_content: Elara.Provider.Visibility.upsert(streaming.public_content, part)
+      }
+
+      {%{state | streaming: streaming}, [{:emit, :provider_view_changed}]}
+    else
+      {state, []}
+    end
+  end
 
   def step(
         %State{phase: {:calling_provider, r, _it}, streaming: streaming} = state,
@@ -150,16 +188,14 @@ defmodule Elara.Session.Core do
         %State{phase: {:calling_provider, r, _}, streaming: streaming} = state,
         {:provider_result, r, {:error, error}}
       ) do
-    {%{state | phase: :idle, streaming: nil},
-     [{:emit, streamed_turn_ended({:provider_error, error}, streaming)}]}
+    stop_stream(state, streaming, {:provider_error, error})
   end
 
   def step(
         %State{phase: {:calling_provider, _, _}, streaming: streaming} = state,
         :interrupt
       ) do
-    {%{state | phase: :idle, streaming: nil},
-     [{:emit, streamed_turn_ended(:interrupted, streaming)}]}
+    stop_stream(state, streaming, :interrupted)
   end
 
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_result, r, outcome}) do
@@ -196,7 +232,30 @@ defmodule Elara.Session.Core do
 
   def step(%State{} = state, _fact), do: {state, []}
 
+  defp stop_stream(state, %{public_content: [_ | _]} = streaming, outcome) do
+    text =
+      streaming.public_content
+      |> Enum.reject(&(&1["kind"] == "reasoning_summary"))
+      |> Enum.map_join(& &1["text"])
+
+    message = %Assistant{
+      text: if(text == "", do: nil, else: text),
+      public_content: streaming.public_content,
+      request_settings: streaming.settings,
+      interrupted: true
+    }
+
+    {%{state | history: state.history ++ [message], phase: :idle, streaming: nil},
+     [{:emit, {:message_appended, message}}, {:emit, streamed_turn_ended(outcome, streaming)}]}
+  end
+
+  defp stop_stream(state, streaming, outcome),
+    do:
+      {%{state | phase: :idle, streaming: nil},
+       [{:emit, streamed_turn_ended(outcome, streaming)}]}
+
   defp finish_provider(state, asst, streaming) do
+    asst = %{asst | request_settings: streaming.settings}
     history = state.history ++ [asst]
     state = %{state | history: history, streaming: nil}
 
@@ -271,8 +330,11 @@ defmodule Elara.Session.Core do
       {ref, state} = take_ref(state)
       effect = call_provider_effect(state, ref)
 
-      {%{state | phase: {:calling_provider, ref, iteration}, streaming: new_stream(ref)},
-       [effect]}
+      {%{
+         state
+         | phase: {:calling_provider, ref, iteration},
+           streaming: new_stream(ref, state.config.provider_settings)
+       }, [effect]}
     end
   end
 
@@ -280,7 +342,8 @@ defmodule Elara.Session.Core do
     request = %Provider.Request{
       system: state.config.system,
       messages: state.history,
-      tools: Map.values(state.config.tools)
+      tools: Map.values(state.config.tools),
+      settings: state.config.provider_settings
     }
 
     {:call_provider, ref, request}
@@ -291,7 +354,8 @@ defmodule Elara.Session.Core do
     {ref, %{state | next_ref: ref + 1}}
   end
 
-  defp new_stream(ref), do: %{id: "assistant-#{ref}", text: ""}
+  defp new_stream(ref, settings),
+    do: %{id: "assistant-#{ref}", text: "", public_content: [], settings: settings}
 
   defp streamed_turn_ended(outcome, %{text: ""}), do: {:turn_ended, outcome}
   defp streamed_turn_ended(outcome, %{text: _text}), do: {:turn_ended, outcome, :streamed}

@@ -12,13 +12,14 @@ defmodule Elara.Auth.OpenAICodex do
   @form_headers [{"content-type", "application/x-www-form-urlencoded"}]
 
   @derive {Inspect, except: [:access_token, :refresh_token]}
-  defstruct [:access_token, :refresh_token, :expires_at, :account_id]
+  defstruct [:access_token, :refresh_token, :expires_at, :account_id, source: :elara]
 
   @type t :: %__MODULE__{
           access_token: String.t(),
-          refresh_token: String.t(),
+          refresh_token: String.t() | nil,
           expires_at: integer(),
-          account_id: String.t()
+          account_id: String.t(),
+          source: :elara | :codex
         }
 
   @spec verification_url() :: String.t()
@@ -79,6 +80,8 @@ defmodule Elara.Auth.OpenAICodex do
   end
 
   @spec save_tokens(t()) :: :ok | {:error, term()}
+  def save_tokens(%__MODULE__{source: :codex}), do: {:error, :codex_auth_read_only}
+
   def save_tokens(%__MODULE__{} = tokens) do
     path = auth_path()
     dir = Path.dirname(path)
@@ -117,7 +120,55 @@ defmodule Elara.Auth.OpenAICodex do
     end
   end
 
+  @doc "Read an explicitly selected credential source; Codex credentials are never persisted or refreshed."
+  @spec load_tokens(:elara | :codex, map()) :: {:ok, t()} | {:error, term()}
+  def load_tokens(:elara, _env), do: load_tokens()
+
+  def load_tokens(:codex, env) do
+    home =
+      case Map.get(env, "CODEX_HOME") do
+        value when is_binary(value) and value != "" -> value
+        _ -> Path.join(System.user_home!(), ".codex")
+      end
+
+    with {:ok, body} <- File.read(Path.join(home, "auth.json")),
+         {:ok, map} <- decode_map(body),
+         {:ok, tokens} <- tokens_from_codex_map(map) do
+      refresh_if_needed(tokens)
+    else
+      {:error, :enoent} ->
+        {:error, :codex_not_logged_in}
+
+      {:error, reason} when reason in [:invalid_json, :invalid_access_token] ->
+        {:error, :invalid_codex_auth_file}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp tokens_from_codex_map(%{"tokens" => %{"access_token" => access, "account_id" => account}})
+       when is_binary(access) and access != "" and is_binary(account) and account != "" do
+    with [_header, payload, _signature] <- String.split(access, "."),
+         {:ok, json} <- Base.url_decode64(payload, padding: false),
+         {:ok, %{"exp" => expiry}} when is_integer(expiry) and expiry > 0 <- decode_map(json),
+         true <- String.trim(account) != "" do
+      {:ok,
+       %__MODULE__{access_token: access, account_id: account, expires_at: expiry, source: :codex}}
+    else
+      _ -> {:error, :invalid_codex_auth_file}
+    end
+  end
+
+  defp tokens_from_codex_map(_), do: {:error, :invalid_codex_auth_file}
+
   @spec refresh_if_needed(t()) :: {:ok, t()} | {:error, term()}
+  def refresh_if_needed(%__MODULE__{source: :codex} = tokens) do
+    if expired?(tokens, System.system_time(:second)),
+      do: {:error, :codex_login_refresh_required},
+      else: {:ok, tokens}
+  end
+
   def refresh_if_needed(%__MODULE__{} = tokens) do
     if expired?(tokens, System.system_time(:second)) do
       case :global.trans({{__MODULE__, :refresh}, self()}, fn -> refresh_latest(tokens) end) do
@@ -130,7 +181,12 @@ defmodule Elara.Auth.OpenAICodex do
   end
 
   @spec refresh(t(), keyword()) :: {:ok, t()} | {:error, term()}
-  def refresh(%__MODULE__{refresh_token: refresh_token}, opts \\ []) do
+  def refresh(tokens, opts \\ [])
+
+  def refresh(%__MODULE__{source: :codex}, _opts),
+    do: {:error, :codex_login_refresh_required}
+
+  def refresh(%__MODULE__{refresh_token: refresh_token}, opts) do
     http = Keyword.get(opts, :http, &Req.post/2)
 
     with {:ok, map} <-

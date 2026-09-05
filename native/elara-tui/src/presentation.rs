@@ -171,13 +171,170 @@ fn thinking_lines(model: &Model) -> Vec<Line<'static>> {
             "Illustrative binding; not this turn's live reasoning.",
         ));
     } else {
-        lines.push(Line::from("Live reasoning unavailable until PROV-2."));
+        let state = model.transcript.borrow();
+        let turn = if state.follow {
+            turn_prompts(model).count()
+        } else {
+            state.selected_user_turn()
+        };
+        drop(state);
+        let parts = reasoning_for_turn(model, turn);
+        if parts.is_empty() {
+            lines.push(Line::from("Public reasoning summary unavailable."));
+        } else {
+            for part in parts {
+                lines.push(Line::from("Reasoning summary"));
+                lines.extend(
+                    part["text"]
+                        .as_str()
+                        .unwrap_or("")
+                        .lines()
+                        .map(|line| Line::from(line.to_owned())),
+                );
+            }
+        }
     }
     lines
 }
-pub(super) fn inline_thinking(model: &Model, id: &str) -> Option<transcript::Entry> {
+fn reasoning_for_turn(model: &Model, selected: usize) -> Vec<&Value> {
+    let mut turn = 0;
+    let mut parts = Vec::new();
+    for message in model.projection.view["messages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        if message["role"] == "user" {
+            turn += 1;
+        }
+        if turn == selected {
+            parts.extend(
+                message["public_content"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|part| part["kind"] == "reasoning_summary"),
+            );
+        }
+    }
+    if selected == turn {
+        parts.extend(
+            model.projection.view["provider_view"]["streaming"]["public_content"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|part| part["kind"] == "reasoning_summary"),
+        );
+    }
+    parts
+}
+
+pub(super) fn public_entries(
+    model: &Model,
+    id: &str,
+    parts: &[Value],
+    live: bool,
+) -> Vec<transcript::Entry> {
+    parts
+        .iter()
+        .map(|part| {
+            let kind = part["kind"].as_str().unwrap_or("final_answer");
+            let label = match kind {
+                "reasoning_summary" => "Public reasoning summary",
+                "commentary" => "Assistant commentary",
+                _ => "Assistant answer",
+            };
+            let body = part["text"].as_str().unwrap_or("");
+            let mut lines = if kind == "reasoning_summary" {
+                body.split('\n')
+                    .map(|line| Line::from(vec![Span::raw("    "), Span::raw(line.to_owned())]))
+                    .collect()
+            } else {
+                assistant_markdown_lines(body)
+            };
+            // The first span is renderer chrome, excluded from Entry::rendered's
+            // selectable body and therefore from its stable byte offsets.
+            if let Some(first) = lines.first_mut() {
+                first.spans[0] = Span::styled(
+                    format!("{label}{}  ", if live { " · live" } else { "" }),
+                    Style::default().fg(Color::Gray),
+                );
+            }
+            let mut entry = transcript::Entry::rendered(
+                format!(
+                    "{id}:{}:{}:{kind}",
+                    part["output_index"], part["part_index"]
+                ),
+                lines,
+                false,
+                false,
+            );
+            if kind == "reasoning_summary"
+                && (model.appearance.layout != ViewLayout::Ember || !model.thinking_visible)
+            {
+                entry.lines.clear();
+            }
+            entry
+        })
+        .collect()
+}
+
+// Index the source user message once per transcript build, including live summaries.
+pub(super) fn summary_turns(model: &Model) -> HashSet<usize> {
+    let mut turns = HashSet::new();
+    let mut current = None;
+    for (index, message) in model.projection.view["messages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .enumerate()
+    {
+        if message["role"] == "user" {
+            current = Some(index);
+        }
+        if let Some(turn) = current
+            && message["public_content"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|part| part["kind"] == "reasoning_summary")
+        {
+            turns.insert(turn);
+        }
+    }
+    if let Some(turn) = current
+        && model.projection.view["provider_view"]["streaming"]["public_content"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|part| part["kind"] == "reasoning_summary")
+    {
+        turns.insert(turn);
+    }
+    turns
+}
+
+pub(super) fn inline_thinking(
+    model: &Model,
+    id: &str,
+    has_summary: bool,
+) -> Option<transcript::Entry> {
     if !model.preview_reasoning {
-        return None;
+        if model.projection.view["provider_view"]["next_request"].is_null() {
+            return None;
+        }
+        if has_summary {
+            return None;
+        }
+        let mut entry = transcript::Entry::plain(
+            &format!("{id}:thinking"),
+            "Public reasoning summary unavailable.",
+            false,
+        );
+        if model.appearance.layout != ViewLayout::Ember || !model.thinking_visible {
+            entry.lines.clear();
+        }
+        return Some(entry);
     }
     let text = format!("Thinking · PREVIEW fixture (not live)\n{PREVIEW_SUMMARY}");
     let mut entry = transcript::Entry::plain(&format!("{id}:thinking"), &text, false);
@@ -284,6 +441,30 @@ pub(super) fn panes(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) -
         _ => area,
     }
 }
+fn usage_text(usage: &Value) -> String {
+    if usage.is_null() {
+        return "unavailable".into();
+    }
+    [
+        ("input_tokens", "input"),
+        ("output_tokens", "output"),
+        ("cached_input_tokens", "cached input"),
+        ("reasoning_tokens", "reasoning"),
+        ("cache_write_tokens", "cache write"),
+    ]
+    .iter()
+    .map(|(key, label)| {
+        format!(
+            "{label} {}",
+            usage[key]
+                .as_u64()
+                .map_or_else(|| "unavailable".into(), |n| n.to_string())
+        )
+    })
+    .collect::<Vec<_>>()
+    .join(" · ")
+}
+
 pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
     if model.appearance_picker.is_some() || model.presentation_overlay.is_some() {
         let area = frame.area();
@@ -339,6 +520,67 @@ pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
                 );
             }
         }
+    }
+    if let Some((m, e)) = model.provider_picker {
+        let view = &model.projection.view["provider_view"];
+        let choice = &view["catalog"][m];
+        let usage = &view["usage"];
+        let active = &view["active_request"];
+        let next = &view["next_request"];
+        let served = model.projection.view["messages"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .rev()
+            .find_map(|message| message["response_model"].as_str())
+            .unwrap_or("unavailable");
+        let lines = vec![
+            Line::from("Up/Down model · Left/Right effort · Enter accept · Esc cancel"),
+            Line::from(format!(
+                "Selected: {} · {}",
+                choice["model"].as_str().unwrap_or("?"),
+                choice["efforts"][e].as_str().unwrap_or("?")
+            )),
+            Line::from(format!(
+                "Next request: {} · {}",
+                next["model"].as_str().unwrap_or("unavailable"),
+                next["effort"].as_str().unwrap_or("?")
+            )),
+            Line::from(format!(
+                "Active request: {} · {}",
+                active["model"].as_str().unwrap_or("none"),
+                active["effort"].as_str().unwrap_or("-")
+            )),
+            Line::from(format!(
+                "Catalog: {} · tested efforts {}",
+                choice["provenance"].as_str().unwrap_or("unknown"),
+                choice["tested_efforts"]
+            )),
+            Line::from(format!("Last served model: {served}")),
+            Line::from(format!(
+                "Last request tokens: {}",
+                usage_text(&usage["last_request"])
+            )),
+            Line::from(format!(
+                "Reported session token totals: {}",
+                usage_text(&usage["session_totals"])
+            )),
+            Line::from(format!(
+                "Context: advertised {} · occupancy unavailable",
+                view["context"]["advertised_limit"]
+            )),
+            Line::from(format!(
+                "Conservative estimate: {} tokens (history/system/tools bytes + reserve)",
+                view["context"]["estimate_tokens"]
+            )),
+        ];
+        frame.render_widget(ratatui::widgets::Clear, frame.area());
+        panel(
+            frame,
+            lines,
+            frame.area(),
+            " Model / effort / usage · next provider request ",
+        );
     }
     let t = model.appearance.theme.tokens();
     let buffer = frame.buffer_mut();
@@ -407,6 +649,245 @@ mod tests {
         );
         model
     }
+    #[test]
+    fn real_public_parts_stay_bound_to_turns_and_hidden_across_layouts() {
+        let mut model = preview();
+        model.preview_reasoning = false;
+        let part = |text: &str, kind: &str| json!({"kind":kind,"item_id":"r","output_index":0,"part_index":0,"text":text});
+        model.projection.view["messages"][1]["public_content"] = json!([
+            part("ACTUAL_HISTORY", "reasoning_summary"),
+            part("COMMENTARY_ONLY", "commentary"),
+            part("ANSWER_ONLY", "final_answer")
+        ]);
+        model.projection.view["provider_view"] = json!({"extension":"provider_visibility_v1","catalog":[],"next_request":{"model":"gpt-5.5","effort":"low"},"streaming":{"id":"a","public_content":[part("ACTUAL_LIVE", "reasoning_summary")]}});
+        for layout in ViewLayout::ALL {
+            model.set_appearance(Appearance {
+                layout: *layout,
+                ..model.appearance
+            });
+            assert_eq!(reasoning_for_turn(&model, 1)[0]["text"], "ACTUAL_HISTORY");
+            assert_eq!(reasoning_for_turn(&model, 2)[0]["text"], "ACTUAL_LIVE");
+            key(&mut model, KeyCode::F(4));
+            let frame = render_frame(&model, 120, 40).unwrap();
+            assert!(!frame.contains("ACTUAL_HISTORY") && !frame.contains("ACTUAL_LIVE"));
+            assert!(frame.contains("COMMENTARY_ONLY") && frame.contains("ANSWER_ONLY"));
+            key(&mut model, KeyCode::F(4));
+            let frame = render_frame(&model, 120, 40).unwrap();
+            assert!(frame.contains("ACTUAL_LIVE"));
+            assert!(!frame.contains("PREVIEW"));
+        }
+        model.projection.view["provider_view"]["streaming"] = Value::Null;
+        assert!(thinking_lines(&model).iter().any(|line| {
+            line.to_string()
+                .contains("Public reasoning summary unavailable.")
+        }));
+    }
+
+    #[test]
+    fn public_copy_excludes_labels_and_retains_selection_after_completion_or_interrupt() {
+        let model = preview();
+        let body = "Public α selection 👩‍💻\nsecond line";
+        let parts = [
+            json!({"kind":"reasoning_summary","item_id":"r","output_index":0,"part_index":0,"text":body}),
+        ];
+        let live = public_entries(&model, "s:message:1", &parts, true);
+        assert_eq!(live[0].text, body);
+        let id = live[0].id.clone();
+        for interrupted in [false, true] {
+            let mut state = transcript::Transcript::default();
+            state.layout(live.clone(), 80, 20);
+            state.selected = Some(id.clone());
+            let start = body.find("selection").unwrap();
+            state.selection = Some((
+                transcript::Point {
+                    id: id.clone(),
+                    byte: start,
+                },
+                transcript::Point {
+                    id: id.clone(),
+                    byte: start + "selection 👩‍💻".len(),
+                },
+            ));
+            assert_eq!(state.copy_entry().as_deref(), Some(body));
+            assert_eq!(state.copy_selection().as_deref(), Some("selection 👩‍💻"));
+            let mut canonical = public_entries(&model, "s:message:1", &parts, false);
+            if interrupted {
+                canonical.insert(
+                    0,
+                    transcript::Entry::plain(
+                        "s:message:1:interrupted",
+                        "Interrupted · partial public response",
+                        false,
+                    ),
+                );
+            }
+            state.layout(canonical, 42, 20);
+            assert_eq!(state.copy_entry().as_deref(), Some(body));
+            assert_eq!(state.copy_selection().as_deref(), Some("selection 👩‍💻"));
+        }
+    }
+
+    #[test]
+    fn public_answers_and_commentary_use_markdown_styles_and_code_blocks() {
+        let model = preview();
+        for kind in ["final_answer", "commentary"] {
+            let parts = [
+                json!({"kind":kind,"item_id":"m","output_index":1,"part_index":0,"text":"**Bold** and *italic*\n\n```rust\nlet value = 1;\n```"}),
+            ];
+            let entries = public_entries(&model, "s:message:1", &parts, false);
+            let lines = &entries[0].lines;
+            assert!(
+                lines
+                    .iter()
+                    .flat_map(|line| &line.spans)
+                    .any(|span| span.content == "Bold"
+                        && span.style.add_modifier.contains(Modifier::BOLD))
+            );
+            assert!(
+                lines
+                    .iter()
+                    .flat_map(|line| &line.spans)
+                    .any(|span| span.content == "italic"
+                        && span.style.add_modifier.contains(Modifier::ITALIC))
+            );
+            let frame = lines
+                .iter()
+                .map(Line::to_string)
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert!(frame.contains("let value = 1;"));
+            assert!(!frame.contains("**Bold**") && !frame.contains("```"));
+            let live = public_entries(&model, "s:message:1", &parts, true);
+            let body = entries[0].text.clone();
+            assert_eq!(live[0].text, body);
+            assert!(!body.contains("Assistant") && !body.contains("· live"));
+            let id = entries[0].id.clone();
+            let start = body.find("let value = 1;").unwrap();
+            let mut state = transcript::Transcript::default();
+            state.layout(live, 80, 20);
+            state.selected = Some(id.clone());
+            state.selection = Some((
+                transcript::Point {
+                    id: id.clone(),
+                    byte: start,
+                },
+                transcript::Point {
+                    id,
+                    byte: start + "let value = 1;".len(),
+                },
+            ));
+            state.layout(entries, 42, 20);
+            assert_eq!(state.copy_entry().as_deref(), Some(body.as_str()));
+            assert_eq!(state.copy_selection().as_deref(), Some("let value = 1;"));
+        }
+    }
+
+    #[test]
+    fn typed_content_and_tools_follow_provider_output_order() {
+        let mut model = preview();
+        model.preview_reasoning = false;
+        let part = |index, text: &str, kind: &str| json!({"kind":kind,"item_id":format!("item{index}"),"output_index":index,"part_index":0,"text":text});
+        let call =
+            json!({"id":"c|tool","name":"read","args":{"ok":{"path":"file"}},"output_index":1});
+        model.projection.view["messages"] = json!([{"role":"user","text":"question"},{"role":"assistant","text":"after","public_content":[part(0,"before","reasoning_summary"),part(2,"after","commentary")],"tool_calls":[call]}]);
+        model.projection.view["tool_calls"] = json!([{"id":"c|tool","name":"read","args":{"ok":{"path":"file"}},"output_index":1,"status":"succeeded","outcome":{"ok":"body"}}]);
+        let entries = transcript_entries(&model);
+        let before = entries
+            .iter()
+            .position(|entry| entry.text.contains("before"))
+            .unwrap();
+        let tool = entries
+            .iter()
+            .position(|entry| entry.id.ends_with("tool:c|tool"))
+            .unwrap();
+        let after = entries
+            .iter()
+            .position(|entry| entry.text.contains("after"))
+            .unwrap();
+        assert!(before < tool && tool < after);
+        let id = entries[before].id.clone();
+        model.projection.view["messages"]
+            .as_array_mut()
+            .unwrap()
+            .pop();
+        model.projection.view["provider_view"] = json!({"streaming":{"id":"assistant-1","public_content":[part(0,"before","reasoning_summary")]}});
+        assert!(
+            transcript_entries(&model)
+                .iter()
+                .any(|entry| entry.id == id)
+        );
+    }
+
+    #[test]
+    fn provider_picker_keeps_interrupt_and_detach_available_except_during_safe_paste() {
+        let mut model = preview();
+        model.projection.view["provider_view"] =
+            json!({"catalog":[{"model":"gpt-5.5","efforts":["low"]}]});
+        model.provider_picker = Some((0, 0));
+        for (key, expected) in [('x', InputAction::Interrupt), ('c', InputAction::Detach)] {
+            let event = Event::Key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::CONTROL));
+            assert_eq!(handle_input(&mut model, event.clone(), 78), expected);
+            model.safe_paste = true;
+            assert_eq!(handle_input(&mut model, event, 78), InputAction::None);
+            model.safe_paste = false;
+        }
+    }
+
+    #[test]
+    fn provider_picker_clamps_effort_when_switching_to_a_smaller_catalog_entry() {
+        let mut model = preview();
+        model.projection.view["provider_view"] = json!({"extension":"provider_visibility_v1", "catalog":[{"model":"large","efforts":["low","high"]},{"model":"small","efforts":["low"]}],"next_request":{"model":"large","effort":"high"}});
+        key(&mut model, KeyCode::F(7));
+        assert_eq!(model.provider_picker, Some((0, 1)));
+        key(&mut model, KeyCode::Down);
+        assert_eq!(model.provider_picker, Some((1, 0)));
+        let result = handle_input(
+            &mut model,
+            Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            78,
+        );
+        assert_eq!(
+            result,
+            InputAction::ProviderSettings(
+                json!({"version":2,"command":"set_provider_settings","extension":"provider_visibility_v1","model":"small","effort":"low"})
+            )
+        );
+    }
+
+    #[test]
+    fn provider_controls_send_selected_settings_without_mutating_authority_or_draft() {
+        let mut model = preview();
+        model.projection.view["provider_view"] = json!({"extension":"provider_visibility_v1", "catalog":[{"model":"gpt-5.5","efforts":["low","high"]},{"model":"gpt-5.4-mini","efforts":["low","high"]}],"next_request":{"model":"gpt-5.5","effort":"low"}});
+        let draft = model.editor.text().to_owned();
+        key(&mut model, KeyCode::F(7));
+        key(&mut model, KeyCode::Down);
+        key(&mut model, KeyCode::Right);
+        let result = handle_input(
+            &mut model,
+            Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            78,
+        );
+        assert_eq!(
+            result,
+            InputAction::ProviderSettings(
+                json!({"version":2,"command":"set_provider_settings","extension":"provider_visibility_v1","model":"gpt-5.4-mini","effort":"high"})
+            )
+        );
+        assert_eq!(
+            model.projection.view["provider_view"]["next_request"]["model"],
+            "gpt-5.5"
+        );
+        assert_eq!(model.editor.text(), draft);
+        model.command_reply(Some("unsupported_provider_settings"));
+        assert!(
+            model
+                .notice
+                .as_ref()
+                .unwrap()
+                .contains("unsupported_provider_settings")
+        );
+    }
+
     #[test]
     fn workbench_turn_summaries_are_bounded_to_visible_rows() {
         let mut model = preview();

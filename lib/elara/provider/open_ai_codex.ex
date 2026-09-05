@@ -11,15 +11,19 @@ defmodule Elara.Provider.OpenAICodex do
   alias Elara.Tool
 
   @default_base_url "https://chatgpt.com/backend-api"
-  @default_model "gpt-5.3-codex"
+  @default_model "gpt-5.5"
+
+  @spec default_model() :: String.t()
+  def default_model, do: @default_model
   @provider_state_key "openai_codex"
 
   @derive {Inspect, except: [:tokens]}
-  defstruct [:tokens, :model, :base_url, :originator]
+  defstruct [:tokens, :model, :base_url, :originator, effort: "low"]
 
   @type config :: %__MODULE__{
           tokens: Auth.t(),
           model: String.t(),
+          effort: String.t(),
           base_url: String.t(),
           originator: String.t()
         }
@@ -30,7 +34,8 @@ defmodule Elara.Provider.OpenAICodex do
       tokens: tokens,
       model: Keyword.get(opts, :model, @default_model),
       base_url: Keyword.get(opts, :base_url, @default_base_url),
-      originator: Keyword.get(opts, :originator, "elara")
+      originator: Keyword.get(opts, :originator, "elara"),
+      effort: Keyword.get(opts, :effort, "low")
     }
   end
 
@@ -49,8 +54,10 @@ defmodule Elara.Provider.OpenAICodex do
 
       {:error, reason} ->
         {:error,
-         %Error{kind: :transport, message: "OpenAI token refresh failed: #{inspect(reason)}"},
-         config}
+         %Error{
+           kind: :transport,
+           message: "OpenAI token refresh failed: #{Elara.Config.error_message(reason)}"
+         }, config}
     end
   end
 
@@ -59,6 +66,7 @@ defmodule Elara.Provider.OpenAICodex do
   def build_body(%__MODULE__{} = config, %Provider.Request{} = request) do
     body = %{
       "model" => config.model,
+      "reasoning" => %{"effort" => config.effort, "summary" => "auto"},
       "store" => false,
       "stream" => true,
       "instructions" => request.system,
@@ -237,6 +245,7 @@ defmodule Elara.Provider.OpenAICodex do
     %{
       buffer: "",
       text: "",
+      public_content: [],
       items: %{},
       terminal: nil,
       error: nil,
@@ -248,7 +257,6 @@ defmodule Elara.Provider.OpenAICodex do
     normalized =
       (state.buffer <> data)
       |> :binary.replace("\r\n", "\n", [:global])
-      |> :binary.replace("\r", "\n", [:global])
 
     parts = :binary.split(normalized, "\n\n", [:global])
     buffer = List.last(parts)
@@ -301,15 +309,58 @@ defmodule Elara.Provider.OpenAICodex do
 
   defp consume_event(
          state,
-         %{
-           "type" => "response.output_text.delta",
-           "delta" => delta
-         },
+         %{"type" => "response.reasoning_summary_text.done", "text" => text} = event,
+         sink
+       )
+       when is_binary(text) do
+    index = Map.get(event, "output_index", 0)
+    item = Map.get(state.items, index, %{})
+
+    part = %{
+      "kind" => "reasoning_summary",
+      "item_id" => Map.get(event, "item_id", item["id"] || "output-#{index}"),
+      "output_index" => index,
+      "part_index" => Map.get(event, "summary_index", 0),
+      "text" => text
+    }
+
+    :ok = sink.({:public_content, part})
+    {:ok, %{state | public_content: Elara.Provider.Visibility.upsert(state.public_content, part)}}
+  end
+
+  defp consume_event(
+         state,
+         %{"type" => "response.reasoning_summary_text.delta", "delta" => delta} = event,
          sink
        )
        when is_binary(delta) do
-    :ok = sink.(delta)
-    {:ok, %{state | text: state.text <> delta}}
+    public_delta(
+      state,
+      event,
+      "reasoning_summary",
+      Map.get(event, "summary_index", 0),
+      delta,
+      sink
+    )
+  end
+
+  defp consume_event(
+         state,
+         %{
+           "type" => "response.output_text.delta",
+           "delta" => delta
+         } = event,
+         sink
+       )
+       when is_binary(delta) do
+    item = Map.get(state.items, Map.get(event, "output_index", 0), %{})
+    kind = if item["phase"] == "commentary", do: "commentary", else: "final_answer"
+
+    {:ok, state} =
+      public_delta(state, event, kind, Map.get(event, "content_index", 0), delta, sink)
+
+    if kind == "final_answer", do: :ok = sink.(delta)
+    {:ok, %{state | text: state.text <> if(kind == "final_answer", do: delta, else: "")}}
   end
 
   defp consume_event(
@@ -422,7 +473,13 @@ defmodule Elara.Provider.OpenAICodex do
            {:ok, calls} <- output_calls(output),
            provider_state = %{@provider_state_key => %{"output" => output}},
            {:ok, assistant} <- Message.assistant(empty_to_nil(text), calls, provider_state) do
-        {:ok, assistant}
+        {:ok,
+         %{
+           assistant
+           | public_content: public_output(output),
+             usage: Elara.Provider.Visibility.usage(response["usage"]),
+             response_model: response["model"]
+         }}
       else
         {:error, %Error{} = error} ->
           {:error, error}
@@ -433,6 +490,66 @@ defmodule Elara.Provider.OpenAICodex do
     else
       {:error, %Error{kind: :bad_response, message: "stream ended with an incomplete SSE frame"}}
     end
+  end
+
+  defp public_delta(state, event, kind, part_index, delta, sink) do
+    index = Map.get(event, "output_index", 0)
+    item = Map.get(state.items, index, %{})
+
+    part = %{
+      "kind" => kind,
+      "item_id" => Map.get(event, "item_id", item["id"] || "output-#{index}"),
+      "output_index" => index,
+      "part_index" => part_index,
+      "text" => delta
+    }
+
+    previous =
+      Enum.find(
+        state.public_content,
+        &(Elara.Provider.Visibility.key(&1) == Elara.Provider.Visibility.key(part))
+      )
+
+    part = if previous, do: %{part | "text" => previous["text"] <> delta}, else: part
+    :ok = sink.({:public_content, part})
+    {:ok, %{state | public_content: Elara.Provider.Visibility.upsert(state.public_content, part)}}
+  end
+
+  defp public_output(output) do
+    output
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {item, index} ->
+      {kind, parts} =
+        case item do
+          %{"type" => "reasoning"} ->
+            {"reasoning_summary", Map.get(item, "summary", [])}
+
+          %{"type" => "message", "role" => "assistant"} ->
+            {if(item["phase"] == "commentary", do: "commentary", else: "final_answer"),
+             Map.get(item, "content", [])}
+
+          _ ->
+            {nil, []}
+        end
+
+      parts
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {part, part_index} ->
+        if part["type"] in ["summary_text", "output_text"] and is_binary(part["text"]) do
+          [
+            %{
+              "kind" => kind,
+              "item_id" => item["id"] || "output-#{index}",
+              "output_index" => index,
+              "part_index" => part_index,
+              "text" => part["text"]
+            }
+          ]
+        else
+          []
+        end
+      end)
+    end)
   end
 
   defp canonical_output(_state, %{"output" => output}) when is_list(output) and output != [],
@@ -446,6 +563,9 @@ defmodule Elara.Provider.OpenAICodex do
 
   defp output_text(output) do
     Enum.reduce_while(output, {:ok, ""}, fn
+      %{"type" => "message", "phase" => "commentary"}, result ->
+        {:cont, result}
+
       %{
         "type" => "message",
         "id" => id,
@@ -482,26 +602,28 @@ defmodule Elara.Provider.OpenAICodex do
 
   defp output_calls(output) do
     output
+    |> Enum.with_index()
     |> Enum.reduce_while({:ok, []}, fn
-      %{
-        "type" => "function_call",
-        "id" => item_id,
-        "call_id" => call_id,
-        "name" => name,
-        "arguments" => arguments
-      },
+      {%{
+         "type" => "function_call",
+         "id" => item_id,
+         "call_id" => call_id,
+         "name" => name,
+         "arguments" => arguments
+       }, index},
       {:ok, calls}
       when is_binary(item_id) and item_id != "" and is_binary(call_id) and call_id != "" and
              is_binary(name) and name != "" and is_binary(arguments) ->
         call = %ToolCall{
           id: call_id <> "|" <> item_id,
           name: name,
-          args: decode_arguments(arguments)
+          args: decode_arguments(arguments),
+          output_index: index
         }
 
         {:cont, {:ok, [call | calls]}}
 
-      %{"type" => "function_call"}, {:ok, _calls} ->
+      {%{"type" => "function_call"}, _index}, {:ok, _calls} ->
         {:halt, bad_response("malformed function call")}
 
       _item, result ->

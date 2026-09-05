@@ -110,7 +110,7 @@ defmodule Elara.FlightRecorderTest do
              Elara.replay(recording)
   end
 
-  test "provider-private assistant state survives recording and replay" do
+  test "provider-private assistant state is excluded from recording and replay" do
     provider_state = %{
       "openai_codex" => %{
         "output" => [
@@ -132,13 +132,13 @@ defmodule Elara.FlightRecorderTest do
     assert {:ok, "answer"} = Elara.ask(session, "question")
     recording = Elara.recording(session)
 
-    assert get_in(List.last(recording.transitions), [:fact, :message, :provider_state]) ==
-             provider_state
+    refute get_in(List.last(recording.transitions), [:fact, :message, :provider_state])
+    refute inspect(recording) =~ "encrypted_content"
 
     assert {:ok, %FlightRecorder.Report{status: :match, final_state: replayed}} =
              Elara.replay(recording)
 
-    assert List.last(replayed.history).provider_state == provider_state
+    assert List.last(replayed.history).provider_state == nil
   end
 
   test "detects core behavior changes and supports transition fault injection" do

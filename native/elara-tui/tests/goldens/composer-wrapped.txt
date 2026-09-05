@@ -16,7 +16,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │Unicode é 👩‍💻  中  with spaces Unicode é 👩‍💻  中  with spaces Unicode é 👩‍💻  中  with s│
 │paces Unicode é 👩‍💻  中  with spaces                                             │

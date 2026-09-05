@@ -60,12 +60,15 @@ defmodule Elara.Protocol do
 
   @spec snapshot(String.t(), String.t(), Core.State.t()) :: map()
   def snapshot(session_id, incarnation, %Core.State{} = core) do
+    provider_view = Elara.Provider.Visibility.view(core)
+
     %{
       "session" => %{"id" => session_id, "incarnation" => incarnation},
       "messages" => Enum.map(core.history, &encode_message/1),
       "tool_calls" => tool_views(core),
       "turn" => encode_phase(core.phase),
-      "usage" => nil,
+      "usage" => provider_view["usage"]["session_totals"],
+      "provider_view" => provider_view,
       "content_deltas" => content_deltas(core)
     }
   end
@@ -98,8 +101,14 @@ defmodule Elara.Protocol do
         messages: messages,
         supersedes: supersedes
       }) do
+    provider_view = Elara.Provider.Visibility.view(core)
+
     reconcile_messages(message_offset, messages, supersedes) ++
       reconcile_tool_statuses(messages, core) ++
+      [
+        %{"op" => "set_provider_view", "provider_view" => provider_view},
+        %{"op" => "set_usage", "usage" => provider_view["usage"]["session_totals"]}
+      ] ++
       event_ops(event, message_offset, messages, supersedes) ++
       [
         maybe_supersedes(
@@ -122,6 +131,8 @@ defmodule Elara.Protocol do
   def apply_patch(_view, _ops), do: {:error, :invalid_patch}
 
   @spec decode_event(map()) :: {:ok, Elara.Event.t()} | {:error, :invalid_event}
+  def decode_event(%{"kind" => "provider_view_changed"}), do: {:ok, :provider_view_changed}
+
   def decode_event(%{"kind" => "turn_started", "prompt" => prompt}) when is_binary(prompt),
     do: {:ok, {:turn_started, prompt}}
 
@@ -164,6 +175,8 @@ defmodule Elara.Protocol do
   end
 
   def decode_event(_event), do: {:error, :invalid_event}
+
+  defp encode_event(:provider_view_changed), do: %{"kind" => "provider_view_changed"}
 
   defp encode_event({:turn_started, prompt}), do: %{"kind" => "turn_started", "prompt" => prompt}
 
@@ -238,6 +251,8 @@ defmodule Elara.Protocol do
       end
     end)
   end
+
+  defp event_ops(:provider_view_changed, _offset, _messages, _supersedes), do: []
 
   defp event_ops({:turn_started, _prompt}, _offset, _messages, _supersedes), do: []
 
@@ -366,6 +381,10 @@ defmodule Elara.Protocol do
   defp maybe_supersedes(op, nil), do: op
   defp maybe_supersedes(op, id) when is_binary(id), do: Map.put(op, "supersedes", id)
 
+  defp apply_op(view, %{"op" => "set_provider_view", "provider_view" => provider_view})
+       when is_map(provider_view),
+       do: {:ok, Map.put(view, "provider_view", provider_view)}
+
   defp apply_op(
          %{"messages" => messages, "tool_calls" => tool_calls} = view,
          %{"op" => "append_message", "index" => index, "message" => message} = op
@@ -458,8 +477,17 @@ defmodule Elara.Protocol do
 
   defp encode_message(%User{text: text}), do: %{"role" => "user", "text" => text}
 
-  defp encode_message(%Assistant{text: text, tool_calls: calls}) do
-    %{"role" => "assistant", "text" => text, "tool_calls" => Enum.map(calls, &encode_call/1)}
+  defp encode_message(%Assistant{text: text, tool_calls: calls} = message) do
+    %{
+      "role" => "assistant",
+      "text" => text,
+      "tool_calls" => Enum.map(calls, &encode_call/1),
+      "public_content" => message.public_content,
+      "usage" => message.usage,
+      "response_model" => message.response_model,
+      "request_settings" => message.request_settings,
+      "interrupted" => message.interrupted
+    }
   end
 
   defp encode_message(%ToolResult{call_id: id, name: name, outcome: outcome}) do
@@ -474,10 +502,31 @@ defmodule Elara.Protocol do
   defp decode_message(%{"role" => "user", "text" => text}) when is_binary(text),
     do: {:ok, %User{text: text}}
 
-  defp decode_message(%{"role" => "assistant", "text" => text, "tool_calls" => calls})
+  defp decode_message(%{"role" => "assistant", "text" => text, "tool_calls" => calls} = message)
        when (is_binary(text) or is_nil(text)) and is_list(calls) do
-    with {:ok, calls} <- map_ok(calls, &decode_call/1) do
-      {:ok, %Assistant{text: text, tool_calls: calls}}
+    with {:ok, calls} <- map_ok(calls, &decode_call/1),
+         parts = Map.get(message, "public_content", []),
+         true <- is_list(parts) and Enum.all?(parts, &Elara.Provider.Visibility.valid_part?/1),
+         usage = Map.get(message, "usage"),
+         true <- valid_public_usage?(usage),
+         model = Map.get(message, "response_model"),
+         true <- is_nil(model) or is_binary(model),
+         settings = Map.get(message, "request_settings"),
+         true <- valid_request_settings?(settings),
+         interrupted = Map.get(message, "interrupted", false),
+         true <- is_boolean(interrupted) do
+      {:ok,
+       %Assistant{
+         text: text,
+         tool_calls: calls,
+         public_content: parts,
+         usage: usage,
+         response_model: model,
+         request_settings: settings,
+         interrupted: interrupted
+       }}
+    else
+      _ -> {:error, :invalid_event}
     end
   end
 
@@ -495,13 +544,44 @@ defmodule Elara.Protocol do
 
   defp decode_message(_message), do: {:error, :invalid_event}
 
-  defp encode_call(%ToolCall{id: id, name: name, args: args}) do
-    %{"id" => id, "name" => name, "args" => encode_args(args)}
+  defp valid_public_usage?(nil), do: true
+
+  defp valid_public_usage?(usage) when is_map(usage) do
+    Enum.all?(usage, fn {key, value} ->
+      key in [
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "cached_input_tokens",
+        "cache_write_tokens",
+        "reasoning_tokens"
+      ] and is_integer(value) and value >= 0
+    end)
   end
 
-  defp decode_call(%{"id" => id, "name" => name, "args" => args})
+  defp valid_public_usage?(_), do: false
+
+  defp valid_request_settings?(nil), do: true
+
+  defp valid_request_settings?(%{"model" => model, "effort" => effort} = settings),
+    do: map_size(settings) == 2 and is_binary(model) and is_binary(effort)
+
+  defp valid_request_settings?(_), do: false
+
+  defp encode_call(%ToolCall{id: id, name: name, args: args} = call) do
+    map = %{"id" => id, "name" => name, "args" => encode_args(args)}
+    if call.output_index, do: Map.put(map, "output_index", call.output_index), else: map
+  end
+
+  defp decode_call(%{"id" => id, "name" => name, "args" => args} = call)
        when is_binary(id) and is_binary(name) do
-    with {:ok, args} <- decode_args(args), do: {:ok, %ToolCall{id: id, name: name, args: args}}
+    with {:ok, args} <- decode_args(args),
+         index = Map.get(call, "output_index"),
+         true <- is_nil(index) or (is_integer(index) and index >= 0) do
+      {:ok, %ToolCall{id: id, name: name, args: args, output_index: index}}
+    else
+      _ -> {:error, :invalid_event}
+    end
   end
 
   defp decode_call(_call), do: {:error, :invalid_event}

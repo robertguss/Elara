@@ -98,6 +98,12 @@ defmodule Elara.Server do
 
   defp establish_connection(socket, provider, request) do
     version = response_version(request)
+    extensions = Map.get(request, "extensions", [])
+
+    Process.put(
+      :provider_visibility,
+      version == 2 and is_list(extensions) and "provider_visibility_v1" in extensions
+    )
 
     case request do
       %{"version" => 2, "command" => "list"} ->
@@ -107,11 +113,18 @@ defmodule Elara.Server do
         with {:ok, version, session, mode, cursor, incarnation} <-
                prepare_attachment(request, provider),
              {:ok, attachment} <- attach(version, session, mode, cursor, incarnation) do
-          send_json(socket, attached_message(version, mode, attachment))
+          send_json(
+            socket,
+            Map.put(
+              attached_message(version, mode, attachment),
+              "extensions",
+              if(Process.get(:provider_visibility), do: ["provider_visibility_v1"], else: [])
+            )
+          )
 
           if version == 1 do
             Enum.each(attachment.replay, fn {seq, event} ->
-              send_json(socket, Protocol.event(seq, event))
+              send_v1_event(socket, seq, event)
             end)
           end
 
@@ -176,7 +189,7 @@ defmodule Elara.Server do
       "incarnation" => attachment.incarnation,
       "head" => attachment.head,
       "mode" => Atom.to_string(mode),
-      "snapshot" => attachment.snapshot
+      "snapshot" => negotiated_snapshot(attachment.snapshot)
     }
   end
 
@@ -224,14 +237,17 @@ defmodule Elara.Server do
         :ok
 
       {:elara_event, ^session, incarnation, seq, event} ->
-        message = Protocol.event(seq, event) |> Map.put("incarnation", incarnation)
-
-        case send_json(socket, message) do
+        case send_v1_event(socket, seq, event, incarnation) do
           :ok -> connection_loop(socket, session, version, line_buffer)
           {:error, _} -> :ok
         end
 
       {:elara_patch, ^session, incarnation, seq, ops} ->
+        ops =
+          if Process.get(:provider_visibility),
+            do: ops,
+            else: Enum.reject(ops, &(&1["op"] == "set_provider_view"))
+
         message = Protocol.patch(seq, ops) |> Map.put("incarnation", incarnation)
 
         case send_json(socket, message) do
@@ -241,6 +257,21 @@ defmodule Elara.Server do
     end
   end
 
+  defp send_v1_event(socket, seq, event, incarnation \\ nil)
+  defp send_v1_event(_socket, _seq, :provider_view_changed, _incarnation), do: :ok
+
+  defp send_v1_event(socket, seq, event, incarnation) do
+    message = Protocol.event(seq, event)
+    message = if incarnation, do: Map.put(message, "incarnation", incarnation), else: message
+    send_json(socket, message)
+  end
+
+  defp negotiated_snapshot(snapshot) do
+    if Process.get(:provider_visibility),
+      do: snapshot,
+      else: Map.delete(snapshot, "provider_view")
+  end
+
   defp handle_command(session, version, {:ok, %{"version" => version} = request}),
     do: handle_versioned_command(session, version, request)
 
@@ -248,6 +279,25 @@ defmodule Elara.Server do
     do: error_message(:unsupported_version, version)
 
   defp handle_command(_session, version, {:error, reason}), do: error_message(reason, version)
+
+  defp handle_versioned_command(session, 2, %{
+         "command" => "set_provider_settings",
+         "extension" => "provider_visibility_v1",
+         "model" => model,
+         "effort" => effort
+       }) do
+    if Process.get(:provider_visibility) do
+      command_result(
+        Elara.attached_command(
+          session,
+          {:provider_settings, %{"model" => model, "effort" => effort}}
+        ),
+        2
+      )
+    else
+      error_message(:unsupported_extension, 2)
+    end
+  end
 
   defp handle_versioned_command(session, version, %{"command" => "ask", "prompt" => prompt})
        when is_binary(prompt) do
@@ -288,7 +338,7 @@ defmodule Elara.Server do
       "session_id" => snapshot.id,
       "incarnation" => snapshot.incarnation,
       "head" => snapshot.head,
-      "snapshot" => snapshot.snapshot
+      "snapshot" => negotiated_snapshot(snapshot.snapshot)
     }
   end
 
@@ -310,6 +360,14 @@ defmodule Elara.Server do
   defp error_message(reason, version) do
     %{"type" => "error", "version" => version, "error" => format_reason(reason)}
   end
+
+  defp format_reason(reason)
+       when reason in [
+              :codex_not_logged_in,
+              :invalid_codex_auth_file,
+              :codex_login_refresh_required
+            ],
+       do: Elara.Config.error_message(reason)
 
   defp format_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
   defp format_reason(reason), do: inspect(reason)

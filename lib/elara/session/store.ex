@@ -40,6 +40,7 @@ defmodule Elara.Session.Store do
           leaf: String.t() | nil,
           name: String.t() | nil,
           parent_session: String.t() | nil,
+          provider_settings: Elara.Provider.Visibility.settings() | nil,
           lock_path: String.t() | nil,
           lock_handle: port() | nil,
           persist?: boolean()
@@ -52,6 +53,7 @@ defmodule Elara.Session.Store do
     :leaf,
     :name,
     :parent_session,
+    :provider_settings,
     :lock_path,
     :lock_handle,
     entries: [],
@@ -116,7 +118,8 @@ defmodule Elara.Session.Store do
          entries: entries,
          leaf: leaf,
          name: header.name,
-         parent_session: header.parent_session
+         parent_session: header.parent_session,
+         provider_settings: header.provider_settings
        }}
     end
   end
@@ -183,7 +186,8 @@ defmodule Elara.Session.Store do
       new(source.cwd, source.name)
       | entries: entries,
         leaf: leaf,
-        parent_session: source.path
+        parent_session: source.path,
+        provider_settings: source.provider_settings
     }
 
     save(target)
@@ -347,14 +351,21 @@ defmodule Elara.Session.Store do
   @doc false
   def encode_message(%User{text: text}), do: %{"user" => %{"text" => text}}
 
-  def encode_message(%Assistant{
-        text: text,
-        tool_calls: tool_calls,
-        provider_state: provider_state
-      }) do
+  def encode_message(
+        %Assistant{
+          text: text,
+          tool_calls: tool_calls,
+          provider_state: provider_state
+        } = message
+      ) do
     assistant =
       %{"text" => text, "toolCalls" => Enum.map(tool_calls, &encode_tool_call/1)}
       |> put_optional("providerState", provider_state)
+      |> Map.put("publicContent", message.public_content)
+      |> put_optional("usage", message.usage)
+      |> put_optional("responseModel", message.response_model)
+      |> put_optional("requestSettings", message.request_settings)
+      |> Map.put("interrupted", message.interrupted)
 
     %{"assistant" => assistant}
   end
@@ -376,15 +387,40 @@ defmodule Elara.Session.Store do
 
   def decode_message(%{"assistant" => payload} = encoded) when map_size(encoded) == 1 do
     with %{"text" => text, "toolCalls" => calls} = assistant
-         when map_size(assistant) in [2, 3] and (is_binary(text) or is_nil(text)) and
+         when (is_binary(text) or is_nil(text)) and
                 is_list(calls) <-
            payload,
          provider_state when is_map(provider_state) or is_nil(provider_state) <-
            Map.get(assistant, "providerState"),
-         true <- map_size(assistant) == 2 or Map.has_key?(assistant, "providerState"),
+         true <-
+           Enum.all?(
+             Map.keys(assistant),
+             &(&1 in [
+                 "text",
+                 "toolCalls",
+                 "providerState",
+                 "publicContent",
+                 "usage",
+                 "responseModel",
+                 "requestSettings",
+                 "interrupted"
+               ])
+           ),
          {:ok, tool_calls} <- decode_tool_calls(calls),
-         {:ok, message} <- Message.assistant(text, tool_calls, provider_state) do
-      {:ok, message}
+         parts = Map.get(assistant, "publicContent", []),
+         true <- is_list(parts) and Enum.all?(parts, &Elara.Provider.Visibility.valid_part?/1),
+         true <- (is_binary(text) and text != "") or tool_calls != [] or parts != [] do
+      {:ok,
+       %Assistant{
+         text: text,
+         tool_calls: tool_calls,
+         provider_state: provider_state,
+         public_content: parts,
+         usage: Map.get(assistant, "usage"),
+         response_model: Map.get(assistant, "responseModel"),
+         request_settings: Map.get(assistant, "requestSettings"),
+         interrupted: Map.get(assistant, "interrupted", false)
+       }}
     else
       _ -> {:error, :invalid_message}
     end
@@ -402,6 +438,10 @@ defmodule Elara.Session.Store do
   end
 
   def decode_message(_encoded), do: {:error, :invalid_message}
+
+  @spec set_provider_settings(t(), Elara.Provider.Visibility.settings() | nil) ::
+          {:ok, t()} | {:error, term()}
+  def set_provider_settings(store, settings), do: save(%{store | provider_settings: settings})
 
   defp save(%__MODULE__{persist?: false} = store), do: {:ok, store}
   defp save(%__MODULE__{path: nil}), do: {:error, :no_path}
@@ -428,6 +468,7 @@ defmodule Elara.Session.Store do
     %{"version" => @version, "id" => store.id, "cwd" => store.cwd, "leaf" => store.leaf}
     |> put_optional("name", store.name)
     |> put_optional("parentSession", store.parent_session)
+    |> put_optional("providerSettings", store.provider_settings)
   end
 
   defp put_optional(map, _key, nil), do: map
@@ -498,7 +539,8 @@ defmodule Elara.Session.Store do
   end
 
   defp decode_header(%{"version" => version, "id" => id, "cwd" => cwd} = header) do
-    allowed = MapSet.new(["version", "id", "cwd", "leaf", "name", "parentSession"])
+    allowed =
+      MapSet.new(["version", "id", "cwd", "leaf", "name", "parentSession", "providerSettings"])
 
     cond do
       not Enum.all?(Map.keys(header), &MapSet.member?(allowed, &1)) ->
@@ -533,7 +575,8 @@ defmodule Elara.Session.Store do
            leaf: Map.get(header, "leaf", :legacy),
            legacy?: not Map.has_key?(header, "leaf"),
            name: Map.get(header, "name"),
-           parent_session: Map.get(header, "parentSession")
+           parent_session: Map.get(header, "parentSession"),
+           provider_settings: Map.get(header, "providerSettings")
          }}
     end
   end
@@ -625,8 +668,9 @@ defmodule Elara.Session.Store do
   defp entry_id(nil), do: nil
   defp entry_id(entry), do: entry.id
 
-  defp encode_tool_call(%ToolCall{id: id, name: name, args: args}) do
+  defp encode_tool_call(%ToolCall{id: id, name: name, args: args} = call) do
     %{"id" => id, "name" => name, "args" => encode_args(args)}
+    |> put_optional("outputIndex", call.output_index)
   end
 
   defp encode_args({:ok, args}), do: %{"ok" => args}
@@ -646,10 +690,15 @@ defmodule Elara.Session.Store do
   end
 
   defp decode_tool_call(%{"id" => id, "name" => name, "args" => encoded_args} = call)
-       when map_size(call) == 3 and is_binary(id) and id != "" and is_binary(name) and name != "" do
+       when map_size(call) in [3, 4] and is_binary(id) and id != "" and is_binary(name) and
+              name != "" do
     case decode_args(encoded_args) do
-      {:ok, args} -> {:ok, %ToolCall{id: id, name: name, args: args}}
-      :error -> {:error, :invalid_message}
+      {:ok, args} ->
+        {:ok,
+         %ToolCall{id: id, name: name, args: args, output_index: Map.get(call, "outputIndex")}}
+
+      :error ->
+        {:error, :invalid_message}
     end
   end
 

@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
     env = dict(os.environ, TERM="xterm-256color", ELARA_TUI_APPEARANCE_FILE=str(preferences))
     pid, master = pty.fork()
     if pid == 0:
-        os.execve(binary, [binary, session, "--port", port, "--appearance", "--preview-reasoning"], env)
+        os.execve(binary, [binary, "--port", port, "--appearance", "--preview-reasoning", "--", session], env)
     output = bytearray()
 
     def drain(seconds=.15):
@@ -148,7 +148,7 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
         _, status = os.waitpid(pid, 0)
         pid = None
         assert os.waitstatus_to_exitcode(status) == 0
-        resumed = subprocess.run([binary, session, "--port", port, "--headless"], env=env,
+        resumed = subprocess.run([binary, "--port", port, "--headless", "--", session], env=env,
                                  capture_output=True, timeout=10, check=True)
         assert b"workbench / forest" in resumed.stdout, "next launch loads saved defaults"
         assert b"PREVIEW fixture" not in resumed.stdout, "preview is never persisted as live reasoning"
@@ -158,7 +158,7 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
             (["--theme", "ember"], b"workbench / ember"),
             (["--layout", "ember", "--theme", "workbench"], b"ember / workbench"),
         ]:
-            result = subprocess.run([binary, session, "--port", port, "--headless", *overrides],
+            result = subprocess.run([binary, "--port", port, "--headless", *overrides, "--", session],
                                     env=env, capture_output=True, timeout=10, check=True)
             assert expected in result.stdout, "CLI overrides take precedence over saved defaults"
             assert preferences.read_bytes() == saved, "CLI overrides do not rewrite defaults"
@@ -166,8 +166,8 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
             unattached.bind(("127.0.0.1", 0))
             unattached.listen()
             unattached.settimeout(.2)
-            result = subprocess.run([binary, session, "--port", str(unattached.getsockname()[1]),
-                                     "--appearance", "--headless"],
+            result = subprocess.run([binary, "--port", str(unattached.getsockname()[1]),
+                                     "--appearance", "--headless", "--", session],
                                     env=env, capture_output=True, timeout=10)
             assert result.returncode == 1
             assert b"--appearance requires an interactive terminal" in result.stderr
@@ -180,7 +180,7 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
                 raise AssertionError("invalid CLI combination attached before rejection")
         malformed = Path(tmp) / "malformed.json"
         malformed.write_text("{broken")
-        result = subprocess.run([binary, session, "--port", port, "--headless"],
+        result = subprocess.run([binary, "--port", port, "--headless", "--", session],
                                 env=dict(env, ELARA_TUI_APPEARANCE_FILE=str(malformed)),
                                 capture_output=True, timeout=10, check=True)
         assert b"Invalid appearance preferences" in result.stderr
@@ -191,7 +191,7 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
         os.close(master)
         pid, master = pty.fork()
         if pid == 0:
-            os.execve(binary, [binary, session, "--port", port, "--appearance"], env)
+            os.execve(binary, [binary, "--port", port, "--appearance", "--", session], env)
         output = bytearray()
         resize(120, 40)
         wait_for(lambda: b"APPEARANCE" in output, "save failure picker opens")

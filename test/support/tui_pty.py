@@ -38,7 +38,7 @@ def prompts():
 pid, master = pty.fork()
 if pid == 0:
     os.environ["TERM"] = "xterm-256color"
-    os.execv(binary, [binary, session, "--port", server_port])
+    os.execv(binary, [binary, "--port", server_port, "--", session])
 
 output = bytearray()
 

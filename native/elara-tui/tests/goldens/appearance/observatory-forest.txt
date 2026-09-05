@@ -18,7 +18,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
@@ -28,7 +28,7 @@
 ┌ observatory / forest · F4 thinking open ·  transcript · prompt focus · FOL┐┌ Thinking · F4 hide · F5 view ───────────┐
 │you inspect the build                                                      ││Thinking · turn 1 · live follow ·        │
 │ai  I’ll check it.                                                         ││complete                                 │
-│                                                                           ││Live reasoning unavailable until PROV-2. │
+│                                                                           ││Public reasoning summary unavailable.    │
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 │                                                                           ││                                         │
@@ -60,7 +60,7 @@
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 │                                                                           ││                                         │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ─────────────────┘└─────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
@@ -69,7 +69,7 @@
 === idle 180x45 ===
 ┌ observatory / forest · F4 thinking open ·  transcript · prompt focus · FOLLOW  ─────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
 │you inspect the build                                                                                            ││Thinking · turn 1 · live follow · complete                     │
-│ai  I’ll check it.                                                                                               ││Live reasoning unavailable until PROV-2.                       │
+│ai  I’ll check it.                                                                                               ││Public reasoning summary unavailable.                          │
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
@@ -107,7 +107,7 @@
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ───────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -132,7 +132,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │Unicode draft 👩‍💻  中                                                            │
 │Keep this visible                                                             │
@@ -143,7 +143,7 @@
 ┌ observatory / forest · F4 thinking open ·  transcript · prompt focus · FOL┐┌ Thinking · F4 hide · F5 view ───────────┐
 │you inspect the build                                                      ││Thinking · turn 1 · live follow ·        │
 │ai  I’ll check it.                                                         ││complete                                 │
-│                                                                           ││Live reasoning unavailable until PROV-2. │
+│                                                                           ││Public reasoning summary unavailable.    │
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 │                                                                           ││                                         │
@@ -174,7 +174,7 @@
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 │                                                                           ││                                         │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ─────────────────┘└─────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │Unicode draft 👩‍💻  中                                                                                                    │
 │Keep this visible                                                                                                     │
@@ -184,7 +184,7 @@
 === composing 180x45 ===
 ┌ observatory / forest · F4 thinking open ·  transcript · prompt focus · FOLLOW  ─────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
 │you inspect the build                                                                                            ││Thinking · turn 1 · live follow · complete                     │
-│ai  I’ll check it.                                                                                               ││Live reasoning unavailable until PROV-2.                       │
+│ai  I’ll check it.                                                                                               ││Public reasoning summary unavailable.                          │
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
@@ -221,7 +221,7 @@
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ───────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │Unicode draft 👩‍💻  中                                                                                                                                                                │
 │Keep this visible                                                                                                                                                                 │
@@ -248,7 +248,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
@@ -257,7 +257,7 @@
 === streaming 120x40 ===
 ┌ observatory / forest · F4 thinking open ·  transcript · prompt focus · FOL┐┌ Thinking · F4 hide · F5 view ───────────┐
 │you inspect the build                                                      ││Thinking · turn 1 · live follow · active │
-│ai  I’ll check it.                                                         ││Live reasoning unavailable until PROV-2. │
+│ai  I’ll check it.                                                         ││Public reasoning summary unavailable.    │
 │ai  Streaming the answer▌                                                  ││                                         │
 │                                                                           ││                                         │
 │                                                                           ││                                         │
@@ -290,7 +290,7 @@
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 │                                                                           ││                                         │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ─────────────────┘└─────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
@@ -299,7 +299,7 @@
 === streaming 180x45 ===
 ┌ observatory / forest · F4 thinking open ·  transcript · prompt focus · FOLLOW  ─────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
 │you inspect the build                                                                                            ││Thinking · turn 1 · live follow · active                       │
-│ai  I’ll check it.                                                                                               ││Live reasoning unavailable until PROV-2.                       │
+│ai  I’ll check it.                                                                                               ││Public reasoning summary unavailable.                          │
 │ai  Streaming the answer▌                                                                                        ││                                                               │
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
@@ -337,7 +337,7 @@
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ───────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -363,7 +363,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
@@ -405,7 +405,7 @@
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 │                                                                           ││                                         │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ─────────────────┘└─────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
@@ -452,7 +452,7 @@
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ───────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -478,7 +478,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
@@ -520,7 +520,7 @@
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
@@ -567,7 +567,7 @@
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -593,7 +593,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
@@ -602,7 +602,7 @@
 === tool-failed 120x40 ===
 ┌ observatory / forest · F4 thinking open ·  transcript · prompt focus · FOL┐┌ Thinking · F4 hide · F5 view ───────────┐
 │you inspect the build                                                      ││Thinking · turn 1 · live follow · active │
-│[+] bash · failed                                                          ││Live reasoning unavailable until PROV-2. │
+│[+] bash · failed                                                          ││Public reasoning summary unavailable.    │
 │$ mix test                                                                 ││                                         │
 │Display folded · Space expand · f viewer                                   ││                                         │
 │                                                                           ││                                         │
@@ -635,7 +635,7 @@
 │                                                                           ││                                         │
 │                                                                           ││                                         │
 │                                                                           ││                                         │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ─────────────────┘└─────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
@@ -644,7 +644,7 @@
 === tool-failed 180x45 ===
 ┌ observatory / forest · F4 thinking open ·  transcript · prompt focus · FOLLOW  ─────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
 │you inspect the build                                                                                            ││Thinking · turn 1 · live follow · active                       │
-│[+] bash · failed                                                                                                ││Live reasoning unavailable until PROV-2.                       │
+│[+] bash · failed                                                                                                ││Public reasoning summary unavailable.                          │
 │$ mix test                                                                                                       ││                                                               │
 │Display folded · Space expand · f viewer                                                                         ││                                                               │
 │                                                                                                                 ││                                                               │
@@ -682,7 +682,7 @@
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
 │                                                                                                                 ││                                                               │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ───────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -3,6 +3,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers as M};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Action {
     Appearance,
+    ProviderSettings,
     Thinking,
     ThinkingView,
     Turns,
@@ -52,6 +53,13 @@ const fn binding(
     }
 }
 static BINDINGS: &[Binding] = &[
+    binding(
+        KeyCode::F(7),
+        M::NONE,
+        false,
+        Action::ProviderSettings,
+        "F7 model/effort",
+    ),
     binding(
         KeyCode::F(3),
         M::NONE,

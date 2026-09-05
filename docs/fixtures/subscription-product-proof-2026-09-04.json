@@ -1,0 +1,88 @@
+{
+  "date": "2026-09-04",
+  "context": {
+    "advertised_limit": 272000,
+    "estimate_basis": "UTF-8 serialized history, system and tool schemas plus 4096 framing reserve; conservative byte estimate, not exact provider request or tokenizer occupancy",
+    "estimate_tokens": 8126,
+    "occupancy": null
+  },
+  "usage": {
+    "last_request": {
+      "cache_write_tokens": 0,
+      "cached_input_tokens": 0,
+      "input_tokens": 145,
+      "output_tokens": 45,
+      "reasoning_tokens": 27,
+      "total_tokens": 190
+    },
+    "session_totals": {
+      "cache_write_tokens": 0,
+      "cached_input_tokens": 0,
+      "input_tokens": 256,
+      "output_tokens": 65,
+      "reasoning_tokens": 27,
+      "total_tokens": 321
+    }
+  },
+  "result": "Arithmetic result: 469  \nEcho result: proof-469",
+  "assistants": [
+    {
+      "usage": {
+        "cache_write_tokens": 0,
+        "cached_input_tokens": 0,
+        "input_tokens": 111,
+        "output_tokens": 20,
+        "reasoning_tokens": 0,
+        "total_tokens": 131
+      },
+      "public_content": [],
+      "request_settings": {
+        "effort": "high",
+        "model": "gpt-5.5"
+      },
+      "response_model": "gpt-5.5"
+    },
+    {
+      "usage": {
+        "cache_write_tokens": 0,
+        "cached_input_tokens": 0,
+        "input_tokens": 145,
+        "output_tokens": 45,
+        "reasoning_tokens": 27,
+        "total_tokens": 190
+      },
+      "public_content": [
+        {
+          "kind": "reasoning_summary",
+          "output_index": 0,
+          "part_index": 0,
+          "text": "**Calculating and verifying arithmetic result**"
+        },
+        {
+          "kind": "final_answer",
+          "output_index": 1,
+          "part_index": 0,
+          "text": "Arithmetic result: 469  \nEcho result: proof-469"
+        }
+      ],
+      "request_settings": {
+        "effort": "high",
+        "model": "gpt-5.5"
+      },
+      "response_model": "gpt-5.5"
+    }
+  ],
+  "tool_results": [
+    {
+      "name": "echo_marker",
+      "result": "proof-469"
+    }
+  ],
+  "route": "ChatGPT subscription /backend-api/codex/responses",
+  "credential_source": "explicit read-only Codex login",
+  "credential_file_unchanged": true,
+  "selected_settings": {
+    "effort": "high",
+    "model": "gpt-5.5"
+  }
+}

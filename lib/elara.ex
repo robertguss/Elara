@@ -83,6 +83,9 @@ defmodule Elara do
     call(session, {:ask_async, prompt})
   end
 
+  @doc "Accept model and effort for the next provider request; an in-flight request is unchanged."
+  def set_provider_settings(session, settings), do: call(session, {:provider_settings, settings})
+
   @spec subscribe(session_ref()) :: :ok
   def subscribe(session) when is_pid(session) or is_binary(session) do
     call(session, :subscribe)

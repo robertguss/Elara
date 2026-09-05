@@ -45,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix="elara-tool-inspection-pty-") as tmp:
         os.environ["TERM"] = "xterm-256color"
         os.environ["PATH"] = tmp + os.pathsep + os.environ["PATH"]
         os.environ["TEST_CLIPBOARD_PATH"] = str(clipboard)
-        os.execv(binary, [binary, session, "--port", port])
+        os.execv(binary, [binary, "--port", port, "--", session])
     output = bytearray()
 
     def drain(seconds=0.15):

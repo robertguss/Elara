@@ -18,7 +18,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
@@ -60,7 +60,7 @@
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
@@ -107,7 +107,7 @@
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -132,7 +132,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │Unicode draft 👩‍💻  中                                                            │
 │Keep this visible                                                             │
@@ -174,7 +174,7 @@
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │Unicode draft 👩‍💻  中                                                                                                    │
 │Keep this visible                                                                                                     │
@@ -221,7 +221,7 @@
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │Unicode draft 👩‍💻  中                                                                                                                                                                │
 │Keep this visible                                                                                                                                                                 │
@@ -248,7 +248,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
@@ -290,7 +290,7 @@
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
@@ -337,7 +337,7 @@
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -363,7 +363,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
@@ -405,7 +405,7 @@
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
@@ -452,7 +452,7 @@
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -478,7 +478,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
@@ -520,7 +520,7 @@
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
@@ -567,7 +567,7 @@
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -593,7 +593,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
@@ -635,7 +635,7 @@
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
@@ -682,7 +682,7 @@
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -37,7 +37,7 @@ defmodule Elara.Chat do
         exit({:shutdown, 1})
 
       {:error, reason} ->
-        Mix.shell().error("Config error: #{inspect(reason)}")
+        Mix.shell().error("Config error: #{Elara.Config.error_message(reason)}")
         exit({:shutdown, 1})
     end
   end

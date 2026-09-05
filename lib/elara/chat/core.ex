@@ -260,6 +260,8 @@ defmodule Elara.Chat.Core do
     print(["    error · ", err.message, "\n"])
   end
 
+  defp event_prints(:provider_view_changed), do: []
+
   defp event_prints({:turn_started, _}), do: []
   defp event_prints({:message_appended, %User{}}), do: []
 

@@ -14,8 +14,8 @@ defmodule Elara.TuiTest do
     {Elara.Provider.Scripted, agent}
   end
 
-  defp run_tui(binary, state_dir, port, args) do
-    System.cmd(binary, args ++ ["--port", Integer.to_string(port)],
+  defp run_tui(binary, state_dir, port, [target | options]) do
+    System.cmd(binary, options ++ ["--port", Integer.to_string(port), "--", target],
       env: [{"ELARA_TUI_STATE_DIR", state_dir}],
       stderr_to_stdout: true
     )
@@ -128,10 +128,11 @@ defmodule Elara.TuiTest do
 
     assert :ok =
              Mix.Tasks.Elara.Tui.run([
-               "new",
                "--headless",
                "--port",
-               Integer.to_string(external_port)
+               Integer.to_string(external_port),
+               "--",
+               "new"
              ])
 
     assert Process.alive?(external)
@@ -371,13 +372,14 @@ defmodule Elara.TuiTest do
         args:
           Enum.map(
             [
-              session,
               "--headless",
               "--event-dump",
               "--ask",
               "detached prompt",
               "--port",
-              Integer.to_string(port_number)
+              Integer.to_string(port_number),
+              "--",
+              session
             ],
             &String.to_charlist/1
           ),

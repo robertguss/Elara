@@ -485,7 +485,8 @@ defmodule Elara.FlightRecorder do
         system: state.config.system,
         tools: tools,
         max_iterations: state.config.max_iterations,
-        max_tool_output_bytes: state.config.max_tool_output_bytes
+        max_tool_output_bytes: state.config.max_tool_output_bytes,
+        provider_settings: Map.get(state.config, :provider_settings)
       },
       history: Enum.map(state.history, &normalize_message/1),
       phase: normalize_phase(state.phase),
@@ -494,7 +495,7 @@ defmodule Elara.FlightRecorder do
 
     case state.streaming do
       nil -> normalized
-      %{text: ""} -> normalized
+      %{text: "", public_content: []} -> normalized
       streaming -> Map.put(normalized, :streaming, streaming)
     end
   end
@@ -507,7 +508,8 @@ defmodule Elara.FlightRecorder do
         system: state.config.system,
         tools: tools,
         max_iterations: state.config.max_iterations,
-        max_tool_output_bytes: state.config.max_tool_output_bytes
+        max_tool_output_bytes: state.config.max_tool_output_bytes,
+        provider_settings: Map.get(state.config, :provider_settings)
       },
       history: Enum.map(state.history, &denormalize_message/1),
       phase: denormalize_phase(state.phase),
@@ -515,6 +517,9 @@ defmodule Elara.FlightRecorder do
       next_ref: state.next_ref
     }
   end
+
+  defp normalize_fact({:provider_settings, settings}),
+    do: %{kind: :provider_settings, settings: settings}
 
   defp normalize_fact({:ask, prompt}), do: %{kind: :ask, prompt: prompt}
 
@@ -535,6 +540,9 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_fact({:tool_timeout, ref}), do: %{kind: :tool_timeout, ref: ref}
   defp normalize_fact(:interrupt), do: %{kind: :interrupt}
+
+  defp denormalize_fact(%{kind: :provider_settings, settings: settings}),
+    do: {:provider_settings, settings}
 
   defp denormalize_fact(%{kind: :ask, prompt: prompt}), do: {:ask, prompt}
 
@@ -604,16 +612,18 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_message(%User{text: text}), do: %{kind: :user, text: text}
 
-  defp normalize_message(%Assistant{text: text, tool_calls: calls, provider_state: nil}),
-    do: %{kind: :assistant, text: text, tool_calls: Enum.map(calls, &normalize_call/1)}
-
-  defp normalize_message(%Assistant{text: text, tool_calls: calls, provider_state: state}),
-    do: %{
+  defp normalize_message(%Assistant{} = message) do
+    %{
       kind: :assistant,
-      text: text,
-      tool_calls: Enum.map(calls, &normalize_call/1),
-      provider_state: state
+      text: message.text,
+      tool_calls: Enum.map(message.tool_calls, &normalize_call/1),
+      public_content: message.public_content,
+      usage: message.usage,
+      response_model: message.response_model,
+      request_settings: message.request_settings,
+      interrupted: message.interrupted
     }
+  end
 
   defp normalize_message(%ToolResult{} = result) do
     %{
@@ -630,7 +640,12 @@ defmodule Elara.FlightRecorder do
     do: %Assistant{
       text: text,
       tool_calls: Enum.map(calls, &denormalize_call/1),
-      provider_state: Map.get(message, :provider_state)
+      provider_state: Map.get(message, :provider_state),
+      public_content: Map.get(message, :public_content, []),
+      usage: Map.get(message, :usage),
+      response_model: Map.get(message, :response_model),
+      request_settings: Map.get(message, :request_settings),
+      interrupted: Map.get(message, :interrupted, false)
     }
 
   defp denormalize_message(%{kind: :tool_result} = result),
@@ -640,11 +655,16 @@ defmodule Elara.FlightRecorder do
       outcome: denormalize_outcome(result.outcome)
     }
 
-  defp normalize_call(%ToolCall{id: id, name: name, args: args}),
-    do: %{id: id, name: name, args: normalize_args(args)}
+  defp normalize_call(%ToolCall{id: id, name: name, args: args} = call),
+    do: %{id: id, name: name, args: normalize_args(args), output_index: call.output_index}
 
   defp denormalize_call(call),
-    do: %ToolCall{id: call.id, name: call.name, args: denormalize_args(call.args)}
+    do: %ToolCall{
+      id: call.id,
+      name: call.name,
+      args: denormalize_args(call.args),
+      output_index: Map.get(call, :output_index)
+    }
 
   defp normalize_args({:ok, arguments}), do: %{status: :ok, arguments: arguments}
   defp normalize_args({:malformed, raw}), do: %{status: :malformed, raw: raw}
@@ -661,6 +681,8 @@ defmodule Elara.FlightRecorder do
 
   defp denormalize_error(error),
     do: %Provider.Error{kind: error.kind, message: error.message, status: error.status}
+
+  defp normalize_event(:provider_view_changed), do: %{kind: :provider_view_changed}
 
   defp normalize_event({:turn_started, prompt}), do: %{kind: :turn_started, prompt: prompt}
 

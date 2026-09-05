@@ -96,6 +96,9 @@ defmodule Elara.Session do
     provider = Keyword.fetch!(opts, :provider)
     cwd = Keyword.fetch!(opts, :cwd)
     store = Keyword.fetch!(opts, :store)
+
+    core_config = restore_provider_settings(core_config, store, provider)
+
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
     plugin_paths = Keyword.get(opts, :plugin_paths, [])
     router = Keyword.fetch!(opts, :router)
@@ -119,7 +122,8 @@ defmodule Elara.Session do
 
     case prepare_session(store, core_config, recovery) do
       {:ok, store, core, effect_journal} ->
-        with {:ok, _} <- Registry.register(Elara.Sessions, store.id, nil),
+        with {:ok, store} <- Store.set_provider_settings(store, core.config.provider_settings),
+             {:ok, _} <- Registry.register(Elara.Sessions, store.id, nil),
              {:ok, plugins, tools} <- start_plugins(plugin_paths, cwd, core.config.tools) do
           incarnation = new_incarnation()
 
@@ -228,6 +232,9 @@ defmodule Elara.Session do
     {:reply, snapshot(shell), shell}
   end
 
+  def handle_call({:provider_settings, settings}, _from, shell),
+    do: change_provider_settings(shell, settings)
+
   def handle_call(:recording, _from, shell) do
     {:reply, FlightRecorder.snapshot(shell.recorder), shell}
   end
@@ -247,7 +254,8 @@ defmodule Elara.Session do
 
   def handle_call(:child_config, _from, shell) do
     config = %{
-      provider: shell.provider,
+      provider:
+        Elara.Provider.Visibility.configure(shell.provider, shell.core.config.provider_settings),
       cwd: shell.cwd,
       tools: Map.values(shell.base_tools),
       system: shell.core.config.system,
@@ -319,15 +327,24 @@ defmodule Elara.Session do
 
   def handle_call({:hydrate, store}, _from, shell) do
     if Core.idle?(shell.core) do
-      case hydrate(store, shell.core.config) do
-        {:ok, store, core} ->
-          if store.path != shell.store.path do
-            Store.release(shell.store)
-          end
+      config = restore_provider_settings(shell.core.config, store, shell.provider)
 
-          core = Core.rebase_history(shell.core, core.history)
-          recorder = FlightRecorder.segment(shell.recorder, core, :history_rebased)
-          {:reply, {:ok, core.history}, %{shell | store: store, core: core, recorder: recorder}}
+      case hydrate(store, config) do
+        {:ok, store, core} ->
+          case Store.set_provider_settings(store, config.provider_settings) do
+            {:ok, store} ->
+              if store.path != shell.store.path, do: Store.release(shell.store)
+
+              core = Core.rebase_history(shell.core, core.history)
+              recorder = FlightRecorder.segment(shell.recorder, core, :history_rebased)
+              shell = %{shell | store: store, core: core, recorder: recorder}
+              shell = feed({:provider_settings, config.provider_settings}, shell)
+              {:reply, {:ok, shell.core.history}, shell}
+
+            {:error, reason} ->
+              if store.path != shell.store.path, do: Store.release(store)
+              {:reply, {:error, reason}, shell}
+          end
 
         {:error, reason} ->
           {:reply, {:error, reason}, shell}
@@ -447,7 +464,7 @@ defmodule Elara.Session do
   end
 
   def handle_info({:provider_delta, pid, core_ref, text}, shell)
-      when is_pid(pid) and is_binary(text) do
+      when is_pid(pid) and (is_binary(text) or is_tuple(text)) do
     case find_task_by_core_ref(shell, core_ref, :provider) do
       {_task_ref, ^pid, _plugin_lease} ->
         {:noreply, feed({:provider_delta, core_ref, text}, shell)}
@@ -867,6 +884,16 @@ defmodule Elara.Session do
     is_pid(GenServer.whereis(executor))
   end
 
+  defp restore_provider_settings(config, store, provider) do
+    settings =
+      case Elara.Provider.Visibility.settings(provider) do
+        nil -> nil
+        defaults -> store.provider_settings || config.provider_settings || defaults
+      end
+
+    %{config | provider_settings: settings}
+  end
+
   defp hydrate(store, config) do
     with {:ok, store} <- Store.claim(store) do
       persist_repairs(store, Core.new(config, Store.history(store)))
@@ -1008,7 +1035,7 @@ defmodule Elara.Session do
   end
 
   defp run_effect({:call_provider, core_ref, request}, _effect_id, shell, _patch_context) do
-    {mod, cfg} = shell.provider
+    {mod, cfg} = Elara.Provider.Visibility.configure(shell.provider, request.settings)
 
     owner = self()
 
@@ -1397,7 +1424,21 @@ defmodule Elara.Session do
     {:reply, :ok, feed(:interrupt, abort_running_tasks(shell))}
   end
 
+  defp handle_attached_command({:provider_settings, settings}, shell),
+    do: change_provider_settings(shell, settings)
+
   defp handle_attached_command(_command, shell), do: {:reply, {:error, :invalid_command}, shell}
+
+  defp change_provider_settings(shell, settings) do
+    with true <- shell.core.config.provider_settings != nil,
+         :ok <- Elara.Provider.Visibility.validate(settings),
+         {:ok, store} <- Store.set_provider_settings(shell.store, settings) do
+      {:reply, :ok, feed({:provider_settings, settings}, %{shell | store: store})}
+    else
+      false -> {:reply, {:error, :provider_controls_unavailable}, shell}
+      {:error, reason} -> {:reply, {:error, reason}, shell}
+    end
+  end
 
   defp validate_incarnation(nil, _shell), do: :ok
   defp validate_incarnation(incarnation, %{incarnation: incarnation}), do: :ok

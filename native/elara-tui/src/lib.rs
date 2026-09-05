@@ -132,6 +132,7 @@ enum PendingReply {
     Ask,
     Interrupt,
     Snapshot,
+    Settings,
 }
 
 #[derive(Clone, Debug)]
@@ -147,6 +148,7 @@ pub struct Model {
     pub show_help: bool,
     pub appearance: Appearance,
     pub appearance_picker: Option<Appearance>,
+    provider_picker: Option<(usize, usize)>,
     pub thinking_visible: bool,
     pub preview_reasoning: bool,
     presentation_overlay: Option<presentation::Overlay>,
@@ -179,6 +181,7 @@ impl Model {
             show_help: false,
             appearance: Appearance::default(),
             appearance_picker: None,
+            provider_picker: None,
             thinking_visible: true,
             preview_reasoning: false,
             presentation_overlay: None,
@@ -434,6 +437,79 @@ pub enum InputAction {
     Submit,
     Interrupt,
     Detach,
+    ProviderSettings(Value),
+}
+
+fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<InputAction> {
+    use crossterm::event::{Event, KeyCode, KeyEventKind};
+    let Event::Key(key) = event else {
+        return model.provider_picker.map(|_| InputAction::None);
+    };
+    if key.kind == KeyEventKind::Release || model.safe_paste {
+        return None;
+    }
+    if model.provider_picker.is_none() && key.code != KeyCode::F(7) {
+        return None;
+    }
+    let catalog = model.projection.view["provider_view"]["catalog"].as_array();
+    if model.connection != ConnectionState::Connected
+        || model.mode != "control"
+        || catalog.is_none_or(Vec::is_empty)
+    {
+        model.notice = Some("Provider controls unavailable for this connection/provider.".into());
+        model.provider_picker = None;
+        return Some(InputAction::None);
+    }
+    let catalog = catalog.unwrap();
+    let Some((mut m, mut e)) = model.provider_picker else {
+        let current = &model.projection.view["provider_view"]["next_request"];
+        let m = catalog
+            .iter()
+            .position(|item| item["model"] == current["model"])
+            .unwrap_or(0);
+        let e = catalog[m]["efforts"]
+            .as_array()
+            .and_then(|efforts| {
+                efforts
+                    .iter()
+                    .position(|effort| effort == &current["effort"])
+            })
+            .unwrap_or(0);
+        model.provider_picker = Some((m, e));
+        return Some(InputAction::None);
+    };
+    m = m.min(catalog.len() - 1);
+    let count = catalog[m]["efforts"].as_array().map_or(0, Vec::len);
+    if count == 0 {
+        model.provider_picker = None;
+        return Some(InputAction::None);
+    }
+    e = e.min(count - 1);
+    match key.code {
+        KeyCode::Esc | KeyCode::F(7) => {
+            model.provider_picker = None;
+            return Some(InputAction::None);
+        }
+        KeyCode::Up => m = (m + catalog.len() - 1) % catalog.len(),
+        KeyCode::Down => m = (m + 1) % catalog.len(),
+        KeyCode::Left => e = (e + count - 1) % count,
+        KeyCode::Right => e = (e + 1) % count,
+        KeyCode::Enter => {
+            let request = json!({"version": 2, "command": "set_provider_settings", "extension": "provider_visibility_v1", "model": catalog[m]["model"], "effort": catalog[m]["efforts"][e]});
+            model.provider_picker = None;
+            model.pending_replies.push_back(PendingReply::Settings);
+            model.notice = Some("Settings submitted; awaiting authority for next request.".into());
+            return Some(InputAction::ProviderSettings(request));
+        }
+        _ => {}
+    }
+    let selected_count = catalog[m]["efforts"].as_array().map_or(0, Vec::len);
+    model.provider_picker = if selected_count == 0 {
+        None
+    } else {
+        Some((m, e.min(selected_count - 1)))
+    };
+    Some(InputAction::None)
 }
 
 pub fn handle_input(
@@ -444,6 +520,22 @@ pub fn handle_input(
     use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
     if model.safe_paste && model.viewer.is_some() {
         model.close_tool();
+    }
+    if !model.safe_paste
+        && model.provider_picker.is_some()
+        && let Event::Key(key) = &event
+        && key.kind == KeyEventKind::Press
+    {
+        match actions::lookup(*key, false) {
+            Some(actions::Action::Interrupt) => return InputAction::Interrupt,
+            Some(actions::Action::Escape) if key.code != KeyCode::Esc => {
+                return InputAction::Detach;
+            }
+            _ => {}
+        }
+    }
+    if let Some(action) = provider_input(model, &event) {
+        return action;
     }
     if presentation::input(model, &event) {
         return InputAction::None;
@@ -898,6 +990,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "create",
+            "extensions": ["provider_visibility_v1"],
             "mode": mode,
             "cwd": std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).to_string_lossy()
         })
@@ -905,6 +998,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "attach",
+            "extensions": ["provider_visibility_v1"],
             "session_id": target,
             "mode": mode,
             "cursor": cursor.cursor,
@@ -1088,7 +1182,7 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             .title_bottom(if state.focused {
                 actions::hints(true)
             } else {
-                " Tab transcript · F5 reasoning (unavailable until PROV-2) ".into()
+                " Tab transcript · F5 thinking · F7 model/effort ".into()
             }),
     );
     frame.render_widget(transcript, transcript_area);
@@ -1205,6 +1299,7 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
     let mut entries = Vec::new();
     let view = &model.projection.view;
     let canonical_calls = tools::calls(view);
+    let summary_turns = presentation::summary_turns(model);
     let mut rendered_tools = HashSet::new();
     if let Some(messages) = view["messages"].as_array() {
         for (index, message) in messages.iter().enumerate() {
@@ -1229,12 +1324,68 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
                         })
                         .collect();
                     entries.push(Entry::rendered(id.clone(), lines, true, false));
-                    if let Some(thinking) = presentation::inline_thinking(model, &id) {
+                    if let Some(thinking) =
+                        presentation::inline_thinking(model, &id, summary_turns.contains(&index))
+                    {
                         entries.push(thinking);
                     }
                 }
                 Some("assistant") => {
-                    if let Some(text) = message["text"].as_str()
+                    if message["interrupted"] == true {
+                        entries.push(Entry::plain(
+                            &format!("{id}:interrupted"),
+                            "Interrupted · partial public response",
+                            false,
+                        ));
+                    }
+                    if let Some(parts) = message["public_content"]
+                        .as_array()
+                        .filter(|parts| !parts.is_empty())
+                    {
+                        let mut output: Vec<(u64, u64, bool, &Value)> = parts
+                            .iter()
+                            .map(|part| {
+                                (
+                                    part["output_index"].as_u64().unwrap_or(0),
+                                    part["part_index"].as_u64().unwrap_or(0),
+                                    false,
+                                    part,
+                                )
+                            })
+                            .collect();
+                        output.extend(message["tool_calls"].as_array().into_iter().flatten().map(
+                            |call| {
+                                (
+                                    call["output_index"].as_u64().unwrap_or(u64::MAX),
+                                    0,
+                                    true,
+                                    call,
+                                )
+                            },
+                        ));
+                        output.sort_by_key(|(index, part, _, _)| (*index, *part));
+                        for (_, _, is_tool, item) in output {
+                            if is_tool {
+                                let call_id = item["id"].as_str().unwrap_or("?");
+                                if let Some(call) = canonical_calls.get(call_id) {
+                                    entries.push(tools::entry(
+                                        &model.session_id,
+                                        call,
+                                        model.expanded_tools.contains(call_id),
+                                    ));
+                                    rendered_tools.insert(call_id.to_owned());
+                                }
+                            } else {
+                                entries.extend(presentation::public_entries(
+                                    model,
+                                    &id,
+                                    std::slice::from_ref(item),
+                                    false,
+                                ));
+                            }
+                        }
+                        continue;
+                    } else if let Some(text) = message["text"].as_str()
                         && !text.is_empty()
                     {
                         entries.push(Entry::rendered(
@@ -1274,8 +1425,26 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
             }
         }
     }
+    if let Some(parts) = view["provider_view"]["streaming"]["public_content"].as_array() {
+        let id = format!(
+            "{}:message:{}",
+            model.session_id,
+            view["messages"].as_array().map_or(0, Vec::len)
+        );
+        entries.extend(presentation::public_entries(model, &id, parts, true));
+    }
     if let Some(deltas) = view["content_deltas"].as_object() {
         for (id, text) in deltas {
+            let typed = &view["provider_view"]["streaming"];
+            if typed["id"].as_str() == Some(id.as_str())
+                && typed["public_content"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .any(|part| part["kind"] == "final_answer")
+            {
+                continue;
+            }
             if let Some(text) = text.as_str() {
                 let mut entry = Entry::rendered(
                     format!("{}:stream:{id}", model.session_id),
@@ -1409,12 +1578,42 @@ fn validate_snapshot(view: &Value) -> Result<(), String> {
     if !matches!(object.get("usage"), Some(Value::Null | Value::Object(_))) {
         return Err("snapshot has invalid usage".to_string());
     }
+    if let Some(provider) = object.get("provider_view") {
+        validate_provider_view(provider)?;
+    }
     let deltas = object
         .get("content_deltas")
         .and_then(Value::as_object)
         .ok_or_else(|| "snapshot has invalid content_deltas".to_string())?;
     if !deltas.values().all(Value::is_string) {
         return Err("snapshot has invalid content delta".to_string());
+    }
+    Ok(())
+}
+
+fn validate_public_parts(value: &Value) -> Result<(), String> {
+    let parts = value.as_array().ok_or("invalid public content")?;
+    for part in parts {
+        if !matches!(
+            part["kind"].as_str(),
+            Some("reasoning_summary" | "commentary" | "final_answer")
+        ) || !part["item_id"].is_string()
+            || !part["text"].is_string()
+            || !part["output_index"].is_u64()
+            || !part["part_index"].is_u64()
+            || part.as_object().is_none_or(|object| object.len() != 5)
+        {
+            return Err("invalid public content part".into());
+        }
+    }
+    Ok(())
+}
+fn validate_provider_view(value: &Value) -> Result<(), String> {
+    if value["extension"] != "provider_visibility_v1" || !value["catalog"].is_array() {
+        return Err("unsupported provider view extension".into());
+    }
+    if !value["streaming"].is_null() {
+        validate_public_parts(&value["streaming"]["public_content"])?;
     }
     Ok(())
 }
@@ -1434,6 +1633,9 @@ fn validate_snapshot_identity(
 }
 
 fn validate_message(message: &Value) -> Result<(), String> {
+    if let Some(parts) = message.get("public_content") {
+        validate_public_parts(parts)?;
+    }
     match message["role"].as_str() {
         Some("user") if message["text"].is_string() => Ok(()),
         Some("assistant")
@@ -1506,6 +1708,11 @@ fn apply_op(view: &mut Value, op: &Value) -> Result<(), String> {
         Some("set_tool_status") => set_tool_status(view, op),
         Some("set_turn_state") => set_turn_state(view, op),
         Some("set_usage") => set_usage(view, op),
+        Some("set_provider_view") => {
+            validate_provider_view(&op["provider_view"])?;
+            view["provider_view"] = op["provider_view"].clone();
+            Ok(())
+        }
         Some("append_content_delta") => append_content_delta(view, op),
         _ => Err("invalid patch operation".to_string()),
     }
@@ -2040,6 +2247,36 @@ mod tests {
         assert!(rows[first + 3].contains("end"));
         assert!(rows[first + 4].trim_matches(['│', ' ']).is_empty());
         assert_eq!(model.projection.view["messages"][0]["text"], prompt);
+    }
+
+    #[test]
+    fn typed_answer_supersedes_only_its_matching_legacy_live_delta() {
+        let mut model = fixture_model("streaming");
+        model.projection.view["content_deltas"] =
+            json!({"assistant-1":"UNIQUE_ANSWER", "other":"OTHER_STREAM"});
+        model.projection.view["provider_view"] = json!({"streaming":{"id":"assistant-1","public_content":[{"kind":"final_answer","item_id":"m","output_index":0,"part_index":0,"text":"UNIQUE_ANSWER"}]}});
+        let entries = transcript_entries(&model);
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|entry| entry.text.contains("UNIQUE_ANSWER"))
+                .count(),
+            1
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.text.contains("OTHER_STREAM"))
+        );
+        model.projection.view["provider_view"]["streaming"]["public_content"][0]["kind"] =
+            json!("reasoning_summary");
+        model.projection.view["provider_view"]["streaming"]["public_content"][0]["text"] =
+            json!("Reasoning only");
+        assert!(
+            transcript_entries(&model)
+                .iter()
+                .any(|entry| entry.text == "UNIQUE_ANSWER")
+        );
     }
 
     #[test]

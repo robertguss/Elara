@@ -26,7 +26,7 @@ defmodule Mix.Tasks.Elara.Server do
         Elara.CLI.Signal.await_shutdown()
 
       {:error, reason} ->
-        Mix.raise("could not start Elara server: #{inspect(reason)}")
+        Mix.raise("could not start Elara server: #{Elara.Config.error_message(reason)}")
     end
   end
 end

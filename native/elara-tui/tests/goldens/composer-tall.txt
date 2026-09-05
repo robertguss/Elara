@@ -10,7 +10,7 @@
 │                                                                              │
 │                                                                              │
 │                                                                              │
-└ Tab transcript · F5 reasoning (unavailable until PROV-2) ────────────────────┘
+└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
 ┌ ask · Enter send · F1 help · F2 safe paste · F3 appearance ──────────────────┐
 │multiline draft row                                                           │
 │multiline draft row                                                           │

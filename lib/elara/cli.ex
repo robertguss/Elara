@@ -28,13 +28,15 @@ defmodule Elara.CLI do
         exit({:shutdown, 1})
 
       {:error, reason} ->
-        Mix.shell().error("Config error: #{inspect(reason)}")
+        Mix.shell().error("Config error: #{Elara.Config.error_message(reason)}")
         exit({:shutdown, 1})
     end
   end
 
   @doc "Pure. One event to iodata."
   @spec render(Elara.Event.t()) :: iodata()
+  def render(:provider_view_changed), do: []
+
   def render({:turn_started, prompt}), do: ["[turn] ", prompt, "\n"]
 
   def render({:tool_started, %ToolCall{name: name, args: args}}) do

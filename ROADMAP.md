@@ -34,9 +34,9 @@ with the next concrete action. Close test terminal windows after testing.
 | TUI-5 tool inspection | Implementation verified | 59 Rust TUI tests; 8 product tests; 340 offline Linux tests |
 | TUI-7 layouts, themes, and appearance | Implementation verified | 72 Rust TUI tests; 9 product tests; 341 offline Linux tests; all five review findings fixed |
 
-**Next action:** implement PROV-2 using the recorded subscription preflight:
-public reasoning content, model/effort selection, usage, and explicit credential
-integration. Manual acceptance requiring the absent owner stays deferred.
+**Next action:** publish the verified PROV-2 implementation, then start INPUT-1
+file references and disk image attachments. Manual acceptance requiring the
+absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -1595,7 +1595,7 @@ persisted as canonical conversation content.
 
 ## PROV-2 — ChatGPT reasoning visibility, model controls, and usage
 
-**Status:** IN PROGRESS — TUI-7 pushed; subscription preflight recorded
+**Status:** IN PROGRESS — implementation verified; ready for publication
 
 ### Outcome
 
@@ -1644,15 +1644,40 @@ placeholder as completion. Existing provider behavior remains compatible.
 
 ### Result
 
-**IN PROGRESS (2026-09-04).** TUI-7 is pushed in `0c968dc`. Use the verified
-subscription contract and sanitized fixtures from the preflight. The Codex-only
-unsupported default will become `gpt-5.5`; provider choice remains explicit.
-Add opt-in, read-only use of the existing Codex login without copying or rotating
-its credentials. Implement typed public reasoning/commentary/final content,
-authority-owned model/effort controls, and honest usage/context evidence through
-Core, persistence, protocol, and all three TUI layouts. Verify offline recovery
-and a bounded real subscription turn; keep encrypted reasoning and tokens out
-of display data and logs.
+**IN PROGRESS (2026-09-04).** Implemented typed public summaries/commentary/final
+answers, persisted request/served model metadata, interruption recovery, and the
+negotiated `provider_visibility_v1` extension. F7 selects model/effort for the
+next request while showing active settings separately. Resume and child settings
+inheritance are covered. Usage is provider-reported; unknown occupancy stays
+unknown and the conservative byte estimate is labeled with its basis.
+
+The Codex-only default is now `gpt-5.5`/`low`; provider selection stays explicit.
+`ELARA_CODEX_AUTH_SOURCE=codex` opts into read-only Codex login reuse. A real
+subscription session selected `gpt-5.5`/`high`, invoked a synthetic tool, received
+a public summary and returned 469; the credential file was unchanged. The
+[sanitized proof](docs/fixtures/subscription-product-proof-2026-09-04.json)
+records the public content and telemetry. All 11 macOS product tests passed,
+including real local HTTP/SSE through Core and the Rust PTY, live/historical
+summaries, all-layout sticky hiding, next-request changes, persistence/resume,
+and interrupted partial-summary reload. Final offline Linux Mix checks passed
+365/365; both Rust crates pass formatting, Clippy and tests on macOS and Linux
+(80 TUI library tests, 2 parser tests, and 3 execution-stub tests). Compilation
+passes with warnings treated as errors.
+
+The completed code review covered nine local lenses plus independent Claude
+Opus 5, with fresh finding validation. All seven actionable findings were fixed:
+event metadata round trips, both resume paths and cross-provider settings,
+stable body copying and Markdown, extension negotiation, and legacy streaming
+without duplicate native rendering. F7 interrupt/detach and deterministic
+settings-save failure also have regressions. The pre-existing leading-hyphen
+session-ID parser failure was fixed as an early TUI-6 prerequisite, using
+standard `--` and the exact failing ID rather than favorable random IDs.
+
+Remaining limits: exact context occupancy is unknown, model/effort support is
+the dated observed catalog, and large cumulative streams still need an
+end-to-end latency measurement. Older builds reject the expanded saved-settings
+header, as documented in README. Physical terminal acceptance remains
+owner-deferred; no required PROV-2 implementation work remains before publication.
 
 ## INPUT-1 — File references and image attachments from disk
 
@@ -1734,13 +1759,16 @@ Sources: [AGENTS.md](https://agents.md/) and
 
 **Status:** BLOCKED on INST-1
 
-### Known issue to cover
+### Prerequisite repaired during PROV-2 verification
 
 TUI-5 verification exposed an existing CLI parsing bug: URL-safe session IDs
 starting with `-` are rejected as unknown options by `Args::parse`. Reproduced
-with `-XRyHg3MnKDpFahPkoG7BA` during the macOS product suite. Fix and test session
-attachment argument handling as part of this lifecycle item; do not regenerate
-IDs or weaken product tests to hide the failure.
+with `-XRyHg3MnKDpFahPkoG7BA` during the macOS product suite and
+`-cs4HS4nJbLUqcYi8LhWHw` during PROV-2 Linux verification. The parser now supports
+standard `--` end-of-options handling, and native test launchers pass options
+before `-- SESSION`. The exact failing ID has a deterministic regression;
+unknown flags still fail. This prerequisite was advanced to unblock shared
+verification; the remaining lifecycle scope below is unchanged.
 
 ### Outcome
 

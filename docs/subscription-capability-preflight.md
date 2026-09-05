@@ -53,6 +53,31 @@ occupancy estimates explicitly labeled and use conservative reserves; the
 catalog response is not a proof of the exact effective limit on every request.
 No higher-capacity setting, unsupported effort, or all-model matrix was probed.
 
+## Live Elara product proof
+
+On 2026-09-04, the implemented adapter completed a synthetic session through
+`Elara.start_session`, `Elara.set_provider_settings`, and `Elara.ask` on the same
+subscription route. Explicit read-only Codex authentication loaded successfully;
+the credential file remained byte-for-byte unchanged. The session selected
+`gpt-5.5` with `high` effort, called the supplied `echo_marker` tool once with
+`proof-469`, then returned the correct arithmetic result, 469, and the echo.
+
+The tool-call response provided no public summary; the final response provided
+one public summary followed by a distinct final answer. Both responses reported
+the requested model and usage. Reported totals were 256 input, 65 output, and 27
+reasoning tokens (reasoning is included in output); cached input and cache writes
+were zero. The advertised limit remained 272,000, with exact occupancy unknown.
+The labeled estimate includes serialized history, system text, tool schemas and
+a 4096-byte framing reserve; it is not exact request/tokenizer measurement.
+
+The [sanitized product proof](fixtures/subscription-product-proof-2026-09-04.json)
+contains only synthetic public content, selected/served model, tool result, and
+allowlisted telemetry. It omits credentials, account and response identities,
+and private continuation data. This resolves the earlier default/login adapter
+blockers. It does not expand the tested model/effort matrix or prove a saturated
+context limit. Image capability remains established by the earlier synthetic
+red/blue-image route probe; attachment delivery belongs to INPUT-1.
+
 ## Official documentation context
 
 The [reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)

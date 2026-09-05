@@ -47,16 +47,27 @@ Elara keeps ownership of its own session, tools, execution, and agent loop:
 mix elara.login openai
 export ELARA_PROVIDER='openai-codex'
 
-# Optional; this is the current default:
-export ELARA_MODEL='gpt-5.3-codex'
+# Optional; these are the Codex provider defaults:
+export ELARA_MODEL='gpt-5.5'
+export ELARA_REASONING_EFFORT='low'
 ```
 
 Open the printed OpenAI URL, enter the device code, and wait for Elara to save
 the tokens under `~/.elara/openai-codex-auth.json` with mode `0600`. Elara uses
 the subscription-backed Codex Responses stream and identifies itself as
-`originator=elara`; it does not read credentials from Codex, Pi, or another
-harness. `ELARA_PROVIDER` must be set in the process that owns the session—for
-detached use, that is `mix elara.server`.
+`originator=elara`. Alternatively, explicitly reuse an existing Codex login:
+
+```bash
+export ELARA_PROVIDER='openai-codex'
+export ELARA_CODEX_AUTH_SOURCE='codex'
+mix elara.tui new
+```
+
+This reads `$CODEX_HOME/auth.json` (default `~/.codex/auth.json`) without copying,
+refreshing, or rotating its credentials. If the login needs refreshing, Elara
+asks you to refresh it in Codex. Omit `ELARA_CODEX_AUTH_SOURCE`, or set it to
+`elara`, to use Elara's own login. Set these variables in the process that owns
+the session—for detached use, that is `mix elara.server`.
 
 This path uses ChatGPT plan limits. It is separate from OpenAI Platform API-key
 billing below.
@@ -168,9 +179,24 @@ four independent themes (Ember, Observatory, Workbench, Forest). Enter applies;
 and restores focus. Turn navigation shows short summaries; the transcript
 retains each full prompt. Optional side panes collapse on narrow terminals;
 these keys keep them accessible. Thinking identifies the inspected historical turn
-or live-following turn. Live reasoning is unavailable until the provider
-integration lands. `--preview-reasoning` explicitly shows a labeled, synthetic
+or live-following turn. The Codex provider displays public reasoning summaries,
+commentary, and final answers separately; missing summaries are labeled
+unavailable. `--preview-reasoning` explicitly shows a labeled, synthetic
 presentation fixture; it is not saved in preferences or conversation history.
+
+**F7** opens Codex model and reasoning-effort controls. Up/Down chooses a model;
+Left/Right chooses effort; Enter accepts and Esc cancels. Accepted settings apply
+to the next provider request, including the next tool-loop iteration. The view
+distinguishes the active request from next-request settings, which survive resume
+and are inherited by children. Available choices are pinned to the observed
+subscription catalog; advertised choices may still be rejected by the provider.
+Sessions saved with provider settings require a build with provider-visibility
+support; older builds reject the expanded session header.
+
+F7 also shows provider-reported request usage and session totals when available.
+Context size is a labeled conservative byte estimate, with an advertised model
+limit; it is not exact tokenizer occupancy. See the [subscription evidence](docs/subscription-capability-preflight.md)
+for tested capabilities and limitations.
 
 The composer edits multiline text with a visible cursor and keyboard selection.
 Enter sends when idle; **Ctrl-J** inserts a newline in both legacy and enhanced

@@ -31,6 +31,37 @@ defmodule Elara.Provider.OpenAICodexIntegrationTest do
     {:ok, root: root}
   end
 
+  test "accepted settings are inherited by the existing child creation config" do
+    tokens = %Tokens{
+      access_token: "fake",
+      refresh_token: "fake",
+      expires_at: System.system_time(:second) + 3600,
+      account_id: "fake"
+    }
+
+    {:ok, session} =
+      Elara.start_session(
+        provider: {OpenAICodex, OpenAICodex.new(tokens)},
+        tools: [],
+        persist: false
+      )
+
+    assert :ok =
+             Elara.set_provider_settings(session, %{"model" => "gpt-5.4-mini", "effort" => "high"})
+
+    assert {OpenAICodex, %{model: "gpt-5.4-mini", effort: "high"}} =
+             Elara.child_config(session).provider
+
+    assert {:error, :unsupported_provider_settings} =
+             Elara.set_provider_settings(session, %{"model" => "unsupported", "effort" => "ultra"})
+
+    assert {OpenAICodex, %{model: "gpt-5.4-mini", effort: "high"}} =
+             Elara.child_config(session).provider
+
+    {:ok, pid} = Elara.session_pid(session)
+    GenServer.stop(pid)
+  end
+
   test "public session streams tool continuation and resumes native state", %{root: root} do
     {tool_response, tool_output} = tool_stream()
     {second_response, second_output} = success_stream("tool complete", "msg_2")

@@ -8,7 +8,8 @@ defmodule Elara.Event do
           | {:provider_error, Elara.Provider.Error.t()}
 
   @type t ::
-          {:turn_started, String.t()}
+          :provider_view_changed
+          | {:turn_started, String.t()}
           | {:message_appended, Elara.Message.t()}
           | {:message_appended, Elara.Message.Assistant.t(), :streamed}
           | {:content_delta, String.t(), String.t()}

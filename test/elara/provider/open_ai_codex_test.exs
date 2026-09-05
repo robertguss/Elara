@@ -21,6 +21,103 @@ defmodule Elara.Provider.OpenAICodexTest do
     )
   end
 
+  test "public summaries preserve parts and phases across every byte boundary" do
+    output = [
+      %{
+        "id" => "r1",
+        "type" => "reasoning",
+        "encrypted_content" => "SECRET",
+        "summary" => [
+          %{"type" => "summary_text", "text" => "Plan α"},
+          %{"type" => "summary_text", "text" => "Check"}
+        ]
+      },
+      %{
+        "id" => "m1",
+        "type" => "message",
+        "role" => "assistant",
+        "phase" => "commentary",
+        "content" => [%{"type" => "output_text", "text" => "Working"}]
+      },
+      %{
+        "id" => "m2",
+        "type" => "message",
+        "role" => "assistant",
+        "phase" => "final_answer",
+        "content" => [%{"type" => "output_text", "text" => "Done"}]
+      }
+    ]
+
+    events = [
+      %{"type" => "response.output_item.added", "output_index" => 0, "item" => hd(output)},
+      %{
+        "type" => "response.reasoning_summary_text.delta",
+        "output_index" => 0,
+        "item_id" => "r1",
+        "summary_index" => 0,
+        "delta" => "Plan α"
+      },
+      %{
+        "type" => "response.reasoning_summary_text.delta",
+        "output_index" => 0,
+        "item_id" => "r1",
+        "summary_index" => 1,
+        "delta" => "Check"
+      },
+      %{
+        "type" => "response.completed",
+        "response" => %{
+          "model" => "gpt-5.5",
+          "output" => output,
+          "usage" => %{
+            "input_tokens" => 12,
+            "output_tokens" => 8,
+            "input_tokens_details" => %{"cache_write_tokens" => 4, "cached_tokens" => 2},
+            "output_tokens_details" => %{"reasoning_tokens" => 3}
+          }
+        }
+      }
+    ]
+
+    data = Enum.map_join(events, &("data: " <> JSON.encode!(&1) <> "\r\n\r\n"))
+    chunks = for <<byte <- data>>, do: <<byte>>
+
+    {:ok, assistant} =
+      OpenAICodex.parse_stream_chunks(chunks, fn delta ->
+        send(self(), {:public_test, delta})
+        :ok
+      end)
+
+    assert Enum.map(assistant.public_content, & &1["kind"]) == [
+             "reasoning_summary",
+             "reasoning_summary",
+             "commentary",
+             "final_answer"
+           ]
+
+    assert Enum.map(assistant.public_content, & &1["text"]) == [
+             "Plan α",
+             "Check",
+             "Working",
+             "Done"
+           ]
+
+    assert assistant.text == "Done"
+    assert assistant.usage["cache_write_tokens"] == 4
+    assert assistant.usage["input_tokens"] == 12
+    assert assistant.usage["reasoning_tokens"] == 3
+    refute JSON.encode!(assistant.public_content) =~ "SECRET"
+    assert_received {:public_test, {:public_content, %{"text" => "Plan α", "part_index" => 0}}}
+  end
+
+  test "SSE multiline data preserves split CRLF boundaries" do
+    event =
+      "data: {\r\ndata: \"type\":\"response.completed\",\"response\":{\"output\":[{\"id\":\"m\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}]}}\r\n\r\n"
+
+    assert {:ok, %{text: "ok"}} =
+             OpenAICodex.parse_stream_chunks(for(<<byte <- event>>, do: <<byte>>), fn _ -> :ok end)
+  end
+
   test "build_body maps instructions, messages, and function tools" do
     request = %Provider.Request{
       system: "system",
@@ -194,7 +291,8 @@ defmodule Elara.Provider.OpenAICodexTest do
              %ToolCall{
                id: "call_1|fc_1",
                name: "read",
-               args: {:ok, %{"path" => "README.md"}}
+               args: {:ok, %{"path" => "README.md"}},
+               output_index: 2
              }
            ]
 
@@ -204,8 +302,54 @@ defmodule Elara.Provider.OpenAICodexTest do
     assert reasoning["encrypted_content"] == "encrypted"
     assert message["id"] == "msg_1"
     assert function_call["id"] == "fc_1"
+    assert_receive {:delta, {:public_content, %{"text" => "Hel"}}}
+    assert_receive {:delta, {:public_content, %{"text" => "Hello"}}}
     assert_receive {:delta, "Hel"}
     assert_receive {:delta, "lo"}
+  end
+
+  test "compatibility deltas contain final answers but never commentary or reasoning" do
+    commentary = %{
+      "id" => "commentary",
+      "type" => "message",
+      "role" => "assistant",
+      "phase" => "commentary",
+      "content" => [%{"type" => "output_text", "text" => "Working"}]
+    }
+
+    final = %{
+      "id" => "final",
+      "type" => "message",
+      "role" => "assistant",
+      "phase" => "final_answer",
+      "content" => [%{"type" => "output_text", "text" => "Answer"}]
+    }
+
+    events = [
+      %{
+        "type" => "response.reasoning_summary_text.delta",
+        "item_id" => "r",
+        "output_index" => 0,
+        "summary_index" => 0,
+        "delta" => "Thinking"
+      },
+      %{"type" => "response.output_item.added", "output_index" => 1, "item" => commentary},
+      %{"type" => "response.output_text.delta", "output_index" => 1, "delta" => "Working"},
+      %{"type" => "response.output_item.added", "output_index" => 2, "item" => final},
+      %{"type" => "response.output_text.delta", "output_index" => 2, "delta" => "Answer"},
+      %{"type" => "response.completed", "response" => %{"output" => [commentary, final]}}
+    ]
+
+    {:ok, assistant} =
+      OpenAICodex.parse_stream_chunks(Enum.map(events, &event/1), fn delta ->
+        send(self(), {:compatibility, delta})
+        :ok
+      end)
+
+    assert assistant.text == "Answer"
+    assert_received {:compatibility, "Answer"}
+    refute_received {:compatibility, "Working"}
+    refute_received {:compatibility, "Thinking"}
   end
 
   test "stream parser fails malformed, incomplete, and unterminated streams closed" do

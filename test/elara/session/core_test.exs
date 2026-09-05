@@ -49,6 +49,133 @@ defmodule Elara.Session.CoreTest do
     %ToolCall{id: id, name: name, args: args}
   end
 
+  test "public parts upsert, interrupt persist, and resume without private state" do
+    part = %{
+      "kind" => "reasoning_summary",
+      "item_id" => "r",
+      "output_index" => 0,
+      "part_index" => 0,
+      "text" => "Public α"
+    }
+
+    {state, _} = ask(new())
+    {state, _} = Core.step(state, {:provider_delta, 1, {:public_content, part}})
+    {state, _} = Core.step(state, {:provider_delta, 1, {:public_content, part}})
+    assert state.streaming.public_content == [part]
+
+    assert {^state, []} =
+             Core.step(
+               state,
+               {:provider_delta, 1,
+                {:public_content, Map.put(part, "encrypted_content", "secret")}}
+             )
+
+    snapshot = Elara.Protocol.snapshot("id", "incarnation", state)
+    assert snapshot["provider_view"]["streaming"].public_content == [part]
+    {state, effects} = Core.step(state, :interrupt)
+
+    assert [{:emit, {:message_appended, interrupted}}, {:emit, {:turn_ended, :interrupted}}] =
+             effects
+
+    assert interrupted.interrupted
+    assert interrupted.public_content == [part]
+    assert interrupted.provider_state == nil
+
+    {:ok, decoded} =
+      interrupted |> Elara.Session.Store.encode_message() |> Elara.Session.Store.decode_message()
+
+    resumed = Core.new(config([]), [Message.user("question"), decoded])
+    assert List.last(resumed.history).public_content == [part]
+    assert {^state, []} = Core.step(state, {:provider_delta, 1, {:public_content, part}})
+  end
+
+  test "accepted settings apply at next request including tool iterations and usage is counted once" do
+    initial = %{"model" => "gpt-5.5", "effort" => "low"}
+    selected = %{"model" => "gpt-5.4-mini", "effort" => "high"}
+    {state, _} = Core.step(new(), {:provider_settings, initial})
+    {state, effects} = ask(state)
+    assert {:call_provider, 1, %Provider.Request{settings: ^initial}} = List.last(effects)
+    {state, _} = Core.step(state, {:provider_settings, selected})
+    assert state.streaming.settings == initial
+    assert Elara.Provider.Visibility.view(state)["next_request"] == selected
+
+    assistant = %{
+      asst("Working", [call("c", "echo")])
+      | usage: %{"input_tokens" => 12, "output_tokens" => 3}
+    }
+
+    {state, _} = Core.step(state, {:provider_result, 1, {:ok, assistant}})
+    {state, effects} = Core.step(state, {:tool_result, 2, {:ok, "ok"}})
+    assert {:call_provider, 3, %Provider.Request{settings: ^selected}} = List.last(effects)
+    assert state.streaming.settings == selected
+
+    assert Elara.Provider.Visibility.totals(state.history) == %{
+             "input_tokens" => 12,
+             "output_tokens" => 3
+           }
+
+    assert {^state, []} = Core.step(state, {:provider_result, 1, {:ok, assistant}})
+  end
+
+  test "missing latest request usage is unavailable while reported totals remain" do
+    previous = %{asst("prior") | usage: %{"input_tokens" => 12}}
+    state = Core.new(config([]), [previous, Message.user("next"), asst("new")])
+    usage = Elara.Provider.Visibility.view(state)["usage"]
+    assert usage["last_request"] == nil
+    assert usage["session_totals"] == %{"input_tokens" => 12}
+  end
+
+  test "advertised context limit comes from the selected catalog entry" do
+    for entry <- Elara.Provider.Visibility.catalog() do
+      {state, _} =
+        Core.step(new(), {:provider_settings, %{"model" => entry["model"], "effort" => "low"}})
+
+      assert Elara.Provider.Visibility.view(state)["context"]["advertised_limit"] ==
+               entry["context_window"]
+    end
+
+    {state, _} =
+      Core.step(new(), {:provider_settings, %{"model" => "unknown", "effort" => "low"}})
+
+    assert Elara.Provider.Visibility.view(state)["context"]["advertised_limit"] == nil
+  end
+
+  test "typed and binary answer channels preserve compatibility and stream validation" do
+    {state, _} = ask(new())
+
+    part = %{
+      "kind" => "final_answer",
+      "item_id" => "m",
+      "output_index" => 0,
+      "part_index" => 0,
+      "text" => "answer"
+    }
+
+    {state, _} = Core.step(state, {:provider_delta, 1, {:public_content, part}})
+    {state, effects} = Core.step(state, {:provider_delta, 1, "answer"})
+    assert [{:emit, {:content_delta, "assistant-1", "answer"}}] = effects
+    assert state.streaming.text == "answer"
+    assert state.streaming.public_content == [part]
+
+    {complete, effects} =
+      Core.step(state, {:provider_result, 1, {:ok, %{asst("answer") | public_content: [part]}}})
+
+    assert Core.idle?(complete)
+
+    assert [
+             {:emit, {:message_appended, _, :streamed}},
+             {:emit, {:turn_ended, {:completed, "answer"}}}
+           ] = effects
+
+    {rejected, effects} = Core.step(state, {:provider_result, 1, {:ok, asst("different")}})
+    assert Core.idle?(rejected)
+
+    assert [
+             {:emit,
+              {:turn_ended, {:provider_error, %Provider.Error{kind: :bad_response}}, :streamed}}
+           ] = effects
+  end
+
   test "new/2 hydrates exact history while remaining idle" do
     {:ok, assistant} = Message.assistant("prior answer", [])
     history = [Message.user("prior question"), assistant]
@@ -130,7 +257,7 @@ defmodule Elara.Session.CoreTest do
     {streamed, _effects} = ask(new())
     {streamed, effects} = Core.step(streamed, {:provider_delta, 1, "hel"})
 
-    assert streamed.streaming == %{id: "assistant-1", text: "hel"}
+    assert %{id: "assistant-1", text: "hel"} = streamed.streaming
     assert effects == [{:emit, {:content_delta, "assistant-1", "hel"}}]
 
     {streamed, effects} = Core.step(streamed, {:provider_delta, 1, "lo"})

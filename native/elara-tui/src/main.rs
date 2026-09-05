@@ -39,11 +39,16 @@ struct Args {
 
 impl Args {
     fn parse() -> Result<Self, String> {
+        Self::parse_from(std::env::args().skip(1))
+    }
+
+    fn parse_from(mut arguments: impl Iterator<Item = String>) -> Result<Self, String> {
         let mut appearance = false;
         let mut layout = None;
         let mut theme = None;
         let mut preview_reasoning = false;
         let mut target = None;
+        let mut positional_only = false;
         let mut port = environment_port();
         let mut observe = false;
         let mut headless = false;
@@ -53,10 +58,16 @@ impl Args {
         let mut timeout = Duration::from_secs(30);
         let mut width = 100;
         let mut height = 24;
-        let mut arguments = std::env::args().skip(1);
 
         while let Some(argument) = arguments.next() {
+            if positional_only {
+                if target.replace(argument.clone()).is_some() {
+                    return Err(format!("unexpected argument {argument}\n{}", usage()));
+                }
+                continue;
+            }
             match argument.as_str() {
+                "--" => positional_only = true,
                 "--appearance" => appearance = true,
                 "--layout" => {
                     layout = Some(ViewLayout::parse(&next_value(&mut arguments, "--layout")?)?)
@@ -144,7 +155,7 @@ fn environment_port() -> u16 {
 }
 
 fn usage() -> &'static str {
-    "usage: elara-tui SESSION|new|list [--port PORT] [--observe] [--ask PROMPT] \
+    "usage: elara-tui [OPTIONS] [--] SESSION|new|list\noptions: [--port PORT] [--observe] [--ask PROMPT] \
      [--headless] [--event-dump] [--appearance] [--layout ember|observatory|workbench] [--theme ember|observatory|workbench|forest] [--preview-reasoning]"
 }
 
@@ -432,6 +443,7 @@ fn run_interactive(
             {
                 InputAction::Detach => return Ok(()),
                 InputAction::Submit => model.prepare_submit(),
+                InputAction::ProviderSettings(request) => Some(request),
                 InputAction::Interrupt if model.track_interrupt() => Some(command("interrupt")),
                 _ => None,
             };
@@ -536,5 +548,68 @@ impl Drop for TerminalGuard {
         );
         let _ = disable_raw_mode();
         let _ = io::stdout().flush();
+    }
+}
+
+#[cfg(test)]
+mod argument_tests {
+    use super::Args;
+
+    fn parse(arguments: &[&str]) -> Result<Args, String> {
+        Args::parse_from(arguments.iter().map(|value| (*value).to_owned()))
+    }
+
+    #[test]
+    fn end_of_options_accepts_the_reported_hyphen_leading_session() {
+        let args = parse(&[
+            "--port",
+            "4321",
+            "--headless",
+            "--",
+            "-cs4HS4nJbLUqcYi8LhWHw",
+        ])
+        .unwrap();
+        assert_eq!(args.target, "-cs4HS4nJbLUqcYi8LhWHw");
+        assert_eq!(args.port, 4321);
+        assert!(args.headless);
+        assert_eq!(parse(&["--", "--help"]).unwrap().target, "--help");
+    }
+
+    #[test]
+    fn delimiter_preserves_ordinary_forms_and_rejects_extra_positionals() {
+        for arguments in [
+            &["new", "--headless"][..],
+            &["--headless", "new"],
+            &["--headless", "--", "new"],
+        ] {
+            let args = parse(arguments).unwrap();
+            assert_eq!(args.target, "new");
+            assert!(args.headless);
+        }
+        assert_eq!(parse(&["list"]).unwrap().target, "list");
+        assert_eq!(parse(&["session", "--"]).unwrap().target, "session");
+        assert_eq!(
+            parse(&["--ask", "--", "session"]).unwrap().ask.as_deref(),
+            Some("--")
+        );
+        for arguments in [
+            &["--"][..],
+            &["--", "session", "--headless"],
+            &["session", "--", "extra"],
+        ] {
+            assert!(parse(arguments).is_err());
+        }
+        assert!(
+            parse(&["--typo", "session"])
+                .err()
+                .unwrap()
+                .contains("unknown option --typo")
+        );
+        assert!(
+            parse(&["-cs4HS4nJbLUqcYi8LhWHw"])
+                .err()
+                .unwrap()
+                .contains("unknown option")
+        );
     }
 }

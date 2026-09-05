@@ -51,6 +51,7 @@ defmodule Elara.ProtocolV2Test do
       send_json(socket, %{
         "version" => 2,
         "command" => "attach",
+        "extensions" => ["provider_visibility_v1"],
         "session_id" => session,
         "mode" => mode,
         "cursor" => cursor,
@@ -136,6 +137,81 @@ defmodule Elara.ProtocolV2Test do
       end)
 
     {core, view, seq}
+  end
+
+  test "provider settings enforce controller ownership and extension negotiation" do
+    tokens = %Elara.Auth.OpenAICodex{
+      access_token: "fake",
+      refresh_token: "fake",
+      account_id: "fake",
+      expires_at: System.system_time(:second) + 3600
+    }
+
+    provider = {Elara.Provider.OpenAICodex, Elara.Provider.OpenAICodex.new(tokens)}
+    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: provider)
+    controller = connect(Elara.Server.port(server))
+    observer = connect(Elara.Server.port(server))
+    legacy = connect(Elara.Server.port(server))
+    negotiated = attach_v2(controller, session, "control", 0, nil)
+    assert Map.has_key?(negotiated["snapshot"], "provider_view")
+    attach_v2(observer, session, "observe", 0, nil)
+
+    send_json(legacy, %{
+      "version" => 2,
+      "command" => "attach",
+      "session_id" => session,
+      "mode" => "observe"
+    })
+
+    assert %{"extensions" => [], "snapshot" => legacy_snapshot} = recv_json(legacy)
+    refute Map.has_key?(legacy_snapshot, "provider_view")
+    before = Elara.materialized_view(session)
+
+    command = %{
+      "version" => 2,
+      "command" => "set_provider_settings",
+      "extension" => "provider_visibility_v1",
+      "model" => "gpt-5.4-mini",
+      "effort" => "high"
+    }
+
+    send_json(observer, command)
+    assert %{"type" => "error", "error" => "not_controller"} = recv_json(observer)
+    send_json(legacy, command)
+    assert %{"type" => "error", "error" => "unsupported_extension"} = recv_json(legacy)
+
+    for invalid <- [%{"model" => "unsupported"}, %{"effort" => "ultra"}] do
+      send_json(controller, Map.merge(command, invalid))
+
+      assert %{"type" => "error", "error" => "unsupported_provider_settings"} =
+               recv_json(controller)
+    end
+
+    assert Elara.materialized_view(session) == before
+    send_json(controller, command)
+    assert %{"type" => "ok"} = recv_json(controller)
+    assert %{"type" => "patch", "ops" => negotiated_ops} = recv_json(controller)
+    assert Enum.any?(negotiated_ops, &(&1["op"] == "set_provider_view"))
+    assert %{"type" => "patch", "ops" => legacy_ops} = recv_json(legacy)
+    refute Enum.any?(legacy_ops, &(&1["op"] == "set_provider_view"))
+    assert Enum.all?(legacy_ops, &(&1["op"] in ["set_usage", "set_turn_state"]))
+
+    assert Elara.materialized_view(session)["provider_view"]["next_request"] == %{
+             "model" => "gpt-5.4-mini",
+             "effort" => "high"
+           }
+
+    send_json(legacy, %{"version" => 2, "command" => "resnapshot"})
+    assert %{"type" => "snapshot", "snapshot" => legacy_snapshot} = recv_json(legacy)
+    refute Map.has_key?(legacy_snapshot, "provider_view")
+    send_json(controller, %{"version" => 2, "command" => "resnapshot"})
+    assert %{"type" => "snapshot", "snapshot" => negotiated_snapshot} = recv_json(controller)
+    assert negotiated_snapshot["provider_view"]["next_request"]["model"] == "gpt-5.4-mini"
+
+    Enum.each([controller, observer, legacy], &:gen_tcp.close/1)
+    {:ok, pid} = Elara.session_pid(session)
+    GenServer.stop(pid)
   end
 
   test "cold v2 attach materializes history beyond the v1 replay window" do
@@ -346,7 +422,7 @@ defmodule Elara.ProtocolV2Test do
     snapshot = Protocol.snapshot("session", "incarnation", Core.new(config, [assistant]))
     encoded = JSON.encode!(snapshot)
 
-    assert snapshot["messages"] == [
+    assert Enum.map(snapshot["messages"], &Map.take(&1, ["role", "text", "tool_calls"])) == [
              %{"role" => "assistant", "text" => "answer", "tool_calls" => []}
            ]
 
@@ -364,6 +440,93 @@ defmodule Elara.ProtocolV2Test do
       assert encoded["version"] == 1
       assert {:ok, ^event} = Protocol.decode_event(encoded["event"])
     end
+  end
+
+  test "provider events and public assistant metadata round-trip with strict field validation" do
+    part = %{
+      "kind" => "reasoning_summary",
+      "item_id" => "r",
+      "output_index" => 0,
+      "part_index" => 0,
+      "text" => "Public summary"
+    }
+
+    assistant = %{
+      asst("answer", [%ToolCall{id: "call", name: "echo", args: {:ok, %{}}, output_index: 1}])
+      | public_content: [part],
+        usage: %{"input_tokens" => 3},
+        response_model: "gpt-5.5",
+        request_settings: %{"model" => "gpt-5.5", "effort" => "high"},
+        interrupted: true
+    }
+
+    for event <- [
+          :provider_view_changed,
+          {:message_appended, assistant},
+          {:message_appended, assistant, :streamed}
+        ] do
+      assert {:ok, ^event} = Protocol.decode_event(Protocol.event(7, event)["event"])
+    end
+
+    encoded = Protocol.event(7, {:message_appended, assistant})["event"]
+
+    for {key, invalid} <- [
+          {"public_content", [Map.put(part, "encrypted_content", "secret")]},
+          {"usage", %{"input_tokens" => -1}},
+          {"usage", %{"secret" => 1}},
+          {"response_model", false},
+          {"request_settings", %{"model" => "gpt-5.5"}},
+          {"request_settings", %{"model" => "gpt-5.5", "effort" => 1}},
+          {"interrupted", "true"},
+          {"tool_calls",
+           [%{"id" => "call", "name" => "echo", "args" => %{"ok" => %{}}, "output_index" => -1}]}
+        ] do
+      assert {:error, :invalid_event} =
+               Protocol.decode_event(put_in(encoded, ["message", key], invalid))
+    end
+
+    legacy = %{
+      "kind" => "message_appended",
+      "message" => %{"role" => "assistant", "text" => "answer", "tool_calls" => []}
+    }
+
+    assert {:ok, {:message_appended, %{public_content: [], usage: nil, interrupted: false}}} =
+             Protocol.decode_event(legacy)
+  end
+
+  test "v1 attachment omits provider-only events from live delivery and replay" do
+    tokens = %Elara.Auth.OpenAICodex{
+      access_token: "fake",
+      refresh_token: "fake",
+      account_id: "fake",
+      expires_at: System.system_time(:second) + 3600
+    }
+
+    provider = {Elara.Provider.OpenAICodex, Elara.Provider.OpenAICodex.new(tokens)}
+    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: provider)
+    live = connect(Elara.Server.port(server))
+
+    attach = %{
+      "version" => 1,
+      "command" => "attach",
+      "session_id" => session,
+      "mode" => "observe"
+    }
+
+    send_json(live, attach)
+    assert %{"type" => "attached"} = recv_json(live)
+    assert :ok = Elara.set_provider_settings(session, %{"model" => "gpt-5.5", "effort" => "high"})
+    send_json(live, %{"version" => 1, "command" => "inspect"})
+    assert %{"type" => "status"} = recv_json(live)
+    replay = connect(Elara.Server.port(server))
+    send_json(replay, attach)
+    assert %{"type" => "attached"} = recv_json(replay)
+    send_json(replay, %{"version" => 1, "command" => "inspect"})
+    assert %{"type" => "status"} = recv_json(replay)
+    Enum.each([live, replay], &:gen_tcp.close/1)
+    {:ok, pid} = Elara.session_pid(session)
+    GenServer.stop(pid)
   end
 
   test "v2 attach patches deliver each content delta before the superseding final" do

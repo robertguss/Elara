@@ -7,7 +7,7 @@ defmodule Mix.Tasks.Elara.Tui do
 
   `mix elara.tui new` starts an embedded Elara server when the selected port is
   free. Start `mix elara.server` separately when sessions must outlive this
-  command.
+  command. Pass options before `-- SESSION` when the session ID starts with `-`.
   """
   @requirements ["app.start"]
 
@@ -75,7 +75,7 @@ defmodule Mix.Tasks.Elara.Tui do
         end
 
       {:error, reason} ->
-        Mix.raise("could not start embedded Elara server: #{inspect(reason)}")
+        Mix.raise("could not start embedded Elara server: #{Elara.Config.error_message(reason)}")
     end
   end
 

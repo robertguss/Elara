@@ -60,6 +60,7 @@ defmodule Elara.Session.Store do
     :lock_handle,
     entries: [],
     inbox: [],
+    agent_wake_count: 0,
     inputs_paused: false,
     active_input_id: nil,
     persist?: true
@@ -126,6 +127,7 @@ defmodule Elara.Session.Store do
          parent_session: header.parent_session,
          provider_settings: header.provider_settings,
          inbox: header.inbox,
+         agent_wake_count: header.agent_wake_count,
          inputs_paused: header.inputs_paused,
          active_input_id: header.active_input_id
        }}
@@ -395,6 +397,11 @@ defmodule Elara.Session.Store do
   end
 
   @doc false
+  def encode_message(%User{agent_source: source} = user) when is_map(source) do
+    %{"user" => body} = encode_message(%{user | agent_source: nil})
+    %{"user" => Map.put(body, "agentSource", source)}
+  end
+
   def encode_message(%User{text: text, attachments: []}), do: %{"user" => %{"text" => text}}
 
   def encode_message(%User{text: text, attachments: attachments}),
@@ -430,6 +437,18 @@ defmodule Elara.Session.Store do
   end
 
   @doc false
+  def decode_message(%{"user" => %{"agentSource" => source} = body} = encoded)
+      when map_size(encoded) == 1 do
+    with %{"sender" => sender, "recipient" => recipient, "message_id" => id} <- source,
+         true <-
+           map_size(source) == 3 and is_binary(sender) and is_binary(recipient) and is_binary(id),
+         {:ok, user} <- decode_message(%{"user" => Map.delete(body, "agentSource")}) do
+      {:ok, %{user | agent_source: source}}
+    else
+      _ -> {:error, :invalid_message}
+    end
+  end
+
   def decode_message(%{"user" => %{"text" => text} = user} = encoded)
       when map_size(encoded) == 1 and map_size(user) == 1 and is_binary(text),
       do: {:ok, %User{text: text}}
@@ -528,6 +547,7 @@ defmodule Elara.Session.Store do
     |> put_optional("name", store.name)
     |> put_optional("parentSession", store.parent_session)
     |> put_optional("providerSettings", store.provider_settings)
+    |> put_optional("agentWakeCount", if(store.agent_wake_count > 0, do: store.agent_wake_count))
     |> put_optional(
       "inbox",
       encode_inbox(store.inbox, store.inputs_paused, store.active_input_id)
@@ -643,6 +663,7 @@ defmodule Elara.Session.Store do
         "name",
         "parentSession",
         "providerSettings",
+        "agentWakeCount",
         "inbox"
       ])
 
@@ -672,7 +693,8 @@ defmodule Elara.Session.Store do
         {:error, :bad_header}
 
       true ->
-        with {:ok, inbox, paused, active_id} <- decode_inbox(Map.get(header, "inbox")),
+        with count when is_integer(count) and count >= 0 <- Map.get(header, "agentWakeCount", 0),
+             {:ok, inbox, paused, active_id} <- decode_inbox(Map.get(header, "inbox")),
              true <- Enum.all?(inbox, &(&1.session_id == id)) do
           {:ok,
            %{
@@ -684,6 +706,7 @@ defmodule Elara.Session.Store do
              parent_session: Map.get(header, "parentSession"),
              provider_settings: Map.get(header, "providerSettings"),
              inbox: inbox,
+             agent_wake_count: count,
              inputs_paused: paused,
              active_input_id: active_id
            }}
@@ -734,7 +757,7 @@ defmodule Elara.Session.Store do
          acc
        )
        when is_binary(id) and id != "" and is_binary(sid) and is_binary(sender) and
-              kind in ["normal", "steer"] and
+              kind in ["normal", "steer", "agent", "report"] and
               state in ["queued", "accepted", "consumed", "cancelled", "failed"] and
               is_integer(created) do
     allowed = ~w(id sessionId senderId kind state user createdAt error)
@@ -746,8 +769,22 @@ defmodule Elara.Session.Store do
         id: id,
         session_id: sid,
         sender_id: sender,
-        kind: String.to_existing_atom(kind),
-        state: String.to_existing_atom(state),
+        kind:
+          Map.fetch!(
+            %{"normal" => :normal, "steer" => :steer, "agent" => :agent, "report" => :report},
+            kind
+          ),
+        state:
+          Map.fetch!(
+            %{
+              "queued" => :queued,
+              "accepted" => :accepted,
+              "consumed" => :consumed,
+              "cancelled" => :cancelled,
+              "failed" => :failed
+            },
+            state
+          ),
         user: user,
         created_at: created,
         error: raw["error"]

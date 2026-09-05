@@ -55,7 +55,8 @@ defmodule Elara.ThreadsTest do
 
   defp parent(cwd, replies, opts \\ []) do
     provider = script(replies)
-    {:ok, id} = Elara.start_session([cwd: cwd, provider: provider] ++ opts)
+    # These lifecycle fixtures script child turns only, not automatic report responses.
+    {:ok, id} = Elara.start_session([cwd: cwd, provider: provider, pause_inputs: true] ++ opts)
     {id, provider}
   end
 
@@ -117,7 +118,11 @@ defmodule Elara.ThreadsTest do
 
     assert Enum.map(Elara.child_config(research["id"]).tools, & &1.name) |> Enum.sort() == [
              "read",
-             "skill"
+             "skill",
+             "thread_read",
+             "thread_send",
+             "thread_status",
+             "thread_wait"
            ]
 
     stop(parent)
@@ -330,8 +335,10 @@ defmodule Elara.ThreadsTest do
 
     finished(parent, id)
 
-    assert %{"child_limit" => 4, "sessions" => [%{"id" => ^id, "tools" => ["read", "skill"]}]} =
+    assert %{"child_limit" => 4, "sessions" => [%{"id" => ^id, "tools" => tools}]} =
              request(observer, %{"command" => "child_list"})
+
+    assert Enum.sort(tools) == ~w(read skill thread_read thread_send thread_status thread_wait)
 
     assert %{
              "type" => "session_error",

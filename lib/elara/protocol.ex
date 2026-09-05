@@ -479,6 +479,9 @@ defmodule Elara.Protocol do
     end
   end
 
+  defp encode_message(%User{agent_source: source} = user) when is_map(source),
+    do: encode_message(%{user | agent_source: nil}) |> Map.put("agent_source", source)
+
   defp encode_message(%User{text: text, attachments: []}), do: %{"role" => "user", "text" => text}
 
   defp encode_message(%User{text: text, attachments: attachments}),
@@ -509,6 +512,10 @@ defmodule Elara.Protocol do
       "outcome" => encode_tool_outcome(outcome)
     }
   end
+
+  defp decode_message(%{"role" => "user", "text" => text, "agent_source" => source}),
+    do:
+      Elara.Session.Store.decode_message(%{"user" => %{"text" => text, "agentSource" => source}})
 
   defp decode_message(%{"role" => "user", "text" => text}) when is_binary(text),
     do: {:ok, %User{text: text}}

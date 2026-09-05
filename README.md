@@ -453,8 +453,72 @@ losing identity or widening read-only limits; use independent open or explicit
 delegation with history. Custom tool modules must be installed and loaded before
 resuming; provider credentials are resolved afresh, never serialized into
 delegation metadata. Do not resume managed children using older Elara builds
-that do not enforce this metadata. Thread messaging, notifications and richer
-tree navigation remain THREAD-2.
+that do not enforce this metadata.
+
+### Thread communication and navigation
+
+`/threads` (also `/children`) opens the compact parent/child list in every
+layout. Enter opens a thread, Tab inspects its full metadata, `/return` opens
+the parent, and `/open THREAD_ID` opens a known session. Opening a child uses
+the ordinary transcript, tool inspector, F12 queue, F7 model/effort and
+reasoning views. Switching retains each thread's draft and local view state and
+preserves control versus observation. An observer never gains control by
+navigating.
+
+Unread **UI notifications** are distinct from model delivery receipts: opening
+or inspecting a listed thread acknowledges its notifications locally, not its
+model inbox. Those acknowledgements survive reattachment and thread switching
+within the TUI process; a new TUI process may show the notifications again.
+Reading, listing, reattaching and resnapshotting never generate model turns.
+
+Models can use `thread_send`, `thread_read`, `thread_status`, and `thread_wait`.
+Send requires a related direct parent/child ID, a stable `message_id`, and
+nonempty text (maximum 64 KiB). Retry the same ID/content after uncertain
+acceptance: different content conflicts, and accepted order is authoritative,
+not lexical ID order or retry arrival order. Follow-ups use the existing child;
+they do not create another thread or replay its assignment. Research children
+retain communication tools only when present in the parent's explicit tool set.
+Sender identity comes from execution context, never tool arguments or text.
+Assignments and delivered messages retain typed agent provenance, and provider
+requests explicitly distinguish them from owner instructions.
+
+Completion evidence retains the full result, workspace, original message IDs,
+file-operation and tool/test references, and uncertainty. The inbox has an
+explicitly labeled 2,000-character preview, not the only retained result.
+`thread_read` returns 2,048-character pages: use `character_offset` to continue,
+`offset` to select another matching original message, `query` for literal
+search, or `source_message_id` for a known original. A completion's `message_id`
+reads the full retained report in pages. Active-branch membership and later
+source IDs identify revisions without treating summaries as truth. Private
+provider continuation state and image bytes are excluded from evidence reads.
+File-operation references are not a claim that a failed operation changed bytes;
+consult the linked results. Shell/plugin and manual changes are not inferred.
+
+Transport receipts and staged completion evidence live under
+`~/.elara/sessions/_thread_messages/`. Durable acceptance precedes delivery to
+the receiver's existing inbox. Duplicate deliveries use the same logical input
+ID, preserving CTRL-1's atomic consumption and external-effect barriers. Busy
+parents finish their current turn before receiving reports; no child completion
+automatically interrupts them. Idle live parents can wake, but stopped/paused
+inputs remain paused, including a stop made before any inbox entry exists.
+Offline recipients retain pending delivery until explicitly opened/resumed.
+
+`thread_wait` is a cancellable event wait, not repeated model polling or a
+second execution loop. It has no ordinary tool deadline; explicit interrupt or
+target process loss settles it. A VM restart interrupts waiting rather than
+replaying uncertain tools. The report still follows the separate inbox path.
+Eight consecutive automatic agent/report turns exhaust a durable wake budget;
+F12 then `r`, `/resume-inputs`, or a new owner submission resets it. Empty sends
+are rejected, report responses do not generate ancestor reports, pending
+transport is limited to 64 entries per recipient, and delegation depth is
+limited to three (in addition to four concurrently running children).
+
+The additive `thread_communication_v1` extension exposes agent/report inbox
+kinds. Older queue clients see only their supported ordinary/steer entries;
+agent provenance remains explicit in transcript text. Saved agent provenance and
+wake-budget headers require this build for resume. This is trusted local thread
+communication, not hosted sharing or an OS sandbox. CTX-1 automatic handoff
+remains separate work.
 
 ## Built-in tools
 

@@ -16,6 +16,36 @@ defmodule Elara.Threads do
   def stop_subtree(parent), do: GenServer.call(__MODULE__, {:stop, parent})
   def managed?(id), do: File.exists?(record_path(id))
 
+  @doc "Canonical direct relationships; text and supplied workspace paths never grant access."
+  def related?(a, b) when is_binary(a) and is_binary(b) do
+    a == b or match?({:ok, %{"parent_id" => ^a}}, read(b)) or
+      match?({:ok, %{"parent_id" => ^b}}, read(a))
+  end
+
+  def related?(_, _), do: false
+  def record(id), do: read(id)
+  def all_records, do: records()
+
+  def navigation(id) do
+    children = list(id).children
+
+    case read(id) do
+      {:ok, r} ->
+        [
+          %{
+            "id" => r["parent_id"],
+            "assignment" => "↑ Return to parent",
+            "state" => "parent",
+            "cwd" => r["parent_invocation_cwd"] || r["parent_cwd"]
+          }
+          | children
+        ]
+
+      _ ->
+        children
+    end
+  end
+
   @doc false
   def resume_options(opts) do
     source =
@@ -146,6 +176,7 @@ defmodule Elara.Threads do
                String.trim(assignment) != "" and
                byte_size(assignment) <= 65_536,
            :ok <- capacity(),
+           :ok <- if(depth(parent) < 3, do: :ok, else: {:error, :thread_depth_limit_3}),
            %{} = config <- Elara.child_config(parent),
            true <-
              config.allowed_capabilities == :all or "delegate" in config.allowed_capabilities do
@@ -298,7 +329,9 @@ defmodule Elara.Threads do
           else:
             Enum.filter(
               config.tools,
-              &(&1 in Enum.filter(Elara.Tool.builtins(), fn t -> t.name in ["read", "skill"] end))
+              &(&1 in Enum.filter(Elara.Tool.builtins(), fn t ->
+                  t.name in ["read", "skill"] or t.run == {Elara.Threads.Communication, :run}
+                end))
             )
 
       caps =
@@ -365,9 +398,24 @@ defmodule Elara.Threads do
   end
 
   defp launch(record) do
-    with :ok <- save(Map.put(record, "state", "running")) do
-      Elara.ask_async(record["id"], record["assignment"])
-    end
+    user = %Elara.Message.User{
+      text: record["assignment"],
+      agent_source: %{
+        "sender" => record["parent_id"],
+        "recipient" => record["id"],
+        "message_id" => "assignment"
+      }
+    }
+
+    with :ok <- save(Map.put(record, "state", "running")),
+         {:ok, _} <-
+           Elara.submit_input(record["id"], %{
+             id: "assignment",
+             sender_id: record["parent_id"],
+             kind: :agent,
+             user: user
+           }),
+         do: Elara.resume_inputs(record["id"])
   end
 
   defp restore(r, opts) do
@@ -444,6 +492,13 @@ defmodule Elara.Threads do
     if Registry.count(Elara.ThreadSlots) < @limit,
       do: :ok,
       else: {:error, :child_concurrency_limit_4}
+  end
+
+  defp depth(id) do
+    case read(id) do
+      {:ok, r} -> 1 + depth(r["parent_id"])
+      _ -> 0
+    end
   end
 
   defp reconciled(id) do

@@ -17,7 +17,8 @@ defmodule Elara.Application do
       {DynamicSupervisor, name: Elara.PluginSup, strategy: :one_for_one},
       {DynamicSupervisor, name: Elara.SessionSup, strategy: :one_for_one},
       {DynamicSupervisor, name: Elara.CoordinatorSup, strategy: :one_for_one},
-      Elara.Threads
+      Elara.Threads,
+      Elara.Threads.Communication
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Elara.Supervisor)

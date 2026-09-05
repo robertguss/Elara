@@ -199,7 +199,10 @@ pub(crate) fn validate(inbox: &Value, session: &str) -> Result<(), String> {
             || !ids.insert(entry["id"].as_str().unwrap())
             || entry["session_id"] != session
             || !entry["sender_id"].is_string()
-            || !matches!(entry["kind"].as_str(), Some("normal" | "steer"))
+            || !matches!(
+                entry["kind"].as_str(),
+                Some("normal" | "steer" | "agent" | "report")
+            )
             || !matches!(
                 entry["state"].as_str(),
                 Some("queued" | "accepted" | "consumed" | "cancelled" | "failed")
@@ -273,6 +276,8 @@ pub(crate) fn summary(model: &Model) -> String {
         "{count} queued{} · F12 queue · Ctrl-S steer · Ctrl-X stop",
         if view["paused"] == true {
             " (paused)"
+        } else if view["wake_budget_exhausted"] == true {
+            " (agent wake limit)"
         } else {
             ""
         }

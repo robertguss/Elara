@@ -109,6 +109,11 @@ defmodule Elara.Server do
     Process.put(:input_images, %{})
 
     Process.put(
+      :thread_communication,
+      version == 2 and is_list(extensions) and "thread_communication_v1" in extensions
+    )
+
+    Process.put(
       :input_queue,
       version == 2 and is_list(extensions) and "input_queue_v1" in extensions
     )
@@ -138,11 +143,20 @@ defmodule Elara.Server do
               attached_message(version, mode, attachment, lifetime)
               |> Map.put("cwd", Elara.cwd(session)),
               "extensions",
-              Enum.filter(["provider_visibility_v1", "input_attachments_v1", "input_queue_v1"], fn
-                "provider_visibility_v1" -> Process.get(:provider_visibility)
-                "input_attachments_v1" -> Process.get(:input_attachments)
-                "input_queue_v1" -> Process.get(:input_queue)
-              end)
+              Enum.filter(
+                [
+                  "provider_visibility_v1",
+                  "input_attachments_v1",
+                  "input_queue_v1",
+                  "thread_communication_v1"
+                ],
+                fn
+                  "thread_communication_v1" -> Process.get(:thread_communication)
+                  "provider_visibility_v1" -> Process.get(:provider_visibility)
+                  "input_attachments_v1" -> Process.get(:input_attachments)
+                  "input_queue_v1" -> Process.get(:input_queue)
+                end
+              )
             )
           )
 
@@ -316,7 +330,14 @@ defmodule Elara.Server do
 
         ops =
           if Process.get(:input_queue),
-            do: ops,
+            do:
+              Enum.map(ops, fn
+                %{"op" => "set_inbox", "inbox" => inbox} = op ->
+                  Map.put(op, "inbox", negotiated_inbox(inbox))
+
+                op ->
+                  op
+              end),
             else: Enum.reject(ops, &(&1["op"] == "set_inbox"))
 
         message = Protocol.patch(seq, ops) |> Map.put("incarnation", incarnation)
@@ -344,7 +365,21 @@ defmodule Elara.Server do
         do: snapshot,
         else: Map.delete(snapshot, "provider_view")
 
-    if Process.get(:input_queue), do: snapshot, else: Map.delete(snapshot, "inbox")
+    if Process.get(:input_queue),
+      do: Map.update(snapshot, "inbox", %{}, &negotiated_inbox/1),
+      else: Map.delete(snapshot, "inbox")
+  end
+
+  defp negotiated_inbox(inbox) do
+    if Process.get(:thread_communication),
+      do: inbox,
+      else:
+        Map.update(
+          inbox,
+          "entries",
+          [],
+          &Enum.reject(&1, fn e -> e["kind"] in ["agent", "report"] end)
+        )
   end
 
   defp handle_command(
@@ -374,6 +409,7 @@ defmodule Elara.Server do
               "session_reload",
               "child_start",
               "child_list",
+              "thread_parent",
               "child_integrate",
               "child_cleanup",
               "child_stop_subtree"
@@ -511,7 +547,7 @@ defmodule Elara.Server do
   end
 
   defp lifecycle_cwd(session, command)
-       when command in ["session_list", "session_tree", "child_list"],
+       when command in ["session_list", "session_tree", "child_list", "thread_parent"],
        do: {:ok, Elara.cwd(session)}
 
   defp lifecycle_cwd(session, _command),
@@ -528,13 +564,30 @@ defmodule Elara.Server do
   end
 
   defp run_lifecycle_command(session, "child_list", _request, _provider, _cwd, lifetime) do
-    %{children: children, limit: limit} = Elara.Threads.list(session)
+    %{limit: limit} = Elara.Threads.list(session)
+    children = Elara.Threads.navigation(session)
 
     sessions =
       Enum.map(children, fn child ->
+        {:ok, status} = Elara.Threads.Communication.status(session, child["id"])
+
         Map.merge(child, %{
           "name" => child["assignment"],
-          "model" => get_in(child, ["settings", "model"]) || child["model"]
+          "model" => get_in(status.record, ["settings", "model"]) || child["model"],
+          "settings" => status.record["settings"],
+          "messages" => status.messages,
+          "notifications" =>
+            status.messages
+            |> Enum.filter(
+              &(&1["sender"] == child["id"] and &1["recipient"] == session and
+                  &1["kind"] == "report")
+            )
+            |> Enum.map(&(&1["sender"] <> "/" <> &1["id"])),
+          "pending_delivery" =>
+            Enum.count(
+              status.messages,
+              &(&1["recipient"] == session and &1["delivery"] in ["pending", "accepted", "queued"])
+            )
         })
       end)
 
@@ -546,6 +599,14 @@ defmodule Elara.Server do
        "child_limit" => limit,
        "lifetime" => Atom.to_string(lifetime)
      }}
+  end
+
+  defp run_lifecycle_command(session, "thread_parent", _request, _provider, _cwd, _lifetime) do
+    with {:ok, r} <- Elara.Threads.record(session) do
+      {:ok, %{"type" => "thread_open", "version" => 2, "session_id" => r["parent_id"]}}
+    else
+      _ -> {:error, :no_parent_thread}
+    end
   end
 
   defp run_lifecycle_command(session, command, request, _provider, _cwd, _lifetime)

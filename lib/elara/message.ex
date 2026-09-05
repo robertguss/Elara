@@ -17,7 +17,7 @@ defmodule Elara.Message do
   defmodule User do
     @type t :: %__MODULE__{text: String.t(), attachments: [map()]}
     @derive {Inspect, except: [:attachments]}
-    defstruct text: nil, attachments: []
+    defstruct text: nil, attachments: [], agent_source: nil
   end
 
   defmodule Assistant do

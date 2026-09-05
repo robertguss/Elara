@@ -44,6 +44,9 @@ pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
         true,
     ),
     ("children", "inspect/open/resume children (limit 4)", false),
+    ("threads", "parent/children and unread reports", false),
+    ("return", "open parent without changing control mode", false),
+    ("open", "THREAD_ID: open known thread", false),
     (
         "integrate",
         "CHILD_ID: apply result to clean parent index",

@@ -435,7 +435,8 @@ fn run_interactive(
             match connection.try_recv() {
                 Ok(Some(frame)) => {
                     dump_frame(args.event_dump, started, &frame);
-                    let created = (frame["type"] == "session_created")
+                    let created = (frame["type"] == "session_created"
+                        || frame["type"] == "thread_open")
                         .then(|| frame["session_id"].as_str().map(str::to_owned))
                         .flatten();
                     let fork_prompt = frame["prompt"].as_str().map(str::to_owned);
@@ -519,6 +520,9 @@ fn handle_frame(
 ) -> Result<(), String> {
     if model.attachment_reply(&frame) || model.session_reply(&frame) || model.input_receipt(&frame)
     {
+        return Ok(());
+    }
+    if frame["type"] == "thread_open" && frame["version"] == 2 {
         return Ok(());
     }
     if frame["type"] == "session_created" && frame["version"] == 2 {

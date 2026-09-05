@@ -169,6 +169,7 @@ pub struct Model {
     pub notice: Option<String>,
     pub lifetime: String,
     session_picker: Option<sessions::Picker>,
+    seen_thread_reports: HashSet<String>,
     session_detail: Option<String>,
     session_detail_scroll: u16,
     pub metrics: Metrics,
@@ -208,6 +209,7 @@ impl Model {
             lifetime: "embedded".into(),
             cwd: None,
             session_picker: None,
+            seen_thread_reports: HashSet::new(),
             session_detail: None,
             session_detail_scroll: 0,
             metrics: Metrics::default(),
@@ -1157,7 +1159,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "create",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, "thread_communication_v1"],
             "mode": mode,
             "cwd": std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).to_string_lossy()
         })
@@ -1165,7 +1167,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "attach",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, "thread_communication_v1"],
             "session_id": target,
             "mode": mode,
             "cursor": cursor.cursor,
@@ -1512,6 +1514,7 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
             match message["role"].as_str() {
                 Some("user") => {
                     let text = message["text"].as_str().unwrap_or_default();
+                    let agent = message["agent_source"].is_object();
                     // Keep literal tabs in the source mapping; expand only visual cells.
                     let lines = text
                         .split('\n')
@@ -1519,7 +1522,11 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
                         .map(|(i, line)| {
                             Line::from(vec![
                                 Span::styled(
-                                    if i == 0 { "you " } else { "    " },
+                                    if i == 0 {
+                                        if agent { "agent " } else { "you " }
+                                    } else {
+                                        "    "
+                                    },
                                     Style::default()
                                         .fg(Color::Cyan)
                                         .add_modifier(Modifier::BOLD),
@@ -2323,6 +2330,22 @@ mod tests {
         let rendered = render_frame(&model, 80, 24).unwrap();
         assert!(rendered.contains("you inspect the build"));
         assert!(rendered.contains("F2 safe paste"));
+    }
+
+    #[test]
+    fn agent_provenance_is_not_rendered_as_the_owner_in_any_layout() {
+        for layout in appearance::ViewLayout::ALL {
+            let mut model = fixture_model("idle");
+            model.appearance.layout = *layout;
+            model.projection.view["messages"] = json!([
+                {"role":"user","text":"child evidence","agent_source":{"sender":"child","recipient":"parent","message_id":"report"}},
+                {"role":"user","text":"owner correction"}
+            ]);
+            let rendered = render_frame(&model, 80, 24).unwrap();
+            assert!(rendered.contains("agent child evidence"), "{rendered}");
+            assert!(!rendered.contains("you child evidence"));
+            assert!(rendered.contains("you owner correction"));
+        }
     }
 
     #[test]

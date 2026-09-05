@@ -54,6 +54,16 @@ pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
             if let Some(picker) = &mut model.session_picker {
                 picker.loading = false;
                 picker.sessions = frame["sessions"].as_array().cloned().unwrap_or_default();
+                for child in &mut picker.sessions {
+                    if let Some(ids) = child["notifications"].as_array() {
+                        child["unread"] = json!(
+                            ids.iter()
+                                .filter_map(Value::as_str)
+                                .filter(|id| !model.seen_thread_reports.contains(*id))
+                                .count()
+                        );
+                    }
+                }
                 picker.error = None;
                 picker.child_limit = frame["child_limit"].as_u64();
             }
@@ -128,6 +138,7 @@ pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
         }
         KeyCode::Tab if picker.child_limit.is_some() => {
             if let Some(child) = filtered.get(picker.selected) {
+                mark_seen(&mut model.seen_thread_reports, child);
                 model.session_detail = Some(pretty(child));
                 model.session_detail_scroll = 0;
                 model.session_picker = None;
@@ -172,12 +183,19 @@ pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
                     model.session_picker = None;
                     return Some(InputAction::None);
                 }
+                mark_seen(&mut model.seen_thread_reports, filtered[picker.selected]);
                 return Some(InputAction::Reconnect(id.to_owned()));
             }
         }
         _ => {}
     }
     Some(InputAction::None)
+}
+
+fn mark_seen(seen: &mut std::collections::HashSet<String>, child: &Value) {
+    if let Some(ids) = child["notifications"].as_array() {
+        seen.extend(ids.iter().filter_map(Value::as_str).map(str::to_owned));
+    }
 }
 
 pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
@@ -211,7 +229,15 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
         area.x + area.width / 10,
         area.y + area.height / 8,
         area.width * 4 / 5,
-        area.height * 3 / 4,
+        if picker.child_limit.is_some() {
+            picker
+                .sessions
+                .len()
+                .saturating_add(7)
+                .min(usize::from(area.height * 3 / 4)) as u16
+        } else {
+            area.height * 3 / 4
+        },
     );
     let filtered: Vec<_> = picker
         .sessions
@@ -221,7 +247,8 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
     let mut lines = vec![Line::from(format!("Filter: {}", picker.query))];
     if let Some(limit) = picker.child_limit {
         lines.push(Line::from(format!(
-            "Limit {limit} running · Tab details · Enter open/resume"
+            "Limit {limit} running · {} · Tab details · Enter open",
+            model.mode
         )));
     }
     if picker.loading {
@@ -239,12 +266,13 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
     for (i, s) in filtered.iter().enumerate().skip(start).take(rows) {
         if picker.child_limit.is_some() {
             lines.push(Line::from(format!(
-                "{} {} · {} · {}",
+                "{} unread {} · {} · {} · {}",
                 if i == picker.selected { ">" } else { " " },
+                s["unread"].as_u64().unwrap_or(0),
                 s["state"].as_str().unwrap_or("unknown"),
                 display(s["name"].as_str().unwrap_or("unnamed"))
                     .chars()
-                    .take(30)
+                    .take(usize::from(rect.width.saturating_sub(45)).min(30))
                     .collect::<String>(),
                 s["id"]
                     .as_str()
@@ -290,7 +318,9 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
             workspace
         };
         lines.push(Line::from(workspace));
-        lines.push(Line::from(if picker.child_limit.is_some() {
+        lines.push(Line::from(if selected["state"] == "parent" {
+            "Parent thread · Enter returns · mode preserved".to_owned()
+        } else if picker.child_limit.is_some() {
             format!(
                 "{} · base {} · stop keeps work",
                 if selected["coding"] == true {
@@ -316,7 +346,7 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
     frame.render_widget(
         Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(
             if picker.child_limit.is_some() {
-                " Children · Esc close · /children refresh "
+                " Threads · Esc close · /threads refresh "
             } else if picker.branch {
                 if model.mode == "control" {
                     " Branch points · Enter fork · Esc close "
@@ -359,7 +389,7 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
                 json!({"version":2,"command":"child_start","assignment":assignment,"coding":mode == "coding","history":name == "delegate-fork"}),
             )
         }
-        "children" => {
+        "children" | "threads" => {
             model.session_picker = Some(Picker {
                 loading: true,
                 child_limit: Some(4),
@@ -367,6 +397,8 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
             });
             InputAction::Session(json!({"version":2,"command":"child_list"}))
         }
+        "return" => InputAction::Session(json!({"version":2,"command":"thread_parent"})),
+        "open" if !argument.is_empty() => InputAction::Reconnect(argument.to_owned()),
         "integrate" | "cleanup-child" if control && !argument.is_empty() => InputAction::Session(
             json!({"version":2,"command":if name == "integrate" { "child_integrate" } else { "child_cleanup" },"session_id":argument}),
         ),
@@ -633,6 +665,79 @@ mod tests {
     }
 
     #[test]
+    fn notification_acknowledgement_is_local_and_survives_resnapshot() {
+        let mut current = model("observe");
+        let list = json!({"type":"session_list","version":2,"child_limit":4,"sessions":[{"id":"child","name":"child","state":"completed","notifications":["child/completion:one"],"pending_delivery":0}]});
+        current.session_picker = Some(Picker::default());
+        reply(&mut current, &list);
+        assert_eq!(
+            current.session_picker.as_ref().unwrap().sessions[0]["unread"],
+            1
+        );
+        assert_eq!(
+            input(
+                &mut current,
+                &Event::Key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))
+            ),
+            Some(InputAction::None)
+        );
+        current.reconnect_from(model("observe"));
+        current.session_picker = Some(Picker::default());
+        reply(&mut current, &list);
+        assert_eq!(
+            current.session_picker.as_ref().unwrap().sessions[0]["unread"],
+            0
+        );
+        let mut another = model("observe");
+        another.session_picker = Some(Picker::default());
+        reply(&mut another, &list);
+        assert_eq!(
+            another.session_picker.as_ref().unwrap().sessions[0]["unread"],
+            1
+        );
+    }
+
+    #[test]
+    fn related_thread_navigation_keeps_observers_read_only_in_every_layout() {
+        for layout in crate::appearance::ViewLayout::ALL {
+            let mut current = model("observe");
+            current.appearance.layout = *layout;
+            current.editor.insert("/threads");
+            assert_eq!(
+                palette_command(&mut current),
+                Some(InputAction::Session(
+                    json!({"version":2,"command":"child_list"})
+                ))
+            );
+            reply(
+                &mut current,
+                &json!({"type":"session_list","version":2,"child_limit":4,"sessions":[{"id":"parent","name":"Return to parent","state":"parent","cwd":"/project","unread":3}]}),
+            );
+            let frame = crate::render_frame(&current, 80, 24).unwrap();
+            for text in ["Return to parent", "unread 3", "observe", "mode preserved"] {
+                assert!(frame.contains(text), "missing {text}: {frame}");
+            }
+            input(
+                &mut current,
+                &Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            );
+            current.editor.insert("/return");
+            assert_eq!(
+                palette_command(&mut current),
+                Some(InputAction::Session(
+                    json!({"version":2,"command":"thread_parent"})
+                ))
+            );
+            current.editor.insert("/open known-thread");
+            assert_eq!(
+                palette_command(&mut current),
+                Some(InputAction::Reconnect("known-thread".into()))
+            );
+            assert_eq!(current.mode, "observe");
+        }
+    }
+
+    #[test]
     fn child_picker_limit_inspection_resume_and_retention_in_all_layouts() {
         for layout in crate::appearance::ViewLayout::ALL {
             for (width, height) in [(80, 24), (120, 40)] {
@@ -652,7 +757,8 @@ mod tests {
                 );
                 let frame = crate::render_frame(&current, width, height).unwrap();
                 for text in [
-                    "Children",
+                    "Threads",
+                    "unread 0",
                     "Limit 4",
                     "Coding λ",
                     "coding worktree",

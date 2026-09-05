@@ -10,8 +10,10 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** [INPUT-1](#input-1--file-references-and-image-attachments-from-disk)
-is IN PROGRESS. PROV-2 is pushed in `fb7a6a3`. TUI-7 is pushed in `0c968dc`;
+**Current:** INPUT-1 is DONE and pushed in `57f930c`.
+[INST-1](#inst-1--standard-project-instructions-and-agent-skills) is next (TODO).
+Work is paused at this completed checkpoint at the owner’s request for the night.
+PROV-2 is pushed in `fb7a6a3`. TUI-7 is pushed in `0c968dc`;
 its hands-on acceptance remains owner-deferred. TUI-5 is pushed in `e7c67bf`;
 TUI-4 in `de46872`.
 TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred while away and does
@@ -35,10 +37,11 @@ with the next concrete action. Close test terminal windows after testing.
 | TUI-5 tool inspection | Implementation verified | 59 Rust TUI tests; 8 product tests; 340 offline Linux tests |
 | TUI-7 layouts, themes, and appearance | Implementation verified | 72 Rust TUI tests; 9 product tests; 341 offline Linux tests; all five review findings fixed |
 | PROV-2 subscription visibility and controls | Complete | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof |
+| INPUT-1 file references and image attachments | Complete | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** implement INPUT-1 file references and disk image attachments,
-then verify model delivery through the subscription route. Manual acceptance
-requiring the absent owner stays deferred.
+**Next action:** when work resumes, implement INST-1 project instruction scope
+and on-demand Agent Skills discovery/loading. No item is mid-implementation.
+Manual acceptance requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -98,7 +101,7 @@ HTML prototypes or existing batch coordinator already implement them.
 
 Build the TUI foundations first, then provider/input and session controls, then
 persistent communicating threads and automatic handoff. Both the TUI and threads
-must be usable before SPLIT-5. INPUT-1 is the current executable item;
+must be usable before SPLIT-5. INST-1 is the next executable item;
 TUI-3/TUI-4/TUI-5/TUI-7 manual acceptance is owner-deferred. Later slices are bounded vertical deliveries; the expanded scope must not be hidden
 inside the composer or session picker.
 
@@ -205,8 +208,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | TUI-5   | DEFERRED | Inspectable typed tool blocks                                 | TUI-4            |
 | TUI-7   | DEFERRED | Three layouts and four independent dark themes               | TUI-5            |
 | PROV-2  | DONE     | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
-| INPUT-1 | IN PROGRESS | File references and image attachments from disk            | PROV-2           |
-| INST-1  | BLOCKED  | Standard project instructions and Agent Skills               | INPUT-1          |
+| INPUT-1 | DONE     | File references and image attachments from disk               | PROV-2           |
+| INST-1  | TODO     | Standard project instructions and Agent Skills               | INPUT-1          |
 | TUI-6   | BLOCKED  | In-TUI session lifecycle and action discovery                 | INST-1           |
 | CTRL-1  | BLOCKED  | Durable input queue, steering, and execution preferences      | TUI-6            |
 | THREAD-1 | BLOCKED | Persistent delegated threads and preserved workspaces        | CTRL-1           |
@@ -1683,7 +1686,7 @@ owner-deferred; no required PROV-2 implementation work remains.
 
 ## INPUT-1 — File references and image attachments from disk
 
-**Status:** IN PROGRESS — PROV-2 pushed; image route capability verified
+**Status:** DONE — pushed `57f930c`
 
 ### Outcome
 
@@ -1721,7 +1724,7 @@ model actually receives, while keeping input inspectable and recoverable.
 
 ### Result
 
-**IN PROGRESS (2026-09-04; implementation verified, publication pending).**
+**DONE (2026-09-04; pushed `57f930c`).**
 F8 and explicit `@path` selection discover workspace references; F9 ingests a
 local PNG, including paths outside the workspace; F10 inspects/removes selected
 items. Elixir owns bounded discovery, validation, immutable submission content,
@@ -1754,14 +1757,14 @@ findings were addressed: image-bearing context estimates are explicitly unknown
 and avoid image reserialization; text ingestion uses a bounded native read with
 regular-file verification; file discovery coalesces outstanding queries; provider
 and attachment pickers have exclusive keyboard ownership. Final post-fix shared
-checks and all twelve macOS product tests pass; publication remains pending.
+checks and all twelve macOS product tests pass; implementation is pushed.
 Physical terminal acceptance stays owner-deferred. Authority, Rust presentation, protocol,
 fixtures, and cross-runtime debugging all required work; exact time shares were
 not measured and remain unknown.
 
 ## INST-1 — Standard project instructions and Agent Skills
 
-**Status:** BLOCKED on INPUT-1
+**Status:** TODO — INPUT-1 pushed; next after the overnight stopping point
 
 ### Outcome
 
@@ -1796,6 +1799,13 @@ including delegated children and fresh handoff sessions.
 
 Sources: [AGENTS.md](https://agents.md/) and
 [Agent Skills specification](https://agentskills.io/specification).
+
+### Result
+
+**TODO (2026-09-04).** INPUT-1 is complete and pushed in `57f930c`. This item
+has not started; work paused at the owner’s requested overnight stopping point.
+Next, implement scoped project instructions and selective standard skill loading,
+then verify their influence through the public session/tool path.
 
 ## TUI-6 — In-TUI session lifecycle and action discovery
 

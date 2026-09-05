@@ -10,9 +10,9 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** TUI-7 implementation and review are complete; its hands-on
-acceptance is owner-deferred. [PROV-2](#prov-2--chatgpt-reasoning-visibility-model-controls-and-usage)
-is the next executable item. TUI-5 is pushed in `e7c67bf`; TUI-4 in `de46872`.
+**Current:** [PROV-2](#prov-2--chatgpt-reasoning-visibility-model-controls-and-usage)
+is IN PROGRESS. TUI-7 is pushed in `0c968dc`; its hands-on acceptance remains
+owner-deferred. TUI-5 is pushed in `e7c67bf`; TUI-4 in `de46872`.
 TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred while away and does
 not block later implementation.
 
@@ -202,7 +202,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | TUI-4   | DEFERRED | Navigable transcript controller                               | TUI-3            |
 | TUI-5   | DEFERRED | Inspectable typed tool blocks                                 | TUI-4            |
 | TUI-7   | DEFERRED | Three layouts and four independent dark themes               | TUI-5            |
-| PROV-2  | TODO     | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
+| PROV-2  | IN PROGRESS | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
 | INPUT-1 | BLOCKED  | File references and image attachments from disk               | PROV-2           |
 | INST-1  | BLOCKED  | Standard project instructions and Agent Skills               | INPUT-1          |
 | TUI-6   | BLOCKED  | In-TUI session lifecycle and action discovery                 | INST-1           |
@@ -1555,7 +1555,7 @@ the preserved prototype, original screenshots, and limits of that evidence.
 
 ### Result
 
-**IMPLEMENTED; hands-on acceptance deferred (2026-09-04).** The bounded [subscription capability preflight](docs/subscription-capability-preflight.md)
+**IMPLEMENTED and pushed in `0c968dc`; hands-on acceptance deferred (2026-09-04).** The bounded [subscription capability preflight](docs/subscription-capability-preflight.md)
 is complete, with sanitized request/response evidence. Existing Codex subscription
 authentication worked without refresh, credential copying, or changing project
 defaults. Four synthetic requests completed: gpt-5.5 low/high reasoning summaries,
@@ -1595,7 +1595,7 @@ persisted as canonical conversation content.
 
 ## PROV-2 — ChatGPT reasoning visibility, model controls, and usage
 
-**Status:** TODO — TUI-7 implementation verified; subscription preflight recorded
+**Status:** IN PROGRESS — TUI-7 pushed; subscription preflight recorded
 
 ### Outcome
 
@@ -1641,6 +1641,18 @@ No hidden-reasoning reconstruction and no promise of raw internal thoughts.
 Support is conditional on what the provider exposes. If a required capability
 cannot be verified, report it as a blocker with evidence rather than treating a
 placeholder as completion. Existing provider behavior remains compatible.
+
+### Result
+
+**IN PROGRESS (2026-09-04).** TUI-7 is pushed in `0c968dc`. Use the verified
+subscription contract and sanitized fixtures from the preflight. The Codex-only
+unsupported default will become `gpt-5.5`; provider choice remains explicit.
+Add opt-in, read-only use of the existing Codex login without copying or rotating
+its credentials. Implement typed public reasoning/commentary/final content,
+authority-owned model/effort controls, and honest usage/context evidence through
+Core, persistence, protocol, and all three TUI layouts. Verify offline recovery
+and a bounded real subscription turn; keep encrypted reasoning and tokens out
+of display data and logs.
 
 ## INPUT-1 — File references and image attachments from disk
 

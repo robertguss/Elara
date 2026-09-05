@@ -411,8 +411,24 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
     }
     set_nonblocking(control_fd)?;
 
-    if !manager_alive(control_fd)? {
-        return Ok(());
+    match read_control(control_fd)? {
+        Control::Alive => {}
+        Control::Cancel => {
+            // The manager still owns a submitted job. Report proven non-start
+            // so its caller can retire the job even when cancellation wins the
+            // race with command spawn.
+            write_json_fd(
+                event_fd,
+                &json!({
+                    "id": request.id,
+                    "ev": "rejected",
+                    "stage": "cancel",
+                    "message": "cancelled before spawn"
+                }),
+            )?;
+            return Ok(());
+        }
+        Control::ManagerGone => return Ok(()),
     }
 
     let output = pipe()?;
@@ -572,13 +588,6 @@ enum Control {
     Alive,
     Cancel,
     ManagerGone,
-}
-
-fn manager_alive(fd: RawFd) -> io::Result<bool> {
-    match read_control(fd)? {
-        Control::Alive => Ok(true),
-        Control::Cancel | Control::ManagerGone => Ok(false),
-    }
 }
 
 fn read_control(fd: RawFd) -> io::Result<Control> {
@@ -809,6 +818,48 @@ fn close_fd(fd: RawFd) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cancellation_before_spawn_reports_rejection_but_manager_loss_stays_silent() {
+        for cancelled in [true, false] {
+            let control = pipe().unwrap();
+            let events = pipe().unwrap();
+            if cancelled {
+                write_all_fd(control[1], b"C").unwrap();
+            } else {
+                close_fd(control[1]);
+            }
+
+            let request = Request {
+                id: "pre-spawn".into(),
+                op: "run".into(),
+                argv: vec!["/bin/sh".into(), "-c".into(), "exit 99".into()],
+                cwd: Some(env::temp_dir().to_string_lossy().into_owned()),
+                env: HashMap::new(),
+                max_bytes: 128,
+                timeout_ms: 1000,
+            };
+            guardian_loop(&request, control[0], events[1]).unwrap();
+            close_fd(control[0]);
+            if cancelled {
+                close_fd(control[1]);
+            }
+            close_fd(events[1]);
+            let mut output = String::new();
+            unsafe { std::fs::File::from_raw_fd(events[0]) }
+                .read_to_string(&mut output)
+                .unwrap();
+
+            if cancelled {
+                let event: Value = serde_json::from_str(&output).unwrap();
+                assert_eq!(event["id"], "pre-spawn");
+                assert_eq!(event["ev"], "rejected");
+                assert_eq!(event["stage"], "cancel");
+            } else {
+                assert!(output.is_empty());
+            }
+        }
+    }
 
     #[test]
     fn attachment_reader_rejects_replaced_fifo_and_symlink_without_waiting() {

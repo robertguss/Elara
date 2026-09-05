@@ -10,10 +10,11 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** [TUI-5 — tool inspection](#tui-5--inspectable-typed-tool-blocks)
-is IN PROGRESS. TUI-4 implementation and review fixes are pushed in `de46872`. TUI-3 and
-TUI-4 hands-on acceptance are DEFERRED by the owner's 2026-09-04 instruction
-while away. Those checks remain unverified and do not block later implementation.
+**Current:** TUI-5 implementation is verified and reviewed. The next action is
+the subscription-capability preflight required before
+[TUI-7 — layouts and themes](#tui-7--three-layouts-and-four-independent-dark-themes).
+TUI-3/TUI-4/TUI-5 hands-on acceptance is DEFERRED by the owner's instruction while
+away. Those checks remain unverified and do not block later implementation.
 
 Update this handoff and each item's Result after verified milestones. Continue
 available agent work autonomously, committing and pushing completed changes;
@@ -30,9 +31,9 @@ with the next concrete action. Close test terminal windows after testing.
 | TUI-4 anchored scrolling, focus, and follow-tail | Implementation verified | Semantic anchors, cached wrapping, explicit follow-tail; 45 Rust tests |
 | TUI-4 search, selection, and clipboard | Implementation verified | Search paste preserves draft; review fixes cover reverse/stale drags and focus |
 | TUI-4 actions, help, product checks | Complete | 7 TUI product tests; 339 full Linux tests; both Rust crates pass checks |
-| TUI-5 tool inspection | In progress | Compact/expanded/fullscreen typed tool views |
+| TUI-5 tool inspection | Implementation verified | 59 Rust TUI tests; 8 product tests; 340 offline Linux tests |
 
-**Next action:** implement and verify TUI-5 typed tool inspection. Manual-only
+**Next action:** run the TUI-7 provider-capability preflight after publishing TUI-5. Manual-only
 acceptance that requires the absent owner stays explicitly deferred, not passed.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -81,7 +82,7 @@ evidence, and reversal signals; this file holds the queue and status.
 
 The foundations are shipped, but the current Rust client is not yet a credible
 daily driver. TUI-3 implements the multiline composer and TUI-4 adds independent transcript
-navigation. Tool inspection is still unstructured and session selection is CLI-oriented. Starting SPLIT-5 in that state would measure missing product basics
+navigation. TUI-5 adds typed tool inspection; session selection is still CLI-oriented. Starting SPLIT-5 in that state would measure missing product basics
 rather than the Elixir/Rust boundary.
 
 [`xai-org/grok-build`](https://github.com/xai-org/grok-build) remains the
@@ -93,7 +94,7 @@ HTML prototypes or existing batch coordinator already implement them.
 
 Build the TUI foundations first, then provider/input and session controls, then
 persistent communicating threads and automatic handoff. Both the TUI and threads
-must be usable before SPLIT-5. TUI-5 is the next executable item; TUI-3/TUI-4 manual acceptance is owner-deferred. Later
+must be usable before SPLIT-5. TUI-7 preflight is next; TUI-3/TUI-4/TUI-5 manual acceptance is owner-deferred. Later
 slices are bounded vertical deliveries; the expanded scope must not be hidden
 inside the composer or session picker.
 
@@ -197,8 +198,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | TUI-2   | DONE     | Render assistant Markdown in the Rust TUI                     | MAC-1            |
 | TUI-3   | DEFERRED | Cursor-aware multiline daily-driver composer                  | TUI-2            |
 | TUI-4   | DEFERRED | Navigable transcript controller                               | TUI-3            |
-| TUI-5   | IN PROGRESS | Inspectable typed tool blocks                                 | TUI-4            |
-| TUI-7   | BLOCKED  | Three layouts and four independent dark themes               | TUI-5            |
+| TUI-5   | DEFERRED | Inspectable typed tool blocks                                 | TUI-4            |
+| TUI-7   | TODO     | Three layouts and four independent dark themes               | TUI-5            |
 | PROV-2  | BLOCKED  | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
 | INPUT-1 | BLOCKED  | File references and image attachments from disk               | PROV-2           |
 | INST-1  | BLOCKED  | Standard project instructions and Agent Skills               | INPUT-1          |
@@ -1417,7 +1418,7 @@ detaches while searching; safe-paste mode retains precedence.
 
 ## TUI-5 — Inspectable typed tool blocks
 
-**Status:** IN PROGRESS — TUI-4 pushed; hands-on acceptance deferred by owner
+**Status:** DEFERRED — implementation verified; hands-on acceptance postponed by owner
 
 ### Outcome
 
@@ -1452,14 +1453,52 @@ renderer for every plugin, or removal of source byte limits.
 
 ### Result
 
-**IN PROGRESS (2026-09-04).** TUI-4 pushed in `de46872`. Implement compact,
-expanded, and fullscreen typed tool inspection. Reuse transcript navigation/search/
-selection; preserve canonical outcomes and explicitly distinguish retained text
-from upstream truncation. Physical acceptance remains owner-deferred while away.
+**DEFERRED (2026-09-04): implementation verified and reviewed; hands-on
+acceptance postponed by owner.** Tool blocks use canonical call IDs and states, with typed bash/
+read/write/edit summaries and a generic fallback. Space or the left gutter
+expands/collapses; `f` or right-click opens fullscreen; Esc or right-click restores
+the transcript viewport. Expanded/viewer copies include retained JSON arguments
+and sanitized result text. Successful edit replacement snippets use canonical
+old/new arguments, never workspace rereads or invented full-file prior contents.
+
+- Verification: 59 Rust TUI tests and 3 execution-stub tests; both crates pass
+  format and all-target Clippy. All 8 macOS TUI product tests and all 340 Mix tests
+  in the offline, unprivileged Linux ARM64 environment pass, with formatting and
+  warnings-as-errors compilation.
+- The new product test invokes the real read tool on a 60-line Unicode file,
+  then exercises keyboard expansion/fullscreen, pasted search deep in the
+  result, complete retained-output copying, 80x24 → 120x40 → 180x45 → 80x24 →
+  120x40 PTY resize with fresh result-body assertions at each size, viewport
+  restoration at a different size, gutter collapse, right-click open/close, and
+  submission of the preserved draft. It failed against TUI-4 before the viewer
+  existed and now passes. Clipboard commands use an isolated subprocess sink.
+- Simplification found and fixed a canonical-call shadowing defect; the existing
+  Linux interruption product test also reproduced the false pending state. A
+  new normal-transcript regression verifies running/succeeded/failed/
+  indeterminate outcomes. Borrowed canonical calls replace redundant cloned
+  reconciliation, and compact previews process only the required characters.
+- Truncation notices identify text markers; a trailing marker is explicitly
+  source-unverified because the current protocol does not expose typed cap
+  metadata or configured limits. No numeric session
+  cap is fabricated. Broad fold-state pruning and offscreen virtualization were
+  skipped as separate behavior/design work.
+- Review completed (`20260904-202126-d305fa2f`) with six local lenses and an
+  independent Claude Opus 5 pass. All seven validated findings were fixed:
+  bounded generic JSON previews, visible viewer connection state, safe-paste
+  composer visibility, lifecycle-stable selection, resize rendering assertions,
+  non-tool right-click selection, and honest truncation-marker attribution.
+  Argument/result sections now retain section-relative selection, anchor, and
+  drag offsets across status/notice changes. Five behavioral regressions failed
+  before the fixes and now pass; generic preview work is bounded for large
+  strings, arrays, and keys. No actionable findings remain.
+- Physical keyboard/mouse and actual Ghostty/WezTerm inspection/resize acceptance
+  remain owner-deferred while away; PTY event injection is not physical
+  acceptance. No new terminal GUI windows were opened for TUI-5.
+
 
 ## TUI-7 — Three layouts and four independent dark themes
 
-**Status:** BLOCKED on TUI-5
+**Status:** TODO — provider-capability preflight before implementation
 
 ### Outcome
 
@@ -1511,6 +1550,15 @@ the preserved prototype, original screenshots, and limits of that evidence.
 - Capture terminal screenshots for comparison with the approved visual studies
   and complete the shared checks. Prototypes are reference material, not code
   to transplant into ratatui.
+
+### Result
+
+**TODO (2026-09-04).** Begin with the bounded capability preflight after TUI-5 is
+pushed. Elara has no saved subscription login; Codex has an existing local
+subscription token set available for a bounded check. Do not expose credentials,
+change billing route, or treat API documentation as proof of subscription
+capabilities. Record observed, unsupported, and unknown results before building
+dependent presentation. Physical acceptance remains owner-deferred while away.
 
 ## PROV-2 — ChatGPT reasoning visibility, model controls, and usage
 
@@ -1637,6 +1685,14 @@ Sources: [AGENTS.md](https://agents.md/) and
 ## TUI-6 — In-TUI session lifecycle and action discovery
 
 **Status:** BLOCKED on INST-1
+
+### Known issue to cover
+
+TUI-5 verification exposed an existing CLI parsing bug: URL-safe session IDs
+starting with `-` are rejected as unknown options by `Args::parse`. Reproduced
+with `-XRyHg3MnKDpFahPkoG7BA` during the macOS product suite. Fix and test session
+attachment argument handling as part of this lifecycle item; do not regenerate
+IDs or weaken product tests to hide the failure.
 
 ### Outcome
 

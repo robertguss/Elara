@@ -229,6 +229,52 @@ defmodule Elara.TuiTest do
     assert output =~ "Transcript PTY passed"
   end
 
+  @tag timeout: 60_000
+  test "interactive tool inspection exposes retained output and preserves the draft", context do
+    cwd = Path.dirname(context.state_dir)
+
+    content =
+      Enum.map_join(1..60, "\n", fn row ->
+        marker = if row == 55, do: "HIDDEN_MARKER ", else: ""
+        "#{marker}row #{row}: " <> String.duplicate("retained Unicode 界 é 👩‍💻 ", 4)
+      end)
+
+    File.write!(Path.join(cwd, "inspection.txt"), content)
+    call = %ToolCall{id: "inspect-read", name: "read", args: {:ok, %{"path" => "inspection.txt"}}}
+
+    {:ok, session} =
+      Elara.start_session(
+        provider:
+          script([
+            {:ok, asst(nil, [call])},
+            {:ok, asst("inspection complete")},
+            {:ok, asst("accepted")}
+          ]),
+        cwd: cwd,
+        persist: false
+      )
+
+    assert {:ok, "inspection complete"} = Elara.ask(session, "inspect the file")
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+
+    {output, status} =
+      System.cmd(
+        System.find_executable("python3") || flunk("python3 is required"),
+        [
+          Path.expand("../support/tool_inspection_pty.py", __DIR__),
+          context.binary,
+          Integer.to_string(Elara.Server.port(server)),
+          session,
+          Path.join(cwd, "inspection.txt")
+        ],
+        env: [{"ELARA_TUI_STATE_DIR", context.state_dir}],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+    assert output =~ "Tool inspection PTY passed"
+  end
+
   test "cold snapshot, create, and live session list use the Rust client", context do
     {:ok, session} =
       Elara.start_session(

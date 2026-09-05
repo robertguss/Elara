@@ -13,6 +13,7 @@ pub(crate) struct Entry {
     pub stream: bool,
     pub prefix: usize,
     pub final_id: Option<String>,
+    pub sections: Vec<(&'static str, std::ops::Range<usize>)>,
 }
 impl Entry {
     pub fn plain(id: &str, text: &str, user: bool) -> Self {
@@ -24,6 +25,7 @@ impl Entry {
             stream: false,
             prefix: 0,
             final_id: None,
+            sections: Vec::new(),
         }
     }
     pub fn rendered(id: String, lines: Vec<Line<'static>>, user: bool, stream: bool) -> Self {
@@ -47,6 +49,7 @@ impl Entry {
             stream,
             prefix: 1,
             final_id: None,
+            sections: Vec::new(),
         }
     }
 }
@@ -157,6 +160,16 @@ impl Transcript {
                     }
                 }
                 if let Some(entry) = entries.iter().find(|e| e.id == point.id) {
+                    if let Some(previous) = self.entries.iter().find(|e| e.id == point.id)
+                        && let Some((name, old)) = previous
+                            .sections
+                            .iter()
+                            .find(|(_, range)| range.start <= point.byte && point.byte <= range.end)
+                        && let Some((_, new)) =
+                            entry.sections.iter().find(|(section, _)| section == name)
+                    {
+                        point.byte = new.start + (point.byte - old.start).min(new.len());
+                    }
                     point.byte = point.byte.min(entry.text.len());
                     point.byte = entry
                         .text

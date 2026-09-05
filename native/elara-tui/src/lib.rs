@@ -1,8 +1,9 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{HashSet, VecDeque};
 
 mod actions;
 mod clipboard;
 mod editor;
+mod tools;
 mod transcript;
 pub use editor::Editor;
 use std::cell::RefCell;
@@ -142,6 +143,8 @@ pub struct Model {
     pub enhanced_keyboard: bool,
     pub show_help: bool,
     transcript: RefCell<transcript::Transcript>,
+    expanded_tools: HashSet<String>,
+    viewer: Option<(String, transcript::Transcript)>,
     pending_replies: VecDeque<PendingReply>,
     // Acceptance can remain uncertain after the turn's metrics have finished.
     pending_ask: Option<(u64, Instant)>,
@@ -166,12 +169,52 @@ impl Model {
             enhanced_keyboard: false,
             show_help: false,
             transcript: RefCell::new(transcript::Transcript::default()),
+            expanded_tools: HashSet::new(),
+            viewer: None,
             pending_replies: VecDeque::new(),
             pending_ask: None,
             last_outcome: None,
             notice: None,
             metrics: Metrics::default(),
             ask_sent_at: None,
+        }
+    }
+
+    fn selected_tool(&self) -> Option<String> {
+        let selected = self.transcript.borrow().selected.clone()?;
+        selected
+            .strip_prefix(&format!("{}:tool:", self.session_id))
+            .map(str::to_owned)
+    }
+
+    fn toggle_tool(&mut self) {
+        if self.viewer.is_some() {
+            return;
+        }
+        if let Some(id) = self.selected_tool() {
+            if !self.expanded_tools.remove(&id) {
+                self.expanded_tools.insert(id);
+            }
+            self.transcript.borrow_mut().source_key = None;
+        }
+    }
+
+    fn open_tool(&mut self) {
+        if self.viewer.is_some() {
+            return;
+        }
+        if let Some(id) = self.selected_tool() {
+            let mut state = transcript::Transcript::default();
+            state.focused = true;
+            state.follow = false;
+            let saved = self.transcript.replace(state);
+            self.viewer = Some((id, saved));
+        }
+    }
+
+    fn close_tool(&mut self) {
+        if let Some((_, saved)) = self.viewer.take() {
+            self.transcript.replace(saved);
         }
     }
 
@@ -384,12 +427,67 @@ pub fn handle_input(
     width: usize,
 ) -> InputAction {
     use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+    if model.safe_paste && model.viewer.is_some() {
+        model.close_tool();
+    }
     let insert = |model: &mut Model, text: &str| {
         if !model.editor.insert(text) {
             model.notice =
                 Some("Draft limit: 64 KiB. Insert rejected; existing text retained.".into());
         }
     };
+    if let Event::Mouse(mouse) = &event
+        && !model.safe_paste
+        && !model.show_help
+        && mouse.modifiers.is_empty()
+    {
+        use crossterm::event::{MouseButton, MouseEventKind};
+        let inside = model
+            .transcript
+            .borrow()
+            .rect
+            .contains((mouse.column, mouse.row).into());
+        if inside && matches!(mouse.kind, MouseEventKind::Down(MouseButton::Right)) {
+            if model.viewer.is_some() {
+                model.transcript.borrow_mut().drag_anchor = None;
+                model.close_tool();
+            } else {
+                let point = model
+                    .transcript
+                    .borrow()
+                    .mouse_point(mouse.column, mouse.row, false);
+                if let Some(point) =
+                    point.filter(|p| p.id.starts_with(&format!("{}:tool:", model.session_id)))
+                {
+                    model.transcript.borrow_mut().drag_anchor = None;
+                    model.transcript.borrow_mut().selected = Some(point.id);
+                    model.open_tool();
+                }
+            }
+            return InputAction::None;
+        }
+        if inside
+            && mouse.kind == MouseEventKind::Down(MouseButton::Left)
+            && mouse.column < model.transcript.borrow().rect.x + 3
+        {
+            let point = model
+                .transcript
+                .borrow()
+                .mouse_point(mouse.column, mouse.row, false);
+            if point.as_ref().is_some_and(|p| {
+                p.byte < 3 && p.id.starts_with(&format!("{}:tool:", model.session_id))
+            }) {
+                let mut state = model.transcript.borrow_mut();
+                state.focused = true;
+                state.scroll(0);
+                state.selected = point.map(|p| p.id);
+                state.drag_anchor = None;
+                drop(state);
+                model.toggle_tool();
+                return InputAction::None;
+            }
+        }
+    }
     if let Event::Mouse(mouse) = &event {
         use crossterm::event::MouseEventKind;
         if matches!(mouse.kind, MouseEventKind::Down(_) | MouseEventKind::Up(_)) {
@@ -450,6 +548,9 @@ pub fn handle_input(
             let focused = model.transcript.borrow().focused;
             let action = actions::lookup(key, focused);
             if action == Some(Action::SafePaste) && key.kind == KeyEventKind::Press {
+                if !model.safe_paste {
+                    model.close_tool();
+                }
                 model.safe_paste = !model.safe_paste;
                 model.safe_paste_cr = false;
                 return InputAction::None;
@@ -520,11 +621,19 @@ pub fn handle_input(
                 return InputAction::None;
             }
             match action {
+                Some(Action::ToggleTool) if focused => model.toggle_tool(),
+                Some(Action::ToolViewer) if focused => model.open_tool(),
                 Some(Action::Focus) => {
-                    model.transcript.borrow_mut().focused = !focused;
+                    if model.viewer.is_some() {
+                        model.close_tool();
+                    } else {
+                        model.transcript.borrow_mut().focused = !focused;
+                    }
                 }
                 Some(Action::Escape) => {
-                    if focused && key.code == KeyCode::Esc {
+                    if model.viewer.is_some() && key.code == KeyCode::Esc {
+                        model.close_tool();
+                    } else if focused && key.code == KeyCode::Esc {
                         model.transcript.borrow_mut().focused = false;
                     } else {
                         return InputAction::Detach;
@@ -830,6 +939,79 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
         );
         return;
     }
+    if let Some((id, _)) = &model.viewer {
+        let view = &model.projection.view;
+        let call = view["tool_calls"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|call| call["id"] == *id);
+        let name = call
+            .and_then(|call| call["name"].as_str())
+            .unwrap_or("unavailable");
+        let viewer_area = ratatui::layout::Rect {
+            height: area.height.saturating_sub(1),
+            ..area
+        };
+        let mut state = model.transcript.borrow_mut();
+        state.rect = viewer_area.inner(ratatui::layout::Margin::new(1, 1));
+        let source_key = (
+            model.session_id.clone(),
+            model.projection.incarnation.clone(),
+            model.projection.head,
+            model.projection.snapshot_generation,
+        );
+        let entries = if state.source_key.as_ref() != Some(&source_key) {
+            state.source_key = Some(source_key);
+            Some(vec![
+                call.map(|call| tools::entry(&model.session_id, call, true))
+                    .unwrap_or_else(|| {
+                        transcript::Entry::plain(id, "Tool unavailable in current snapshot.", false)
+                    }),
+            ])
+        } else {
+            None
+        };
+        state.update(
+            entries,
+            state_width(viewer_area.width),
+            viewer_area.height.saturating_sub(2) as usize,
+        );
+        frame.render_widget(
+            Paragraph::new(state.visible_lines()).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(format!(" Tool viewer · {name} · Esc/right-click close "))
+                    .title_bottom(state.title()),
+            ),
+            viewer_area,
+        );
+        let status_area =
+            ratatui::layout::Rect::new(area.x, area.bottom().saturating_sub(1), area.width, 1);
+        let connection = match model.connection {
+            ConnectionState::Connected => "connected",
+            ConnectionState::Resynchronizing => "resynchronizing",
+            ConnectionState::Detached => "detached",
+        };
+        let pending = if model.pending_ask.is_some() {
+            " · Awaiting acceptance · draft retained"
+        } else {
+            ""
+        };
+        frame.render_widget(
+            Paragraph::new(format!(
+                "{connection}{pending} · {} · {} · {}",
+                model.mode,
+                model.turn_state(),
+                model
+                    .notice
+                    .as_deref()
+                    .unwrap_or("/ search · y copy entry · c copy selection · PgUp/PgDn scroll")
+            )),
+            status_area,
+        );
+        return;
+    }
     let editor_layout = model
         .editor
         .layout(area.width.saturating_sub(2).max(1) as usize);
@@ -988,15 +1170,8 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
     use transcript::Entry;
     let mut entries = Vec::new();
     let view = &model.projection.view;
-    let statuses = view["tool_calls"]
-        .as_array()
-        .map(|calls| {
-            calls
-                .iter()
-                .filter_map(|call| Some((call["id"].as_str()?, call)))
-                .collect::<BTreeMap<_, _>>()
-        })
-        .unwrap_or_default();
+    let canonical_calls = tools::calls(view);
+    let mut rendered_tools = HashSet::new();
     if let Some(messages) = view["messages"].as_array() {
         for (index, message) in messages.iter().enumerate() {
             let id = format!("{}:message:{index}", model.session_id);
@@ -1035,61 +1210,28 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
                     if let Some(calls) = message["tool_calls"].as_array() {
                         for call in calls {
                             let id = call["id"].as_str().unwrap_or("?");
-                            let name = call["name"].as_str().unwrap_or("?");
-                            let status = statuses
-                                .get(id)
-                                .and_then(|v| v["status"].as_str())
-                                .unwrap_or("pending");
-                            let mut entry = Entry::rendered(
-                                format!("{}:tool:{id}", model.session_id),
-                                vec![Line::from(vec![
-                                    Span::raw("    "),
-                                    Span::raw(format!("{name} · {status}")),
-                                ])],
-                                false,
-                                false,
-                            );
-                            entry.lines[0].style = Style::default().fg(match status {
-                                "succeeded" => Color::Blue,
-                                "failed" | "indeterminate" => Color::Red,
-                                "running" => Color::Yellow,
-                                _ => Color::DarkGray,
-                            });
-                            entries.push(entry);
+                            if let Some(call) = canonical_calls.get(id) {
+                                entries.push(tools::entry(
+                                    &model.session_id,
+                                    call,
+                                    model.expanded_tools.contains(id),
+                                ));
+                                rendered_tools.insert(id.to_owned());
+                            }
                         }
                     }
                 }
                 Some("tool") => {
-                    let name = message["name"].as_str().unwrap_or("?");
-                    let (kind, text) = outcome(&message["outcome"]);
-                    let tool_id = message["call_id"].as_str().unwrap_or("?");
-                    let lines = text
-                        .split('\n')
-                        .enumerate()
-                        .map(|(i, line)| {
-                            Line::from(vec![
-                                Span::styled(
-                                    if i == 0 {
-                                        format!("    {name} · {kind} · ")
-                                    } else {
-                                        "      ".into()
-                                    },
-                                    Style::default().fg(if kind == "ok" {
-                                        Color::Blue
-                                    } else {
-                                        Color::Red
-                                    }),
-                                ),
-                                Span::styled(line.to_owned(), Style::default().fg(Color::DarkGray)),
-                            ])
-                        })
-                        .collect();
-                    entries.push(Entry::rendered(
-                        format!("{}:outcome:{tool_id}", model.session_id),
-                        lines,
-                        false,
-                        false,
-                    ));
+                    let id = message["call_id"].as_str().unwrap_or("?");
+                    if rendered_tools.insert(id.to_owned())
+                        && let Some(call) = canonical_calls.get(id)
+                    {
+                        entries.push(tools::entry(
+                            &model.session_id,
+                            call,
+                            model.expanded_tools.contains(id),
+                        ));
+                    }
                 }
                 _ => {}
             }
@@ -2103,13 +2245,21 @@ mod transcript_input_tests {
         assert!(frame.contains("y copy entry"));
     }
     #[test]
-    fn tool_entries_use_stable_call_ids_and_copy_only_outcome_content() {
+    fn tool_entries_use_stable_call_ids_and_retain_outcome_content() {
         let mut model = fixture_model("idle");
         model.projection.view["messages"].as_array_mut().unwrap().push(json!({"role":"tool","call_id":"stable","name":"bash","outcome":{"ok":"a\tb\nresult"}}));
+        model.projection.view["tool_calls"] = json!([{"id":"stable","name":"bash","args":{"ok":{"command":"echo result"}},"status":"succeeded","outcome":{"ok":"a\tb\nresult"}}]);
         let entries = transcript_entries(&model);
         let last = entries.last().unwrap();
-        assert!(last.id.ends_with(":outcome:stable"));
-        assert_eq!(last.text, "a\tb\nresult");
+        assert!(last.id.ends_with(":tool:stable"));
+        model.expanded_tools.insert("stable".into());
+        assert!(
+            transcript_entries(&model)
+                .last()
+                .unwrap()
+                .text
+                .contains("a\tb\nresult")
+        );
     }
     #[test]
     fn pasted_search_query_does_not_edit_draft() {
@@ -2162,5 +2312,284 @@ mod transcript_input_tests {
         let frame = render_frame(&model, 90, 30).unwrap();
         assert_eq!(model.transcript.borrow().layout_rebuilds, builds + 2);
         assert!(frame.contains("replacement"));
+    }
+}
+
+#[cfg(test)]
+mod tool_inspection_tests {
+    use super::*;
+    use crossterm::event::{
+        Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    };
+    fn key(model: &mut Model, code: KeyCode) {
+        handle_input(
+            model,
+            Event::Key(KeyEvent::new(code, KeyModifiers::NONE)),
+            78,
+        );
+    }
+    fn model() -> Model {
+        let mut model = fixture_model("idle");
+        let call = json!({"id":"inspect", "name":"read", "args":{"ok":{"path":"inspection.txt"}}});
+        model.projection.view["messages"] = json!([
+            {"role":"user","text":"inspect"},
+            {"role":"assistant","text":null,"tool_calls":[call]},
+        ]);
+        let mut call = call;
+        call["status"] = json!("running");
+        call["outcome"] = Value::Null;
+        model.projection.view["tool_calls"] = json!([call]);
+        render_frame(&model, 80, 24).unwrap();
+        key(&mut model, KeyCode::Tab);
+        key(&mut model, KeyCode::Home);
+        key(&mut model, KeyCode::Down);
+        model
+    }
+    fn finish(model: &mut Model) {
+        let output = "α\tretained\n".repeat(100) + "HIDDEN_MARKER";
+        let frame = json!({"incarnation":model.projection.incarnation, "seq":model.projection.head+1,
+            "ops":[{"op":"set_tool_status","id":"inspect","status":"succeeded","outcome":{"ok":output}}]});
+        assert_eq!(model.apply_patch_frame(&frame).unwrap(), Ingest::Applied);
+    }
+    #[test]
+    fn viewer_reports_connection_and_pending_acceptance() {
+        let mut model = model();
+        key(&mut model, KeyCode::Char('f'));
+        for (state, label) in [
+            (ConnectionState::Resynchronizing, "resynchronizing"),
+            (ConnectionState::Detached, "detached"),
+        ] {
+            model.connection = state;
+            model.notice = Some("notice".into());
+            assert!(render_frame(&model, 120, 24).unwrap().contains(label));
+        }
+        model.pending_ask = Some((0, Instant::now()));
+        assert!(
+            render_frame(&model, 120, 24)
+                .unwrap()
+                .contains("Awaiting acceptance")
+        );
+    }
+    #[test]
+    fn safe_paste_closes_viewer_before_editing_draft() {
+        let mut model = model();
+        model.editor.insert("draft ");
+        key(&mut model, KeyCode::Char('f'));
+        key(&mut model, KeyCode::F(2));
+        assert!(model.viewer.is_none());
+        assert!(render_frame(&model, 80, 24).unwrap().contains("SAFE PASTE"));
+        handle_input(&mut model, Event::Paste("pasted".into()), 78);
+        key(&mut model, KeyCode::F(2));
+        assert_eq!(model.editor.text(), "draft pasted");
+        model.transcript.borrow_mut().selected = Some(format!("{}:tool:inspect", model.session_id));
+        model.open_tool();
+        model.safe_paste = true;
+        handle_input(&mut model, Event::Paste(" visible".into()), 78);
+        assert!(model.viewer.is_none());
+        assert!(
+            render_frame(&model, 80, 24)
+                .unwrap()
+                .contains("draft pasted visible")
+        );
+    }
+    #[test]
+    fn non_tool_right_click_preserves_saved_selection_and_focus() {
+        let mut model = model();
+        let selected = model.transcript.borrow().selected.clone();
+        key(&mut model, KeyCode::Home);
+        render_frame(&model, 80, 24).unwrap();
+        model.transcript.borrow_mut().selected = selected.clone();
+        model.transcript.borrow_mut().focused = false;
+        handle_input(
+            &mut model,
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Right),
+                column: 6,
+                row: 1,
+                modifiers: KeyModifiers::NONE,
+            }),
+            78,
+        );
+        assert_eq!(model.transcript.borrow().selected, selected);
+        assert!(!model.transcript.borrow().focused);
+        assert!(model.viewer.is_none());
+    }
+    #[test]
+    fn tool_lifecycle_preserves_section_relative_selection_and_drag() {
+        for (fullscreen, selected_text) in [
+            (false, "inspection.txt"),
+            (true, "inspection.txt"),
+            (false, "α\tretained"),
+            (true, "α\tretained"),
+        ] {
+            let mut model = model();
+            if selected_text != "inspection.txt" {
+                finish(&mut model);
+            }
+            key(
+                &mut model,
+                KeyCode::Char(if fullscreen { 'f' } else { ' ' }),
+            );
+            render_frame(&model, 80, 24).unwrap();
+            let text = model.transcript.borrow().copy_entry().unwrap();
+            let start = if selected_text == "inspection.txt" {
+                text.rfind(selected_text)
+            } else {
+                text.find(selected_text)
+            }
+            .unwrap();
+            let id = model.transcript.borrow().selected.clone().unwrap();
+            let a = transcript::Point {
+                id: id.clone(),
+                byte: start,
+            };
+            let b = transcript::Point {
+                id,
+                byte: start + selected_text.len(),
+            };
+            {
+                let mut state = model.transcript.borrow_mut();
+                state.selection = Some((a.clone(), b.clone()));
+                state.drag_anchor = state.selection.clone();
+                state.anchor = Some(a);
+                state.follow = false;
+            }
+            let frame = json!({"incarnation":model.projection.incarnation,"seq":model.projection.head+1,"ops":[{"op":"set_tool_status","id":"inspect","status":"succeeded","outcome":{"ok": "α\tretained\n".repeat(100) + "HIDDEN_MARKER\n[truncated 400 bytes]"}}]});
+            model.apply_patch_frame(&frame).unwrap();
+            render_frame(&model, 80, 24).unwrap();
+            let state = model.transcript.borrow();
+            assert_eq!(state.copy_selection().as_deref(), Some(selected_text));
+            assert_eq!(state.drag_anchor, state.selection);
+        }
+    }
+    #[test]
+    fn transcript_uses_canonical_lifecycle_status_and_retained_result() {
+        let mut model = model();
+        assert!(
+            render_frame(&model, 80, 24)
+                .unwrap()
+                .contains("read · running")
+        );
+        for (status, outcome) in [
+            ("succeeded", json!({"ok":"completed result"})),
+            ("failed", json!({"error":"cancelled"})),
+            (
+                "indeterminate",
+                json!({"indeterminate":"completion unknown"}),
+            ),
+        ] {
+            let frame = json!({"incarnation":model.projection.incarnation, "seq":model.projection.head+1,
+                "ops":[{"op":"set_tool_status","id":"inspect","status":status,"outcome":outcome}]});
+            assert_eq!(model.apply_patch_frame(&frame).unwrap(), Ingest::Applied);
+            let rendered = render_frame(&model, 80, 24).unwrap();
+            assert!(rendered.contains(&format!("read · {status}")));
+            assert!(rendered.contains(crate::outcome(&outcome).1));
+        }
+    }
+    #[test]
+    fn fold_and_viewer_survive_completion_resnapshot_and_restore_transcript_position() {
+        let mut model = model();
+        model.editor.insert("unsent draft");
+        key(&mut model, KeyCode::Char(' '));
+        render_frame(&model, 80, 24).unwrap();
+        let anchor = model.transcript.borrow().anchor.clone();
+        key(&mut model, KeyCode::Char('f'));
+        finish(&mut model);
+        assert!(
+            render_frame(&model, 80, 24)
+                .unwrap()
+                .contains("Tool viewer · read")
+        );
+        assert!(
+            model
+                .transcript
+                .borrow()
+                .copy_entry()
+                .unwrap()
+                .contains("HIDDEN_MARKER")
+        );
+        key(&mut model, KeyCode::Char('/'));
+        handle_input(&mut model, Event::Paste("HIDDEN_MARKER".into()), 78);
+        assert_eq!(model.transcript.borrow().matches.len(), 1);
+        let snapshot = model.projection.view.clone();
+        model
+            .projection
+            .install_snapshot(
+                snapshot,
+                model.projection.incarnation.clone(),
+                model.projection.head,
+            )
+            .unwrap();
+        assert!(
+            render_frame(&model, 40, 12)
+                .unwrap()
+                .contains("HIDDEN_MARKER")
+        );
+        key(&mut model, KeyCode::Esc);
+        key(&mut model, KeyCode::Esc);
+        render_frame(&model, 80, 24).unwrap();
+        assert!(model.viewer.is_none());
+        assert_eq!(model.transcript.borrow().anchor, anchor);
+        assert!(model.expanded_tools.contains("inspect"));
+        assert_eq!(model.editor.text(), "unsent draft");
+    }
+    #[test]
+    fn mouse_gutter_toggles_and_right_click_enters_and_leaves_viewer() {
+        let mut model = model();
+        key(&mut model, KeyCode::Home);
+        render_frame(&model, 80, 24).unwrap();
+        let mouse = |model: &mut Model, button, column, row| {
+            handle_input(
+                model,
+                Event::Mouse(MouseEvent {
+                    kind: MouseEventKind::Down(button),
+                    column,
+                    row,
+                    modifiers: KeyModifiers::NONE,
+                }),
+                78,
+            );
+        };
+        mouse(&mut model, MouseButton::Left, 1, 2);
+        assert!(model.expanded_tools.contains("inspect"));
+        render_frame(&model, 80, 24).unwrap();
+        let anchor = model.transcript.borrow().anchor.clone();
+        mouse(&mut model, MouseButton::Right, 6, 2);
+        assert!(model.viewer.is_some());
+        render_frame(&model, 80, 24).unwrap();
+        mouse(&mut model, MouseButton::Right, 6, 2);
+        assert!(model.viewer.is_none());
+        assert_eq!(model.transcript.borrow().anchor, anchor);
+        mouse(&mut model, MouseButton::Left, 1, 2);
+        assert!(!model.expanded_tools.contains("inspect"));
+    }
+    #[test]
+    fn expanded_result_selection_copy_keeps_unicode_tabs_newlines_across_wraps() {
+        let mut model = model();
+        finish(&mut model);
+        key(&mut model, KeyCode::Char('f'));
+        render_frame(&model, 20, 12).unwrap();
+        let text = model.transcript.borrow().copy_entry().unwrap();
+        let start = text.find("α\tretained\n").unwrap();
+        let end = start + "α\tretained\n".len();
+        let id = model.transcript.borrow().selected.clone().unwrap();
+        model.transcript.borrow_mut().selection = Some((
+            transcript::Point {
+                id: id.clone(),
+                byte: start,
+            },
+            transcript::Point { id, byte: end },
+        ));
+        assert_eq!(
+            model.transcript.borrow().copy_selection().as_deref(),
+            Some("α\tretained\n")
+        );
+        let anchor = model.transcript.borrow().anchor.clone();
+        render_frame(&model, 80, 24).unwrap();
+        assert_eq!(model.transcript.borrow().anchor, anchor);
+        assert_eq!(
+            model.transcript.borrow().copy_selection().as_deref(),
+            Some("α\tretained\n")
+        );
     }
 }

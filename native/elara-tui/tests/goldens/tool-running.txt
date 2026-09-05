@@ -1,8 +1,8 @@
 ┌ transcript · prompt focus · FOLLOW ──────────────────────────────────────────────────┐
 │you inspect the build                                                                 │
-│    bash · running                                                                    │
-│                                                                                      │
-│                                                                                      │
+│[+] bash · running                                                                    │
+│$ mix test                                                                            │
+│Display folded · Space expand · f viewer                                              │
 │                                                                                      │
 │                                                                                      │
 │                                                                                      │

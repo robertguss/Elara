@@ -211,6 +211,29 @@ selection. Terminal-native selection remains available through the terminal's
 mouse-reporting bypass modifier (typically Shift; check your terminal settings).
 F1 lists the current action bindings.
 
+Tool calls appear as compact blocks with their canonical state, useful argument
+summary, and result preview. Select a block and press **Space** to expand or
+collapse it; **f** opens a fullscreen viewer. Click the block's left gutter to
+toggle expansion, or right-click a block to inspect it fullscreen. Esc or
+right-click closes the viewer and restores your transcript position. The draft
+stays intact throughout inspection.
+
+Expanded blocks and the fullscreen viewer expose all retained arguments as JSON
+and retained result text. The viewer uses the same scrolling, search, selection,
+and copy controls as the transcript. Whole-entry copy includes the currently
+shown details: expand the block or open its viewer to copy the complete retained
+arguments and result. Compact display folding is separate from upstream
+truncation. Truncation markers found in result text are labeled as text evidence when their source
+cannot be verified; discarded output cannot be recovered by expanding a block.
+Terminal control characters are removed from displayed result text except tabs
+and line breaks. Argument JSON retains escaped characters.
+
+Bash, read, write, and edit blocks have tailored summaries; other tools retain a
+generic argument/result view. Successful edits may show a replacement snippet
+from the canonical old/new arguments. It is not a full-file diff or a fresh
+filesystem comparison, and failed or indeterminate edits do not claim a
+successful replacement.
+
 ## Built-in tools
 
 - `read` reads a file.

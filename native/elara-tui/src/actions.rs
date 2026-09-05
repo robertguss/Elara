@@ -3,6 +3,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers as M};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Action {
     Focus,
+    ToggleTool,
+    ToolViewer,
     Up,
     Down,
     PageUp,
@@ -46,6 +48,20 @@ const fn binding(
     }
 }
 static BINDINGS: &[Binding] = &[
+    binding(
+        KeyCode::Char(' '),
+        M::NONE,
+        true,
+        Action::ToggleTool,
+        "Space fold tool",
+    ),
+    binding(
+        KeyCode::Char('f'),
+        M::NONE,
+        true,
+        Action::ToolViewer,
+        "f tool viewer",
+    ),
     binding(
         KeyCode::Tab,
         M::NONE,

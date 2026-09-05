@@ -1,8 +1,8 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-05 (CTRL-1 and
-> THREAD-1/THREAD-2 pushed; CTX-1 verified, publication pending) · **Owner:**
-> solo development with AI collaborators
+> THREAD-1/THREAD-2/CTX-1 pushed; SPLIT-5 next) · **Owner:** solo development
+> with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
@@ -10,9 +10,10 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**CTX-1:** IN PROGRESS on `ctx-1`, not committed or pushed. Implementation,
-offline checks and real subscription continuation acceptance passed. Publication
-awaits owner approval; SPLIT-5 remains blocked until publication.
+**CTX-1:** DONE and pushed to `main`. Implementation, offline checks and real
+subscription continuation acceptance passed: 448 Mix tests, 112 Rust TUI tests,
+and 6 execution-stub tests. SPLIT-5 is ready for the owner checkpoint, not
+started.
 
 **THREAD-2:** DONE and pushed on `thread-2`: 434 Mix tests, 111 Rust TUI tests
 and 6 execution-stub tests pass. See its Result for the published commit,
@@ -47,8 +48,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** obtain CTX-1 publication approval. Physical-terminal acceptance
-requiring the absent owner stays deferred.
+**Next action:** SPLIT-5 owner daily-driver checkpoint. It has not started;
+physical-terminal acceptance requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -222,8 +223,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | CTRL-1   | DONE     | Durable input queue, steering, and execution preferences      | TUI-6            |
 | THREAD-1 | DONE     | Persistent delegated threads and preserved workspaces         | CTRL-1           |
 | THREAD-2 | DONE     | Durable thread communication and TUI navigation               | THREAD-1         |
-| CTX-1    | IN PROGRESS | Automatic handoff and uninterrupted continuation              | THREAD-2         |
-| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
+| CTX-1    | DONE     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
+| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2191,7 +2192,7 @@ remains deferred. Next: CTX-1.
 
 ## CTX-1 — Automatic handoff and uninterrupted continuation
 
-**Status:** IN PROGRESS
+**Status:** DONE
 
 ### Outcome
 
@@ -2254,10 +2255,13 @@ threads available for reference; do not silently compact the same history.
 
 ### Result (2026-09-05, implementation and subscription acceptance passed)
 
-Implemented on local `ctx-1`, not committed or pushed. Pre-request accounting
-uses catalog limits, conservative UTF-8/image estimates, a reported-usage floor,
-and explicit output/tool/handoff/uncertainty reserves. The non-modal warning is
-labeled as an estimate; the 16 MiB protocol budget remains separate.
+Implemented in
+[`e25058e`](https://github.com/robertguss/Elara/commit/e25058e8480da9d19dc9f71d9abfd55f1ec051d0),
+fast-forwarded from `ctx-1` into `main` and pushed with owner approval.
+Pre-request accounting uses catalog limits, conservative UTF-8/image estimates,
+a reported-usage floor, and explicit output/tool/handoff/uncertainty reserves.
+The non-modal warning is labeled as an estimate; the 16 MiB protocol budget
+remains separate.
 
 The existing Session loop freezes source model work at a safe boundary, saves a
 fixed successor identity, creates it paused, transfers delivery ownership, and
@@ -2314,12 +2318,18 @@ Limits: this bounded live task is not a long-running daily-driver trial. The
 legacy synchronous ask returns `:interrupted` for the frozen source while the
 successor continues through its own event stream. No generic exactly-once model
 request/external effect guarantee is claimed. Physical-terminal owner acceptance
-remains deferred. CTX-1 is not DONE until its verified changes are published
-with approval; SPLIT-5 remains BLOCKED.
+remains deferred. CTX-1 is DONE and published; SPLIT-5 is unblocked for the
+owner checkpoint. No daily-driver go/no-go decision is made here.
 
 ## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
 
-**Status:** BLOCKED on CTX-1 (owner checkpoint)
+**Status:** TODO (owner checkpoint; CTX-1 published, trial not started)
+
+### Result (2026-09-05, prerequisite publication)
+
+CTX-1 is published on `main`, so this item is no longer blocked on feature
+implementation. The owner trial has not started; physical-terminal entry checks
+and the daily-driver go/no-go decision remain outstanding.
 
 ### Outcome
 

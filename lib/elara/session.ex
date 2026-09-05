@@ -131,6 +131,11 @@ defmodule Elara.Session do
 
     case prepare_session(store, core_config, recovery) do
       {:ok, store, core, effect_journal, effect_recovery_pending} ->
+        store =
+          if Keyword.get(opts, :pause_inputs, false),
+            do: %{store | inputs_paused: true},
+            else: store
+
         with {:ok, store} <- Store.set_provider_settings(store, core.config.provider_settings),
              {:ok, _} <- Registry.register(Elara.Sessions, store.id, nil),
              {:ok, plugins, tools} <- start_plugins(plugin_paths, cwd, core.config.tools) do
@@ -272,6 +277,27 @@ defmodule Elara.Session do
     {:reply, FlightRecorder.snapshot(shell.recorder), shell}
   end
 
+  # Run the Git transaction while this session cannot dispatch a new turn.
+  # Git's index checks additionally protect against edits outside this VM.
+  def handle_call({:workspace_operation, operation, retire?}, _from, shell) do
+    uncertain? =
+      Enum.any?(
+        shell.core.history,
+        &match?(%Message.ToolResult{outcome: {:indeterminate, _}}, &1)
+      )
+
+    if Core.idle?(shell.core) and map_size(shell.tasks) == 0 and
+         shell.effect_recovery_pending == [] and not uncertain? do
+      result = operation.()
+
+      if retire? and result == :ok,
+        do: {:stop, :normal, :ok, shell},
+        else: {:reply, result, shell}
+    else
+      {:reply, {:error, :stop_or_reconcile_effects_first}, shell}
+    end
+  end
+
   def handle_call({:why, selector}, _from, shell) do
     {:reply, FlightRecorder.why(shell.recorder, selector), shell}
   end
@@ -337,15 +363,23 @@ defmodule Elara.Session do
   end
 
   def handle_call(:clone, _from, shell) do
-    idle_store_change(shell, fn store ->
-      with {:ok, target} <- Store.clone(store) do
-        {:ok, target, nil}
-      end
-    end)
+    if Elara.Threads.managed?(shell.id) do
+      {:reply, {:error, :managed_child_use_delegate_history}, shell}
+    else
+      idle_store_change(shell, fn store ->
+        with {:ok, target} <- Store.clone(store) do
+          {:ok, target, nil}
+        end
+      end)
+    end
   end
 
   def handle_call({:fork, id}, _from, shell) do
-    idle_store_change(shell, fn store -> Store.fork_before_user(store, id) end)
+    if Elara.Threads.managed?(shell.id) do
+      {:reply, {:error, :managed_child_use_delegate_history}, shell}
+    else
+      idle_store_change(shell, fn store -> Store.fork_before_user(store, id) end)
+    end
   end
 
   def handle_call({:name, name}, _from, shell) do
@@ -360,31 +394,36 @@ defmodule Elara.Session do
   end
 
   def handle_call({:hydrate, store}, _from, shell) do
-    if Core.idle?(shell.core) do
-      config = restore_provider_settings(shell.core.config, store, shell.provider)
+    cond do
+      Elara.Threads.managed?(shell.id) or Elara.Threads.managed?(store.id) ->
+        {:reply, {:error, :managed_child_open_independently}, shell}
 
-      case hydrate(store, config) do
-        {:ok, store, core} ->
-          case Store.set_provider_settings(store, config.provider_settings) do
-            {:ok, store} ->
-              if store.path != shell.store.path, do: Store.release(shell.store)
+      Core.idle?(shell.core) ->
+        config = restore_provider_settings(shell.core.config, store, shell.provider)
 
-              core = Core.rebase_history(shell.core, core.history)
-              recorder = FlightRecorder.segment(shell.recorder, core, :history_rebased)
-              shell = %{shell | store: store, core: core, recorder: recorder}
-              shell = feed({:provider_settings, config.provider_settings}, shell)
-              {:reply, {:ok, shell.core.history}, shell}
+        case hydrate(store, config) do
+          {:ok, store, core} ->
+            case Store.set_provider_settings(store, config.provider_settings) do
+              {:ok, store} ->
+                if store.path != shell.store.path, do: Store.release(shell.store)
 
-            {:error, reason} ->
-              if store.path != shell.store.path, do: Store.release(store)
-              {:reply, {:error, reason}, shell}
-          end
+                core = Core.rebase_history(shell.core, core.history)
+                recorder = FlightRecorder.segment(shell.recorder, core, :history_rebased)
+                shell = %{shell | store: store, core: core, recorder: recorder}
+                shell = feed({:provider_settings, config.provider_settings}, shell)
+                {:reply, {:ok, shell.core.history}, shell}
 
-        {:error, reason} ->
-          {:reply, {:error, reason}, shell}
-      end
-    else
-      {:reply, {:error, :busy}, shell}
+              {:error, reason} ->
+                if store.path != shell.store.path, do: Store.release(store)
+                {:reply, {:error, reason}, shell}
+            end
+
+          {:error, reason} ->
+            {:reply, {:error, reason}, shell}
+        end
+
+      true ->
+        {:reply, {:error, :busy}, shell}
     end
   end
 
@@ -1178,6 +1217,10 @@ defmodule Elara.Session do
       effect_id = Map.merge(transition.id, %{effect_index: index})
       run_effect(effect, effect_id, shell, patch_context)
     end)
+    |> then(fn shell ->
+      if Core.idle?(shell.core), do: Elara.Threads.release_slot()
+      shell
+    end)
   end
 
   defp run_effect(
@@ -1230,17 +1273,29 @@ defmodule Elara.Session do
   end
 
   defp run_effect({:call_provider, core_ref, request}, _effect_id, shell, _patch_context) do
-    shell = %{shell | presented_instructions: shell.instructions}
-    {mod, cfg} = Elara.Provider.Visibility.configure(shell.provider, request.settings)
+    if Elara.Threads.acquire_slot(shell.id) do
+      shell = %{shell | presented_instructions: shell.instructions}
+      {mod, cfg} = Elara.Provider.Visibility.configure(shell.provider, request.settings)
 
-    owner = self()
+      owner = self()
 
-    task =
-      Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
-        call_provider(mod, cfg, request, owner, core_ref)
-      end)
+      task =
+        Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
+          call_provider(mod, cfg, request, owner, core_ref)
+        end)
 
-    track_task(shell, task, :provider, core_ref)
+      track_task(shell, task, :provider, core_ref)
+    else
+      feed(
+        {:provider_result, core_ref,
+         {:error,
+          %Elara.Provider.Error{
+            kind: :resource_limit,
+            message: "Child concurrency limit 4 reached; retry explicitly when a slot is free"
+          }}},
+        shell
+      )
+    end
   end
 
   defp run_effect(
@@ -1474,6 +1529,8 @@ defmodule Elara.Session do
         _ ->
           shell
       end
+
+    Elara.Threads.lifecycle(shell.id, event)
 
     case event do
       {:turn_ended, outcome} -> send(self(), {:finish_input, outcome})
@@ -1783,6 +1840,9 @@ defmodule Elara.Session do
     cond do
       shell.controller != caller ->
         {:reply, {:error, :not_controller}, shell}
+
+      Elara.Threads.managed?(shell.id) ->
+        {:reply, {:error, :managed_child_use_delegate_history}, shell}
 
       not Core.idle?(shell.core) ->
         {:reply, {:error, :busy}, shell}

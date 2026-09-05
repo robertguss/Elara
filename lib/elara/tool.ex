@@ -14,6 +14,7 @@ defmodule Elara.Tool do
 
   defmodule Ctx do
     @type t :: %__MODULE__{
+            session_id: String.t() | nil,
             cwd: String.t(),
             plugin: PluginRef.t() | nil,
             tool_name: String.t() | nil,
@@ -23,6 +24,7 @@ defmodule Elara.Tool do
             timeout_ms: pos_integer() | nil
           }
     defstruct [
+      :session_id,
       :cwd,
       :plugin,
       :tool_name,
@@ -69,7 +71,8 @@ defmodule Elara.Tool do
       write_tool(),
       edit_tool(),
       bash_tool(),
-      Elara.Skills.tool()
+      Elara.Skills.tool(),
+      Elara.Threads.tool()
     ]
   end
 

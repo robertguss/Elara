@@ -1,7 +1,8 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-05 (CTRL-1
-> pushed; THREAD-1 next) · **Owner:** solo development with AI collaborators
+> pushed; THREAD-1 verified locally, pending push) · **Owner:** solo development
+> with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
@@ -9,13 +10,14 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** CTRL-1 is DONE and pushed with 411 Mix tests, 106 Rust TUI tests,
-and 6 execution-stub tests passing. THREAD-1 is next. TUI-6 is DONE and pushed.
-INST-1 is DONE and pushed, including the shared-check cleanup repair. INPUT-1 is
-DONE and pushed. PROV-2 is pushed in `fb7a6a3`. TUI-7 is pushed in `0c968dc`;
-its hands-on acceptance remains owner-deferred. TUI-5 is pushed in `e7c67bf`;
-TUI-4 in `de46872`. TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred
-while away and does not block later implementation.
+**Current:** THREAD-1 implementation is verified locally, pending
+integration/push and credentialed subscription smoke: 422 Mix tests, 108 Rust
+TUI tests and 6 execution-stub tests pass. CTRL-1 is DONE and pushed. TUI-6 is
+DONE and pushed. INST-1 is DONE and pushed, including the shared-check cleanup
+repair. INPUT-1 is DONE and pushed. PROV-2 is pushed in `fb7a6a3`. TUI-7 is
+pushed in `0c968dc`; its hands-on acceptance remains owner-deferred. TUI-5 is
+pushed in `e7c67bf`; TUI-4 in `de46872`. TUI-3/TUI-4/TUI-5/TUI-7 hands-on
+acceptance remains deferred while away and does not block later implementation.
 
 Update this handoff and each item's Result after verified milestones. Continue
 available agent work autonomously, committing and pushing completed changes;
@@ -37,8 +39,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** implement THREAD-1 persistent delegated threads, using
-`docs/design/elara-tui-prototypes.html` as the TUI design reference. Manual
+**Next action:** integrate/push the verified THREAD-1 local commit and run real
+subscription smoke when credentials are available, then unblock THREAD-2. Manual
 acceptance requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -211,7 +213,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | INST-1   | DONE     | Standard project instructions and Agent Skills                | INPUT-1          |
 | TUI-6    | DONE     | In-TUI session lifecycle and action discovery                 | INST-1           |
 | CTRL-1   | DONE     | Durable input queue, steering, and execution preferences      | TUI-6            |
-| THREAD-1 | TODO     | Persistent delegated threads and preserved workspaces         | CTRL-1           |
+| THREAD-1 | IN PROGRESS | Persistent delegated threads and preserved workspaces         | CTRL-1           |
 | THREAD-2 | BLOCKED  | Durable thread communication and TUI navigation               | THREAD-1         |
 | CTX-1    | BLOCKED  | Automatic handoff and uninterrupted continuation              | THREAD-2         |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
@@ -2009,7 +2011,8 @@ Physical-terminal acceptance previously deferred by the owner remains deferred.
 
 ## THREAD-1 — Persistent delegated threads and preserved workspaces
 
-**Status:** TODO
+**Status:** IN PROGRESS — implementation verified locally; pending push and live
+subscription smoke
 
 ### Outcome
 
@@ -2048,6 +2051,37 @@ instead of disappearing with a batch coordinator or temporary checkout.
 - Test two children (including coding), one child failure with sibling survival,
   parent exit, full restart, child resume, result integration/conflict, and
   preservation of uncommitted work. Shared checks plus real subscription smoke.
+
+### Result
+
+Implemented using ordinary persisted Sessions/Store and the existing model loop.
+Durable child records retain parent identity, assignment, provider/model/effort,
+canonical capability limits, actual cwd, base revision and lifecycle. Coding
+children use managed committed-base worktrees; research shares read-only tools.
+Model `start_child` and TUI delegation support selected assignment context or
+explicit history. The child picker shows the four-active-turn bound, inspection
+and independent open/resume. Explicit subtree interruption retains work.
+
+Integration uses a clean-parent precondition, Git conflict checks and immutable
+binary patch receipts; cleanup is separate, non-forced and refuses unintegrated
+or ignored work. Restart never resubmits the assignment automatically. Canonical
+restrictions survive generic saved startup; uncertain effects and integration
+acknowledgements require explicit recovery. Embedded VM exit remains
+interruption, not background execution. Read-only tools are trusted-local
+limits, not an OS sandbox. Thread messaging/richer navigation remain THREAD-2.
+
+Verified locally: format, warnings-as-errors compile, **422 Mix tests**, both
+native crates' format/Clippy checks, **108 TUI Rust tests** and **6 exec-stub
+tests**. Eleven new API/server/product tests include real PTY delegation of two
+children, inspect/open, server restart/resume, sibling failure survival, parent
+exit, clean/dirty/conflicting integration, nested parent cwd and a separate-BEAM
+abrupt exit/restart without replay. Inspected real tmux captures at 80x24 and
+120x40 cover child states, resource limit, workspace/base and full metadata.
+Live subscription smoke is **unavailable**: no provider credentials in this orb;
+offline scripted-provider evidence is not subscription proof. Local
+implementation is delivered as a Git bundle for parent integration, not pushed
+from this thread. Previously owner-deferred physical-terminal acceptance remains
+deferred.
 
 ## THREAD-2 — Durable thread communication and TUI navigation
 

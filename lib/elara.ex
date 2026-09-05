@@ -23,6 +23,12 @@ defmodule Elara do
   @spec start_session_under(Supervisor.supervisor(), keyword()) ::
           {:ok, String.t()} | {:error, term()}
   def start_session_under(supervisor, opts) do
+    with {:ok, opts} <- Elara.Threads.resume_options(opts) do
+      do_start_session_under(supervisor, opts)
+    end
+  end
+
+  defp do_start_session_under(supervisor, opts) do
     cwd = Keyword.get_lazy(opts, :cwd, &File.cwd!/0)
     tools = Keyword.get_lazy(opts, :tools, &Tool.builtins/0)
     base_system = Keyword.get_lazy(opts, :system, &Prompt.base/0)
@@ -60,6 +66,7 @@ defmodule Elara do
         skills: skills,
         instructions: instructions,
         store: store,
+        pause_inputs: Keyword.get(opts, :pause_inputs, false),
         tool_timeout_ms: tool_timeout_ms,
         plugin_paths: plugin_paths,
         router: router,
@@ -280,7 +287,7 @@ defmodule Elara do
 
   def session_pid(id) when is_binary(id) do
     case Registry.lookup(Elara.Sessions, id) do
-      [{pid, _}] -> {:ok, pid}
+      [{pid, _}] -> session_pid(pid)
       [] -> {:error, :session_not_found}
     end
   end

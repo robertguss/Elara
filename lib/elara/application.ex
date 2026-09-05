@@ -9,13 +9,15 @@ defmodule Elara.Application do
       {Registry, keys: :unique, name: Elara.SessionLocks},
       {Registry, keys: :unique, name: Elara.Sessions},
       {Registry, keys: :unique, name: Elara.EffectExecutors},
+      {Registry, keys: :unique, name: Elara.ThreadSlots},
       Elara.Exec,
       {Task.Supervisor, name: Elara.TaskSup},
       {Elara.Executor.Router, name: Elara.Executor.Router},
       {DynamicSupervisor, name: Elara.EffectExecutorSup, strategy: :one_for_one},
       {DynamicSupervisor, name: Elara.PluginSup, strategy: :one_for_one},
       {DynamicSupervisor, name: Elara.SessionSup, strategy: :one_for_one},
-      {DynamicSupervisor, name: Elara.CoordinatorSup, strategy: :one_for_one}
+      {DynamicSupervisor, name: Elara.CoordinatorSup, strategy: :one_for_one},
+      Elara.Threads
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Elara.Supervisor)

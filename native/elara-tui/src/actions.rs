@@ -37,6 +37,28 @@ pub(crate) enum Action {
     Steer,
 }
 pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
+    ("delegate", "coding|research TASK: persistent child", true),
+    (
+        "delegate-fork",
+        "coding|research TASK: include history",
+        true,
+    ),
+    ("children", "inspect/open/resume children (limit 4)", false),
+    (
+        "integrate",
+        "CHILD_ID: apply result to clean parent index",
+        true,
+    ),
+    (
+        "cleanup-child",
+        "CHILD_ID: remove integrated workspace",
+        true,
+    ),
+    (
+        "stop-subtree",
+        "interrupt this session and descendants",
+        true,
+    ),
     ("queue", "inspect/cancel pending input", false),
     ("steer", "prioritize this draft at a safe boundary", true),
     ("resume-inputs", "resume a paused queue", true),

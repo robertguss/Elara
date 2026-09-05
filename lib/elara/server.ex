@@ -371,7 +371,12 @@ defmodule Elara.Server do
               "session_tree",
               "session_fork",
               "session_clone",
-              "session_reload"
+              "session_reload",
+              "child_start",
+              "child_list",
+              "child_integrate",
+              "child_cleanup",
+              "child_stop_subtree"
             ] do
     lifecycle_command(session, command, request, provider, lifetime)
   end
@@ -505,11 +510,69 @@ defmodule Elara.Server do
     end
   end
 
-  defp lifecycle_cwd(session, command) when command in ["session_list", "session_tree"],
-    do: {:ok, Elara.cwd(session)}
+  defp lifecycle_cwd(session, command)
+       when command in ["session_list", "session_tree", "child_list"],
+       do: {:ok, Elara.cwd(session)}
 
   defp lifecycle_cwd(session, _command),
     do: Elara.attached_command(session, :input_workspace)
+
+  defp run_lifecycle_command(session, "child_start", request, _provider, _cwd, _lifetime) do
+    with {:ok, child} <-
+           Elara.Threads.start_child(session, request["assignment"],
+             coding: request["coding"] == true,
+             history: request["history"] == true
+           ) do
+      {:ok, %{"type" => "child_result", "version" => 2, "result" => child}}
+    end
+  end
+
+  defp run_lifecycle_command(session, "child_list", _request, _provider, _cwd, lifetime) do
+    %{children: children, limit: limit} = Elara.Threads.list(session)
+
+    sessions =
+      Enum.map(children, fn child ->
+        Map.merge(child, %{
+          "name" => child["assignment"],
+          "model" => get_in(child, ["settings", "model"]) || child["model"]
+        })
+      end)
+
+    {:ok,
+     %{
+       "type" => "session_list",
+       "version" => 2,
+       "sessions" => sessions,
+       "child_limit" => limit,
+       "lifetime" => Atom.to_string(lifetime)
+     }}
+  end
+
+  defp run_lifecycle_command(session, command, request, _provider, _cwd, _lifetime)
+       when command in ["child_integrate", "child_cleanup", "child_stop_subtree"] do
+    result =
+      case command do
+        "child_integrate" -> Elara.Threads.integrate(session, request["session_id"])
+        "child_cleanup" -> Elara.Threads.cleanup(session, request["session_id"])
+        "child_stop_subtree" -> Elara.Threads.stop_subtree(session)
+      end
+
+    case result do
+      :ok ->
+        {:ok,
+         %{
+           "type" => "child_result",
+           "version" => 2,
+           "result" => "Workspace cleaned; transcript retained"
+         }}
+
+      {:ok, value} ->
+        {:ok, %{"type" => "child_result", "version" => 2, "result" => value}}
+
+      error ->
+        error
+    end
+  end
 
   defp run_lifecycle_command(_session, "session_list", _request, _provider, cwd, lifetime) do
     {:ok,
@@ -603,9 +666,13 @@ defmodule Elara.Server do
     do: {:error, :invalid_command}
 
   defp delete_session(cwd, id) do
-    case Elara.session_pid(id) do
-      {:ok, pid} -> GenServer.call(pid, {:session_delete, cwd})
-      {:error, :session_not_found} -> delete_saved_session(cwd, id)
+    if Elara.Threads.managed?(id) do
+      {:error, :managed_child_use_cleanup_transcript_retained}
+    else
+      case Elara.session_pid(id) do
+        {:ok, pid} -> GenServer.call(pid, {:session_delete, cwd})
+        {:error, :session_not_found} -> delete_saved_session(cwd, id)
+      end
     end
   end
 
@@ -818,10 +885,15 @@ defmodule Elara.Server do
       {:error, :session_not_found} ->
         cwd = cwd || File.cwd!()
 
-        with {:ok, info} <- Elara.Session.Store.find(cwd, id),
-             {:ok, provider} <- resolve_provider(provider),
-             {:ok, ^id} <- Elara.start_session(provider: provider, cwd: cwd, resume: info.path) do
-          {:ok, id}
+        if Elara.Threads.managed?(id) do
+          with {:ok, provider} <- resolve_provider(provider),
+               do: Elara.Threads.resume(id, provider: provider)
+        else
+          with {:ok, info} <- Elara.Session.Store.find(cwd, id),
+               {:ok, provider} <- resolve_provider(provider),
+               {:ok, ^id} <- Elara.start_session(provider: provider, cwd: cwd, resume: info.path) do
+            {:ok, id}
+          end
         end
     end
   end

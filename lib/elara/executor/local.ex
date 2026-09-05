@@ -10,6 +10,7 @@ defmodule Elara.Executor.Local do
   @impl true
   def execute(%{cwd: cwd}, %Request{} = request, %Tool{run: {module, function}} = tool) do
     ctx = %Ctx{
+      session_id: request.session_id,
       cwd: cwd,
       plugin: tool.plugin,
       tool_name: request.tool_name,

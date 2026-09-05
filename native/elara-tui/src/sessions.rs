@@ -16,6 +16,7 @@ pub(super) struct Picker {
     pub error: Option<String>,
     pub delete_id: Option<String>,
     pub branch: bool,
+    pub child_limit: Option<u64>,
 }
 
 fn matches(value: &Value, query: &str) -> bool {
@@ -54,10 +55,16 @@ pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
                 picker.loading = false;
                 picker.sessions = frame["sessions"].as_array().cloned().unwrap_or_default();
                 picker.error = None;
+                picker.child_limit = frame["child_limit"].as_u64();
             }
             if let Some(lifetime) = frame["lifetime"].as_str() {
                 model.lifetime = lifetime.into();
             }
+            true
+        }
+        Some("child_result") if frame["version"] == 2 => {
+            model.session_detail = Some(pretty(&frame["result"]));
+            model.session_detail_scroll = 0;
             true
         }
         Some("session_error") if frame["version"] == 2 => {
@@ -119,6 +126,13 @@ pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
             picker.query.pop();
             picker.selected = 0;
         }
+        KeyCode::Tab if picker.child_limit.is_some() => {
+            if let Some(child) = filtered.get(picker.selected) {
+                model.session_detail = Some(pretty(child));
+                model.session_detail_scroll = 0;
+                model.session_picker = None;
+            }
+        }
         KeyCode::Char(c)
             if picker.delete_id.is_none()
                 && !key
@@ -129,7 +143,10 @@ pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
             picker.selected = 0;
         }
         KeyCode::Delete
-            if model.mode == "control" && picker.delete_id.is_none() && !picker.branch =>
+            if model.mode == "control"
+                && picker.delete_id.is_none()
+                && !picker.branch
+                && picker.child_limit.is_none() =>
         {
             picker.delete_id = filtered
                 .get(picker.selected)
@@ -202,6 +219,11 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
         .filter(|s| matches(s, &picker.query))
         .collect();
     let mut lines = vec![Line::from(format!("Filter: {}", picker.query))];
+    if let Some(limit) = picker.child_limit {
+        lines.push(Line::from(format!(
+            "Limit {limit} running · Tab details · Enter open/resume"
+        )));
+    }
     if picker.loading {
         lines.push(Line::from("Loading sessions…"));
     } else if let Some(error) = &picker.error {
@@ -209,10 +231,30 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
     } else if filtered.is_empty() {
         lines.push(Line::from("No matching sessions."));
     }
-    let rows = rect.height.saturating_sub(6) as usize;
+    let rows = rect
+        .height
+        .saturating_sub(if picker.child_limit.is_some() { 7 } else { 6 }) as usize;
     let selected = picker.selected.min(filtered.len().saturating_sub(1));
     let start = selected.saturating_sub(rows.saturating_sub(1));
     for (i, s) in filtered.iter().enumerate().skip(start).take(rows) {
+        if picker.child_limit.is_some() {
+            lines.push(Line::from(format!(
+                "{} {} · {} · {}",
+                if i == picker.selected { ">" } else { " " },
+                s["state"].as_str().unwrap_or("unknown"),
+                display(s["name"].as_str().unwrap_or("unnamed"))
+                    .chars()
+                    .take(30)
+                    .collect::<String>(),
+                s["id"]
+                    .as_str()
+                    .unwrap_or("?")
+                    .chars()
+                    .take(8)
+                    .collect::<String>()
+            )));
+            continue;
+        }
         lines.push(Line::from(format!(
             "{} {} · {} · {} · {}",
             if i == picker.selected { ">" } else { " " },
@@ -230,14 +272,42 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
     if !picker.branch
         && let Some(selected) = filtered.get(selected)
     {
-        lines.push(Line::from(format!(
-            "Workspace: {}",
-            display(selected["cwd"].as_str().unwrap_or("unknown"))
-        )));
-        lines.push(Line::from(format!(
-            "Updated: {} ms since epoch",
-            selected["updated_at"]
-        )));
+        let cwd = display(selected["cwd"].as_str().unwrap_or("unknown"));
+        let workspace = format!("Workspace: {cwd}");
+        let workspace = if picker.child_limit.is_some()
+            && Line::from(workspace.clone()).width() > rect.width.saturating_sub(2) as usize
+        {
+            format!(
+                "Workspace: …/{} (Tab full)",
+                cwd.rsplit('/')
+                    .next()
+                    .unwrap_or("")
+                    .chars()
+                    .take(24)
+                    .collect::<String>()
+            )
+        } else {
+            workspace
+        };
+        lines.push(Line::from(workspace));
+        lines.push(Line::from(if picker.child_limit.is_some() {
+            format!(
+                "{} · base {} · stop keeps work",
+                if selected["coding"] == true {
+                    "coding worktree"
+                } else {
+                    "read-only research"
+                },
+                selected["base_revision"]
+                    .as_str()
+                    .unwrap_or("shared")
+                    .chars()
+                    .take(12)
+                    .collect::<String>()
+            )
+        } else {
+            format!("Updated: {} ms since epoch", selected["updated_at"])
+        }));
     }
     if let Some(id) = &picker.delete_id {
         lines.insert(1, Line::from(format!("Delete {id}? Enter yes · Esc no")));
@@ -245,7 +315,9 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
     frame.render_widget(Clear, rect);
     frame.render_widget(
         Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(
-            if picker.branch {
+            if picker.child_limit.is_some() {
+                " Children · Esc close · /children refresh "
+            } else if picker.branch {
                 if model.mode == "control" {
                     " Branch points · Enter fork · Esc close "
                 } else {
@@ -274,6 +346,33 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
     let argument = words.next().unwrap_or("").trim();
     let control = model.mode == "control";
     let result = match name {
+        "delegate" | "delegate-fork" if control => {
+            let Some((mode, assignment)) = argument.split_once(' ') else {
+                model.notice = Some("Use /delegate coding|research TASK".into());
+                return Some(InputAction::None);
+            };
+            if !["coding", "research"].contains(&mode) || assignment.trim().is_empty() {
+                model.notice = Some("Use /delegate coding|research TASK".into());
+                return Some(InputAction::None);
+            }
+            InputAction::Session(
+                json!({"version":2,"command":"child_start","assignment":assignment,"coding":mode == "coding","history":name == "delegate-fork"}),
+            )
+        }
+        "children" => {
+            model.session_picker = Some(Picker {
+                loading: true,
+                child_limit: Some(4),
+                ..Picker::default()
+            });
+            InputAction::Session(json!({"version":2,"command":"child_list"}))
+        }
+        "integrate" | "cleanup-child" if control && !argument.is_empty() => InputAction::Session(
+            json!({"version":2,"command":if name == "integrate" { "child_integrate" } else { "child_cleanup" },"session_id":argument}),
+        ),
+        "stop-subtree" if control => {
+            InputAction::Session(json!({"version":2,"command":"child_stop_subtree"}))
+        }
         "queue" => {
             model.editor.clear();
             return Some(crate::inbox::open(model));
@@ -494,5 +593,98 @@ mod tests {
         assert!(frame.contains("> Name 29"));
         assert!(frame.contains("Delete id-29? Enter yes"));
         assert!(frame.contains("separate draft"));
+    }
+
+    #[test]
+    fn child_actions_restrict_observers_and_preserve_explicit_history_choice() {
+        let mut current = model("control");
+        current
+            .editor
+            .insert("/delegate coding selected Unicode λ task");
+        assert_eq!(
+            palette_command(&mut current),
+            Some(InputAction::Session(
+                json!({"version":2,"command":"child_start","assignment":"selected Unicode λ task","coding":true,"history":false})
+            ))
+        );
+        current
+            .editor
+            .insert("/delegate-fork research with history");
+        assert_eq!(
+            palette_command(&mut current),
+            Some(InputAction::Session(
+                json!({"version":2,"command":"child_start","assignment":"with history","coding":false,"history":true})
+            ))
+        );
+        current.editor.insert("/delegate invalid task");
+        assert_eq!(palette_command(&mut current), Some(InputAction::None));
+        assert_eq!(current.editor.text(), "/delegate invalid task");
+        for action in [
+            "/delegate coding task",
+            "/integrate id",
+            "/cleanup-child id",
+            "/stop-subtree",
+        ] {
+            let mut observer = model("observe");
+            observer.editor.insert(action);
+            assert_eq!(palette_command(&mut observer), Some(InputAction::None));
+            assert_eq!(observer.editor.text(), action);
+        }
+    }
+
+    #[test]
+    fn child_picker_limit_inspection_resume_and_retention_in_all_layouts() {
+        for layout in crate::appearance::ViewLayout::ALL {
+            for (width, height) in [(80, 24), (120, 40)] {
+                let mut current = model("control");
+                current.appearance.layout = *layout;
+                current.editor.insert("/children");
+                assert_eq!(
+                    palette_command(&mut current),
+                    Some(InputAction::Session(
+                        json!({"version":2,"command":"child_list"})
+                    ))
+                );
+                current.editor.insert("retained parent draft");
+                reply(
+                    &mut current,
+                    &json!({"type":"session_list","version":2,"child_limit":4,"sessions":[{"id":"child-1","name":"Coding λ","state":"completed","coding":true,"cwd":"/durable/worktree","base_revision":"abc","parent_id":"current"}]}),
+                );
+                let frame = crate::render_frame(&current, width, height).unwrap();
+                for text in [
+                    "Children",
+                    "Limit 4",
+                    "Coding λ",
+                    "coding worktree",
+                    "retained parent draft",
+                ] {
+                    assert!(frame.contains(text), "missing {text}: {frame}");
+                }
+                input(
+                    &mut current,
+                    &Event::Key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)),
+                );
+                assert!(current.session_picker.as_ref().unwrap().delete_id.is_none());
+                assert_eq!(
+                    input(
+                        &mut current,
+                        &Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+                    ),
+                    Some(InputAction::Reconnect("child-1".into()))
+                );
+                input(
+                    &mut current,
+                    &Event::Key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+                );
+                assert!(
+                    current
+                        .session_detail
+                        .as_deref()
+                        .unwrap()
+                        .contains("base_revision")
+                );
+                assert!(current.session_picker.is_none());
+            }
+        }
     }
 }

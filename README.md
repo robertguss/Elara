@@ -391,9 +391,75 @@ from the canonical old/new arguments. It is not a full-file diff or a fresh
 filesystem comparison, and failed or indeterminate edits do not claim a
 successful replacement.
 
+## Persistent delegated children
+
+Use a long-lived `mix elara.server` for work that must continue after detaching
+the TUI. `/delegate coding TASK` starts an independent persisted session on a
+managed Git branch/worktree at the parent's committed HEAD.
+`/delegate research TASK` shares the checkout with only the parent's available
+built-in `read` and `skill` tools and read capabilities. This is trusted-local
+capability restriction, not an OS sandbox. Coding tools can still access paths
+outside their checkout; the managed worktree isolates ordinary relative-path
+edits, not hostile code.
+
+The model has the same `start_child` tool (`assignment`, optional `coding` and
+`history` booleans). The default context is just the selected assignment:
+include needed excerpts or explicit file content there. Uncommitted parent files
+are never silently copied. `/delegate-fork coding TASK` or
+`/delegate-fork research TASK` explicitly includes the parent's current
+transcript instead. Children load project instructions and skill metadata in
+their actual cwd and retain the parent's explicit tool/capability limits and
+effective provider/model/effort. No additional approval prompts are introduced.
+Plugins are not auto-enabled.
+
+`/children` lists direct children with a **four-active-child-turn limit per
+VM**. Filter by assignment/ID; Enter opens or resumes the selected child, and
+Tab opens scrollable metadata including full IDs, cwd, base revision,
+capabilities and integration receipts. Open children use the existing
+transcript, queue, model, reasoning and provider-reported usage views; there is
+no invented aggregate subscription accounting. F11 remains ordinary workspace
+session discovery. Observers can inspect/open but cannot delegate, integrate,
+clean up or stop work.
+
+Parent stop/detach, coordinator stop and sibling failure do not stop children.
+`/stop-subtree` explicitly requests interruption of this session and
+descendants; already-dispatched effects may still be settling. Stop never
+removes a worktree. An embedded VM still exits with its TUI: saved recovery is
+**not** uninterrupted background execution. On restart, open the child and
+explicitly send a follow-up or resume its paused queue. Recorded effect outcomes
+are reconciled; the original assignment is never automatically resubmitted.
+Interrupted/indeterminate work is not reported as completed. A lost integration
+acknowledgement leaves a durable `integrating` marker and patch;
+inspect/reconcile it manually instead of replaying.
+
+From the parent, `/integrate CHILD_ID` captures that child's committed and
+non-ignored uncommitted changes as an immutable binary Git patch. Both live
+sessions must be idle with settled effects, and **the entire parent checkout
+must be clean**, including untracked files. Git checks for conflicts and applies
+to the parent index/worktree; this does not commit, push or merge a branch.
+Receipts retain the patch, tree and parent revision. Review and commit normally.
+`/cleanup-child CHILD_ID` is separate: it requires integration of the exact
+current tree, no ignored files, and a clean child worktree (commit the child's
+integrated changes first). It never uses forced removal. The child branch,
+transcript and integration patches remain; a cleaned workspace cannot resume.
+
+Metadata/workspaces live under `~/.elara/sessions/_threads/` (or the configured
+Store root). Programmatic entry points are
+`Elara.Threads.start_child(parent_id, assignment, coding: true)`, `list/1`,
+`resume/2`, `integrate/2`, `cleanup/2`, and `stop_subtree/1`. Generic
+saved-session startup also enforces the recorded child configuration. In-place
+hydrate and ordinary clone/fork of managed children are rejected rather than
+losing identity or widening read-only limits; use independent open or explicit
+delegation with history. Custom tool modules must be installed and loaded before
+resuming; provider credentials are resolved afresh, never serialized into
+delegation metadata. Do not resume managed children using older Elara builds
+that do not enforce this metadata. Thread messaging, notifications and richer
+tree navigation remain THREAD-2.
+
 ## Built-in tools
 
 - `read` reads a file.
+- `start_child` starts persistent delegated work as described above.
 - `write` atomically writes a workspace-relative regular file and creates parent
   directories. It records durable controller intent and executor receipts before
   and after mutation.

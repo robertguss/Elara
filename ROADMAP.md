@@ -1,8 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-05 (CTRL-1
-> implemented locally; shared checks passing; push pending) · **Owner:** solo
-> development with AI collaborators
+> pushed; THREAD-1 next) · **Owner:** solo development with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
@@ -10,14 +9,13 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** CTRL-1 is implemented locally with 411 Mix tests, 106 Rust TUI
-tests, and 6 execution-stub tests passing. It remains IN PROGRESS until
-authorized push. TUI-6 is DONE and pushed. INST-1 is DONE and pushed, including
-the shared-check cleanup repair. INPUT-1 is DONE and pushed. PROV-2 is pushed in
-`fb7a6a3`. TUI-7 is pushed in `0c968dc`; its hands-on acceptance remains
-owner-deferred. TUI-5 is pushed in `e7c67bf`; TUI-4 in `de46872`.
-TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred while away and does
-not block later implementation.
+**Current:** CTRL-1 is DONE and pushed with 411 Mix tests, 106 Rust TUI tests,
+and 6 execution-stub tests passing. THREAD-1 is next. TUI-6 is DONE and pushed.
+INST-1 is DONE and pushed, including the shared-check cleanup repair. INPUT-1 is
+DONE and pushed. PROV-2 is pushed in `fb7a6a3`. TUI-7 is pushed in `0c968dc`;
+its hands-on acceptance remains owner-deferred. TUI-5 is pushed in `e7c67bf`;
+TUI-4 in `de46872`. TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred
+while away and does not block later implementation.
 
 Update this handoff and each item's Result after verified milestones. Continue
 available agent work autonomously, committing and pushing completed changes;
@@ -39,8 +37,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** obtain authorization to push the verified CTRL-1
-implementation, then start THREAD-1 persistent delegated threads. Manual
+**Next action:** implement THREAD-1 persistent delegated threads, using
+`docs/design/elara-tui-prototypes.html` as the TUI design reference. Manual
 acceptance requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -101,7 +99,7 @@ HTML prototypes or existing batch coordinator already implement them.
 
 Build the TUI foundations first, then provider/input and session controls, then
 persistent communicating threads and automatic handoff. Both the TUI and threads
-must be usable before SPLIT-5. CTRL-1 is the next executable item;
+must be usable before SPLIT-5. THREAD-1 is the next executable item;
 TUI-3/TUI-4/TUI-5/TUI-7 manual acceptance is owner-deferred. Later slices are
 bounded vertical deliveries; the expanded scope must not be hidden inside the
 composer or session picker.
@@ -192,31 +190,31 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 
 ## Execution queue
 
-| ID       | Status      | Item                                                          | Depends on       |
-| -------- | ----------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1   | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2   | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1  | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2  | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3  | DONE        | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4  | DONE        | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| PROV-1   | DONE        | ChatGPT/Codex subscription provider                           | SPLIT-4          |
-| TUI-1    | DONE        | One-command embedded server for new TUI sessions              | PROV-1           |
-| MAC-1    | DONE        | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
-| TUI-2    | DONE        | Render assistant Markdown in the Rust TUI                     | MAC-1            |
-| TUI-3    | DEFERRED    | Cursor-aware multiline daily-driver composer                  | TUI-2            |
-| TUI-4    | DEFERRED    | Navigable transcript controller                               | TUI-3            |
-| TUI-5    | DEFERRED    | Inspectable typed tool blocks                                 | TUI-4            |
-| TUI-7    | DEFERRED    | Three layouts and four independent dark themes                | TUI-5            |
-| PROV-2   | DONE        | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
-| INPUT-1  | DONE        | File references and image attachments from disk               | PROV-2           |
-| INST-1   | DONE        | Standard project instructions and Agent Skills                | INPUT-1          |
-| TUI-6    | DONE        | In-TUI session lifecycle and action discovery                 | INST-1           |
-| CTRL-1   | IN PROGRESS | Durable input queue, steering, and execution preferences      | TUI-6            |
-| THREAD-1 | BLOCKED     | Persistent delegated threads and preserved workspaces         | CTRL-1           |
-| THREAD-2 | BLOCKED     | Durable thread communication and TUI navigation               | THREAD-1         |
-| CTX-1    | BLOCKED     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
-| SPLIT-5  | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
+| ID       | Status   | Item                                                          | Depends on       |
+| -------- | -------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1   | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2   | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1  | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2  | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3  | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4  | DONE     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| PROV-1   | DONE     | ChatGPT/Codex subscription provider                           | SPLIT-4          |
+| TUI-1    | DONE     | One-command embedded server for new TUI sessions              | PROV-1           |
+| MAC-1    | DONE     | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
+| TUI-2    | DONE     | Render assistant Markdown in the Rust TUI                     | MAC-1            |
+| TUI-3    | DEFERRED | Cursor-aware multiline daily-driver composer                  | TUI-2            |
+| TUI-4    | DEFERRED | Navigable transcript controller                               | TUI-3            |
+| TUI-5    | DEFERRED | Inspectable typed tool blocks                                 | TUI-4            |
+| TUI-7    | DEFERRED | Three layouts and four independent dark themes                | TUI-5            |
+| PROV-2   | DONE     | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
+| INPUT-1  | DONE     | File references and image attachments from disk               | PROV-2           |
+| INST-1   | DONE     | Standard project instructions and Agent Skills                | INPUT-1          |
+| TUI-6    | DONE     | In-TUI session lifecycle and action discovery                 | INST-1           |
+| CTRL-1   | DONE     | Durable input queue, steering, and execution preferences      | TUI-6            |
+| THREAD-1 | TODO     | Persistent delegated threads and preserved workspaces         | CTRL-1           |
+| THREAD-2 | BLOCKED  | Durable thread communication and TUI navigation               | THREAD-1         |
+| CTX-1    | BLOCKED  | Automatic handoff and uninterrupted continuation              | THREAD-2         |
+| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -1943,7 +1941,7 @@ stays deferred.
 
 ## CTRL-1 — Durable input queue, steering, and execution preferences
 
-**Status:** IN PROGRESS — implementation verified locally; push pending
+**Status:** DONE
 
 ### Outcome
 
@@ -1984,14 +1982,15 @@ without losing the message or confusing interruption with completion.
 
 ### Result
 
-Implemented locally on `codex/tui-3-composer`; not pushed yet. Stable submission
-and sender/session IDs, atomic inbox/User persistence, FIFO normal inputs, FIFO
-priority steers, cancellation receipts, explicit stop/pause/resume, immutable
-attachments, and capability visibility ship through negotiated `input_queue_v1`.
-Legacy clients do not receive inbox projection operations. Rust retains pending
-identity privately, resolves uncertain acceptance by ID after reconnect/restart,
-and preserves edited drafts. F12 and `/queue` inspect/cancel inputs; Ctrl-S and
-`/steer TEXT` steer; Ctrl-X stops; inbox `r` and `/resume-inputs` resume.
+Pushed in [`3219bf7`](https://github.com/robertguss/Elara/commit/3219bf7) on
+`codex/tui-3-composer`. Stable submission and sender/session IDs, atomic
+inbox/User persistence, FIFO normal inputs, FIFO priority steers, cancellation
+receipts, explicit stop/pause/resume, immutable attachments, and capability
+visibility ship through negotiated `input_queue_v1`. Legacy clients do not
+receive inbox projection operations. Rust retains pending identity privately,
+resolves uncertain acceptance by ID after reconnect/restart, and preserves
+edited drafts. F12 and `/queue` inspect/cancel inputs; Ctrl-S and `/steer TEXT`
+steer; Ctrl-X stops; inbox `r` and `/resume-inputs` resume.
 
 Steering waits for dispatched tool results and suppresses unstarted sibling
 calls. Durable executor receipts also gate subsequent queued work after a live
@@ -2010,7 +2009,7 @@ Physical-terminal acceptance previously deferred by the owner remains deferred.
 
 ## THREAD-1 — Persistent delegated threads and preserved workspaces
 
-**Status:** BLOCKED on CTRL-1
+**Status:** TODO
 
 ### Outcome
 

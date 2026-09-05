@@ -56,22 +56,24 @@ only when code needs to monitor or explicitly stop the underlying process.
 
 `Elara.start_session/1` accepts:
 
-| Option                   | Default                              | Purpose                                                                      |
-| ------------------------ | ------------------------------------ | ---------------------------------------------------------------------------- |
-| `cwd:`                   | `File.cwd!()`                        | Working directory for prompt rules, local tools, plugins, and session scope. |
-| `provider:`              | resolved auth configuration          | `{provider_module, provider_config}`.                                        |
-| `tools:`                 | `Elara.Tool.builtins()`              | Tools exposed to the model.                                                  |
-| `plugins:`               | discovered under `.elara/plugins/`   | Explicit plugin paths; `[]` disables plugins.                                |
-| `system:`                | built-in prompt plus `cwd/AGENTS.md` | Complete system prompt override.                                             |
-| `max_iterations:`        | `12`                                 | Maximum provider calls in a turn.                                            |
-| `tool_timeout_ms:`       | `30_000`                             | Timeout for each tool call.                                                  |
-| `max_tool_output_bytes:` | `16_384`                             | Tool-result bytes retained in history.                                       |
-| `persist:`               | `true`                               | Write session JSONL and flight recording; `false` keeps both in memory.      |
-| `resume:`                | `nil`                                | `:latest` for the newest cwd-scoped session, or an explicit session path.    |
-| `name:`                  | `nil`                                | Display name for a new persisted session.                                    |
-| `allowed_capabilities:`  | `:all`                               | Capability names allowed before executor routing.                            |
-| `workspace_id:`          | derived from `cwd`                   | Logical workspace identity used for remote routing.                          |
-| `router:`                | `Elara.Executor.Router`              | Executor router process or registered name.                                  |
+| Option                   | Default                            | Purpose                                                                            |
+| ------------------------ | ---------------------------------- | ---------------------------------------------------------------------------------- |
+| `cwd:`                   | `File.cwd!()`                      | Working directory for prompt rules, local tools, plugins, and session scope.       |
+| `provider:`              | resolved auth configuration        | `{provider_module, provider_config}`.                                              |
+| `tools:`                 | `Elara.Tool.builtins()`            | Tools exposed to the model.                                                        |
+| `plugins:`               | discovered under `.elara/plugins/` | Explicit plugin paths; `[]` disables plugins.                                      |
+| `system:`                | built-in coding-agent prompt       | Base prompt override; scoped project instructions and skill metadata are appended. |
+| `skill_paths:`           | `ELARA_SKILL_PATHS`                | Ordered explicit skill directories/containers, ahead of project and user skills.   |
+| `home:`                  | `System.user_home!()`              | User skill discovery home; useful for isolated embedded sessions/tests.            |
+| `max_iterations:`        | `12`                               | Maximum provider calls in a turn.                                                  |
+| `tool_timeout_ms:`       | `30_000`                           | Timeout for each tool call.                                                        |
+| `max_tool_output_bytes:` | `16_384`                           | Tool-result bytes retained in history.                                             |
+| `persist:`               | `true`                             | Write session JSONL and flight recording; `false` keeps both in memory.            |
+| `resume:`                | `nil`                              | `:latest` for the newest cwd-scoped session, or an explicit session path.          |
+| `name:`                  | `nil`                              | Display name for a new persisted session.                                          |
+| `allowed_capabilities:`  | `:all`                             | Capability names allowed before executor routing.                                  |
+| `workspace_id:`          | derived from `cwd`                 | Logical workspace identity used for remote routing.                                |
+| `router:`                | `Elara.Executor.Router`            | Executor router process or registered name.                                        |
 
 `persist: false` cannot be combined with `resume:`. The one-shot Mix task sets
 `persist: false`; direct API sessions and interactive chat persist by default.
@@ -155,7 +157,14 @@ recording = Elara.recording(session)
 ```
 
 `status/1` reports the current phase/effect, mailbox and task counts,
-subscribers, retained event range, worker health, and recording path/count.
+subscribers, retained event range, worker health, and recording path/count. It
+also reports `instructions` (absolute paths mapped to loaded text or a read
+diagnostic) and `skills` (metadata-only selected sources and discovery
+diagnostics). See
+[instruction and skill behavior](../README.md#project-instructions-and-agent-skills).
+Skill instructions enter ordinary tool-result history only when the `skill` tool
+is used. They obey `max_tool_output_bytes`; unusually large skills should split
+supporting material into references that the model can read on demand.
 
 Persistent recordings are versioned `.flight` files beside session JSONL files:
 

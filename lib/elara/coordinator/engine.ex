@@ -431,10 +431,10 @@ defmodule Elara.Coordinator.Engine do
       allowed_capabilities: base.allowed_capabilities,
       persist: false,
       seed_history: state.history,
-      system: Map.get(spec, :system, Elara.Prompt.system(cwd))
+      system: Map.get(spec, :system, base.system)
     ]
 
-    Keyword.merge(custom, forced)
+    base.skill_options |> Keyword.merge(custom) |> Keyword.merge(forced)
   end
 
   defp child_cwd(state, %{coding: true}) do

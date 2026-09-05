@@ -48,7 +48,14 @@ defmodule Elara.Session.Core do
             streaming: Elara.Session.Core.streaming() | nil,
             next_ref: pos_integer()
           }
-    defstruct [:config, history: [], phase: :idle, streaming: nil, next_ref: 1]
+    defstruct [
+      :config,
+      history: [],
+      phase: :idle,
+      streaming: nil,
+      next_ref: 1,
+      deferred_calls: []
+    ]
   end
 
   @type fact ::
@@ -58,6 +65,8 @@ defmodule Elara.Session.Core do
           | {:provider_settings, Elara.Provider.Visibility.settings()}
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
           | {:tool_result, ref(), Tool.outcome()}
+          | {:tool_deferred, ref(), String.t()}
+          | {:instruction_context, String.t()}
           | {:tool_crashed, ref(), reason :: String.t()}
           | {:tool_timeout, ref()}
           | :interrupt
@@ -118,6 +127,10 @@ defmodule Elara.Session.Core do
   def idle?(%State{}), do: false
 
   @spec step(State.t(), fact()) :: {State.t(), [effect()]}
+  def step(state, {:instruction_context, system}) when is_binary(system) do
+    {%{state | config: %{state.config | system: system}}, []}
+  end
+
   def step(%State{phase: :idle} = state, {:ask, prompt}) when is_binary(prompt) do
     step(state, {:ask_input, Message.user(prompt)})
   end
@@ -125,7 +138,7 @@ defmodule Elara.Session.Core do
   def step(%State{phase: :idle} = state, {:ask_input, %User{} = user}) do
     prompt = user.text
     history = state.history ++ [user]
-    {ref, state} = take_ref(%{state | history: history})
+    {ref, state} = take_ref(%{state | history: history, deferred_calls: []})
 
     effects = [
       {:emit, {:turn_started, prompt}},
@@ -201,6 +214,23 @@ defmodule Elara.Session.Core do
         :interrupt
       ) do
     stop_stream(state, streaming, :interrupted)
+  end
+
+  def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_deferred, r, system}) do
+    state = %{
+      state
+      | config: %{state.config | system: system},
+        deferred_calls: [call.id | state.deferred_calls]
+    }
+
+    finish_tool(
+      state,
+      call,
+      rest,
+      it,
+      {:error,
+       "Not executed: new scoped project instructions are now in the system context. Review them and reissue the tool call if appropriate."}
+    )
   end
 
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_result, r, outcome}) do
@@ -299,7 +329,7 @@ defmodule Elara.Session.Core do
 
   defp dispatch_next(state, [call | rest], iteration) do
     cond do
-      repeated_call?(state.history, call) ->
+      repeated_call?(state.history, call, state.deferred_calls) ->
         reject_call(state, call, rest, iteration, "repeated tool call")
 
       match?({:malformed, _}, call.args) ->
@@ -392,7 +422,7 @@ defmodule Elara.Session.Core do
   end
 
   # Same name+args as a tool call that already has a result in this turn.
-  defp repeated_call?(history, %ToolCall{} = call) do
+  defp repeated_call?(history, %ToolCall{} = call, deferred_calls) do
     turn =
       history
       |> Enum.reverse()
@@ -409,6 +439,7 @@ defmodule Elara.Session.Core do
         %Assistant{tool_calls: calls} -> calls
         _ -> []
       end)
+      |> Enum.reject(&(&1.id in deferred_calls))
       |> Enum.filter(fn tc ->
         Enum.any?(turn, fn
           %ToolResult{call_id: id} -> id == tc.id

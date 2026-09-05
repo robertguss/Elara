@@ -33,8 +33,56 @@ To target another directory, use the [Elixir API](docs/elixir-api.md) and pass
 an absolute `cwd:`.
 
 The working directory controls relative tool paths, shell commands, local plugin
-discovery, session scope, and the optional `AGENTS.md` appended to the system
-prompt.
+discovery, session scope, project instructions, and Agent Skills discovery.
+
+## Project instructions and Agent Skills
+
+Elara loads `AGENTS.md` from the working directory and its ancestors, ordered
+outermost first. Each file applies only to its directory and descendants;
+nearest guidance specializes its parents, and explicit user directions take
+precedence over project instructions and skills. Instruction paths and scopes
+are included in the model context.
+
+The session also discovers ancestor guidance for paths passed to the built-in
+`read`, `write`, and `edit` tools. A call encountering new or changed guidance
+is **not executed** until the model has received it and reconsidered the call.
+Unreadable guidance blocks these tools with a diagnostic. Loaded scopes refresh
+at the next user turn. Paths use lexical absolute directory scope; this is not a
+filesystem security boundary. Shell strings and arbitrary plugin/remote
+operations cannot be analyzed for target paths: the model is instructed to read
+applicable guidance before using them.
+
+Skills follow the [Agent Skills format](https://agentskills.io/specification): a
+directory named for the skill containing `SKILL.md` with YAML `name` and
+`description`. Discovery loads metadata into context, not every instruction
+body. Ask explicitly, for example, “Use the reviewing-code skill to review this
+change.” The model uses the `skill` tool to load that skill by name; its output
+includes the absolute base directory for relative references and scripts.
+
+Duplicate names resolve in this order (first wins):
+
+1. Explicit directories in `ELARA_SKILL_PATHS` (colon-separated on Unix), or API
+   `skill_paths: [...]`, in list order. Each can be one skill or a directory
+   containing skills; existing symlinks work without copying files.
+2. `.agents/skills` in the working directory, then each ancestor up to and
+   including the nearest Git root (`.git` file or directory). Without a Git
+   root, search continues to the filesystem root.
+3. `~/.config/agents/skills`, then `~/.agents/skills`.
+
+Malformed skills and shadowed sources produce diagnostics. Compatibility text is
+surfaced for dependency checks, not treated as a promise of vendor tools.
+Experimental `allowed-tools` and vendor-specific fields never grant capabilities
+or start plugins/MCP servers. Scripts run through ordinary `bash`, with its
+existing limits and outcome reporting; missing dependencies fail normally.
+Restart a session to rediscover metadata; selected files are reread and
+validated when loaded. Existing coordinator children rediscover in their own
+working directory and inherit explicitly configured skill paths and capability
+limits.
+
+For diagnostics from the [Elixir API](docs/elixir-api.md), inspect
+`Elara.status(session).instructions` and `.skills`. A custom `tools:` list must
+include `Elara.Skills.tool()` to expose selective loading. This adds no approval
+UI and does not sandbox local scripts.
 
 ## Authenticate
 

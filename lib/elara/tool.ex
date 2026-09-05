@@ -68,7 +68,8 @@ defmodule Elara.Tool do
       read_tool(),
       write_tool(),
       edit_tool(),
-      bash_tool()
+      bash_tool(),
+      Elara.Skills.tool()
     ]
   end
 

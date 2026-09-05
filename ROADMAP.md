@@ -1,8 +1,8 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-04
-> (daily-driver product contract expanded) · **Owner:** solo development with AI
-> collaborators
+> **Canonical roadmap and status source** · **Updated:** 2026-09-05 (INST-1
+> implemented; shared-check blocker recorded) · **Owner:** solo development with
+> AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
@@ -10,12 +10,12 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** INPUT-1 is DONE and pushed in `57f930c`.
-[INST-1](#inst-1--standard-project-instructions-and-agent-skills) is next (TODO).
-Work is paused at this completed checkpoint at the owner’s request for the night.
-PROV-2 is pushed in `fb7a6a3`. TUI-7 is pushed in `0c968dc`;
-its hands-on acceptance remains owner-deferred. TUI-5 is pushed in `e7c67bf`;
-TUI-4 in `de46872`.
+**Current:** [INST-1](#inst-1--standard-project-instructions-and-agent-skills)
+is IN PROGRESS: implementation is locally verified, but not published. Its full
+suite gate is blocked by a pre-existing attachment-timeout cleanup failure,
+reproduced on the untouched starting commit. INPUT-1 is DONE and pushed. PROV-2
+is pushed in `fb7a6a3`. TUI-7 is pushed in `0c968dc`; its hands-on acceptance
+remains owner-deferred. TUI-5 is pushed in `e7c67bf`; TUI-4 in `de46872`.
 TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred while away and does
 not block later implementation.
 
@@ -24,24 +24,25 @@ available agent work autonomously, committing and pushing completed changes;
 pause only for necessary owner input or an external blocker. End each session
 with the next concrete action. Close test terminal windows after testing.
 
-| Checkpoint | State | Evidence or next action |
-| --- | --- | --- |
-| TUI-3 composer and multiline transcript | Implementation complete | 25 Rust tests; 6 TUI product tests; pushed `0e1cbda` |
-| TUI-3 Linux shared checks | Complete | 338/338 Mix tests; both Rust crates pass format/Clippy/tests offline |
-| TUI-3 WezTerm rendering and live resize | Verified | 80x24, 120x40, 180x45; draft/cursor/selection retained |
-| TUI-3 native clipboard actions and Ghostty modified Enter | Verified for API path | Exact canonical text; physical shortcuts remain unverified |
-| TUI-3 physical keys and Ghostty resize | Deferred by owner | Revisit when owner returns; does not gate later implementation |
-| TUI-4 anchored scrolling, focus, and follow-tail | Implementation verified | Semantic anchors, cached wrapping, explicit follow-tail; 45 Rust tests |
-| TUI-4 search, selection, and clipboard | Implementation verified | Search paste preserves draft; review fixes cover reverse/stale drags and focus |
-| TUI-4 actions, help, product checks | Complete | 7 TUI product tests; 339 full Linux tests; both Rust crates pass checks |
-| TUI-5 tool inspection | Implementation verified | 59 Rust TUI tests; 8 product tests; 340 offline Linux tests |
-| TUI-7 layouts, themes, and appearance | Implementation verified | 72 Rust TUI tests; 9 product tests; 341 offline Linux tests; all five review findings fixed |
-| PROV-2 subscription visibility and controls | Complete | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof |
-| INPUT-1 file references and image attachments | Complete | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
+| Checkpoint                                                | State                   | Evidence or next action                                                                                                  |
+| --------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| TUI-3 composer and multiline transcript                   | Implementation complete | 25 Rust tests; 6 TUI product tests; pushed `0e1cbda`                                                                     |
+| TUI-3 Linux shared checks                                 | Complete                | 338/338 Mix tests; both Rust crates pass format/Clippy/tests offline                                                     |
+| TUI-3 WezTerm rendering and live resize                   | Verified                | 80x24, 120x40, 180x45; draft/cursor/selection retained                                                                   |
+| TUI-3 native clipboard actions and Ghostty modified Enter | Verified for API path   | Exact canonical text; physical shortcuts remain unverified                                                               |
+| TUI-3 physical keys and Ghostty resize                    | Deferred by owner       | Revisit when owner returns; does not gate later implementation                                                           |
+| TUI-4 anchored scrolling, focus, and follow-tail          | Implementation verified | Semantic anchors, cached wrapping, explicit follow-tail; 45 Rust tests                                                   |
+| TUI-4 search, selection, and clipboard                    | Implementation verified | Search paste preserves draft; review fixes cover reverse/stale drags and focus                                           |
+| TUI-4 actions, help, product checks                       | Complete                | 7 TUI product tests; 339 full Linux tests; both Rust crates pass checks                                                  |
+| TUI-5 tool inspection                                     | Implementation verified | 59 Rust TUI tests; 8 product tests; 340 offline Linux tests                                                              |
+| TUI-7 layouts, themes, and appearance                     | Implementation verified | 72 Rust TUI tests; 9 product tests; 341 offline Linux tests; all five review findings fixed                              |
+| PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
+| INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** when work resumes, implement INST-1 project instruction scope
-and on-demand Agent Skills discovery/loading. No item is mid-implementation.
-Manual acceptance requiring the absent owner stays deferred.
+**Next action:** resolve the baseline attachment-timeout cleanup failure, rerun
+the full suite, and obtain publication authorization for INST-1 before marking
+it DONE and unblocking TUI-6. No TUI-6 implementation has started. Manual
+acceptance requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -191,31 +192,31 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 
 ## Execution queue
 
-| ID      | Status   | Item                                                          | Depends on       |
-| ------- | -------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1  | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2  | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1 | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2 | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3 | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4 | DONE     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| PROV-1  | DONE     | ChatGPT/Codex subscription provider                           | SPLIT-4          |
-| TUI-1   | DONE     | One-command embedded server for new TUI sessions              | PROV-1           |
-| MAC-1   | DONE     | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
-| TUI-2   | DONE     | Render assistant Markdown in the Rust TUI                     | MAC-1            |
-| TUI-3   | DEFERRED | Cursor-aware multiline daily-driver composer                  | TUI-2            |
-| TUI-4   | DEFERRED | Navigable transcript controller                               | TUI-3            |
-| TUI-5   | DEFERRED | Inspectable typed tool blocks                                 | TUI-4            |
-| TUI-7   | DEFERRED | Three layouts and four independent dark themes               | TUI-5            |
-| PROV-2  | DONE     | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
-| INPUT-1 | DONE     | File references and image attachments from disk               | PROV-2           |
-| INST-1  | TODO     | Standard project instructions and Agent Skills               | INPUT-1          |
-| TUI-6   | BLOCKED  | In-TUI session lifecycle and action discovery                 | INST-1           |
-| CTRL-1  | BLOCKED  | Durable input queue, steering, and execution preferences      | TUI-6            |
-| THREAD-1 | BLOCKED | Persistent delegated threads and preserved workspaces        | CTRL-1           |
-| THREAD-2 | BLOCKED | Durable thread communication and TUI navigation              | THREAD-1         |
-| CTX-1   | BLOCKED  | Automatic handoff and uninterrupted continuation              | THREAD-2         |
-| SPLIT-5 | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
+| ID       | Status      | Item                                                          | Depends on       |
+| -------- | ----------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1   | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2   | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1  | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2  | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3  | DONE        | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4  | DONE        | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| PROV-1   | DONE        | ChatGPT/Codex subscription provider                           | SPLIT-4          |
+| TUI-1    | DONE        | One-command embedded server for new TUI sessions              | PROV-1           |
+| MAC-1    | DONE        | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
+| TUI-2    | DONE        | Render assistant Markdown in the Rust TUI                     | MAC-1            |
+| TUI-3    | DEFERRED    | Cursor-aware multiline daily-driver composer                  | TUI-2            |
+| TUI-4    | DEFERRED    | Navigable transcript controller                               | TUI-3            |
+| TUI-5    | DEFERRED    | Inspectable typed tool blocks                                 | TUI-4            |
+| TUI-7    | DEFERRED    | Three layouts and four independent dark themes                | TUI-5            |
+| PROV-2   | DONE        | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
+| INPUT-1  | DONE        | File references and image attachments from disk               | PROV-2           |
+| INST-1   | IN PROGRESS | Standard project instructions and Agent Skills                | INPUT-1          |
+| TUI-6    | BLOCKED     | In-TUI session lifecycle and action discovery                 | INST-1           |
+| CTRL-1   | BLOCKED     | Durable input queue, steering, and execution preferences      | TUI-6            |
+| THREAD-1 | BLOCKED     | Persistent delegated threads and preserved workspaces         | CTRL-1           |
+| THREAD-2 | BLOCKED     | Durable thread communication and TUI navigation               | THREAD-1         |
+| CTX-1    | BLOCKED     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
+| SPLIT-5  | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -1764,7 +1765,8 @@ not measured and remain unknown.
 
 ## INST-1 — Standard project instructions and Agent Skills
 
-**Status:** TODO — INPUT-1 pushed; next after the overnight stopping point
+**Status:** IN PROGRESS — implemented locally; shared-check gate and publication
+pending
 
 ### Outcome
 
@@ -1802,10 +1804,58 @@ Sources: [AGENTS.md](https://agents.md/) and
 
 ### Result
 
-**TODO (2026-09-04).** INPUT-1 is complete and pushed in `57f930c`. This item
-has not started; work paused at the owner’s requested overnight stopping point.
-Next, implement scoped project instructions and selective standard skill loading,
-then verify their influence through the public session/tool path.
+**IN PROGRESS (2026-09-05).** Implemented locally on `codex/tui-3-composer`,
+starting from the published overnight checkpoint
+[`5675f20`](https://github.com/robertguss/Elara/commit/5675f208f9c0ae9a031f852c75ab0357017fc561).
+No push or DONE claim has been made.
+
+Elixir now resolves outermost-to-nearest `AGENTS.md` guidance for the invocation
+directory and explicit built-in file-tool targets. New/changed instructions
+defer the affected call before execution, including later same-scope calls in
+the same model batch. The model receives the scoped context and can reconsider
+without the duplicate-call guard confusing deferral with prior execution.
+Context refresh and deferral are recorded facts, preserving offline replay.
+Source paths, scope, user precedence, and unreadable-file diagnostics are
+exposed.
+
+The session advertises metadata-only skills from explicit, project, and user
+locations, with deterministic duplicate precedence. The `skill` tool selectively
+rereads and validates YAML frontmatter using `yaml_elixir`/`yamerl`, returns the
+resource base, and leaves reference reads and script execution to ordinary
+tools. Symlinks require no copying or mutation. Unsupported fields and
+compatibility requirements are diagnostic, never capability grants or implicit
+vendor setup. Coordinator children inherit normalized explicit skill locations
+and capability limits while resolving project context in their own directory.
+
+Verification:
+
+- `mix test test/elara/instructions_test.exs test/elara/skills_test.exs test/elara/provider/open_ai_codex_integration_test.exs test/elara/protocol_v2_test.exs test/elara/tui_test.exs`
+  — 36 passed, including real file mutation, script execution, restrictions,
+  missing dependencies, scoped deferral, replay, child resolution, and the
+  provider continuation/resume and shipped TUI paths.
+- `mix format --check-formatted` and `mix compile --warnings-as-errors` —
+  exit 0. A clean dependency build emits upstream yamerl OTP-29 deprecation
+  warnings; no warnings were suppressed.
+- Both Rust crates: format and Clippy with `--all-targets -- -D warnings` pass;
+  exec-stub has 5 passing tests and elara-tui has 95 (80 library, 2 binary, 13
+  attachment integration tests).
+- `mix test --seed 134706` — **394/395 passed**. The failure is
+  `Elara.AttachmentTimeoutTest` at `test/elara/attachment_test.exs:416`: one
+  Exec job remains after the timed-out caller is killed. Running the same test
+  and seed on an untouched archive of the starting commit reproduces it. The
+  unrelated execution code and test were not changed. The expected CrashTool
+  `RuntimeError: boom` log is separate from this failure.
+
+Deviations/limits: instructions use lexical absolute path scopes, not a sandbox
+or shell parser; shell/plugin/remote targets require model-directed guidance
+reads. Skill metadata refreshes on new session creation, and selected bodies
+obey the existing tool-result byte cap. `system:` now overrides the base prompt,
+not project/skill context. Existing coordinator paths are tested; future
+THREAD/CTX handoff paths remain subject to their own integration acceptance. No
+Rust presentation, protocol DTO, MCP transport, or approval UI was added.
+
+Next: repair the independently reproduced shared-check blocker and publish only
+with authorization, then record the published commit and unblock TUI-6.
 
 ## TUI-6 — In-TUI session lifecycle and action discovery
 

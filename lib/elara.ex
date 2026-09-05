@@ -25,7 +25,10 @@ defmodule Elara do
   def start_session_under(supervisor, opts) do
     cwd = Keyword.get_lazy(opts, :cwd, &File.cwd!/0)
     tools = Keyword.get_lazy(opts, :tools, &Tool.builtins/0)
-    system = Keyword.get_lazy(opts, :system, fn -> Prompt.system(cwd) end)
+    base_system = Keyword.get_lazy(opts, :system, &Prompt.base/0)
+    skills = Elara.Skills.discover(cwd, Keyword.take(opts, [:skill_paths, :home]))
+    instructions = Prompt.instructions(cwd)
+    system = Prompt.render(base_system, instructions, Elara.Skills.summary(skills))
     max_iterations = Keyword.get(opts, :max_iterations, 12)
     max_tool_output_bytes = Keyword.get(opts, :max_tool_output_bytes, 16_384)
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
@@ -52,6 +55,10 @@ defmodule Elara do
         core_config: core_config,
         provider: provider,
         cwd: cwd,
+        base_system: base_system,
+        skill_options: skills.options,
+        skills: skills,
+        instructions: instructions,
         store: store,
         tool_timeout_ms: tool_timeout_ms,
         plugin_paths: plugin_paths,

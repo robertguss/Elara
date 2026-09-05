@@ -88,7 +88,8 @@ defmodule Elara.MixProject do
   defp deps do
     [
       {:exqlite, "~> 0.40.0"},
-      {:req, "~> 0.5"}
+      {:req, "~> 0.5"},
+      {:yaml_elixir, "~> 2.11"}
     ]
   end
 end

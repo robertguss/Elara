@@ -104,12 +104,14 @@ defmodule Elara.Provider.OpenAICodexIntegrationTest do
 
     assert {:ok, first_body} = JSON.decode(first_raw_body)
     assert first_body["model"] == "gpt-test"
-    assert first_body["instructions"] == "system"
+    assert String.starts_with?(first_body["instructions"], "system\n\n")
+    assert first_body["instructions"] =~ "Project instruction policy:"
     assert first_body["input"] == [user_input("hello")]
     assert [%{"name" => "echo", "strict" => false}] = first_body["tools"]
 
     assert_receive {:request, "/backend-api/codex/responses", _headers, second_raw_body}
     assert {:ok, second_body} = JSON.decode(second_raw_body)
+    assert second_body["instructions"] == first_body["instructions"]
 
     assert second_body["input"] ==
              [user_input("hello") | tool_output] ++
@@ -139,6 +141,7 @@ defmodule Elara.Provider.OpenAICodexIntegrationTest do
 
     assert_receive {:request, "/backend-api/codex/responses", _headers, third_raw_body}
     assert {:ok, third_body} = JSON.decode(third_raw_body)
+    assert third_body["instructions"] == first_body["instructions"]
 
     assert third_body["input"] ==
              [user_input("hello") | tool_output] ++

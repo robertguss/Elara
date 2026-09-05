@@ -58,6 +58,12 @@ defmodule Elara.Session do
       :effect_executor,
       :effect_executor_explicit?,
       :effect_fault_hook,
+      :base_system,
+      skills: %{skills: %{}, diagnostics: []},
+      skill_options: [],
+      instructions: %{},
+      presented_instructions: %{},
+      instruction_targets: [],
       base_tools: %{},
       plugins: [],
       subscribers: %{},
@@ -142,6 +148,10 @@ defmodule Elara.Session do
             effect_journal: effect_journal,
             provider: provider,
             cwd: cwd,
+            base_system: Keyword.get(opts, :base_system, core.config.system),
+            skill_options: Keyword.get(opts, :skill_options, []),
+            skills: Keyword.get(opts, :skills, %{skills: %{}, diagnostics: []}),
+            instructions: Keyword.get(opts, :instructions, %{}),
             tool_timeout_ms: tool_timeout_ms,
             base_tools: core.config.tools,
             plugins: plugins
@@ -215,6 +225,8 @@ defmodule Elara.Session do
       event_retained: shell.event_log_size,
       recording_path: FlightRecorder.path(shell.recorder),
       recorded_transitions: shell.recorder.sequence,
+      instructions: shell.instructions,
+      skills: shell.skills,
       worker_health: Router.workers(shell.router)
     }
 
@@ -267,7 +279,8 @@ defmodule Elara.Session do
         Elara.Provider.Visibility.configure(shell.provider, shell.core.config.provider_settings),
       cwd: shell.cwd,
       tools: Map.values(shell.base_tools),
-      system: shell.core.config.system,
+      system: shell.base_system,
+      skill_options: shell.skill_options,
       max_iterations: shell.core.config.max_iterations,
       max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
       tool_timeout_ms: shell.tool_timeout_ms,
@@ -988,6 +1001,12 @@ defmodule Elara.Session do
   end
 
   defp feed(fact, shell) do
+    shell =
+      case fact do
+        {kind, _} when kind in [:ask, :ask_input] -> refresh_instructions(shell)
+        _ -> shell
+      end
+
     {recorder, begin} = FlightRecorder.begin_transition(shell.recorder, shell.core, fact)
     message_offset = length(shell.core.history)
     previous_streaming = shell.core.streaming
@@ -1044,6 +1063,7 @@ defmodule Elara.Session do
   end
 
   defp run_effect({:call_provider, core_ref, request}, _effect_id, shell, _patch_context) do
+    shell = %{shell | presented_instructions: shell.instructions}
     {mod, cfg} = Elara.Provider.Visibility.configure(shell.provider, request.settings)
 
     owner = self()
@@ -1093,10 +1113,26 @@ defmodule Elara.Session do
     {:ok, args} = call.args
 
     if capabilities_allowed?(tool.capabilities, shell.allowed_capabilities) do
-      if Tool.builtin_write?(tool) do
-        run_declarative_write(shell, effect_id, core_ref, call, args)
-      else
-        run_routed_tool(shell, effect_id, core_ref, call, tool, args)
+      case instruction_preflight(shell, tool, args) do
+        {:defer, shell} ->
+          feed({:tool_deferred, core_ref, instruction_system(shell)}, shell)
+
+        {:error, reason, shell} ->
+          feed({:tool_result, core_ref, {:error, reason}}, sync_instruction_context(shell))
+
+        {:ok, shell} ->
+          shell = sync_instruction_context(shell)
+
+          cond do
+            tool.run == {Elara.Skills, :load} ->
+              feed({:tool_result, core_ref, Elara.Skills.load(shell.skills, args["name"])}, shell)
+
+            Tool.builtin_write?(tool) ->
+              run_declarative_write(shell, effect_id, core_ref, call, args)
+
+            true ->
+              run_routed_tool(shell, effect_id, core_ref, call, tool, args)
+          end
       end
     else
       feed(
@@ -1104,6 +1140,45 @@ defmodule Elara.Session do
         shell
       )
     end
+  end
+
+  defp instruction_preflight(shell, %Tool{run: {Elara.Tools, action}}, %{"path" => path})
+       when action in [:read, :write, :edit] and is_binary(path) do
+    applicable = Elara.Prompt.instructions(shell.cwd, [path])
+    targets = Enum.uniq([path | shell.instruction_targets])
+    instructions = Elara.Prompt.instructions(shell.cwd, targets)
+    shell = %{shell | instruction_targets: targets, instructions: instructions}
+
+    cond do
+      Enum.any?(applicable, fn {_path, result} -> match?({:error, _}, result) end) ->
+        {:error, "Cannot execute with unreadable project instructions: #{inspect(applicable)}",
+         shell}
+
+      Enum.any?(applicable, fn {path, value} -> shell.presented_instructions[path] != value end) ->
+        {:defer, shell}
+
+      true ->
+        {:ok, shell}
+    end
+  end
+
+  defp instruction_preflight(shell, _tool, _args), do: {:ok, shell}
+
+  defp refresh_instructions(shell) do
+    instructions = Elara.Prompt.instructions(shell.cwd, shell.instruction_targets)
+    sync_instruction_context(%{shell | instructions: instructions})
+  end
+
+  defp sync_instruction_context(shell) do
+    system = instruction_system(shell)
+
+    if system == shell.core.config.system,
+      do: shell,
+      else: feed({:instruction_context, system}, shell)
+  end
+
+  defp instruction_system(shell) do
+    Elara.Prompt.render(shell.base_system, shell.instructions, Elara.Skills.summary(shell.skills))
   end
 
   defp call_provider(mod, cfg, request, owner, core_ref) do

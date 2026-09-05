@@ -450,6 +450,9 @@ defmodule Elara.FlightRecorder do
   defp cause(recorder, {:tool_result, ref, _}),
     do: Map.get(recorder.causes, {:tool, ref}, :external)
 
+  defp cause(recorder, {:tool_deferred, ref, _}),
+    do: Map.get(recorder.causes, {:tool, ref}, :external)
+
   defp cause(recorder, {:tool_crashed, ref, _}),
     do: Map.get(recorder.causes, {:tool, ref}, :external)
 
@@ -493,6 +496,11 @@ defmodule Elara.FlightRecorder do
       next_ref: state.next_ref
     }
 
+    normalized =
+      if state.deferred_calls == [],
+        do: normalized,
+        else: Map.put(normalized, :deferred_calls, state.deferred_calls)
+
     case state.streaming do
       nil -> normalized
       %{text: "", public_content: []} -> normalized
@@ -514,6 +522,7 @@ defmodule Elara.FlightRecorder do
       history: Enum.map(state.history, &denormalize_message/1),
       phase: denormalize_phase(state.phase),
       streaming: Map.get(state, :streaming),
+      deferred_calls: Map.get(state, :deferred_calls, []),
       next_ref: state.next_ref
     }
   end
@@ -536,6 +545,12 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_fact({:tool_result, ref, outcome}),
     do: %{kind: :tool_result, ref: ref, outcome: normalize_outcome(outcome)}
+
+  defp normalize_fact({:tool_deferred, ref, system}),
+    do: %{kind: :tool_deferred, ref: ref, system: system}
+
+  defp normalize_fact({:instruction_context, system}),
+    do: %{kind: :instruction_context, system: system}
 
   defp normalize_fact({:tool_crashed, ref, reason}),
     do: %{kind: :tool_crashed, ref: ref, reason: reason}
@@ -562,6 +577,12 @@ defmodule Elara.FlightRecorder do
 
   defp denormalize_fact(%{kind: :tool_result, ref: ref, outcome: outcome}),
     do: {:tool_result, ref, denormalize_outcome(outcome)}
+
+  defp denormalize_fact(%{kind: :tool_deferred, ref: ref, system: system}),
+    do: {:tool_deferred, ref, system}
+
+  defp denormalize_fact(%{kind: :instruction_context, system: system}),
+    do: {:instruction_context, system}
 
   defp denormalize_fact(%{kind: :tool_crashed, ref: ref, reason: reason}),
     do: {:tool_crashed, ref, reason}

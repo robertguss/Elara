@@ -10,9 +10,10 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Current:** [PROV-2](#prov-2--chatgpt-reasoning-visibility-model-controls-and-usage)
-is IN PROGRESS. TUI-7 is pushed in `0c968dc`; its hands-on acceptance remains
-owner-deferred. TUI-5 is pushed in `e7c67bf`; TUI-4 in `de46872`.
+**Current:** [INPUT-1](#input-1--file-references-and-image-attachments-from-disk)
+is IN PROGRESS. PROV-2 is pushed in `fb7a6a3`. TUI-7 is pushed in `0c968dc`;
+its hands-on acceptance remains owner-deferred. TUI-5 is pushed in `e7c67bf`;
+TUI-4 in `de46872`.
 TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred while away and does
 not block later implementation.
 
@@ -33,10 +34,11 @@ with the next concrete action. Close test terminal windows after testing.
 | TUI-4 actions, help, product checks | Complete | 7 TUI product tests; 339 full Linux tests; both Rust crates pass checks |
 | TUI-5 tool inspection | Implementation verified | 59 Rust TUI tests; 8 product tests; 340 offline Linux tests |
 | TUI-7 layouts, themes, and appearance | Implementation verified | 72 Rust TUI tests; 9 product tests; 341 offline Linux tests; all five review findings fixed |
+| PROV-2 subscription visibility and controls | Complete | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof |
 
-**Next action:** publish the verified PROV-2 implementation, then start INPUT-1
-file references and disk image attachments. Manual acceptance requiring the
-absent owner stays deferred.
+**Next action:** implement INPUT-1 file references and disk image attachments,
+then verify model delivery through the subscription route. Manual acceptance
+requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -96,7 +98,7 @@ HTML prototypes or existing batch coordinator already implement them.
 
 Build the TUI foundations first, then provider/input and session controls, then
 persistent communicating threads and automatic handoff. Both the TUI and threads
-must be usable before SPLIT-5. PROV-2 is the current executable item;
+must be usable before SPLIT-5. INPUT-1 is the current executable item;
 TUI-3/TUI-4/TUI-5/TUI-7 manual acceptance is owner-deferred. Later slices are bounded vertical deliveries; the expanded scope must not be hidden
 inside the composer or session picker.
 
@@ -202,8 +204,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | TUI-4   | DEFERRED | Navigable transcript controller                               | TUI-3            |
 | TUI-5   | DEFERRED | Inspectable typed tool blocks                                 | TUI-4            |
 | TUI-7   | DEFERRED | Three layouts and four independent dark themes               | TUI-5            |
-| PROV-2  | IN PROGRESS | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
-| INPUT-1 | BLOCKED  | File references and image attachments from disk               | PROV-2           |
+| PROV-2  | DONE     | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
+| INPUT-1 | IN PROGRESS | File references and image attachments from disk            | PROV-2           |
 | INST-1  | BLOCKED  | Standard project instructions and Agent Skills               | INPUT-1          |
 | TUI-6   | BLOCKED  | In-TUI session lifecycle and action discovery                 | INST-1           |
 | CTRL-1  | BLOCKED  | Durable input queue, steering, and execution preferences      | TUI-6            |
@@ -1595,7 +1597,7 @@ persisted as canonical conversation content.
 
 ## PROV-2 — ChatGPT reasoning visibility, model controls, and usage
 
-**Status:** IN PROGRESS — implementation verified; ready for publication
+**Status:** DONE — pushed in `fb7a6a3`
 
 ### Outcome
 
@@ -1644,7 +1646,7 @@ placeholder as completion. Existing provider behavior remains compatible.
 
 ### Result
 
-**IN PROGRESS (2026-09-04).** Implemented typed public summaries/commentary/final
+**DONE (2026-09-04), pushed in `fb7a6a3`.** Implemented typed public summaries/commentary/final
 answers, persisted request/served model metadata, interruption recovery, and the
 negotiated `provider_visibility_v1` extension. F7 selects model/effort for the
 next request while showing active settings separately. Resume and child settings
@@ -1677,11 +1679,11 @@ Remaining limits: exact context occupancy is unknown, model/effort support is
 the dated observed catalog, and large cumulative streams still need an
 end-to-end latency measurement. Older builds reject the expanded saved-settings
 header, as documented in README. Physical terminal acceptance remains
-owner-deferred; no required PROV-2 implementation work remains before publication.
+owner-deferred; no required PROV-2 implementation work remains.
 
 ## INPUT-1 — File references and image attachments from disk
 
-**Status:** BLOCKED on PROV-2
+**Status:** IN PROGRESS — PROV-2 pushed; image route capability verified
 
 ### Outcome
 
@@ -1716,6 +1718,16 @@ model actually receives, while keeping input inspectable and recoverable.
   subscription image-understanding turn. Terminal thumbnail rendering is
   optional; selectable name/type/size plus verified model delivery is required.
   Complete shared checks in all layouts.
+
+### Result
+
+**IN PROGRESS (2026-09-04).** Build explicit selected file references and disk
+image attachments through the existing composer, session authority, persistence,
+and Codex provider. Keep bounded immutable attachment content outside snapshots;
+show selected name/type/size and preserve the draft on ingestion errors. Use
+the verified subscription image capability for the final synthetic delivery
+check. No physical terminal acceptance or owner interaction is required to
+implement this item.
 
 ## INST-1 — Standard project instructions and Agent Skills
 

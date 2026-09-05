@@ -1,8 +1,8 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-05 (INST-1
-> implemented; shared-check blocker recorded) · **Owner:** solo development with
-> AI collaborators
+> shipped; shared checks passing) · **Owner:** solo development with AI
+> collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
@@ -11,11 +11,10 @@ roadmaps or archived planning documents in the working tree.
 ## Progress at a glance
 
 **Current:** [INST-1](#inst-1--standard-project-instructions-and-agent-skills)
-is IN PROGRESS: implementation is locally verified, but not published. Its full
-suite gate is blocked by a pre-existing attachment-timeout cleanup failure,
-reproduced on the untouched starting commit. INPUT-1 is DONE and pushed. PROV-2
-is pushed in `fb7a6a3`. TUI-7 is pushed in `0c968dc`; its hands-on acceptance
-remains owner-deferred. TUI-5 is pushed in `e7c67bf`; TUI-4 in `de46872`.
+is DONE and pushed, including the attachment-timeout cleanup repair. All 395 Mix
+tests pass. TUI-6 is next (TODO). INPUT-1 is DONE and pushed. PROV-2 is pushed
+in `fb7a6a3`. TUI-7 is pushed in `0c968dc`; its hands-on acceptance remains
+owner-deferred. TUI-5 is pushed in `e7c67bf`; TUI-4 in `de46872`.
 TUI-3/TUI-4/TUI-5/TUI-7 hands-on acceptance remains deferred while away and does
 not block later implementation.
 
@@ -39,10 +38,9 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** resolve the baseline attachment-timeout cleanup failure, rerun
-the full suite, and obtain publication authorization for INST-1 before marking
-it DONE and unblocking TUI-6. No TUI-6 implementation has started. Manual
-acceptance requiring the absent owner stays deferred.
+**Next action:** implement TUI-6 in-TUI session lifecycle and action discovery.
+No TUI-6 implementation has started. Manual acceptance requiring the absent
+owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -102,9 +100,10 @@ HTML prototypes or existing batch coordinator already implement them.
 
 Build the TUI foundations first, then provider/input and session controls, then
 persistent communicating threads and automatic handoff. Both the TUI and threads
-must be usable before SPLIT-5. INST-1 is the next executable item;
-TUI-3/TUI-4/TUI-5/TUI-7 manual acceptance is owner-deferred. Later slices are bounded vertical deliveries; the expanded scope must not be hidden
-inside the composer or session picker.
+must be usable before SPLIT-5. TUI-6 is the next executable item;
+TUI-3/TUI-4/TUI-5/TUI-7 manual acceptance is owner-deferred. Later slices are
+bounded vertical deliveries; the expanded scope must not be hidden inside the
+composer or session picker.
 
 Rust owns presentation and interaction state; Elixir owns canonical content,
 provider configuration, input delivery, thread relationships, and continuation.
@@ -192,31 +191,31 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 
 ## Execution queue
 
-| ID       | Status      | Item                                                          | Depends on       |
-| -------- | ----------- | ------------------------------------------------------------- | ---------------- |
-| PROD-1   | DONE        | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
-| PROD-2   | CANCELED    | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
-| SPLIT-1  | DONE        | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
-| SPLIT-2  | DONE        | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
-| SPLIT-3  | DONE        | Streaming provider contract and content deltas                | SPLIT-2          |
-| SPLIT-4  | DONE        | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
-| PROV-1   | DONE        | ChatGPT/Codex subscription provider                           | SPLIT-4          |
-| TUI-1    | DONE        | One-command embedded server for new TUI sessions              | PROV-1           |
-| MAC-1    | DONE        | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
-| TUI-2    | DONE        | Render assistant Markdown in the Rust TUI                     | MAC-1            |
-| TUI-3    | DEFERRED    | Cursor-aware multiline daily-driver composer                  | TUI-2            |
-| TUI-4    | DEFERRED    | Navigable transcript controller                               | TUI-3            |
-| TUI-5    | DEFERRED    | Inspectable typed tool blocks                                 | TUI-4            |
-| TUI-7    | DEFERRED    | Three layouts and four independent dark themes                | TUI-5            |
-| PROV-2   | DONE        | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
-| INPUT-1  | DONE        | File references and image attachments from disk               | PROV-2           |
-| INST-1   | IN PROGRESS | Standard project instructions and Agent Skills                | INPUT-1          |
-| TUI-6    | BLOCKED     | In-TUI session lifecycle and action discovery                 | INST-1           |
-| CTRL-1   | BLOCKED     | Durable input queue, steering, and execution preferences      | TUI-6            |
-| THREAD-1 | BLOCKED     | Persistent delegated threads and preserved workspaces         | CTRL-1           |
-| THREAD-2 | BLOCKED     | Durable thread communication and TUI navigation               | THREAD-1         |
-| CTX-1    | BLOCKED     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
-| SPLIT-5  | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
+| ID       | Status   | Item                                                          | Depends on       |
+| -------- | -------- | ------------------------------------------------------------- | ---------------- |
+| PROD-1   | DONE     | Ship receipt-backed local declarative writes end-to-end       | ER-3 METHOD STOP |
+| PROD-2   | CANCELED | Ship receipt-backed local literal edits end-to-end            | PROD-1           |
+| SPLIT-1  | DONE     | Rust execution stub in-repo; route built-in `bash` through it | PROD-1           |
+| SPLIT-2  | DONE     | Protocol v2: snapshot-on-attach and sequenced patches         | SPLIT-1          |
+| SPLIT-3  | DONE     | Streaming provider contract and content deltas                | SPLIT-2          |
+| SPLIT-4  | DONE     | Rust TUI as a protocol v2 projection client                   | SPLIT-3          |
+| PROV-1   | DONE     | ChatGPT/Codex subscription provider                           | SPLIT-4          |
+| TUI-1    | DONE     | One-command embedded server for new TUI sessions              | PROV-1           |
+| MAC-1    | DONE     | Make the Rust exec stub build and retain cleanup on macOS     | TUI-1            |
+| TUI-2    | DONE     | Render assistant Markdown in the Rust TUI                     | MAC-1            |
+| TUI-3    | DEFERRED | Cursor-aware multiline daily-driver composer                  | TUI-2            |
+| TUI-4    | DEFERRED | Navigable transcript controller                               | TUI-3            |
+| TUI-5    | DEFERRED | Inspectable typed tool blocks                                 | TUI-4            |
+| TUI-7    | DEFERRED | Three layouts and four independent dark themes                | TUI-5            |
+| PROV-2   | DONE     | ChatGPT reasoning visibility, model controls, and usage       | TUI-7            |
+| INPUT-1  | DONE     | File references and image attachments from disk               | PROV-2           |
+| INST-1   | DONE     | Standard project instructions and Agent Skills                | INPUT-1          |
+| TUI-6    | TODO     | In-TUI session lifecycle and action discovery                 | INST-1           |
+| CTRL-1   | BLOCKED  | Durable input queue, steering, and execution preferences      | TUI-6            |
+| THREAD-1 | BLOCKED  | Persistent delegated threads and preserved workspaces         | CTRL-1           |
+| THREAD-2 | BLOCKED  | Durable thread communication and TUI navigation               | THREAD-1         |
+| CTX-1    | BLOCKED  | Automatic handoff and uninterrupted continuation              | THREAD-2         |
+| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -1765,8 +1764,7 @@ not measured and remain unknown.
 
 ## INST-1 — Standard project instructions and Agent Skills
 
-**Status:** IN PROGRESS — implemented locally; shared-check gate and publication
-pending
+**Status:** DONE
 
 ### Outcome
 
@@ -1804,10 +1802,11 @@ Sources: [AGENTS.md](https://agents.md/) and
 
 ### Result
 
-**IN PROGRESS (2026-09-05).** Implemented locally on `codex/tui-3-composer`,
-starting from the published overnight checkpoint
-[`5675f20`](https://github.com/robertguss/Elara/commit/5675f208f9c0ae9a031f852c75ab0357017fc561).
-No push or DONE claim has been made.
+**DONE (2026-09-05).** Implementation
+[`da9a690`](https://github.com/robertguss/Elara/commit/da9a6903f7e00bcc4a22c49d91a41d67ffa1759d)
+and shared-check repair
+[`d19bfc5`](https://github.com/robertguss/Elara/commit/d19bfc5a88c84165dd3e8fbd7b9d1223acbbe47f)
+are pushed to `origin/codex/tui-3-composer`. Nothing was merged to main.
 
 Elixir now resolves outermost-to-nearest `AGENTS.md` guidance for the invocation
 directory and explicit built-in file-tool targets. New/changed instructions
@@ -1837,14 +1836,22 @@ Verification:
   exit 0. A clean dependency build emits upstream yamerl OTP-29 deprecation
   warnings; no warnings were suppressed.
 - Both Rust crates: format and Clippy with `--all-targets -- -D warnings` pass;
-  exec-stub has 5 passing tests and elara-tui has 95 (80 library, 2 binary, 13
+  exec-stub has 6 passing tests and elara-tui has 95 (80 library, 2 binary, 13
   attachment integration tests).
-- `mix test --seed 134706` — **394/395 passed**. The failure is
-  `Elara.AttachmentTimeoutTest` at `test/elara/attachment_test.exs:416`: one
-  Exec job remains after the timed-out caller is killed. Running the same test
-  and seed on an untouched archive of the starting commit reproduces it. The
-  unrelated execution code and test were not changed. The expected CrashTool
-  `RuntimeError: boom` log is separate from this failure.
+- `mix test test/elara/attachment_test.exs test/elara/exec_integration_test.exs --seed 134706`
+  — 21 passed, including timed-out caller cleanup and draft retry, interrupt,
+  timeout, output cap, stub loss, and BEAM-death process cleanup.
+- `mix test --seed 134706` — **395 passed**. The expected CrashTool
+  `RuntimeError: boom` log remains intentional.
+
+The first full run exposed a pre-existing attachment-timeout cleanup bug, also
+reproduced on the untouched starting commit. A cancellation already queued when
+the Rust guardian started was treated as manager loss: it exited silently,
+leaving Elixir's submitted job registered. The guardian now reports `rejected`
+with stage `cancel` for proven pre-spawn cancellation, while actual manager loss
+stays silent. A deterministic native regression failed on the missing reply
+before the repair and passes afterward. No timeout was increased and no failing
+test was skipped or weakened.
 
 Deviations/limits: instructions use lexical absolute path scopes, not a sandbox
 or shell parser; shell/plugin/remote targets require model-directed guidance
@@ -1854,12 +1861,11 @@ not project/skill context. Existing coordinator paths are tested; future
 THREAD/CTX handoff paths remain subject to their own integration acceptance. No
 Rust presentation, protocol DTO, MCP transport, or approval UI was added.
 
-Next: repair the independently reproduced shared-check blocker and publish only
-with authorization, then record the published commit and unblock TUI-6.
+Decision: unblock TUI-6. The shared-check gate is clear and INST-1 is published.
 
 ## TUI-6 — In-TUI session lifecycle and action discovery
 
-**Status:** BLOCKED on INST-1
+**Status:** TODO
 
 ### Prerequisite repaired during PROV-2 verification
 
@@ -1908,6 +1914,12 @@ No imported foreign histories, generated titles, cloud session hosting,
 multiplayer, or dynamic backend command marketplace. Thread references and
 parent/child navigation follow in THREAD-2; model controls ship in PROV-2.
 
+### Result
+
+**TODO (2026-09-05).** INST-1 and its shared-check repair are pushed and the
+full suite passes. This is the next executable item; implementation has not
+started. Earlier owner-deferred terminal acceptance remains deferred.
+
 ## CTRL-1 — Durable input queue, steering, and execution preferences
 
 **Status:** BLOCKED on TUI-6
@@ -1938,15 +1950,16 @@ without losing the message or confusing interruption with completion.
   draining until the owner resumes/sends again. Tool failures and cancellation
   remain truthful; a steering message does not prove a command was undone.
 - Preserve draft/attachments until authoritative acceptance, and inbox entries
-  across detach, server restart, and model errors. A disconnected acknowledgement
-  is resolved by submission ID, not resending under a fresh ID.
+  across detach, server restart, and model errors. A disconnected
+  acknowledgement is resolved by submission ID, not resending under a fresh ID.
 - Default to trusted local execution with no per-command/file-edit approval
   prompts. Keep effective restrictions visible and enforce existing capability
-  limits. A read-only preset may be added later; this item must not grow into
-  a broad approval-policy engine. Queue/handoff never invent new approval gates.
-- Test FIFO, multiple steers, deletion/consumption race, input during a long tool,
-  stop with pending entries, reconnect/restart, provider failure, and observers'
-  rejected mutation commands through the real protocol and TUI. Shared checks.
+  limits. A read-only preset may be added later; this item must not grow into a
+  broad approval-policy engine. Queue/handoff never invent new approval gates.
+- Test FIFO, multiple steers, deletion/consumption race, input during a long
+  tool, stop with pending entries, reconnect/restart, provider failure, and
+  observers' rejected mutation commands through the real protocol and TUI.
+  Shared checks.
 
 ## THREAD-1 — Persistent delegated threads and preserved workspaces
 

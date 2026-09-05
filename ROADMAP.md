@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-05 (CTRL-1 and
-> THREAD-1 pushed; THREAD-2 next) · **Owner:** solo development with AI
+> THREAD-1/THREAD-2 pushed; CTX-1 next) · **Owner:** solo development with AI
 > collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -10,9 +10,9 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**THREAD-2:** implemented and verified locally on `thread-2`: 434 Mix tests,
-111 Rust TUI tests and 6 execution-stub tests pass. Publication requires owner
-authorization; see its Result for evidence and limits.
+**THREAD-2:** DONE and pushed on `thread-2`: 434 Mix tests, 111 Rust TUI tests
+and 6 execution-stub tests pass. See its Result for the published commit,
+evidence and limits.
 
 **Previous checkpoint:** THREAD-1 is DONE and pushed; live subscription smoke passed. 422
 Mix tests, 108 Rust TUI tests and 6 execution-stub tests pass. CTRL-1 is DONE
@@ -43,9 +43,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** publish the verified THREAD-2 branch after owner authorization,
-then begin CTX-1. No CTX-1 implementation is included here. Manual acceptance
-requiring the absent owner stays deferred.
+**Next action:** begin CTX-1. No CTX-1 implementation is included here. Manual
+acceptance requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -218,8 +217,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | TUI-6    | DONE     | In-TUI session lifecycle and action discovery                 | INST-1           |
 | CTRL-1   | DONE     | Durable input queue, steering, and execution preferences      | TUI-6            |
 | THREAD-1 | DONE     | Persistent delegated threads and preserved workspaces         | CTRL-1           |
-| THREAD-2 | IN PROGRESS | Durable communication verified locally; publication pending | THREAD-1 |
-| CTX-1    | BLOCKED  | Automatic handoff and uninterrupted continuation              | THREAD-2         |
+| THREAD-2 | DONE     | Durable thread communication and TUI navigation               | THREAD-1         |
+| CTX-1    | TODO     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -2097,7 +2096,7 @@ acceptance remains deferred.
 
 ## THREAD-2 — Durable thread communication and TUI navigation
 
-**Status:** IN PROGRESS — implementation verified locally; publication pending
+**Status:** DONE
 
 ### Outcome
 
@@ -2136,10 +2135,10 @@ owner can open, inspect, guide, and return from any child inside the TUI.
 
 ### Result
 
-Implemented locally on `thread-2`, based on the requested pushed feature branch.
-No push or merge is authorized by this implementation request. The roadmap's
-published-DONE gate therefore remains pending; CTX-1 stays blocked and
-untouched.
+Implemented and pushed on `thread-2` with owner authorization:
+[`a4f0651`](https://github.com/robertguss/Elara/commit/a4f0651a491320a55beee547bb0fc74238fff2ab).
+Based on the requested pushed feature branch; not merged. CTX-1 is now the next
+TODO item; its implementation remains untouched.
 
 Durable related-thread transport uses the existing Session inbox and model loop.
 Stable IDs and acceptance-order receipts deduplicate retries and survive
@@ -2184,11 +2183,11 @@ not relabeled as evidence for this change. File-operation references are not
 independent proof of workspace mutations or test success. Interrupted work is
 not automatically replayed after VM loss, and pending offline messages await
 explicit session hydration. Earlier owner-deferred physical-terminal acceptance
-remains deferred. Next: authorized publication, then CTX-1.
+remains deferred. Next: CTX-1.
 
 ## CTX-1 — Automatic handoff and uninterrupted continuation
 
-**Status:** BLOCKED on THREAD-2
+**Status:** TODO
 
 ### Outcome
 

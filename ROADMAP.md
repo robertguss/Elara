@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-06 (PLUGIN-1
-> merged; PLUGIN-2 live-model experiment verified, publication in progress) · **Owner:** solo development
+> merged; PLUGIN-2 assisted live-model experiment complete) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -10,7 +10,8 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**PLUGIN-2:** IN PROGRESS, verification and publication. The real model authored
+**PLUGIN-2:** DONE and pushed at `43b283a` on `codex/agent-authored-plugin`.
+The real model authored
 and used a plugin, fixed the macOS shell-liveness helper, and retained probe state
 across a revision in the same plugin process. All 21 shell tests pass; two turn
 limits and operator/review assistance are recorded in the
@@ -69,8 +70,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Publish PLUGIN-2's result and return to the SPLIT-5 owner
-checkpoint. The experiment recommends fixing legitimate repeated-call rejection
+**Next action:** Return to the SPLIT-5 owner checkpoint. PLUGIN-2 is published
+on its experiment branch. It recommends fixing legitimate repeated-call rejection
 before another larger runtime experiment; that follow-up is not yet queued.
 The daily-driver trial has not started and physical-terminal acceptance stays
 deferred.
@@ -250,8 +251,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | CTX-1    | DONE     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
 | TUI-8    | IMPLEMENTED | Mockup-faithful presentation with quiet chrome             | CTX-1            |
 | PLUGIN-1 | DONE     | Discover and evolve a useful plugin in a live session         | Owner selection  |
-| PLUGIN-2 | IN PROGRESS | Agent-authored plugin during a real coding task           | PLUGIN-1         |
-| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, PLUGIN-2  |
+| PLUGIN-2 | DONE     | Agent-authored plugin during a real coding task              | PLUGIN-1         |
+| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, PLUGIN-2  |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2562,8 +2563,9 @@ single experiment, not a dedicated eval framework or benchmark.
 
 ### Result
 
-**IN PROGRESS (2026-09-06), verified; awaiting publication.** Implementation is
-on `codex/agent-authored-plugin` from merged `main` (`eb88160`). The
+**DONE (2026-09-06), assisted experiment complete.** Implementation and evidence
+are pushed in `43b283a` on `codex/agent-authored-plugin`, from merged `main`
+(`eb88160`). The experiment branch has not been merged into `main`. The
 [report](docs/features-research/agent-authored-plugin-experiment.md),
 [exact prompts](docs/features-research/agent-authored-plugin-prompts.md), and
 [archived plugin](docs/features-research/fixtures/shell_liveness.exs) capture the

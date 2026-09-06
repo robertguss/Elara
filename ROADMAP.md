@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-06 (PLUGIN-1
-> pushed; SPLIT-5 next) · **Owner:** solo development
+> merged; PLUGIN-2 live-model experiment in progress) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,11 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**PLUGIN-2:** IN PROGRESS. The owner authorized a live-model coding task that
+authors a useful plugin, pauses for explicit activation, and continues using it.
+The selected task is a macOS shell-liveness regression. PLUGIN-1 is merged to
+`main` at `eb88160`; 34 focused checks passed on the merged tree.
 
 **PLUGIN-1:** DONE and pushed on `codex/live-plugin-discovery` at `8728298`.
 Discovery, explicit TUI activation, and state-preserving upgrade
@@ -61,7 +66,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** SPLIT-5 owner daily-driver checkpoint. It has not started;
+**Next action:** Complete PLUGIN-2's live-model task and record the practical
+result, then return to SPLIT-5. That checkpoint has not started;
 physical-terminal acceptance requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -239,7 +245,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | CTX-1    | DONE     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
 | TUI-8    | IMPLEMENTED | Mockup-faithful presentation with quiet chrome             | CTX-1            |
 | PLUGIN-1 | DONE     | Discover and evolve a useful plugin in a live session         | Owner selection  |
-| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, PLUGIN-1  |
+| PLUGIN-2 | IN PROGRESS | Agent-authored plugin during a real coding task           | PLUGIN-1         |
+| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, PLUGIN-2  |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2538,3 +2545,22 @@ A concurrent task switched the shared checkout's branch during verification;
 publication uses the sibling `Elara-live-plugin-discovery` worktree and preserves
 that task's shared files. Review is complete with no remaining actionable
 findings in this change. No merge to `main` is implied by branch publication.
+
+## PLUGIN-2 — Agent-authored plugin during a real coding task
+
+**Scope:** Owner-authorized on 2026-09-06. Use Elara's real configured model to
+reproduce and fix one macOS shell-liveness test failure. Ask Elara to author a
+small helpful plugin, explicitly inspect/activate it between turns, then let the
+same session use it while completing the task. Record prompts, actual tool
+outcomes, retained state, guidance required, and practical usefulness. This is a
+single experiment, not a dedicated eval framework or benchmark.
+
+### Result
+
+**IN PROGRESS (2026-09-06).** Working on `codex/agent-authored-plugin` from merged
+`main` (`eb88160`). The selected S-EFFECT-LIVE test fails on macOS before changes.
+Provider credentials resolve through the existing Codex integration; configured
+model is `gpt-5.5`, effort `low`. The live session will keep repository guidance
+but use an empty user-skill home to avoid the known oversized-catalog confound.
+Activation is performed through the public API after source inspection. Raw
+credentials and private provider payloads will not enter the experiment report.

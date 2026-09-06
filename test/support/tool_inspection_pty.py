@@ -83,8 +83,9 @@ with tempfile.TemporaryDirectory(prefix="elara-tool-inspection-pty-") as tmp:
         wait_for(lambda: b"Ctrl-J" in output, "initial frame")
         send(b"draft survives inspection")
         send(b"\t\x1b[H")
-        # The first user occupies row 2; the read block begins on row 3.
-        send(b"\x1b[<0;6;3M\x1b[<0;6;3m")
+        # Rows 1-based: header, rule, blank, `YOU`, prompt, blank, rule, then
+        # the compact read header on row 8.
+        send(b"\x1b[<0;6;8M\x1b[<0;6;8m")
         send(b" ")  # expand the selected call
         send(b"f")  # fullscreen retained details
         wait_for(lambda: b"Tool viewer" in output, "fullscreen tool viewer opens")
@@ -109,18 +110,18 @@ with tempfile.TemporaryDirectory(prefix="elara-tool-inspection-pty-") as tmp:
         assert "inspection.txt" in copied(), "viewer retains canonical arguments"
         send(b"\x1b")  # restore transcript and its viewport
         clipboard.unlink()
-        send(b"\x1b[<0;2;3M\x1b[<0;2;3m")  # gutter click collapses the same block
+        send(b"\x1b[<0;2;8M\x1b[<0;2;8m")  # gutter click collapses the same block
         send(b"y")
-        wait_for(lambda: copied() is not None and "Display folded" in copied(),
+        wait_for(lambda: copied() is not None and "inspection.txt" in copied(),
                  "restored transcript retains its expanded state and click collapses it")
         assert "HIDDEN_MARKER" not in copied(), "compact copy remains visibly folded"
         viewer_start = len(output)
-        send(b"\x1b[<2;6;3M\x1b[<2;6;3m")  # right-click opens fullscreen
+        send(b"\x1b[<2;6;8M\x1b[<2;6;8m")  # right-click opens fullscreen
         wait_for(lambda: b"Tool viewer" in output[viewer_start:], "mouse opens tool viewer")
         clipboard.unlink()
         send(b"y")
         wait_for(lambda: copied() is not None and expected in copied(), "mouse viewer retains full copy")
-        send(b"\x1b[<2;6;3M\x1b[<2;6;3m")  # right-click closes fullscreen
+        send(b"\x1b[<2;6;8M\x1b[<2;6;8m")  # right-click closes fullscreen
         send(b"\t\r")
         wait_for(lambda: prompts()[-1] == "draft survives inspection",
                  "tool inspection preserves composer and returns prompt focus")

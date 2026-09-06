@@ -10,6 +10,12 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
+**TUI-8:** IMPLEMENTED in the working tree, not yet committed or pushed. The
+Rust TUI now follows the `docs/design/elara-tui-prototypes.html` mockups for
+Ember, Observatory and Workbench with quiet chrome by default and an opt-in
+diagnostics row. 448 Mix tests, 113 Rust TUI tests and clippy/fmt pass. Owner
+review of the rendered frames is the next action.
+
 **CTX-1:** DONE and pushed to `main`. Implementation, offline checks and real
 subscription continuation acceptance passed: 448 Mix tests, 112 Rust TUI tests,
 and 6 execution-stub tests. SPLIT-5 is ready for the owner checkpoint, not
@@ -224,7 +230,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | THREAD-1 | DONE     | Persistent delegated threads and preserved workspaces         | CTRL-1           |
 | THREAD-2 | DONE     | Durable thread communication and TUI navigation               | THREAD-1         |
 | CTX-1    | DONE     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
-| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | CTX-1            |
+| TUI-8    | IMPLEMENTED | Mockup-faithful presentation with quiet chrome             | CTX-1            |
+| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8            |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2320,6 +2327,56 @@ successor continues through its own event stream. No generic exactly-once model
 request/external effect guarantee is claimed. Physical-terminal owner acceptance
 remains deferred. CTX-1 is DONE and published; SPLIT-5 is unblocked for the
 owner checkpoint. No daily-driver go/no-go decision is made here.
+
+## TUI-8 — Mockup-faithful presentation with quiet chrome
+
+**Status:** IMPLEMENTED — uncommitted working tree; owner review of rendered frames pending
+
+### Outcome
+
+Make the three layouts and their themes look close to the approved
+`docs/design/elara-tui-prototypes.html` mockups (Ember, Observatory, Workbench)
+without changing session behavior or the protocol. The default chrome is quiet:
+tool calls are one-line headers, the transcript uses speaker eyebrows and a
+single accent gutter, and the dense status row is a toggle for debugging.
+Forest remains the fourth theme.
+
+### Scope
+
+- Palettes from the mockups for Ember, Observatory and Workbench, applied
+  through fourteen semantic slots (`appearance::slot`, indexed 232–245) so a
+  theme switch never re-styles individual widgets.
+- Header `✳ elara  ~/cwd` with the mode at the right over a rule; activity row
+  (`● Running bash …`, `○ detached`, `✓ Idle`, notices) above the composer; a
+  quiet footer `model · elara │ layout / theme · Thinking … · F1 help │ ~cwd`.
+- Compact tool entries: `› ✓ name  summary` with a right tail (`+3 −1`,
+  `n lines`, `running`, `failed`). Space expands the essentials inline (result
+  capped at 40 lines; edits show the path and colored −/+ rows). `f` opens the
+  full inspection (call ID, retained JSON, truncation notes) unchanged.
+- Thinking heading shortened to `◇ THINKING · live|turn N`; the binding source
+  moved to the block footer. Workbench rail wraps prompts to two rows.
+- Diagnostics row (`lifetime · connection · mode · head · state · outcome`) is
+  off by default; toggled by `/diagnostics`, `d` in the F3 appearance picker,
+  or `--diagnostics`; persisted as `diagnostics` in `tui-appearance.json`
+  (older files without the key still load).
+- `examples/preview.rs` renders any layout/theme at any size with a rich
+  fixture for design review (`cargo run --example preview -- ember ember 120 40`).
+
+### Result (2026-09-06, implementation complete; not committed)
+
+All three layouts were compared against the mockup HTML at 120×40 and 80×24 in
+rasterized frames, including hidden thinking and the diagnostics row.
+Regenerated golden frames cover every layout/theme pair. Composer hints now
+clip from the right so continuity context (`handoff failed: …`) stays visible
+at 80 columns. Offline evidence: `mix format --check-formatted`, `mix test`
+(448 passed), `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
+and `cargo test --release` (95 library, 2 binary, 13 attachment, 3 lifecycle)
+pass. PTY scripts were updated for the new chrome; `threads_pty.py` forces a
+full redraw before asserting multi-word text because ratatui's cell-diff
+renderer splits unchanged cells with cursor moves in the raw byte stream.
+Limits: rasterized ANSI captures, not physical Ghostty/WezTerm acceptance;
+timestamps, branch and session names from the mockups are not in the protocol
+and were omitted.
 
 ## SPLIT-5 — Daily-driver checkpoint and recorded go/no-go
 

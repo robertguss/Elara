@@ -1,690 +1,690 @@
 === idle 80x24 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
-│you inspect the build                                                         │
-│ai  I’ll check it.                                                            │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
+ ✳ elara                                                                control
+────────────────────────────────────────────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ELARA
+ I’ll check it.
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ─────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · s
+ elara · elara      │ observatory / ember · Thinking expanded · F1 help │
 
 === idle 120x40 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
-│you inspect the build                                                      ││Thinking · turn 1 · live follow ·        │
-│ai  I’ll check it.                                                         ││complete                                 │
-│                                                                           ││Public reasoning summary unavailable.    │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-└ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                             │ ◇ THINKING · live              Hide − F4
+ ▌ YOU                                                                       │
+ ▌ inspect the build                                                         │ Public reasoning summary unavailable.
+                                                                             │ ────────────────────────────────────────
+ ELARA                                                                       │ turn 1 · live follow · complete
+ I’ll check it.                                                              │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+ ✓ Idle
+┌ PROMPT ─────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
+ elara · elara                          │ observatory / ember · Thinking expanded · F1 help │
 
 === idle 180x45 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
-│you inspect the build                                                                                            ││Thinking · turn 1 · live follow · complete                     │
-│ai  I’ll check it.                                                                                               ││Public reasoning summary unavailable.                          │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-└ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                                                                                    control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                                   │ ◇ THINKING · live                                    Hide − F4
+ ▌ YOU                                                                                                             │
+ ▌ inspect the build                                                                                               │ Public reasoning summary unavailable.
+                                                                                                                   │ ──────────────────────────────────────────────────────────────
+ ELARA                                                                                                             │ turn 1 · live follow · complete
+ I’ll check it.                                                                                                    │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+ ✓ Idle
+┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
+ elara · elara                                                        │ observatory / ember · Thinking expanded · F1 help │
 
 === composing 80x24 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
-│you inspect the build                                                         │
-│ai  I’ll check it.                                                            │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
+ ✳ elara                                                                control
+────────────────────────────────────────────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ELARA
+ I’ll check it.
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ─────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │Unicode draft 👩‍💻  中                                                            │
 │Keep this visible                                                             │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · s
+ elara · elara      │ observatory / ember · Thinking expanded · F1 help │
 
 === composing 120x40 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
-│you inspect the build                                                      ││Thinking · turn 1 · live follow ·        │
-│ai  I’ll check it.                                                         ││complete                                 │
-│                                                                           ││Public reasoning summary unavailable.    │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-└ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                             │ ◇ THINKING · live              Hide − F4
+ ▌ YOU                                                                       │
+ ▌ inspect the build                                                         │ Public reasoning summary unavailable.
+                                                                             │ ────────────────────────────────────────
+ ELARA                                                                       │ turn 1 · live follow · complete
+ I’ll check it.                                                              │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+ ✓ Idle
+┌ PROMPT ─────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │Unicode draft 👩‍💻  中                                                                                                    │
 │Keep this visible                                                                                                     │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
+ elara · elara                          │ observatory / ember · Thinking expanded · F1 help │
 
 === composing 180x45 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
-│you inspect the build                                                                                            ││Thinking · turn 1 · live follow · complete                     │
-│ai  I’ll check it.                                                                                               ││Public reasoning summary unavailable.                          │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-└ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                                                                                    control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                                   │ ◇ THINKING · live                                    Hide − F4
+ ▌ YOU                                                                                                             │
+ ▌ inspect the build                                                                                               │ Public reasoning summary unavailable.
+                                                                                                                   │ ──────────────────────────────────────────────────────────────
+ ELARA                                                                                                             │ turn 1 · live follow · complete
+ I’ll check it.                                                                                                    │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+ ✓ Idle
+┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │Unicode draft 👩‍💻  中                                                                                                                                                                │
 │Keep this visible                                                                                                                                                                 │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
+ elara · elara                                                        │ observatory / ember · Thinking expanded · F1 help │
 
 === streaming 80x24 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
-│you inspect the build                                                         │
-│ai  I’ll check it.                                                            │
-│ai  Streaming the answer▌                                                     │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
+ ✳ elara                                                                control
+────────────────────────────────────────────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ELARA
+ I’ll check it.
+
+ ELARA · live
+ Streaming the answer▌
+
+
+
+
+
+
+
+
+ ● Calling provider …
+┌ PROMPT ─────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- embedded · exits with TUI · control · connected · head 7 · calling_provider · o
+ elara · elara      │ observatory / ember · Thinking expanded · F1 help │
 
 === streaming 120x40 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
-│you inspect the build                                                      ││Thinking · turn 1 · live follow · active │
-│ai  I’ll check it.                                                         ││Public reasoning summary unavailable.    │
-│ai  Streaming the answer▌                                                  ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-└ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                             │ ◇ THINKING · live              Hide − F4
+ ▌ YOU                                                                       │
+ ▌ inspect the build                                                         │ Public reasoning summary unavailable.
+                                                                             │ ────────────────────────────────────────
+ ELARA                                                                       │ turn 1 · live follow · active
+ I’ll check it.                                                              │
+                                                                             │
+ ELARA · live                                                                │
+ Streaming the answer▌                                                       │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+ ● Calling provider …
+┌ PROMPT ─────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 7 · calling_provider · outcome - · session-demo
+ elara · elara                          │ observatory / ember · Thinking expanded · F1 help │
 
 === streaming 180x45 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
-│you inspect the build                                                                                            ││Thinking · turn 1 · live follow · active                       │
-│ai  I’ll check it.                                                                                               ││Public reasoning summary unavailable.                          │
-│ai  Streaming the answer▌                                                                                        ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-└ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                                                                                    control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                                   │ ◇ THINKING · live                                    Hide − F4
+ ▌ YOU                                                                                                             │
+ ▌ inspect the build                                                                                               │ Public reasoning summary unavailable.
+                                                                                                                   │ ──────────────────────────────────────────────────────────────
+ ELARA                                                                                                             │ turn 1 · live follow · active
+ I’ll check it.                                                                                                    │
+                                                                                                                   │
+ ELARA · live                                                                                                      │
+ Streaming the answer▌                                                                                             │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+ ● Calling provider …
+┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 7 · calling_provider · outcome - · session-demo
+ elara · elara                                                        │ observatory / ember · Thinking expanded · F1 help │
 
 === reasoning-open 80x24 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
-│you inspect the build                                                         │
-│ai  I’ll check it.                                                            │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
+ ✳ elara                                                                control
+────────────────────────────────────────────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ELARA
+ I’ll check it.
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ─────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · s
+ elara · elara      │ observatory / ember · Thinking expanded · F1 help │
 
 === reasoning-open 120x40 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
-│you inspect the build                                                      ││Thinking · turn 1 · live follow ·        │
-│ai  I’ll check it.                                                         ││complete                                 │
-│                                                                           ││PREVIEW fixture · subscription preflight │
-│                                                                           ││sample                                   │
-│                                                                           ││Evaluating three-digit numbers with digit│
-│                                                                           ││sum 19                                   │
-│                                                                           ││Finding smallest 3-digit multiple 469    │
-│                                                                           ││Illustrative binding; not this turn's    │
-│                                                                           ││live reasoning.                          │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-└ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                             │ ◇ THINKING · live              Hide − F4
+ ▌ YOU                                                                       │
+ ▌ inspect the build                                                         │ PREVIEW fixture · subscription preflight
+                                                                             │ sample
+ ELARA                                                                       │ Evaluating three-digit numbers with
+ I’ll check it.                                                              │ digit sum 19
+                                                                             │ Finding smallest 3-digit multiple 469
+                                                                             │ ────────────────────────────────────────
+                                                                             │ Illustrative binding; not this turn's
+                                                                             │ live reasoning
+                                                                             │ turn 1 · live follow · complete
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+ ✓ Idle
+┌ PROMPT ─────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
+ elara · elara                          │ observatory / ember · Thinking expanded · F1 help │
 
 === reasoning-open 180x45 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
-│you inspect the build                                                                                            ││Thinking · turn 1 · live follow · complete                     │
-│ai  I’ll check it.                                                                                               ││PREVIEW fixture · subscription preflight sample                │
-│                                                                                                                 ││Evaluating three-digit numbers with digit sum 19               │
-│                                                                                                                 ││Finding smallest 3-digit multiple 469                          │
-│                                                                                                                 ││Illustrative binding; not this turn's live reasoning.          │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-└ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                                                                                    control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                                   │ ◇ THINKING · live                                    Hide − F4
+ ▌ YOU                                                                                                             │
+ ▌ inspect the build                                                                                               │ PREVIEW fixture · subscription preflight sample
+                                                                                                                   │ Evaluating three-digit numbers with digit sum 19
+ ELARA                                                                                                             │ Finding smallest 3-digit multiple 469
+ I’ll check it.                                                                                                    │ ──────────────────────────────────────────────────────────────
+                                                                                                                   │ Illustrative binding; not this turn's live reasoning
+                                                                                                                   │ turn 1 · live follow · complete
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+ ✓ Idle
+┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
+ elara · elara                                                        │ observatory / ember · Thinking expanded · F1 help │
 
 === reasoning-hidden 80x24 ===
-┌ observatory / ember · F4 thinking hidden ·  transcript · prompt focus · FOLLO┐
-│you inspect the build                                                         │
-│ai  I’ll check it.                                                            │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
+ ✳ elara                                                                control
+────────────────────────────────────────────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ELARA
+ I’ll check it.
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ─────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · s
+ elara · elara       │ observatory / ember · Thinking hidden · F1 help │
 
 === reasoning-hidden 120x40 ===
-┌ observatory / ember · F4 thinking hidden ·  transcript · prompt focus · FOLLOW  ─────────────────────────────────────┐
-│you inspect the build                                                                                                 │
-│ai  I’ll check it.                                                                                                    │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ELARA
+ I’ll check it.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ─────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
+ elara · elara                           │ observatory / ember · Thinking hidden · F1 help │
 
 === reasoning-hidden 180x45 ===
-┌ observatory / ember · F4 thinking hidden ·  transcript · prompt focus · FOLLOW  ─────────────────────────────────────────────────────────────────────────────────────────────────┐
-│you inspect the build                                                                                                                                                             │
-│ai  I’ll check it.                                                                                                                                                                │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-│                                                                                                                                                                                  │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                                                                                    control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ELARA
+ I’ll check it.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · session-demo
+ elara · elara                                                         │ observatory / ember · Thinking hidden · F1 help │
 
 === tool-failed 80x24 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW ┐
-│you inspect the build                                                         │
-│[+] bash · failed                                                             │
-│$ mix test                                                                    │
-│Display folded · Space expand · f viewer                                      │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
+ ✳ elara                                                                control
+────────────────────────────────────────────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ──────────────────────────────────────────────────────────────────────────────
+ › ✗ bash  mix test                                                      failed
+ ──────────────────────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+ ● Running bash …
+┌ PROMPT ─────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                              │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- embedded · exits with TUI · control · connected · head 8 · running_tool · outco
+ elara · elara      │ observatory / ember · Thinking expanded · F1 help │
 
 === tool-failed 120x40 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLL┐┌ Thinking · F4 hide · F5 view ───────────┐
-│you inspect the build                                                      ││Thinking · turn 1 · live follow · active │
-│[+] bash · failed                                                          ││Public reasoning summary unavailable.    │
-│$ mix test                                                                 ││                                         │
-│Display folded · Space expand · f viewer                                   ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-│                                                                           ││                                         │
-└ Tab transcript · F5 thinking · F7 model/effort ───────────────────────────┘└─────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                             │ ◇ THINKING · live              Hide − F4
+ ▌ YOU                                                                       │
+ ▌ inspect the build                                                         │ Public reasoning summary unavailable.
+                                                                             │ ────────────────────────────────────────
+ ─────────────────────────────────────────────────────────────────────────── │ turn 1 · live follow · active
+ › ✗ bash  mix test                                                   failed │
+ ─────────────────────────────────────────────────────────────────────────── │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+                                                                             │
+ ● Running bash …
+┌ PROMPT ─────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 8 · running_tool · outcome - · session-demo
+ elara · elara                          │ observatory / ember · Thinking expanded · F1 help │
 
 === tool-failed 180x45 ===
-┌ observatory / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ──────────────────────────────────┐┌ Thinking · F4 hide · F5 view ─────────────────────────────────┐
-│you inspect the build                                                                                            ││Thinking · turn 1 · live follow · active                       │
-│[+] bash · failed                                                                                                ││Public reasoning summary unavailable.                          │
-│$ mix test                                                                                                       ││                                                               │
-│Display folded · Space expand · f viewer                                                                         ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-│                                                                                                                 ││                                                               │
-└ Tab transcript · F5 thinking · F7 model/effort ─────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+ ✳ elara                                                                                                                                                                    control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                                   │ ◇ THINKING · live                                    Hide − F4
+ ▌ YOU                                                                                                             │
+ ▌ inspect the build                                                                                               │ Public reasoning summary unavailable.
+                                                                                                                   │ ──────────────────────────────────────────────────────────────
+ ───────────────────────────────────────────────────────────────────────────────────────────────────────────────── │ turn 1 · live follow · active
+ › ✗ bash  mix test                                                                                         failed │
+ ───────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+                                                                                                                   │
+ ● Running bash …
+┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                                                                                                                  │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- embedded · exits with TUI · control · connected · head 8 · running_tool · outcome - · session-demo
+ elara · elara                                                        │ observatory / ember · Thinking expanded · F1 help │
 

@@ -77,6 +77,7 @@ pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
     ("detach", "leave the session", false),
     ("help", "show all controls", false),
     ("appearance", "choose layout/theme", false),
+    ("diagnostics", "toggle the diagnostic status row", false),
     ("model", "choose model/effort", true),
     ("effort", "choose model/effort", true),
 ];

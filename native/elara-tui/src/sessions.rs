@@ -449,6 +449,21 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
             model.appearance_picker = Some(model.appearance);
             InputAction::None
         }
+        "diagnostics" => {
+            model.editor.clear();
+            let mut appearance = model.appearance;
+            appearance.diagnostics = !appearance.diagnostics;
+            model.set_appearance(appearance);
+            model.notice = Some(
+                if appearance.diagnostics {
+                    "Diagnostics row shown · /diagnostics hides it"
+                } else {
+                    "Diagnostics row hidden"
+                }
+                .into(),
+            );
+            InputAction::None
+        }
         "model" | "effort" if control => {
             model.editor.clear();
             model.provider_picker = Some((0, 0));

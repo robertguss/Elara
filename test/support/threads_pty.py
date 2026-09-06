@@ -86,6 +86,20 @@ def resize(width, height):
     drain()
 
 
+def wait_visible(predicate, description):
+    """Like `wait`, but each poll forces a full redraw first: the cell-diff
+    renderer otherwise splits unchanged cells (for example the space in
+    `Limit 4`) with cursor moves, so multi-word text is not contiguous in
+    the raw byte stream."""
+    until = time.monotonic() + 10
+    while time.monotonic() < until:
+        resize(119, 40)
+        resize(120, 40)
+        if predicate():
+            return
+    raise AssertionError(description + "\n" + repr(bytes(output[-5000:])))
+
+
 try:
     resize(120, 40)
     wait(lambda: b"Ctrl-J" in output, "initial TUI frame")
@@ -98,7 +112,7 @@ try:
         wait(lambda: len(children()) == 2 and any("failed" in c["state"] for c in children()), "sibling failure shown")
         send(b"\x1b")
     command("/children")
-    wait(lambda: b"Limit 4" in output and b"Threads" in output and b"unread" in output, "thread limit, unread reports and list rendered")
+    wait_visible(lambda: b"Limit 4" in output and b"Threads" in output and b"unread" in output, "thread limit, unread reports and list rendered")
     resize(80, 24)
     resize(120, 40)
     send(b"PTY coding")
@@ -107,19 +121,19 @@ try:
     send(b"\x1b")
     command("/children")
     send(b"PTY coding\r")
-    wait(lambda: "PTY coding λ".encode() in output, "child transcript opens")
+    wait_visible(lambda: "PTY coding λ".encode() in output, "child transcript opens")
     if stage == "resume":
         command("explicit PTY child follow-up")
-        wait(lambda: b"resumed" in output and any(m.get("text") == "PTY resumed answer" for m in child_messages()), "saved child resumes without replay")
+        wait_visible(lambda: b"resumed" in output and any(m.get("text") == "PTY resumed answer" for m in child_messages()), "saved child resumes without replay")
     else:
-        wait(lambda: b"coding answer" in output and any(m.get("text") == "PTY coding answer" for m in child_messages()), "actual child tool transcript")
+        wait_visible(lambda: b"coding answer" in output and any(m.get("text") == "PTY coding answer" for m in child_messages()), "actual child tool transcript")
     output.clear()
     command("/threads")
     wait(lambda: b"Return" in output and b"parent" in output, "parent link in child tree (cursor-addressed text)")
     send(b"\x1b")
     output.clear()
     command("/return")
-    wait(lambda: b"No messages yet." in output, "explicit return restores original empty parent transcript")
+    wait_visible(lambda: b"No messages yet." in output, "explicit return restores original empty parent transcript")
     command("/threads")
     wait(lambda: b"unread" in output, "parent completion indicators survive return")
     send(b"\x1b")

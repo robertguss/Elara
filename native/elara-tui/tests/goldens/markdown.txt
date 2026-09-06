@@ -1,18 +1,18 @@
-┌ ember / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ─────────────┐
-│you show **markdown**                                                                 │
-│ai  Result                                                                            │
-│                                                                                      │
-│    Bold and code                                                                     │
-│                                                                                      │
-│    - first                                                                           │
-│    - second                                                                          │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────┐
+ ✳ elara                                                                        control
+────────────────────────────────────────────────────────────────────────────────────────
+ ▌ YOU
+ ▌ show **markdown**
+
+ ELARA
+ Result
+
+ Bold and code
+
+ - first
+ - second
+
+ ✓ Idle
+┌ PROMPT ─────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────┘
- embedded · exits with TUI · control · connected · head 10 · idle · outcome - · session-
+ elara · elara             │ ember / ember · Thinking expanded · F1 help │

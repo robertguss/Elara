@@ -332,7 +332,11 @@ defmodule Elara.TuiTest do
     port = Elara.Server.port(server)
 
     assert {snapshot, 0} =
-             run_tui(context.binary, context.state_dir, port, [session, "--headless"])
+             run_tui(context.binary, context.state_dir, port, [
+               session,
+               "--headless",
+               "--diagnostics"
+             ])
 
     assert snapshot =~ "earlier prompt"
     assert snapshot =~ "already complete"
@@ -449,10 +453,12 @@ defmodule Elara.TuiTest do
                "--ask",
                "start a long tool",
                "--interrupt-after-ms",
-               "150"
+               "150",
+               "--diagnostics"
              ])
 
-    assert output =~ "bash · failed"
+    # Compact tool header: `bash  sleep 10` with the canonical status as its tail.
+    assert output =~ ~r/bash  sleep 10 +failed/
     assert output =~ "outcome interrupted"
     assert Elara.status(session).phase == :idle
   end

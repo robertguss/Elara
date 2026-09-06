@@ -35,6 +35,8 @@ choices!(Theme, Ember => "ember", Observatory => "observatory", Workbench => "wo
 pub struct Appearance {
     pub layout: ViewLayout,
     pub theme: Theme,
+    /// Show the dense connection/head/outcome status row under the footer.
+    pub diagnostics: bool,
 }
 impl Appearance {
     pub fn path() -> PathBuf {
@@ -56,9 +58,19 @@ impl Appearance {
         };
         let v: Value = serde_json::from_slice(&bytes)
             .map_err(|e| format!("Invalid appearance preferences: {e}"))?;
+        let diagnostics = match &v["diagnostics"] {
+            Value::Null => false,
+            Value::Bool(flag) => *flag,
+            other => {
+                return Err(format!(
+                    "Invalid appearance preferences: diagnostics {other}"
+                ));
+            }
+        };
         Ok(Self {
             layout: ViewLayout::parse(v["layout"].as_str().unwrap_or(""))?,
             theme: Theme::parse(v["theme"].as_str().unwrap_or(""))?,
+            diagnostics,
         })
     }
     pub fn save(self) -> Result<(), String> {
@@ -71,7 +83,12 @@ impl Appearance {
         let temporary = path.with_extension(format!("{}.tmp", std::process::id()));
         fs::write(
             &temporary,
-            json!({"layout":self.layout.name(),"theme":self.theme.name()}).to_string(),
+            json!({
+                "layout": self.layout.name(),
+                "theme": self.theme.name(),
+                "diagnostics": self.diagnostics
+            })
+            .to_string(),
         )
         .map_err(|e| e.to_string())?;
         fs::rename(temporary, path).map_err(|e| format!("Cannot save appearance: {e}"))
@@ -80,20 +97,56 @@ impl Appearance {
         vec![
             Line::from("APPEARANCE · local presentation"),
             Line::from(""),
-            Line::from(format!("l / Left / Right · Layout: {}", self.layout.name())),
-            Line::from(format!("t / Up / Down    · Theme:  {}", self.theme.name())),
+            Line::from(format!(
+                "l / Left / Right · Layout:      {}",
+                self.layout.name()
+            )),
+            Line::from(format!(
+                "t / Up / Down    · Theme:       {}",
+                self.theme.name()
+            )),
+            Line::from(format!(
+                "d                · Diagnostics: {}",
+                if self.diagnostics { "on" } else { "off" }
+            )),
             Line::from(""),
             Line::from("Enter apply · s save defaults + apply · Esc cancel"),
             Line::from("F3 appearance · F4 hide/show thinking · F5 thinking view"),
-            Line::from("F6 turns · Tab transcript · End follow live work"),
+            Line::from("F6 turns · Tab transcript · End follow live work · /diagnostics"),
         ]
     }
 }
+
+/// Theme-independent placeholder colors. Draw sites use these; the final
+/// buffer pass in `presentation::paint` resolves them to the active theme.
+/// The indexed range is reserved: nothing else in the TUI emits it.
+pub mod slot {
+    use ratatui::style::Color;
+    pub const BASE: u8 = 232;
+    pub const BACKGROUND: Color = Color::Indexed(BASE);
+    pub const SURFACE: Color = Color::Indexed(BASE + 1);
+    pub const THINKING_SURFACE: Color = Color::Indexed(BASE + 2);
+    pub const LINE: Color = Color::Indexed(BASE + 3);
+    pub const TEXT: Color = Color::Indexed(BASE + 4);
+    pub const MUTED: Color = Color::Indexed(BASE + 5);
+    pub const ACCENT: Color = Color::Indexed(BASE + 6);
+    pub const SELECTION: Color = Color::Indexed(BASE + 7);
+    pub const SUCCESS: Color = Color::Indexed(BASE + 8);
+    pub const FAILURE: Color = Color::Indexed(BASE + 9);
+    pub const ADDED: Color = Color::Indexed(BASE + 10);
+    pub const ADDED_SURFACE: Color = Color::Indexed(BASE + 11);
+    pub const REMOVED: Color = Color::Indexed(BASE + 12);
+    pub const REMOVED_SURFACE: Color = Color::Indexed(BASE + 13);
+    pub const LAST: u8 = BASE + 13;
+}
+
 /// All text tokens meet WCAG 4.5:1 on background, surface and selection.
 #[derive(Clone, Copy, Debug)]
 pub struct Tokens {
     pub background: Color,
     pub surface: Color,
+    pub thinking_surface: Color,
+    pub line: Color,
     pub text: Color,
     pub secondary: Color,
     pub focus: Color,
@@ -102,31 +155,74 @@ pub struct Tokens {
     pub success: Color,
     pub failure: Color,
     pub added: Color,
+    pub added_surface: Color,
     pub removed: Color,
+    pub removed_surface: Color,
 }
 const fn rgb(v: u32) -> Color {
     Color::Rgb((v >> 16) as u8, (v >> 8) as u8, v as u8)
 }
 impl Theme {
+    // Ember/Observatory/Workbench use the approved study palettes verbatim
+    // (docs/design/elara-tui-prototypes.html); Forest follows the Amp reference.
     pub fn tokens(self) -> Tokens {
-        let (bg, surface, text, secondary, focus, selection) = match self {
-            Self::Ember => (0x151413, 0x211e1a, 0xeee7dc, 0xb9af9f, 0xf0c58a, 0x433a2c),
-            Self::Observatory => (0x10171b, 0x182328, 0xe3eef0, 0xaac4cc, 0x96e5d7, 0x29424a),
-            Self::Workbench => (0x14141d, 0x20202e, 0xedeafa, 0xbeb8d7, 0xd0baff, 0x3a3452),
-            Self::Forest => (0x0d1712, 0x18271e, 0xe0eee2, 0xb2cbb6, 0xc0e3ac, 0x304334),
+        let (bg, surface, thinking, line, text, muted, accent, selection) = match self {
+            Self::Ember => (
+                0x151413, 0x1e1c19, 0x1e1c19, 0x39342c, 0xe5dfd4, 0xa49b8c, 0xdeb57a, 0x342e27,
+            ),
+            Self::Observatory => (
+                0x10171b, 0x182328, 0x131e23, 0x2c4149, 0xdde9eb, 0xa0b6be, 0x8ad8cb, 0x29424a,
+            ),
+            Self::Workbench => (
+                0x14141d, 0x20202e, 0x20202e, 0x39384e, 0xe5e3f1, 0xafabc7, 0xb9a4f5, 0x3a3452,
+            ),
+            Self::Forest => (
+                0x0d1712, 0x18271e, 0x132019, 0x2d4234, 0xe0eee2, 0xb2cbb6, 0xc0e3ac, 0x304334,
+            ),
         };
         Tokens {
             background: rgb(bg),
             surface: rgb(surface),
+            thinking_surface: rgb(thinking),
+            line: rgb(line),
             text: rgb(text),
-            secondary: rgb(secondary),
-            focus: rgb(focus),
+            secondary: rgb(muted),
+            focus: rgb(accent),
             selection: rgb(selection),
-            reasoning: rgb(secondary),
-            success: rgb(0xb8e3b0),
-            failure: rgb(0xffb5b5),
-            added: rgb(0xb8e3b0),
-            removed: rgb(0xffb5b5),
+            reasoning: rgb(muted),
+            success: rgb(0xa3c799),
+            failure: rgb(0xe0a59d),
+            added: rgb(0xafd0a5),
+            added_surface: rgb(0x253028),
+            removed: rgb(0xd5a59d),
+            removed_surface: rgb(0x342524),
+        }
+    }
+}
+impl Tokens {
+    /// Resolve a semantic slot; other colors pass through unchanged.
+    pub fn resolve(&self, color: Color) -> Color {
+        match color {
+            Color::Indexed(index) if (slot::BASE..=slot::LAST).contains(&index) => {
+                match Color::Indexed(index) {
+                    slot::BACKGROUND => self.background,
+                    slot::SURFACE => self.surface,
+                    slot::THINKING_SURFACE => self.thinking_surface,
+                    slot::LINE => self.line,
+                    slot::TEXT => self.text,
+                    slot::MUTED => self.secondary,
+                    slot::ACCENT => self.focus,
+                    slot::SELECTION => self.selection,
+                    slot::SUCCESS => self.success,
+                    slot::FAILURE => self.failure,
+                    slot::ADDED => self.added,
+                    slot::ADDED_SURFACE => self.added_surface,
+                    slot::REMOVED => self.removed,
+                    slot::REMOVED_SURFACE => self.removed_surface,
+                    _ => unreachable!("slot range is exhaustive"),
+                }
+            }
+            other => other,
         }
     }
 }
@@ -148,6 +244,11 @@ mod tests {
         };
         linear(r) * 0.2126 + linear(g) * 0.7152 + linear(b) * 0.0722
     }
+    fn contrast(a: Color, b: Color) -> f64 {
+        let a = luminance(a);
+        let b = luminance(b);
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
     #[test]
     fn every_text_token_has_readable_contrast_on_each_surface() {
         for theme in Theme::ALL {
@@ -162,16 +263,24 @@ mod tests {
                 t.added,
                 t.removed,
             ] {
-                for bg in [t.background, t.surface, t.selection] {
-                    let a = luminance(fg);
-                    let b = luminance(bg);
-                    assert!(
-                        (a.max(b) + 0.05) / (a.min(b) + 0.05) >= 4.5,
-                        "{theme:?} {fg:?} on {bg:?}"
-                    );
+                for bg in [t.background, t.surface, t.thinking_surface, t.selection] {
+                    assert!(contrast(fg, bg) >= 4.5, "{theme:?} {fg:?} on {bg:?}");
                 }
             }
+            assert!(contrast(t.added, t.added_surface) >= 4.5);
+            assert!(contrast(t.removed, t.removed_surface) >= 4.5);
         }
+    }
+    #[test]
+    fn every_slot_resolves_and_other_colors_pass_through() {
+        let t = Theme::Ember.tokens();
+        for index in slot::BASE..=slot::LAST {
+            assert!(matches!(t.resolve(Color::Indexed(index)), Color::Rgb(..)));
+        }
+        assert_eq!(t.resolve(Color::Indexed(1)), Color::Indexed(1));
+        assert_eq!(t.resolve(Color::Reset), Color::Reset);
+        assert_eq!(t.resolve(slot::ACCENT), t.focus);
+        assert_eq!(t.resolve(slot::REMOVED_SURFACE), t.removed_surface);
     }
     #[test]
     fn preferences_round_trip_and_reject_invalid_values_without_rewriting() {
@@ -180,12 +289,22 @@ mod tests {
         let choice = Appearance {
             layout: ViewLayout::Workbench,
             theme: Theme::Forest,
+            diagnostics: true,
         };
         choice.write(&path).unwrap();
         assert_eq!(Appearance::read(&path).unwrap(), choice);
+        // Preferences written before the diagnostics flag existed still load quietly.
+        fs::write(&path, "{\"layout\":\"ember\",\"theme\":\"forest\"}").unwrap();
+        assert!(!Appearance::read(&path).unwrap().diagnostics);
         fs::write(&path, "{\"layout\":\"bogus\",\"theme\":\"forest\"}").unwrap();
         assert!(Appearance::read(&path).is_err());
-        assert!(fs::read_to_string(&path).unwrap().contains("bogus"));
+        fs::write(
+            &path,
+            "{\"layout\":\"ember\",\"theme\":\"forest\",\"diagnostics\":\"yes\"}",
+        )
+        .unwrap();
+        assert!(Appearance::read(&path).is_err());
+        assert!(fs::read_to_string(&path).unwrap().contains("yes"));
         fs::remove_file(path).unwrap();
         assert_eq!(choice.layout.next().previous(), choice.layout);
         assert_eq!(choice.theme.previous().next(), choice.theme);

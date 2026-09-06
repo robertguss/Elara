@@ -51,7 +51,15 @@ or interaction acceptance is implied. Original palettes are starting points,
 not a requirement to reproduce low-contrast text or browser-only geometry.
 
 The terminal implementation defines its concrete tokens in
-[`appearance.rs`](../native/elara-tui/src/appearance.rs). Automated
+[`appearance.rs`](../native/elara-tui/src/appearance.rs). Since TUI-8 the
+palettes for Ember, Observatory and Workbench come from
+[`design/elara-tui-prototypes.html`](design/elara-tui-prototypes.html) and are
+applied through semantic slots (background, surface, line, text, muted, accent,
+success, failure, added/removed and their surfaces, selection). Chrome is quiet
+by default; the dense diagnostics row is opt-in (`/diagnostics`, `d` in the
+appearance picker, or `--diagnostics`). `cargo run --example preview -- LAYOUT
+THEME [W H] [--diagnostics] [--hidden]` renders a rich fixture for side-by-side
+review against the mockups. Automated
 [reference frames](../native/elara-tui/tests/goldens/appearance/) cover every
 layout/theme pair at 80×24, 120×40, and 180×45 for idle, composing, streaming,
 reasoning shown/hidden, and failed-tool states. They record terminal cell text;

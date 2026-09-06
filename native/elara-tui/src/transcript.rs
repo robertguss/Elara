@@ -4,6 +4,34 @@ use std::collections::{HashMap, HashSet};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+/// A presentation-only row placed above or below an entry's source lines.
+/// Synthetic rows carry no bytes: they never change `Entry::text`, copy
+/// ranges, or search offsets.
+#[derive(Clone, Debug)]
+pub(crate) enum Synthetic {
+    /// Full-width rule such as `─────` or a box edge `┌────┐`.
+    Rule {
+        left: &'static str,
+        fill: char,
+        right: &'static str,
+        style: Style,
+    },
+    /// Decorated chrome text (eyebrow labels, footers), with the entry's
+    /// gutter, fill, and edge; `tail` is right-aligned on the same row.
+    Text {
+        spans: Vec<Span<'static>>,
+        tail: Vec<Span<'static>>,
+    },
+    /// An empty spacer row with no decoration.
+    Blank,
+}
+/// Per-logical-line decoration overrides.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LineDecor {
+    pub fill: Option<Style>,
+    pub indent: Vec<Span<'static>>,
+    pub tail: Vec<Span<'static>>,
+}
 #[derive(Clone, Debug)]
 pub(crate) struct Entry {
     pub id: String,
@@ -14,6 +42,15 @@ pub(crate) struct Entry {
     pub prefix: usize,
     pub final_id: Option<String>,
     pub sections: Vec<(&'static str, std::ops::Range<usize>)>,
+    /// Chrome prepended to every visual row, including wrapped continuations.
+    pub gutter: Vec<Span<'static>>,
+    /// Chrome appended after full-width padding on every visual row.
+    pub edge: Vec<Span<'static>>,
+    /// Pad every row to the full width with this style (row background).
+    pub fill: Option<Style>,
+    pub line_decor: HashMap<usize, LineDecor>,
+    pub above: Vec<Synthetic>,
+    pub below: Vec<Synthetic>,
 }
 impl Entry {
     pub fn plain(id: &str, text: &str, user: bool) -> Self {
@@ -26,10 +63,16 @@ impl Entry {
             prefix: 0,
             final_id: None,
             sections: Vec::new(),
+            gutter: Vec::new(),
+            edge: Vec::new(),
+            fill: None,
+            line_decor: HashMap::new(),
+            above: Vec::new(),
+            below: Vec::new(),
         }
     }
     pub fn rendered(id: String, lines: Vec<Line<'static>>, user: bool, stream: bool) -> Self {
-        // Every renderer supplies one four-column speaker span per logical line.
+        // Every renderer supplies one chrome span per logical line (may be empty).
         let text = lines
             .iter()
             .map(|line| {
@@ -50,8 +93,31 @@ impl Entry {
             prefix: 1,
             final_id: None,
             sections: Vec::new(),
+            gutter: Vec::new(),
+            edge: Vec::new(),
+            fill: None,
+            line_decor: HashMap::new(),
+            above: Vec::new(),
+            below: Vec::new(),
         }
     }
+    pub fn tail(&mut self, line: usize, tail: Vec<Span<'static>>) {
+        self.line_decor.entry(line).or_default().tail = tail;
+    }
+    pub fn decorate_line(&mut self, line: usize, fill: Option<Style>, indent: Vec<Span<'static>>) {
+        let decor = self.line_decor.entry(line).or_default();
+        decor.fill = fill;
+        decor.indent = indent;
+    }
+    /// Apply one style to every span of every source line (e.g. muted thinking).
+    pub fn restyle(&mut self, style: Style) {
+        for line in &mut self.lines {
+            line.style = line.style.patch(style);
+        }
+    }
+}
+fn spans_width(spans: &[Span<'_>]) -> usize {
+    spans.iter().map(|s| s.content.width()).sum()
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Point {
@@ -65,12 +131,293 @@ struct Cell {
     start: usize,
     end: usize,
     chrome: bool,
+    /// A literal source space: a soft-wrap opportunity.
+    space: bool,
 }
 #[derive(Clone, Debug)]
 struct Row {
     id: String,
     start: usize,
     cells: Vec<Cell>,
+    /// Position among consecutive rows of this entry sharing `start`, so a
+    /// viewport pinned on a synthetic row does not drift onto its neighbour.
+    ordinal: usize,
+    /// Row background applied by `fill`; focus highlighting may replace it.
+    fill_bg: Option<Color>,
+}
+/// Builds the visual rows of one entry: source lines are wrapped first, then
+/// each row is assembled as `gutter | indent | body | tail | padding | edge`.
+struct RowBuilder<'a> {
+    entry: &'a Entry,
+    width: usize,
+    gutter_width: usize,
+    edge_width: usize,
+    rows: Vec<Row>,
+}
+impl<'a> RowBuilder<'a> {
+    fn new(entry: &'a Entry, width: usize) -> Self {
+        let width = width.max(1);
+        // Decoration degrades before the body loses its last column.
+        let mut gutter_width = spans_width(&entry.gutter);
+        let mut edge_width = spans_width(&entry.edge);
+        if gutter_width + edge_width >= width {
+            edge_width = 0;
+            gutter_width = gutter_width.min(width.saturating_sub(1));
+        }
+        Self {
+            entry,
+            width,
+            gutter_width,
+            edge_width,
+            rows: Vec::new(),
+        }
+    }
+    fn chrome(text: impl Into<String>, style: Style, byte: usize) -> Cell {
+        Cell {
+            text: text.into(),
+            style,
+            start: byte,
+            end: byte,
+            chrome: true,
+            space: false,
+        }
+    }
+    /// Soft-wrap at the last space in `row` so words stay whole. Returns the
+    /// cells carried to the next row and that row's first source byte; an
+    /// unbreakable row starts the next one empty at `byte`.
+    fn break_word(row: &mut Vec<Cell>, byte: usize) -> (Vec<Cell>, usize) {
+        let space = row
+            .iter()
+            .rposition(|cell| cell.space)
+            .filter(|index| index + 1 < row.len());
+        let Some(space) = space else {
+            return (Vec::new(), byte);
+        };
+        let carried = row.split_off(space + 1);
+        let start = carried[0].start;
+        (carried, start)
+    }
+    fn fixed(&self, spans: &[Span<'static>], budget: usize, base: Style, byte: usize) -> Vec<Cell> {
+        let mut cells = Vec::new();
+        let mut used = 0;
+        for span in spans {
+            let mut text = String::new();
+            for grapheme in span.content.graphemes(true) {
+                if used + grapheme.width() > budget {
+                    break;
+                }
+                used += grapheme.width();
+                text.push_str(grapheme);
+            }
+            if !text.is_empty() {
+                cells.push(Self::chrome(text, base.patch(span.style), byte));
+            }
+        }
+        cells
+    }
+    /// Assemble one visual row from body cells whose source bytes are already set.
+    fn finish(&mut self, body: Vec<Cell>, start: usize, decor: Option<&LineDecor>, last: bool) {
+        let entry = self.entry;
+        let fill = decor.and_then(|d| d.fill).or(entry.fill);
+        let base = fill.unwrap_or_default();
+        let end = body.last().map_or(start, |cell| cell.end);
+        let mut cells = Vec::new();
+        if self.gutter_width > 0 {
+            cells.extend(self.fixed(&entry.gutter, self.gutter_width, base, start));
+        }
+        let indent_budget = self
+            .width
+            .saturating_sub(self.gutter_width + self.edge_width + 1);
+        let indent = decor.map_or(&[][..], |d| d.indent.as_slice());
+        cells.extend(self.fixed(indent, indent_budget, base, start));
+        let mut used: usize = cells.iter().map(|c| c.text.width()).sum();
+        used += body.iter().map(|c| c.text.width()).sum::<usize>();
+        cells.extend(body);
+        let remaining = self.width.saturating_sub(used + self.edge_width);
+        let tail = decor
+            .filter(|_| last)
+            .map_or(&[][..], |d| d.tail.as_slice());
+        let tail_width = spans_width(tail);
+        let mut padding = remaining;
+        if !tail.is_empty() && tail_width < remaining {
+            padding = remaining - tail_width;
+            let mut tail_cells = self.fixed(tail, tail_width, base, end);
+            if padding > 0 {
+                cells.push(Self::chrome(" ".repeat(padding), base, end));
+            }
+            cells.append(&mut tail_cells);
+            padding = 0;
+        }
+        if padding > 0 && (fill.is_some() || self.edge_width > 0) {
+            cells.push(Self::chrome(" ".repeat(padding), base, end));
+        }
+        if self.edge_width > 0 {
+            cells.extend(self.fixed(&entry.edge, self.edge_width, base, end));
+        }
+        self.rows.push(Row {
+            id: entry.id.clone(),
+            start,
+            cells,
+            ordinal: 0,
+            fill_bg: fill.and_then(|s| s.bg),
+        });
+    }
+    fn synthetic(&mut self, row: &Synthetic, byte: usize) {
+        match row {
+            Synthetic::Blank => self.rows.push(Row {
+                id: self.entry.id.clone(),
+                start: byte,
+                cells: Vec::new(),
+                ordinal: 0,
+                fill_bg: None,
+            }),
+            Synthetic::Rule {
+                left,
+                fill,
+                right,
+                style,
+            } => {
+                let mut text = String::new();
+                let caps = left.width() + right.width();
+                if caps <= self.width {
+                    text.push_str(left);
+                    text.extend(std::iter::repeat_n(*fill, self.width - caps));
+                    text.push_str(right);
+                } else {
+                    text.extend(std::iter::repeat_n(*fill, self.width));
+                }
+                self.rows.push(Row {
+                    id: self.entry.id.clone(),
+                    start: byte,
+                    cells: vec![Self::chrome(text, *style, byte)],
+                    ordinal: 0,
+                    fill_bg: style.bg,
+                });
+            }
+            Synthetic::Text { spans, tail } => {
+                let budget = self
+                    .width
+                    .saturating_sub(self.gutter_width + self.edge_width)
+                    .max(1);
+                let body = self.fixed(spans, budget, Style::default(), byte);
+                let decor = LineDecor {
+                    fill: None,
+                    indent: Vec::new(),
+                    tail: tail.clone(),
+                };
+                self.finish(body, byte, Some(&decor), true);
+            }
+        }
+    }
+    /// Wrap the entry's source lines and append the stream cursor to the body.
+    fn body(&mut self) {
+        let entry = self.entry;
+        let mut byte = 0;
+        for (line_index, line) in entry.lines.iter().enumerate() {
+            let decor = entry.line_decor.get(&line_index);
+            let fill = decor
+                .and_then(|d| d.fill)
+                .or(entry.fill)
+                .unwrap_or_default();
+            let indent_width = decor.map_or(0, |d| spans_width(&d.indent)).min(
+                self.width
+                    .saturating_sub(self.gutter_width + self.edge_width + 1),
+            );
+            let offset = self.gutter_width + indent_width;
+            let capacity = self.width.saturating_sub(offset + self.edge_width).max(1);
+            let mut flow: Vec<Vec<Cell>> = vec![Vec::new()];
+            let mut starts = vec![byte];
+            let mut column = 0;
+            for (span_index, span) in line.spans.iter().enumerate() {
+                for grapheme in span.content.graphemes(true) {
+                    let chrome = span_index < entry.prefix;
+                    let size = if grapheme == "\t" {
+                        4 - (offset + column) % 4
+                    } else {
+                        grapheme.width()
+                    };
+                    if column + size > capacity && !flow.last().unwrap().is_empty() {
+                        let (carried, start) = if grapheme == " " {
+                            (Vec::new(), byte)
+                        } else {
+                            Self::break_word(flow.last_mut().unwrap(), byte)
+                        };
+                        column = carried.iter().map(|cell| cell.text.width()).sum();
+                        flow.push(carried);
+                        starts.push(start);
+                    }
+                    let end = if chrome { byte } else { byte + grapheme.len() };
+                    let display = if grapheme == "\t" {
+                        " ".repeat((4 - (offset + column) % 4).min(capacity))
+                    } else if grapheme.width() > capacity {
+                        "�".into()
+                    } else {
+                        grapheme.into()
+                    };
+                    let size = display.width();
+                    flow.last_mut().unwrap().push(Cell {
+                        text: display,
+                        style: fill.patch(line.style).patch(span.style),
+                        start: byte,
+                        end,
+                        chrome,
+                        space: !chrome && grapheme == " ",
+                    });
+                    byte = end;
+                    column += size;
+                }
+            }
+            if entry.stream && line_index + 1 == entry.lines.len() {
+                let full = flow
+                    .last()
+                    .unwrap()
+                    .iter()
+                    .map(|cell| cell.text.width())
+                    .sum::<usize>()
+                    >= capacity;
+                if full {
+                    flow.push(Vec::new());
+                    starts.push(byte);
+                }
+                flow.last_mut()
+                    .unwrap()
+                    .push(Self::chrome("▌", Style::default(), byte));
+            }
+            let count = flow.len();
+            for (index, (cells, start)) in flow.into_iter().zip(starts).enumerate() {
+                self.finish(cells, start, decor, index + 1 == count);
+            }
+            if line_index + 1 < entry.lines.len() {
+                byte += 1;
+            }
+        }
+    }
+    fn build(mut self) -> Vec<Row> {
+        if self.entry.lines.is_empty() {
+            // Hidden entries keep identity and copy ranges but draw nothing.
+            return Vec::new();
+        }
+        for row in &self.entry.above {
+            self.synthetic(row, 0);
+        }
+        self.body();
+        let end = self.entry.text.len();
+        for row in &self.entry.below {
+            self.synthetic(row, end);
+        }
+        let mut previous: Option<usize> = None;
+        let mut ordinal = 0;
+        for row in &mut self.rows {
+            ordinal = if previous == Some(row.start) {
+                ordinal + 1
+            } else {
+                0
+            };
+            row.ordinal = ordinal;
+            previous = Some(row.start);
+        }
+        self.rows
+    }
 }
 #[derive(Clone, Debug)]
 pub(crate) struct Transcript {
@@ -93,6 +440,7 @@ pub(crate) struct Transcript {
     width: usize,
     entry_ranks: HashMap<String, usize>,
     match_starts: HashSet<(usize, usize)>,
+    anchor_ordinal: usize,
     #[cfg(test)]
     pub layout_rebuilds: usize,
 }
@@ -118,6 +466,7 @@ impl Default for Transcript {
             width: 0,
             entry_ranks: HashMap::new(),
             match_starts: HashSet::new(),
+            anchor_ordinal: 0,
             #[cfg(test)]
             layout_rebuilds: 0,
         }
@@ -217,79 +566,7 @@ impl Transcript {
             }
             self.rows.clear();
             for entry in &self.entries {
-                let mut byte = 0;
-                for (line_index, line) in entry.lines.iter().enumerate() {
-                    let mut row = Row {
-                        id: entry.id.clone(),
-                        start: byte,
-                        cells: Vec::new(),
-                    };
-                    let mut column = 0;
-                    for (span_index, span) in line.spans.iter().enumerate() {
-                        for grapheme in span.content.graphemes(true) {
-                            let chrome = span_index < entry.prefix;
-                            let size = if grapheme == "\t" {
-                                4 - column % 4
-                            } else {
-                                grapheme.width()
-                            };
-                            if column + size > width.max(1) && !row.cells.is_empty() {
-                                self.rows.push(row);
-                                row = Row {
-                                    id: entry.id.clone(),
-                                    start: byte,
-                                    cells: Vec::new(),
-                                };
-                                column = 0;
-                            }
-                            let end = if chrome { byte } else { byte + grapheme.len() };
-                            let display = if grapheme == "\t" {
-                                " ".repeat((4 - column % 4).min(width.max(1)))
-                            } else if grapheme.width() > width.max(1) {
-                                "�".into()
-                            } else {
-                                grapheme.into()
-                            };
-                            let size = display.width();
-                            row.cells.push(Cell {
-                                text: display,
-                                style: line.style.patch(span.style),
-                                start: byte,
-                                end,
-                                chrome,
-                            });
-                            byte = end;
-                            column += size;
-                        }
-                    }
-                    self.rows.push(row);
-                    if line_index + 1 < entry.lines.len() {
-                        byte += 1;
-                    }
-                }
-                if entry.stream {
-                    if self.rows.last().is_some_and(|row| {
-                        row.cells
-                            .iter()
-                            .map(|cell| cell.text.width())
-                            .sum::<usize>()
-                            >= width.max(1)
-                    }) {
-                        self.rows.push(Row {
-                            id: entry.id.clone(),
-                            start: byte,
-                            cells: Vec::new(),
-                        });
-                    }
-                    let row = self.rows.last_mut().expect("entry has a line");
-                    row.cells.push(Cell {
-                        text: "▌".into(),
-                        style: Style::default(),
-                        start: byte,
-                        end: byte,
-                        chrome: true,
-                    });
-                }
+                self.rows.extend(RowBuilder::new(entry, width).build());
             }
         }
         self.height = height.max(1);
@@ -307,19 +584,31 @@ impl Transcript {
         }
     }
     fn row_for(&self, point: &Point) -> Option<usize> {
-        self.rows
+        let group = self
+            .rows
             .iter()
             .enumerate()
             .filter(|(_, r)| r.id == point.id && r.start <= point.byte)
             .map(|(i, _)| i)
             .next_back()
-            .or_else(|| {
-                // A presentation-only entry can move into a pane without losing its anchor.
-                let rank = self.entry_ranks.get(&point.id)?;
-                self.rows
-                    .iter()
-                    .rposition(|row| self.entry_ranks.get(&row.id).is_some_and(|r| r < rank))
-            })
+            .map(|last| {
+                // Rewind to the first row of the (id, start) group, then step
+                // forward by the pinned ordinal (clamped to the group).
+                let start = self.rows[last].start;
+                let first = (0..=last)
+                    .rev()
+                    .take_while(|&i| self.rows[i].id == point.id && self.rows[i].start == start)
+                    .last()
+                    .unwrap_or(last);
+                (first + self.anchor_ordinal).min(last)
+            });
+        group.or_else(|| {
+            // A presentation-only entry can move into a pane without losing its anchor.
+            let rank = self.entry_ranks.get(&point.id)?;
+            self.rows
+                .iter()
+                .rposition(|row| self.entry_ranks.get(&row.id).is_some_and(|r| r < rank))
+        })
     }
     fn pin(&mut self) {
         self.follow = false;
@@ -327,6 +616,7 @@ impl Transcript {
             id: r.id.clone(),
             byte: r.start,
         });
+        self.anchor_ordinal = self.rows.get(self.top).map_or(0, |r| r.ordinal);
         self.selected = self.anchor.as_ref().map(|p| p.id.clone());
     }
     pub fn scroll(&mut self, delta: isize) {
@@ -386,6 +676,7 @@ impl Transcript {
             self.top = row;
             self.pin();
             self.anchor = Some(point);
+            self.anchor_ordinal = 0;
         }
     }
     pub fn refresh_matches(&mut self) {
@@ -535,6 +826,18 @@ impl Transcript {
             byte: row.cells.last().map_or(row.start, |c| c.end),
         })
     }
+    /// The entry and source byte at which the visual row under the mouse starts.
+    pub fn mouse_row_start(&self, column: u16, row: u16) -> Option<Point> {
+        if !self.rect.contains((column, row).into()) {
+            return None;
+        }
+        let y = row.saturating_sub(self.rect.y) as usize;
+        let row = self.rows.get(self.top + y)?;
+        Some(Point {
+            id: row.id.clone(),
+            byte: row.start,
+        })
+    }
     pub fn visible_lines(&self) -> Vec<Line<'static>> {
         let selection = self.ordered_selection();
         let rank = |id: &str, byte: usize| (self.entry_ranks.get(id).copied().unwrap_or(0), byte);
@@ -560,8 +863,12 @@ impl Transcript {
                                     cell.style.bg(Color::Blue).fg(Color::White)
                                 } else if matched {
                                     cell.style.bg(Color::Yellow).fg(Color::Black)
-                                } else if self.focused && self.selected.as_deref() == Some(&row.id)
+                                } else if self.focused
+                                    && self.selected.as_deref() == Some(&row.id)
+                                    && (cell.style.bg.is_none() || cell.style.bg == row.fill_bg)
                                 {
+                                    // Highlight the row surface without flattening
+                                    // diff or panel backgrounds inside it.
                                     cell.style.bg(Color::DarkGray)
                                 } else {
                                     cell.style
@@ -800,6 +1107,34 @@ mod navigation_tests {
                 .all(|row| row.cells.iter().map(|c| c.text.width()).sum::<usize>() <= 1)
         );
         assert_eq!(state.copy_entry().as_deref(), Some("👩‍💻\t漢"));
+    }
+    #[test]
+    fn soft_wrap_breaks_between_words_and_keeps_copy_bytes() {
+        let entry = Entry::plain("m0", "Keep my draft intact when a stream updates.", false);
+        let mut state = Transcript::default();
+        state.layout(vec![entry], 16, 20);
+        let rows: Vec<String> = state
+            .rows
+            .iter()
+            .map(|row| row.cells.iter().map(|c| c.text.as_str()).collect())
+            .collect();
+        assert_eq!(
+            rows,
+            ["Keep my draft ", "intact when a ", "stream updates."]
+        );
+        assert_eq!(
+            state.rows.iter().map(|row| row.start).collect::<Vec<_>>(),
+            [0, 14, 28]
+        );
+        // Unbreakable runs still wrap per grapheme rather than overflowing.
+        state.layout(vec![Entry::plain("m1", "abcdefghij", false)], 4, 20);
+        assert!(
+            state
+                .rows
+                .iter()
+                .all(|row| row.cells.iter().map(|c| c.text.width()).sum::<usize>() <= 4)
+        );
+        assert_eq!(state.rows.len(), 3);
     }
     #[test]
     fn search_paste_limit_is_atomic_and_unicode_safe() {

@@ -1,18 +1,18 @@
-┌ ember / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ─────────────┐
-│you inspect the build                                                                 │
-│[+] bash · running                                                                    │
-│$ mix test                                                                            │
-│Display folded · Space expand · f viewer                                              │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────┐
+ ✳ elara                                                                        control
+────────────────────────────────────────────────────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ──────────────────────────────────────────────────────────────────────────────────────
+ › ● bash  mix test                                                             running
+ ──────────────────────────────────────────────────────────────────────────────────────
+
+
+
+
+ ● Running bash …
+┌ PROMPT ─────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────┘
- embedded · exits with TUI · control · connected · head 8 · running_tool · outcome - · s
+ elara · elara             │ ember / ember · Thinking expanded · F1 help │

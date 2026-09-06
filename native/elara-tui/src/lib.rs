@@ -22,12 +22,13 @@ use std::time::{Duration, Instant};
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use serde_json::{Value, json};
 use tui_markdown::{ImageFallback, Options as MarkdownOptions, StyleSheet};
+use unicode_width::UnicodeWidthStr;
 
 pub const DEFAULT_PORT: u16 = 4_048;
 const MAX_LINE_BYTES: usize = 16 * 1_024 * 1_024;
@@ -279,6 +280,11 @@ impl Model {
             .map(str::to_owned)
     }
 
+    /// Expand a tool call inline (presentation state; used by previews and tests).
+    pub fn expand_tool(&mut self, call_id: &str) {
+        self.expanded_tools.insert(call_id.to_owned());
+        self.transcript.borrow_mut().source_key = None;
+    }
     fn toggle_tool(&mut self) {
         if self.viewer.is_some() {
             return;
@@ -746,14 +752,16 @@ pub fn handle_input(
         }
         if inside
             && mouse.kind == MouseEventKind::Down(MouseButton::Left)
-            && mouse.column < model.transcript.borrow().rect.x + 3
+            && mouse.column < model.transcript.borrow().rect.x + 4
         {
+            // The `› ✓ ` gutter of a tool header row toggles it; clicks on the
+            // header text still select and start a drag like any other row.
             let point = model
                 .transcript
                 .borrow()
-                .mouse_point(mouse.column, mouse.row, false);
+                .mouse_row_start(mouse.column, mouse.row);
             if point.as_ref().is_some_and(|p| {
-                p.byte < 3 && p.id.starts_with(&format!("{}:tool:", model.session_id))
+                p.byte == 0 && p.id.starts_with(&format!("{}:tool:", model.session_id))
             }) {
                 let mut state = model.transcript.borrow_mut();
                 state.focused = true;
@@ -1231,12 +1239,46 @@ pub fn render_frame(model: &Model, width: u16, height: u16) -> Result<String, St
     Ok(format!("{}\n", rows.join("\n")))
 }
 
+/// Render one frame as 24-bit ANSI text (fg/bg/bold per cell) for previews.
+pub fn render_ansi(model: &Model, width: u16, height: u16) -> Result<String, String> {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).map_err(|error| format!("render failed: {error}"))?;
+    terminal
+        .draw(|frame| draw_model(frame, model))
+        .map_err(|error| format!("render failed: {error}"))?;
+    let buffer = terminal.backend().buffer();
+    let sgr = |color: Color, layer: u8| match color {
+        Color::Rgb(r, g, b) => format!("\x1b[{layer}8;2;{r};{g};{b}m"),
+        _ => format!("\x1b[{layer}9m"),
+    };
+    let mut out = String::new();
+    for y in 0..height {
+        for x in 0..width {
+            let cell = &buffer[(x, y)];
+            out.push_str("\x1b[0m");
+            out.push_str(&sgr(cell.fg, 3));
+            out.push_str(&sgr(cell.bg, 4));
+            if cell.modifier.contains(Modifier::BOLD) {
+                out.push_str("\x1b[1m");
+            }
+            out.push_str(cell.symbol());
+        }
+        out.push_str("\x1b[0m\n");
+    }
+    Ok(out)
+}
+
 pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
     draw_content(frame, model);
     presentation::finish(frame, model);
     attachments::draw(frame, model);
     sessions::draw(frame, model);
     inbox::draw(frame, model);
+    draw_session_detail(frame, model);
+    presentation::paint(frame, model);
+}
+
+fn draw_session_detail(frame: &mut ratatui::Frame<'_>, model: &Model) {
     if let Some(text) = &model.session_detail {
         let area = frame.area();
         let rect = ratatui::layout::Rect::new(
@@ -1269,7 +1311,11 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title(" Composer help · F1/Esc close "),
+                        .border_style(presentation::line_style())
+                        .title(Span::styled(
+                            " Composer help · F1/Esc close ",
+                            presentation::muted(),
+                        )),
                 ),
             area,
         );
@@ -1300,7 +1346,7 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
         let entries = if state.source_key.as_ref() != Some(&source_key) {
             state.source_key = Some(source_key);
             Some(vec![
-                call.map(|call| tools::entry(&model.session_id, call, true))
+                call.map(|call| tools::inspection(&model.session_id, call))
                     .unwrap_or_else(|| {
                         transcript::Entry::plain(id, "Tool unavailable in current snapshot.", false)
                     }),
@@ -1317,8 +1363,12 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             Paragraph::new(state.visible_lines()).block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(format!(" Tool viewer · {name} · Esc/right-click close "))
-                    .title_bottom(state.title()),
+                    .border_style(presentation::line_style())
+                    .title(Span::styled(
+                        format!(" Tool viewer · {name} · Esc/right-click close "),
+                        presentation::accent(),
+                    ))
+                    .title_bottom(Span::styled(state.title(), presentation::muted())),
             ),
             viewer_area,
         );
@@ -1335,14 +1385,17 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             ""
         };
         frame.render_widget(
-            Paragraph::new(format!(
-                "{connection}{pending} · {} · {} · {}",
-                model.mode,
-                model.turn_state(),
-                model
-                    .notice
-                    .as_deref()
-                    .unwrap_or("/ search · y copy entry · c copy selection · PgUp/PgDn scroll")
+            Paragraph::new(Span::styled(
+                format!(
+                    " {connection}{pending} · {} · {} · {}",
+                    model.mode,
+                    model.turn_state(),
+                    model
+                        .notice
+                        .as_deref()
+                        .unwrap_or("/ search · y copy entry · c copy selection · PgUp/PgDn scroll")
+                ),
+                presentation::muted(),
             )),
             status_area,
         );
@@ -1355,19 +1408,24 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
         .rows
         .len()
         .clamp(1, (area.height as usize / 3).max(1)) as u16;
+    let diagnostics_rows = u16::from(model.appearance.diagnostics);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
+            Constraint::Length(2),
             Constraint::Min(4),
+            Constraint::Length(1),
             Constraint::Length(model.attachments.selections.len() as u16),
             Constraint::Length(editor_height + 2),
             Constraint::Length(1),
+            Constraint::Length(diagnostics_rows),
         ])
         .split(area);
+    draw_header(frame, model, chunks[0]);
 
-    let transcript_area = presentation::panes(frame, model, chunks[0]);
+    let transcript_area = presentation::panes(frame, model, chunks[1]);
     let mut state = model.transcript.borrow_mut();
-    state.rect = transcript_area.inner(ratatui::layout::Margin::new(1, 1));
+    state.rect = transcript_area.inner(ratatui::layout::Margin::new(1, 0));
     let source_key = (
         model.session_id.clone(),
         model.projection.incarnation.clone(),
@@ -1383,34 +1441,39 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
     state.update(
         entries,
         state_width(transcript_area.width),
-        transcript_area.height.saturating_sub(2) as usize,
+        transcript_area.height as usize,
     );
-    let transcript = Paragraph::new(state.visible_lines()).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(format!(
-                " {} / {} · F4 thinking {} · {} ",
-                model.appearance.layout.name(),
-                model.appearance.theme.name(),
-                if model.thinking_visible {
-                    "open"
-                } else {
-                    "hidden"
-                },
-                state.title()
-            ))
-            .title_bottom(if state.focused {
-                actions::hints(true)
+    frame.render_widget(Paragraph::new(state.visible_lines()), state.rect);
+    let transcript_focused = state.focused;
+    let transcript_status = if state.searching || !state.query.is_empty() {
+        Some(format!(
+            "/{} · {}/{} matches",
+            state.query,
+            if state.matches.is_empty() {
+                0
             } else {
-                " Tab transcript · F5 thinking · F7 model/effort ".into()
-            }),
-    );
-    frame.render_widget(transcript, transcript_area);
+                state.match_index + 1
+            },
+            state.matches.len()
+        ))
+    } else if state.focused {
+        Some(format!(
+            "{} · {}",
+            if state.follow { "FOLLOW" } else { "PAUSED" },
+            actions::hints(true)
+        ))
+    } else if !state.follow {
+        Some("PAUSED · End follow".into())
+    } else {
+        None
+    };
     drop(state);
+    draw_activity(frame, model, chunks[2], transcript_status);
 
-    frame.render_widget(Paragraph::new(model.attachments.lines()), chunks[1]);
+    frame.render_widget(Paragraph::new(model.attachments.lines()), chunks[3]);
 
-    let visible = chunks[2].height.saturating_sub(2) as usize;
+    let composer = chunks[4];
+    let visible = composer.height.saturating_sub(2) as usize;
     let first_row = editor_layout
         .cursor_row
         .saturating_sub(visible.saturating_sub(1));
@@ -1435,19 +1498,28 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             )
         })
         .collect();
-    let prompt_title = if model.inbox.supported {
+    let prompt_hint = if model.inbox.supported {
         format!(" Enter send/queue · {} ", inbox::summary(model))
     } else {
         actions::prompt_title()
     };
-    let title = if model.safe_paste {
-        " SAFE PASTE · Enter newline · F2 finish (does not send) "
+    let (title, hint) = if model.safe_paste {
+        (
+            " SAFE PASTE ",
+            " Enter newline · F2 finish (does not send) ".to_owned(),
+        )
     } else {
-        &prompt_title
+        (" PROMPT ", prompt_hint)
     };
+    // The hint is right-aligned, so ratatui would drop its head when it does
+    // not fit; clip the tail instead so the leading context stays readable.
+    let hint = clip_end(
+        &hint,
+        (composer.width as usize).saturating_sub(title.width() + 2),
+    );
     let continuity = &model.projection.view["inbox"];
     let bindings = if !model.safe_paste
-        && chunks[2].width < 120
+        && composer.width < 120
         && (continuity["context"]["warning"] == true
             || continuity["handoff"].is_object()
             || continuity["source"].is_string())
@@ -1458,53 +1530,269 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
     } else {
         " Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history "
     };
+    let border = if transcript_focused {
+        presentation::line_style()
+    } else {
+        presentation::accent()
+    };
     let input = Paragraph::new(input_lines).block(
         Block::default()
             .borders(Borders::ALL)
-            .title(title)
-            .title_bottom(bindings),
+            .border_style(border)
+            .title(Span::styled(title, presentation::accent()))
+            .title(Line::from(Span::styled(hint, presentation::muted())).right_aligned())
+            .title_bottom(Span::styled(bindings, presentation::muted())),
     );
-    frame.render_widget(input, chunks[2]);
-    if visible > 0 && chunks[2].width > 2 && !model.transcript.borrow().focused {
+    frame.render_widget(input, composer);
+    if visible > 0 && composer.width > 2 && !transcript_focused {
         frame.set_cursor_position((
-            chunks[2].x + 1 + (editor_layout.cursor_column as u16).min(chunks[2].width - 3),
-            chunks[2].y + 1 + (editor_layout.cursor_row - first_row) as u16,
+            composer.x + 1 + (editor_layout.cursor_column as u16).min(composer.width - 3),
+            composer.y + 1 + (editor_layout.cursor_row - first_row) as u16,
         ));
     }
+    draw_footer(frame, model, chunks[5]);
+    if diagnostics_rows > 0 {
+        draw_diagnostics(frame, model, chunks[6]);
+    }
+}
 
-    let connection = match model.connection {
+/// Keep the head of `text` within `width` cells, ending with `… ` when cut.
+fn clip_end(text: &str, width: usize) -> String {
+    if text.width() <= width {
+        return text.to_owned();
+    }
+    let budget = width.saturating_sub(2);
+    let mut out = String::new();
+    for ch in text.chars() {
+        if out.width() + ch.to_string().width() > budget {
+            break;
+        }
+        out.push(ch);
+    }
+    if width >= 2 {
+        out.push_str("… ");
+    }
+    out
+}
+
+fn connection_label(model: &Model) -> &'static str {
+    match model.connection {
         ConnectionState::Connected => "connected",
         ConnectionState::Resynchronizing => "resynchronizing",
         ConnectionState::Detached => "detached",
-    };
-    let outcome = model.last_outcome.as_deref().unwrap_or("-");
-    let status = if let Some(notice) = &model.notice {
-        format!(" {notice}")
+    }
+}
+
+/// `✳ elara  ~/cwd` with the control mode at the right, over a rule.
+fn draw_header(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
+    if area.height == 0 {
+        return;
+    }
+    let inner = area.inner(ratatui::layout::Margin::new(1, 0));
+    let mut left = vec![
+        Span::styled("✳ ", presentation::accent()),
+        Span::styled("elara", presentation::accent().add_modifier(Modifier::BOLD)),
+    ];
+    if let Some(cwd) = &model.cwd {
+        left.push(Span::styled(
+            format!("   {}", tilde(cwd)),
+            presentation::muted(),
+        ));
+    }
+    let right = vec![Span::styled(model.mode.clone(), presentation::muted())];
+    frame.render_widget(
+        Paragraph::new(presentation::row(left, right, inner.width)),
+        Rect { height: 1, ..inner },
+    );
+    if area.height > 1 {
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "─".repeat(area.width as usize),
+                presentation::line_style(),
+            ))),
+            Rect {
+                y: area.y + 1,
+                height: 1,
+                ..area
+            },
+        );
+    }
+}
+
+/// One-line activity row: turn state or notice left, transcript status right.
+/// Human-readable activity line: `running_tool` names the running tool when known.
+fn activity_label(model: &Model, state: &str) -> String {
+    let running = model.projection.view["turn"]["tool_call_id"]
+        .as_str()
+        .and_then(|id| {
+            model.projection.view["tool_calls"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|call| call["id"] == id)
+        })
+        .and_then(|call| call["name"].as_str());
+    match (state, running) {
+        ("running_tool", Some(name)) => format!("Running {name}"),
+        _ => {
+            let mut label = state.replace('_', " ");
+            if let Some(first) = label.get(..1) {
+                let upper = first.to_uppercase();
+                label.replace_range(..1, &upper);
+            }
+            label
+        }
+    }
+}
+fn draw_activity(
+    frame: &mut ratatui::Frame<'_>,
+    model: &Model,
+    area: Rect,
+    transcript_status: Option<String>,
+) {
+    if area.height == 0 {
+        return;
+    }
+    let inner = area.inner(ratatui::layout::Margin::new(1, 0));
+    let left = if let Some(notice) = &model.notice {
+        vec![
+            Span::styled("● ", presentation::accent()),
+            Span::styled(notice.clone(), Style::default().fg(appearance::slot::TEXT)),
+        ]
     } else if model.pending_ask.is_some() {
-        " Awaiting acceptance · draft retained · no automatic retry ".to_string()
+        vec![
+            Span::styled("● ", presentation::accent()),
+            Span::styled(
+                "Awaiting acceptance · draft retained · no automatic retry",
+                presentation::muted(),
+            ),
+        ]
+    } else if model.connection != ConnectionState::Connected {
+        vec![
+            Span::styled("○ ", Style::default().fg(appearance::slot::FAILURE)),
+            Span::styled(connection_label(model), presentation::muted()),
+        ]
     } else {
-        format!(
-            " {} · {} · head {} · {} · outcome {} · {} ",
-            model.mode,
-            connection,
-            model.projection.head,
-            model.turn_state(),
-            outcome,
-            model.session_id
+        match model.turn_state() {
+            "idle" => vec![
+                Span::styled("✓ ", Style::default().fg(appearance::slot::SUCCESS)),
+                Span::styled("Idle", presentation::muted()),
+            ],
+            state => vec![
+                Span::styled("● ", presentation::accent()),
+                Span::styled(
+                    format!("{} …", activity_label(model, state)),
+                    presentation::accent(),
+                ),
+            ],
+        }
+    };
+    let right = transcript_status
+        .map(|status| vec![Span::styled(status, presentation::muted())])
+        .unwrap_or_default();
+    frame.render_widget(
+        Paragraph::new(presentation::row(left, right, inner.width)),
+        inner,
+    );
+}
+
+fn tilde(path: &str) -> String {
+    match std::env::var("HOME") {
+        Ok(home) if !home.is_empty() && path.starts_with(&home) => {
+            format!("~{}", &path[home.len()..])
+        }
+        _ => path.to_owned(),
+    }
+}
+
+/// Quiet footer: model, layout/theme, thinking state, F1 help, cwd.
+fn draw_footer(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
+    if area.height == 0 {
+        return;
+    }
+    let inner = area.inner(ratatui::layout::Margin::new(1, 0));
+    let provider = &model.projection.view["provider_view"];
+    let model_name = provider["next_request"]["model"]
+        .as_str()
+        .or_else(|| {
+            model.projection.view["messages"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .rev()
+                .find_map(|message| message["response_model"].as_str())
+        })
+        .unwrap_or("elara");
+    let left = vec![Span::styled(
+        format!("{model_name} · elara"),
+        presentation::muted(),
+    )];
+    let center = format!(
+        "{} / {} · Thinking {} · F1 help",
+        model.appearance.layout.name(),
+        model.appearance.theme.name(),
+        if model.thinking_visible {
+            "expanded"
+        } else {
+            "hidden"
+        }
+    );
+    let right = model.cwd.as_deref().map(tilde).unwrap_or_default();
+    let width = inner.width as usize;
+    let used = left[0].content.width() + center.width() + right.width();
+    let line = if used + 6 <= width {
+        let gap = width - used;
+        let before = gap / 2;
+        let mut spans = left;
+        spans.push(Span::styled(
+            format!("{}│ ", " ".repeat(before.saturating_sub(2))),
+            presentation::line_style(),
+        ));
+        spans.push(Span::styled(center, presentation::muted()));
+        spans.push(Span::styled(
+            format!(" │{}", " ".repeat((gap - before).saturating_sub(2))),
+            presentation::line_style(),
+        ));
+        spans.push(Span::styled(right, presentation::muted()));
+        Line::from(spans)
+    } else {
+        presentation::row(
+            vec![Span::styled(center, presentation::muted())],
+            Vec::new(),
+            inner.width,
         )
     };
+    frame.render_widget(Paragraph::new(line), inner);
+}
+
+/// Dense status row for debugging; enabled with `/diagnostics` or `--diagnostics`.
+fn draw_diagnostics(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
+    if area.height == 0 {
+        return;
+    }
+    let outcome = model.last_outcome.as_deref().unwrap_or("-");
     let lifetime = match model.lifetime.as_str() {
         "embedded" => "embedded · exits with TUI",
         "long_lived" => "long-lived server",
         _ => "server lifetime unknown",
     };
-    let status = format!(" {lifetime} ·{status}");
+    let status = format!(
+        " {lifetime} · {} · {} · head {} · {} · outcome {} · {} ",
+        model.mode,
+        connection_label(model),
+        model.projection.head,
+        model.turn_state(),
+        outcome,
+        model.session_id
+    );
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             status,
-            Style::default().bg(Color::DarkGray).fg(Color::White),
+            Style::default()
+                .bg(appearance::slot::SURFACE)
+                .fg(appearance::slot::MUTED),
         ))),
-        chunks[3],
+        area,
     );
 }
 
@@ -1549,26 +1837,22 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
                     let text = message["text"].as_str().unwrap_or_default();
                     let agent = message["agent_source"].is_object();
                     // Keep literal tabs in the source mapping; expand only visual cells.
+                    // The empty first span is the renderer chrome slot.
                     let lines = text
                         .split('\n')
-                        .enumerate()
-                        .map(|(i, line)| {
-                            Line::from(vec![
-                                Span::styled(
-                                    if i == 0 {
-                                        if agent { "agent " } else { "you " }
-                                    } else {
-                                        "    "
-                                    },
-                                    Style::default()
-                                        .fg(Color::Cyan)
-                                        .add_modifier(Modifier::BOLD),
-                                ),
-                                Span::raw(line.to_owned()),
-                            ])
-                        })
+                        .map(|line| Line::from(vec![Span::raw(""), Span::raw(line.to_owned())]))
                         .collect();
-                    entries.push(Entry::rendered(id.clone(), lines, true, false));
+                    let mut entry = Entry::rendered(id.clone(), lines, true, false);
+                    entry.gutter = vec![Span::styled("▌ ", presentation::accent())];
+                    if model.appearance.layout != ViewLayout::Workbench {
+                        entry.fill = Some(Style::default().bg(appearance::slot::SURFACE));
+                    }
+                    entry.above = vec![
+                        transcript::Synthetic::Blank,
+                        presentation::eyebrow(if agent { "AGENT" } else { "YOU" }, Vec::new()),
+                    ];
+                    entry.below = vec![transcript::Synthetic::Blank];
+                    entries.push(entry);
                     if let Some(attachments) = message["attachments"].as_array() {
                         for (attachment_index, metadata) in attachments.iter().take(4).enumerate() {
                             entries.push(Entry::plain(
@@ -1578,9 +1862,15 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
                             ));
                         }
                     }
-                    if let Some(thinking) =
-                        presentation::inline_thinking(model, &id, summary_turns.contains(&index))
-                    {
+                    let last_turn = !messages[index + 1..]
+                        .iter()
+                        .any(|later| later["role"] == "user");
+                    if let Some(thinking) = presentation::inline_thinking(
+                        model,
+                        &id,
+                        summary_turns.contains(&index),
+                        last_turn,
+                    ) {
                         entries.push(thinking);
                     }
                 }
@@ -1642,12 +1932,11 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
                     } else if let Some(text) = message["text"].as_str()
                         && !text.is_empty()
                     {
-                        entries.push(Entry::rendered(
-                            id,
-                            assistant_markdown_lines(text),
-                            false,
-                            false,
-                        ));
+                        let mut entry =
+                            Entry::rendered(id, assistant_markdown_lines(text), false, false);
+                        entry.above = vec![presentation::eyebrow("ELARA", Vec::new())];
+                        entry.below = vec![transcript::Synthetic::Blank];
+                        entries.push(entry);
                     }
                     if let Some(calls) = message["tool_calls"].as_array() {
                         for call in calls {
@@ -1706,6 +1995,7 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
                     false,
                     true,
                 );
+                entry.above = vec![presentation::eyebrow("ELARA · live", Vec::new())];
                 entry.final_id = Some(format!(
                     "{}:message:{}",
                     model.session_id,
@@ -1716,13 +2006,68 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
         }
     }
     if entries.is_empty() {
-        entries.push(Entry::plain(
+        let mut entry = Entry::plain(
             &format!("{}:empty", model.session_id),
             "No messages yet.",
             false,
-        ));
+        );
+        entry.restyle(presentation::muted());
+        entries.push(entry);
     }
+    decorate_runs(model, &mut entries);
     entries
+}
+
+/// Frame consecutive tool calls (rules, or boxes in Workbench) and close each
+/// Ember thinking block with its footer. Presentation only: no text changes.
+fn decorate_runs(model: &Model, entries: &mut [transcript::Entry]) {
+    use transcript::Synthetic;
+    let tool_prefix = format!("{}:tool:", model.session_id);
+    let is_tool = |entry: &transcript::Entry| entry.id.starts_with(&tool_prefix);
+    let is_thinking = |entry: &transcript::Entry| {
+        entry.id.ends_with(":thinking") || entry.id.ends_with(":reasoning_summary")
+    };
+    let boxed = model.appearance.layout == ViewLayout::Workbench;
+    let edge = |left: &'static str, right: &'static str| Synthetic::Rule {
+        left,
+        fill: '─',
+        right,
+        style: presentation::line_style(),
+    };
+    let count = entries.len();
+    for index in 0..count {
+        let next_is_tool = entries.get(index + 1).is_some_and(is_tool);
+        let next_is_thinking = entries.get(index + 1).is_some_and(is_thinking);
+        let entry = &mut entries[index];
+        if is_tool(entry) {
+            if boxed {
+                entry.gutter = vec![Span::styled("│ ", presentation::line_style())];
+                entry.edge = vec![Span::styled(" │", presentation::line_style())];
+                entry.above = vec![edge("┌", "┐")];
+                entry.below = vec![edge("└", "┘")];
+                if !next_is_tool {
+                    entry.below.push(Synthetic::Blank);
+                }
+            } else {
+                entry.above = vec![presentation::rule()];
+                if !next_is_tool {
+                    entry.below = vec![presentation::rule(), Synthetic::Blank];
+                }
+            }
+        } else if is_thinking(entry) && !next_is_thinking && !entry.lines.is_empty() {
+            let closes_summary = entry.id.ends_with(":reasoning_summary");
+            if closes_summary {
+                entry.below.push(Synthetic::Text {
+                    spans: vec![Span::styled(
+                        "Provider-visible summary",
+                        presentation::muted(),
+                    )],
+                    tail: Vec::new(),
+                });
+            }
+            entry.below.push(Synthetic::Blank);
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1748,17 +2093,9 @@ fn assistant_markdown_lines(text: &str) -> Vec<Line<'static>> {
         lines.push(Line::default());
     }
 
-    for (index, line) in lines.iter_mut().enumerate() {
-        let prefix = if index == 0 { "ai  " } else { "    " };
-        line.spans.insert(
-            0,
-            Span::styled(
-                prefix,
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        );
+    // The empty first span is the renderer chrome slot (see Entry::rendered).
+    for line in &mut lines {
+        line.spans.insert(0, Span::raw(""));
     }
 
     lines
@@ -2185,6 +2522,17 @@ pub fn fixture_model(name: &str) -> Model {
 mod tests {
     use super::*;
 
+    /// The activity row sits above the composer: `● notice`, `○ connection`,
+    /// or `✓ Idle`.
+    fn activity_row(frame: &str) -> &str {
+        frame
+            .lines()
+            .find(|line| {
+                line.starts_with(" ● ") || line.starts_with(" ○ ") || line.starts_with(" ✓ ")
+            })
+            .unwrap_or_else(|| panic!("no activity row in\n{frame}"))
+    }
+
     #[test]
     fn delayed_acceptance_is_visible_and_late_reply_clears_only_the_submitted_draft() {
         let mut model = fixture_model("idle");
@@ -2194,12 +2542,7 @@ mod tests {
         assert!(model.check_acceptance_timeout());
         assert!(!model.check_acceptance_timeout());
         assert!(
-            render_frame(&model, 80, 24)
-                .unwrap()
-                .lines()
-                .last()
-                .unwrap()
-                .contains("Acceptance uncertain")
+            activity_row(&render_frame(&model, 80, 24).unwrap()).contains("Acceptance uncertain")
         );
         assert_eq!(model.editor.text(), "waiting draft");
         assert!(model.prepare_submit().is_none());
@@ -2216,22 +2559,10 @@ mod tests {
         model.editor.insert("next prompt");
         model.prepare_submit().unwrap();
         let frame = render_frame(&model, 80, 24).unwrap();
-        assert!(
-            frame
-                .lines()
-                .last()
-                .unwrap()
-                .contains("Awaiting acceptance")
-        );
+        assert!(activity_row(&frame).contains("Awaiting acceptance"));
         model.mark_disconnected("socket lost");
         let frame = render_frame(&model, 80, 24).unwrap();
-        assert!(
-            frame
-                .lines()
-                .last()
-                .unwrap()
-                .contains("Acceptance uncertain")
-        );
+        assert!(activity_row(&frame).contains("Acceptance uncertain"));
     }
 
     #[test]
@@ -2361,7 +2692,7 @@ mod tests {
         let cursor = terminal.get_cursor_position().unwrap();
         assert!(cursor.x > 0 && cursor.x < 79 && cursor.y > 0 && cursor.y < 23);
         let rendered = render_frame(&model, 80, 24).unwrap();
-        assert!(rendered.contains("you inspect the build"));
+        assert!(rendered.contains("▌ inspect the build"));
         assert!(rendered.contains("F2 safe paste"));
     }
 
@@ -2375,9 +2706,31 @@ mod tests {
                 {"role":"user","text":"owner correction"}
             ]);
             let rendered = render_frame(&model, 80, 24).unwrap();
-            assert!(rendered.contains("agent child evidence"), "{rendered}");
-            assert!(!rendered.contains("you child evidence"));
-            assert!(rendered.contains("you owner correction"));
+            let rows: Vec<&str> = rendered.lines().collect();
+            let speaker_before = |text: &str| {
+                let index = rows
+                    .iter()
+                    .position(|row| row.contains(text))
+                    .unwrap_or_else(|| panic!("{text} missing in\n{rendered}"));
+                rows[..index]
+                    .iter()
+                    .rev()
+                    .find(|row| row.contains("YOU") || row.contains("AGENT"))
+                    .copied()
+                    .unwrap_or_else(|| panic!("no speaker above {text} in\n{rendered}"))
+            };
+            assert!(
+                speaker_before("child evidence").contains("AGENT"),
+                "{rendered}"
+            );
+            assert!(
+                !speaker_before("child evidence").contains("YOU"),
+                "{rendered}"
+            );
+            assert!(
+                speaker_before("owner correction").contains("YOU"),
+                "{rendered}"
+            );
         }
     }
 
@@ -2515,15 +2868,17 @@ mod tests {
         model.projection.view["messages"] = json!([{"role": "user", "text": prompt}]);
         let frame = render_frame(&model, 80, 24).unwrap();
         let rows = frame.lines().collect::<Vec<_>>();
-        let first = rows
-            .iter()
-            .position(|row| row.contains("you first"))
-            .unwrap();
-        assert!(rows[first + 1].trim_matches(['│', ' ']).is_empty());
-        assert!(rows[first + 2].contains("│      **literal**"));
-        assert!(rows[first + 3].contains("│    e\u{301}   👩‍💻  "));
-        assert!(rows[first + 3].contains("end"));
-        assert!(rows[first + 4].trim_matches(['│', ' ']).is_empty());
+        let first = rows.iter().position(|row| row.contains("▌ first")).unwrap();
+        assert!(rows[first + 1].trim_matches(['▌', ' ']).is_empty());
+        assert!(rows[first + 2].contains("▌   **literal**"));
+        assert!(
+            rows[first + 3].contains("▌ e\u{301} "),
+            "{}",
+            rows[first + 3]
+        );
+        assert!(rows[first + 3].contains("👩‍💻   end"), "{}", rows[first + 3]);
+        assert!(!rows[first + 3].contains('\t'));
+        assert!(rows[first + 4].trim_matches(['▌', ' ']).is_empty());
         assert_eq!(model.projection.view["messages"][0]["text"], prompt);
     }
 
@@ -2567,7 +2922,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
 
-        assert!(rendered.starts_with("ai  Heading"));
+        assert!(rendered.starts_with("Heading"));
         assert!(rendered.contains("- [x] done"));
         assert!(rendered.contains("quote"));
         assert!(rendered.contains("docs (https://example.com)"));
@@ -2593,13 +2948,10 @@ mod tests {
     fn streaming_markdown_keeps_multiline_speaker_prefix_and_cursor() {
         let lines = assistant_markdown_lines("First paragraph\n\nSecond paragraph");
 
-        assert_eq!(lines[0].spans[0].content, "ai  ");
-        assert!(
-            lines
-                .iter()
-                .skip(1)
-                .all(|line| line.spans[0].content == "    ")
-        );
+        // The speaker eyebrow is a separate synthetic row; body lines carry
+        // an empty leading chrome span so decoration is applied uniformly.
+        assert_eq!(lines[0].spans[1].content, "First paragraph");
+        assert!(lines.iter().all(|line| line.spans[0].content.is_empty()));
         let entry = transcript::Entry::rendered("stream".into(), lines, false, true);
         let mut state = transcript::Transcript::default();
         state.layout(vec![entry], 80, 24);
@@ -2681,16 +3033,18 @@ mod transcript_input_tests {
     fn mouse_drag_stops_follow_and_copy_mapping_excludes_speaker() {
         let mut model = fixture_model("idle");
         render_frame(&model, 80, 24).unwrap();
+        // Row 4 is the first user text row at 80x24 (header, rule, blank,
+        // `YOU` eyebrow); column 1 is the gutter bar, column 9 the last `t`.
         for (kind, column) in [
             (MouseEventKind::Down(MouseButton::Left), 1),
-            (MouseEventKind::Drag(MouseButton::Left), 11),
+            (MouseEventKind::Drag(MouseButton::Left), 9),
         ] {
             handle_input(
                 &mut model,
                 Event::Mouse(MouseEvent {
                     kind,
                     column,
-                    row: 1,
+                    row: 4,
                     modifiers: KeyModifiers::NONE,
                 }),
                 78,
@@ -2715,11 +3069,12 @@ mod transcript_input_tests {
     }
     #[test]
     fn reverse_mouse_drag_includes_both_cells_and_unicode_graphemes() {
+        // User text starts at column 3 (` ▌ text`) on row 4.
         for (text, start, end, expected) in [
-            ("abc", 7, 5, "abc"),
-            ("abc", 6, 5, "ab"),
-            ("a界é", 8, 6, "界é"),
-            ("a界é", 6, 8, "界é"),
+            ("abc", 5, 3, "abc"),
+            ("abc", 4, 3, "ab"),
+            ("a界é", 6, 4, "界é"),
+            ("a界é", 4, 6, "界é"),
         ] {
             let mut model = fixture_model("idle");
             model.projection.view["messages"][0]["text"] = json!(text);
@@ -2728,9 +3083,9 @@ mod transcript_input_tests {
                 &mut model,
                 MouseEventKind::Down(MouseButton::Left),
                 start,
-                1,
+                4,
             );
-            mouse(&mut model, MouseEventKind::Drag(MouseButton::Left), end, 1);
+            mouse(&mut model, MouseEventKind::Drag(MouseButton::Left), end, 4);
             assert_eq!(
                 model.transcript.borrow().copy_selection().as_deref(),
                 Some(expected)
@@ -2761,15 +3116,15 @@ mod transcript_input_tests {
             render_frame(&model, 80, 24).unwrap();
             key(&mut model, KeyCode::Tab);
             key(&mut model, KeyCode::Home);
-            mouse(&mut model, MouseEventKind::Down(MouseButton::Left), 5, 1);
-            mouse(&mut model, MouseEventKind::Drag(MouseButton::Left), 6, 1);
+            mouse(&mut model, MouseEventKind::Down(MouseButton::Left), 3, 4);
+            mouse(&mut model, MouseEventKind::Drag(MouseButton::Left), 4, 4);
             mouse(&mut model, finish, 1, 23);
             let before = model.transcript.borrow().copy_selection();
             let top = model.transcript.borrow().top;
             mouse(&mut model, MouseEventKind::Drag(MouseButton::Left), 1, 23);
             assert_eq!(model.transcript.borrow().copy_selection(), before);
             assert_eq!(model.transcript.borrow().top, top);
-            mouse(&mut model, MouseEventKind::Down(MouseButton::Left), 5, 1);
+            mouse(&mut model, MouseEventKind::Down(MouseButton::Left), 3, 4);
             mouse(&mut model, MouseEventKind::Drag(MouseButton::Left), 1, 23);
             assert!(model.transcript.borrow().top > top);
         }
@@ -2894,7 +3249,26 @@ mod tool_inspection_tests {
         render_frame(&model, 80, 24).unwrap();
         key(&mut model, KeyCode::Tab);
         key(&mut model, KeyCode::Home);
-        key(&mut model, KeyCode::Down);
+        for _ in 0..12 {
+            if model
+                .transcript
+                .borrow()
+                .selected
+                .as_deref()
+                .is_some_and(|id| id.ends_with(":tool:inspect"))
+            {
+                break;
+            }
+            key(&mut model, KeyCode::Down);
+        }
+        assert!(
+            model
+                .transcript
+                .borrow()
+                .selected
+                .as_deref()
+                .is_some_and(|id| id.ends_with(":tool:inspect"))
+        );
         model
     }
     fn finish(model: &mut Model) {
@@ -3017,25 +3391,40 @@ mod tool_inspection_tests {
     #[test]
     fn transcript_uses_canonical_lifecycle_status_and_retained_result() {
         let mut model = model();
-        assert!(
-            render_frame(&model, 80, 24)
-                .unwrap()
-                .contains("read · running")
-        );
-        for (status, outcome) in [
-            ("succeeded", json!({"ok":"completed result"})),
-            ("failed", json!({"error":"cancelled"})),
+        let header = |frame: &str| -> String {
+            frame
+                .lines()
+                .find(|line| line.contains("read  inspection.txt"))
+                .unwrap_or_else(|| panic!("no tool header in\n{frame}"))
+                .to_owned()
+        };
+        let rendered = render_frame(&model, 80, 24).unwrap();
+        assert!(header(&rendered).trim_end().ends_with("running"));
+        // Space expands the essentials inline; the retained result must appear.
+        key(&mut model, KeyCode::Char(' '));
+        for (status, outcome, tail) in [
+            ("succeeded", json!({"ok":"completed result"}), "1 lines"),
+            ("failed", json!({"error":"cancelled"}), "failed"),
             (
                 "indeterminate",
                 json!({"indeterminate":"completion unknown"}),
+                "indeterminate",
             ),
         ] {
             let frame = json!({"incarnation":model.projection.incarnation, "seq":model.projection.head+1,
                 "ops":[{"op":"set_tool_status","id":"inspect","status":status,"outcome":outcome}]});
             assert_eq!(model.apply_patch_frame(&frame).unwrap(), Ingest::Applied);
             let rendered = render_frame(&model, 80, 24).unwrap();
-            assert!(rendered.contains(&format!("read · {status}")));
-            assert!(rendered.contains(crate::outcome(&outcome).1));
+            assert!(header(&rendered).trim_end().ends_with(tail), "{rendered}");
+            assert!(rendered.contains(crate::outcome(&outcome).1), "{rendered}");
+            // The viewer names the canonical status verbatim.
+            key(&mut model, KeyCode::Char('f'));
+            assert!(
+                render_frame(&model, 80, 24)
+                    .unwrap()
+                    .contains(&format!("read · {status}"))
+            );
+            key(&mut model, KeyCode::Esc);
         }
     }
     #[test]
@@ -3102,17 +3491,22 @@ mod tool_inspection_tests {
                 78,
             );
         };
-        mouse(&mut model, MouseButton::Left, 1, 2);
+        let rendered = render_frame(&model, 80, 24).unwrap();
+        let row = rendered
+            .lines()
+            .position(|line| line.contains("read  inspection.txt"))
+            .unwrap_or_else(|| panic!("no tool header in\n{rendered}")) as u16;
+        mouse(&mut model, MouseButton::Left, 1, row);
         assert!(model.expanded_tools.contains("inspect"));
         render_frame(&model, 80, 24).unwrap();
         let anchor = model.transcript.borrow().anchor.clone();
-        mouse(&mut model, MouseButton::Right, 6, 2);
+        mouse(&mut model, MouseButton::Right, 6, row);
         assert!(model.viewer.is_some());
         render_frame(&model, 80, 24).unwrap();
-        mouse(&mut model, MouseButton::Right, 6, 2);
+        mouse(&mut model, MouseButton::Right, 6, row);
         assert!(model.viewer.is_none());
         assert_eq!(model.transcript.borrow().anchor, anchor);
-        mouse(&mut model, MouseButton::Left, 1, 2);
+        mouse(&mut model, MouseButton::Left, 1, row);
         assert!(!model.expanded_tools.contains("inspect"));
     }
     #[test]

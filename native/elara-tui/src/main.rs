@@ -25,6 +25,7 @@ struct Args {
     appearance: bool,
     layout: Option<ViewLayout>,
     theme: Option<Theme>,
+    diagnostics: bool,
     preview_reasoning: bool,
     target: String,
     port: u16,
@@ -47,6 +48,7 @@ impl Args {
         let mut appearance = false;
         let mut layout = None;
         let mut theme = None;
+        let mut diagnostics = false;
         let mut preview_reasoning = false;
         let mut target = None;
         let mut positional_only = false;
@@ -74,6 +76,7 @@ impl Args {
                     layout = Some(ViewLayout::parse(&next_value(&mut arguments, "--layout")?)?)
                 }
                 "--theme" => theme = Some(Theme::parse(&next_value(&mut arguments, "--theme")?)?),
+                "--diagnostics" => diagnostics = true,
                 "--preview-reasoning" => preview_reasoning = true,
                 "--port" => port = parse_next(&mut arguments, "--port")?,
                 "--observe" | "-o" => observe = true,
@@ -117,6 +120,7 @@ impl Args {
             appearance,
             layout,
             theme,
+            diagnostics,
             preview_reasoning,
             target,
             port,
@@ -157,7 +161,7 @@ fn environment_port() -> u16 {
 
 fn usage() -> &'static str {
     "usage: elara-tui [OPTIONS] [--] SESSION|new|list\noptions: [--port PORT] [--observe] [--ask PROMPT] \
-     [--headless] [--event-dump] [--appearance] [--layout ember|observatory|workbench] [--theme ember|observatory|workbench|forest] [--preview-reasoning]"
+     [--headless] [--event-dump] [--appearance] [--layout ember|observatory|workbench] [--theme ember|observatory|workbench|forest] [--diagnostics] [--preview-reasoning]"
 }
 
 fn main() -> ExitCode {
@@ -184,6 +188,9 @@ fn run(args: Args) -> Result<(), String> {
     }
     if let Some(theme) = args.theme {
         appearance.theme = theme;
+    }
+    if args.diagnostics {
+        appearance.diagnostics = true;
     }
     if args.appearance {
         appearance = pick_appearance(appearance)?;
@@ -270,6 +277,7 @@ fn pick_appearance(original: Appearance) -> Result<Appearance, String> {
                 KeyCode::Right | KeyCode::Char('l') => choice.layout = choice.layout.next(),
                 KeyCode::Up => choice.theme = choice.theme.previous(),
                 KeyCode::Down | KeyCode::Char('t') => choice.theme = choice.theme.next(),
+                KeyCode::Char('d') => choice.diagnostics = !choice.diagnostics,
                 KeyCode::Enter => return Ok(choice),
                 KeyCode::Esc => return Ok(original),
                 KeyCode::Char('c')

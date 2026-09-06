@@ -1,24 +1,24 @@
-┌ ember / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ─────┐
-│you inspect the build                                                         │
-│ai  I’ll check it.                                                            │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-│                                                                              │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────┐
+ ✳ elara                                                                control
+────────────────────────────────────────────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ELARA
+ I’ll check it.
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ─────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │Unicode é 👩‍💻  中  with spaces Unicode é 👩‍💻  中  with spaces Unicode é 👩‍💻  中  with s│
 │paces Unicode é 👩‍💻  中  with spaces                                             │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
- embedded · exits with TUI · control · connected · head 4 · idle · outcome - · s
+ elara · elara         │ ember / ember · Thinking expanded · F1 help │

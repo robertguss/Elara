@@ -1,6 +1,8 @@
 use super::*;
+use appearance::slot;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::layout::Rect;
+use unicode_width::UnicodeWidthStr;
 
 // Public summary headings from docs/fixtures/subscription-preflight-2026-09-04.json.
 // Presentation fixture only: never inserted into Projection or sent to Core.
@@ -54,6 +56,7 @@ pub(super) fn input(model: &mut Model, event: &Event) -> bool {
             KeyCode::Right | KeyCode::Char('l') => choice.layout = choice.layout.next(),
             KeyCode::Up => choice.theme = choice.theme.previous(),
             KeyCode::Down | KeyCode::Char('t') => choice.theme = choice.theme.next(),
+            KeyCode::Char('d') => choice.diagnostics = !choice.diagnostics,
             KeyCode::Esc | KeyCode::F(3) => {
                 model.appearance_picker = None;
                 return true;
@@ -151,25 +154,104 @@ impl Model {
         )
     }
 }
-fn thinking_lines(model: &Model) -> Vec<Line<'static>> {
-    let mut lines = vec![Line::from(format!(
-        "Thinking · {}",
-        model.thinking_source()
-    ))];
+// Theme-independent chrome styles; `paint` resolves the slots at the very end.
+pub(super) fn muted() -> Style {
+    Style::default().fg(slot::MUTED)
+}
+pub(super) fn accent() -> Style {
+    Style::default().fg(slot::ACCENT)
+}
+pub(super) fn line_style() -> Style {
+    Style::default().fg(slot::LINE)
+}
+pub(super) fn rule() -> transcript::Synthetic {
+    transcript::Synthetic::Rule {
+        left: "",
+        fill: '─',
+        right: "",
+        style: line_style(),
+    }
+}
+/// Small caps label such as `YOU` or `ELARA`, with an optional right-aligned tail.
+pub(super) fn eyebrow(label: &str, tail: Vec<Span<'static>>) -> transcript::Synthetic {
+    transcript::Synthetic::Text {
+        spans: vec![Span::styled(label.to_owned(), muted())],
+        tail,
+    }
+}
+/// One text row padded to `width`, with `tail` right-aligned when it fits.
+pub(super) fn row(left: Vec<Span<'static>>, tail: Vec<Span<'static>>, width: u16) -> Line<'static> {
+    let width = width as usize;
+    let used: usize = left.iter().map(|s| s.content.width()).sum();
+    let tail_width: usize = tail.iter().map(|s| s.content.width()).sum();
+    let mut spans = left;
+    if !tail.is_empty() && used + tail_width < width {
+        spans.push(Span::raw(" ".repeat(width - used - tail_width)));
+        spans.extend(tail);
+    }
+    Line::from(spans)
+}
+fn thinking_heading(model: &Model, width: u16) -> Line<'static> {
+    let follow = model.transcript.borrow().follow;
+    let label = if follow {
+        " · live".to_owned()
+    } else {
+        format!(" · turn {}", model.transcript.borrow().selected_user_turn())
+    };
+    let tail = if model.thinking_visible {
+        vec![Span::styled("Hide − F4", muted())]
+    } else {
+        vec![Span::styled("F4 show", muted())]
+    };
+    row(
+        vec![
+            Span::styled("◇ THINKING", accent()),
+            Span::styled(label, muted()),
+        ],
+        tail,
+        width,
+    )
+}
+/// Thinking block body: heading, summary text, and a footer naming the source turn.
+fn thinking_lines(model: &Model, width: u16) -> Vec<Line<'static>> {
+    let mut lines = vec![thinking_heading(model, width), Line::default()];
+    let divider = || Line::from(Span::styled("─".repeat(width as usize), line_style()));
+    // `{note} · {source}` on one row when it fits; otherwise the source keeps
+    // its own row so the binding label is never split by wrapping.
+    let footer = |note: Option<&str>| -> Vec<Line<'static>> {
+        let source = model.thinking_source();
+        match note {
+            Some(note) if note.width() + 3 + source.width() <= width as usize => {
+                vec![Line::from(Span::styled(
+                    format!("{note} · {source}"),
+                    muted(),
+                ))]
+            }
+            Some(note) => vec![
+                Line::from(Span::styled(note.to_owned(), muted())),
+                Line::from(Span::styled(source, muted())),
+            ],
+            None => vec![Line::from(Span::styled(source, muted()))],
+        }
+    };
     if !model.thinking_visible {
-        lines.push(Line::from("Hidden by you · F4 show"));
+        lines.push(Line::from(Span::styled("Hidden by you · F4 show", muted())));
+        lines.push(divider());
+        lines.extend(footer(None));
     } else if model.preview_reasoning {
-        lines.push(Line::from(
+        lines.push(Line::from(Span::styled(
             "PREVIEW fixture · subscription preflight sample",
-        ));
+            accent(),
+        )));
         lines.extend(
             PREVIEW_SUMMARY
                 .split('\n')
-                .map(|s| Line::from(s.to_owned())),
+                .map(|s| Line::from(Span::styled(s.to_owned(), muted()))),
         );
-        lines.push(Line::from(
-            "Illustrative binding; not this turn's live reasoning.",
-        ));
+        lines.push(divider());
+        lines.extend(footer(Some(
+            "Illustrative binding; not this turn's live reasoning",
+        )));
     } else {
         let state = model.transcript.borrow();
         let turn = if state.follow {
@@ -180,18 +262,27 @@ fn thinking_lines(model: &Model) -> Vec<Line<'static>> {
         drop(state);
         let parts = reasoning_for_turn(model, turn);
         if parts.is_empty() {
-            lines.push(Line::from("Public reasoning summary unavailable."));
+            lines.push(Line::from(Span::styled(
+                "Public reasoning summary unavailable.",
+                muted(),
+            )));
+            lines.push(divider());
+            lines.extend(footer(None));
         } else {
-            for part in parts {
-                lines.push(Line::from("Reasoning summary"));
+            for (index, part) in parts.iter().enumerate() {
+                if index > 0 {
+                    lines.push(divider());
+                }
                 lines.extend(
                     part["text"]
                         .as_str()
                         .unwrap_or("")
                         .lines()
-                        .map(|line| Line::from(line.to_owned())),
+                        .map(|line| Line::from(Span::styled(line.to_owned(), muted()))),
                 );
             }
+            lines.push(divider());
+            lines.extend(footer(Some("Provider-visible summary")));
         }
     }
     lines
@@ -239,26 +330,20 @@ pub(super) fn public_entries(
         .iter()
         .map(|part| {
             let kind = part["kind"].as_str().unwrap_or("final_answer");
-            let label = match kind {
-                "reasoning_summary" => "Public reasoning summary",
-                "commentary" => "Assistant commentary",
-                _ => "Assistant answer",
-            };
             let body = part["text"].as_str().unwrap_or("");
             let mut lines = if kind == "reasoning_summary" {
                 body.split('\n')
-                    .map(|line| Line::from(vec![Span::raw("    "), Span::raw(line.to_owned())]))
+                    .map(|line| {
+                        Line::from(vec![Span::raw(""), Span::styled(line.to_owned(), muted())])
+                    })
                     .collect()
             } else {
                 assistant_markdown_lines(body)
             };
-            // The first span is renderer chrome, excluded from Entry::rendered's
-            // selectable body and therefore from its stable byte offsets.
-            if let Some(first) = lines.first_mut() {
-                first.spans[0] = Span::styled(
-                    format!("{label}{}  ", if live { " · live" } else { "" }),
-                    Style::default().fg(Color::Gray),
-                );
+            // The first span of every line is renderer chrome, excluded from
+            // Entry::rendered's selectable body and its stable byte offsets.
+            for line in &mut lines {
+                line.spans[0] = Span::raw("");
             }
             let mut entry = transcript::Entry::rendered(
                 format!(
@@ -269,10 +354,23 @@ pub(super) fn public_entries(
                 false,
                 false,
             );
-            if kind == "reasoning_summary"
-                && (model.appearance.layout != ViewLayout::Ember || !model.thinking_visible)
-            {
-                entry.lines.clear();
+            match kind {
+                "reasoning_summary" => {
+                    entry.gutter = vec![Span::styled("│ ", line_style())];
+                    if model.appearance.layout != ViewLayout::Ember || !model.thinking_visible {
+                        entry.lines.clear();
+                    }
+                }
+                _ => {
+                    let label = match (kind, live) {
+                        ("commentary", true) => "ELARA · commentary · live",
+                        ("commentary", false) => "ELARA · commentary",
+                        (_, true) => "ELARA · live",
+                        _ => "ELARA",
+                    };
+                    entry.above = vec![eyebrow(label, Vec::new())];
+                    entry.below = vec![transcript::Synthetic::Blank];
+                }
             }
             entry
         })
@@ -314,44 +412,76 @@ pub(super) fn summary_turns(model: &Model) -> HashSet<usize> {
     turns
 }
 
+/// The `◇ THINKING` heading placed under a user message in the Ember layout.
+/// Other layouts keep the entry (identity, copy ranges) but draw nothing.
 pub(super) fn inline_thinking(
     model: &Model,
     id: &str,
     has_summary: bool,
+    last_turn: bool,
 ) -> Option<transcript::Entry> {
-    if !model.preview_reasoning {
-        if model.projection.view["provider_view"]["next_request"].is_null() {
-            return None;
-        }
-        if has_summary {
-            return None;
-        }
-        let mut entry = transcript::Entry::plain(
-            &format!("{id}:thinking"),
-            "Public reasoning summary unavailable.",
-            false,
+    if !model.preview_reasoning && model.projection.view["provider_view"]["next_request"].is_null()
+    {
+        return None;
+    }
+    let state = if !last_turn || model.turn_state() == "idle" {
+        "complete"
+    } else {
+        "live"
+    };
+    let heading = |tail: &str| {
+        Line::from(vec![
+            Span::styled("◇ ", accent()),
+            Span::styled("THINKING", accent()),
+            Span::styled(format!(" · {tail}"), muted()),
+        ])
+    };
+    let mut lines = Vec::new();
+    if !model.thinking_visible {
+        lines.push(heading("Hidden by you"));
+    } else if model.preview_reasoning {
+        lines.push(heading("PREVIEW fixture (not live)"));
+        lines.extend(
+            PREVIEW_SUMMARY
+                .split('\n')
+                .map(|s| Line::from(vec![Span::raw(""), Span::styled(s.to_owned(), muted())])),
         );
-        if model.appearance.layout != ViewLayout::Ember || !model.thinking_visible {
-            entry.lines.clear();
+    } else {
+        lines.push(heading(state));
+        if !has_summary {
+            lines.push(Line::from(vec![
+                Span::raw(""),
+                Span::styled("Public reasoning summary unavailable.", muted()),
+            ]));
         }
-        return Some(entry);
     }
-    let text = format!("Thinking · PREVIEW fixture (not live)\n{PREVIEW_SUMMARY}");
-    let mut entry = transcript::Entry::plain(&format!("{id}:thinking"), &text, false);
-    for line in &mut entry.lines {
-        line.style = Style::default().fg(Color::Gray);
-    }
+    let mut entry = transcript::Entry::rendered(format!("{id}:thinking"), lines, false, false);
+    entry.gutter = vec![Span::styled("│ ", line_style())];
+    entry.tail(
+        0,
+        vec![Span::styled(
+            if model.thinking_visible {
+                "Hide − F4"
+            } else {
+                "F4 show"
+            },
+            muted(),
+        )],
+    );
     // Retain source identity/copy ranges when its visual content moves to a pane.
-    if model.appearance.layout != ViewLayout::Ember || !model.thinking_visible {
+    if model.appearance.layout != ViewLayout::Ember {
         entry.lines.clear();
     }
     Some(entry)
 }
 fn panel(frame: &mut ratatui::Frame<'_>, lines: Vec<Line<'static>>, area: Rect, title: &str) {
     frame.render_widget(
-        Paragraph::new(lines)
-            .wrap(Wrap { trim: false })
-            .block(Block::default().borders(Borders::ALL).title(title)),
+        Paragraph::new(lines).wrap(Wrap { trim: false }).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(line_style())
+                .title(Span::styled(title.to_owned(), muted())),
+        ),
         area,
     );
 }
@@ -364,14 +494,28 @@ fn turn_prompts(model: &Model) -> impl Iterator<Item = &str> {
         .filter_map(|message| message["text"].as_str())
 }
 fn turn_lines(model: &Model, skip: usize, rows: usize) -> Vec<Line<'_>> {
-    std::iter::once(Line::from(model.thinking_source()))
-        .chain(turn_prompts(model).enumerate().map(|(i, prompt)| {
+    let selected = model.transcript.borrow().selected_user_turn();
+    let live = model.transcript.borrow().follow;
+    std::iter::once(Line::from(Span::styled("THIS SESSION", muted())))
+        .chain(std::iter::once(Line::default()))
+        .chain(turn_prompts(model).enumerate().map(move |(i, prompt)| {
+            let current = !live && i + 1 == selected;
+            let number = format!("{:02} ", i + 1);
             Line::from(vec![
-                Span::raw(format!("{:02} ", i + 1)),
+                Span::styled(number, if current { accent() } else { muted() }),
                 Span::raw(prompt.lines().next().unwrap_or("")),
             ])
+            .style(if current {
+                Style::default().bg(slot::SURFACE)
+            } else {
+                Style::default()
+            })
         }))
-        .chain(std::iter::once(Line::from("F6 turns · End live")))
+        .chain(std::iter::once(Line::default()))
+        .chain(std::iter::once(Line::from(Span::styled(
+            format!("{} · F6 turns · End live", model.thinking_source()),
+            muted(),
+        ))))
         .skip(skip)
         .take(rows)
         .collect()
@@ -390,17 +534,161 @@ fn turns_panel(
         scroll.min(
             turn_prompts(model)
                 .count()
-                .saturating_add(2)
+                .saturating_add(4)
                 .saturating_sub(rows),
         )
     };
     // Each summary occupies one visual row. Borrow prompt text and format only the
     // visible window; full text and copy ranges remain in the canonical transcript.
     frame.render_widget(
-        Paragraph::new(turn_lines(model, skip, rows))
-            .block(Block::default().borders(Borders::ALL).title(title)),
+        Paragraph::new(turn_lines(model, skip, rows)).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(line_style())
+                .title(Span::styled(title.to_owned(), muted())),
+        ),
         area,
     );
+}
+/// Greedy word wrap to `width` columns, keeping at most `max_rows` rows (last one elided).
+fn wrap_words(text: &str, width: usize, max_rows: usize) -> Vec<String> {
+    let mut rows: Vec<String> = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        let joined = if current.is_empty() {
+            word.to_owned()
+        } else {
+            format!("{current} {word}")
+        };
+        if joined.width() <= width || current.is_empty() {
+            current = joined;
+        } else {
+            rows.push(std::mem::take(&mut current));
+            current = word.to_owned();
+        }
+    }
+    if !current.is_empty() {
+        rows.push(current);
+    }
+    if rows.len() > max_rows {
+        rows.truncate(max_rows);
+        if let Some(last) = rows.last_mut() {
+            let mut kept = last.clone();
+            while kept.width() + 1 > width && kept.pop().is_some() {}
+            *last = format!("{kept}…");
+        }
+    }
+    rows
+}
+/// Workbench rail rows: numbered turns with the prompt wrapped beneath each number.
+fn rail_lines(model: &Model, width: usize, rows: usize) -> Vec<Line<'static>> {
+    let state = model.transcript.borrow();
+    let (selected, live) = (state.selected_user_turn(), state.follow);
+    drop(state);
+    let mut lines = vec![
+        Line::from(Span::styled("THIS SESSION", muted())),
+        Line::default(),
+    ];
+    for (i, prompt) in turn_prompts(model).enumerate() {
+        let current = !live && i + 1 == selected;
+        let style = if current {
+            Style::default().bg(slot::SURFACE)
+        } else {
+            Style::default()
+        };
+        lines.push(
+            Line::from(Span::styled(
+                format!("{:02}", i + 1),
+                if current { accent() } else { muted() },
+            ))
+            .style(style),
+        );
+        for row in wrap_words(prompt, width.saturating_sub(3).max(1), 2) {
+            lines.push(Line::from(Span::raw(format!("   {row}"))).style(style));
+        }
+        lines.push(Line::default());
+    }
+    lines.truncate(rows);
+    lines
+}
+/// Workbench side rail: session turns, plus retained tool-call counts.
+fn turn_rail(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::RIGHT)
+        .border_style(line_style());
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let inner = Rect {
+        x: inner.x + 1,
+        width: inner.width.saturating_sub(2),
+        ..inner
+    };
+    let calls = model.projection.view["tool_calls"]
+        .as_array()
+        .map_or(0, Vec::len);
+    let files: HashSet<&str> = model.projection.view["tool_calls"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|call| matches!(call["name"].as_str(), Some("edit" | "write")))
+        .filter(|call| call["status"] == "succeeded")
+        .filter_map(|call| call["args"]["ok"]["path"].as_str())
+        .collect();
+    let plural =
+        |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    let note = [
+        Line::default(),
+        Line::from(Span::styled(
+            plural(calls, "tool call", "tool calls"),
+            muted(),
+        )),
+        Line::from(Span::styled(
+            plural(files.len(), "file changed", "files changed"),
+            muted(),
+        )),
+    ];
+    let rows = (inner.height as usize).saturating_sub(note.len());
+    let mut lines = rail_lines(model, inner.width as usize, rows);
+    lines.extend(note);
+    frame.render_widget(Paragraph::new(lines), inner);
+}
+/// Observatory right pane: the thinking column on its own surface.
+fn thinking_pane(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::LEFT)
+        .border_style(line_style())
+        .style(Style::default().bg(slot::THINKING_SURFACE));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let inner = Rect {
+        x: inner.x + 1,
+        width: inner.width.saturating_sub(2),
+        ..inner
+    };
+    frame.render_widget(
+        Paragraph::new(thinking_lines(model, inner.width)).wrap(Wrap { trim: false }),
+        inner,
+    );
+}
+/// Workbench bottom strip: thinking on a panel surface with an accent bar.
+fn thinking_strip(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::LEFT)
+        .border_style(accent())
+        .style(Style::default().bg(slot::THINKING_SURFACE));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let inner = Rect {
+        x: inner.x + 1,
+        width: inner.width.saturating_sub(2),
+        ..inner
+    };
+    let mut lines = thinking_lines(model, inner.width);
+    // The strip is short: keep the heading, drop the spacer under it.
+    if lines.len() > 1 && lines[1].spans.is_empty() {
+        lines.remove(1);
+    }
+    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
 }
 pub(super) fn panes(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) -> Rect {
     if area.width < 100 || area.height < 12 {
@@ -412,27 +700,21 @@ pub(super) fn panes(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) -
             let parts =
                 Layout::horizontal([Constraint::Percentage(64), Constraint::Percentage(36)])
                     .split(area);
-            panel(
-                frame,
-                thinking_lines(model),
-                parts[1],
-                " Thinking · F4 hide · F5 view ",
-            );
+            thinking_pane(frame, model, parts[1]);
             parts[0]
         }
         ViewLayout::Workbench => {
             let parts =
                 Layout::horizontal([Constraint::Length(23), Constraint::Min(1)]).split(area);
-            turns_panel(frame, model, parts[0], 0, " Turns · F6 ");
+            turn_rail(frame, model, parts[0]);
             if model.thinking_visible {
-                let main =
-                    Layout::vertical([Constraint::Min(4), Constraint::Length(7)]).split(parts[1]);
-                panel(
-                    frame,
-                    thinking_lines(model),
-                    main[1],
-                    " Thinking strip · F5 view ",
-                );
+                let main = Layout::vertical([
+                    Constraint::Min(4),
+                    Constraint::Length(1),
+                    Constraint::Length(7),
+                ])
+                .split(parts[1]);
+                thinking_strip(frame, model, main[2]);
                 main[0]
             } else {
                 parts[1]
@@ -468,7 +750,8 @@ fn usage_text(usage: &Value) -> String {
 pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
     if model.appearance_picker.is_some() || model.presentation_overlay.is_some() {
         let area = frame.area();
-        // Preserve the composer and status when the overlay has enough content rows.
+        // Preserve the activity row, composer, footer, and diagnostics row when the
+        // overlay has enough content rows.
         let editor_height = model
             .editor
             .layout(area.width.saturating_sub(2).max(1) as usize)
@@ -476,8 +759,9 @@ pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
             .len()
             .clamp(1, (area.height as usize / 3).max(1)) as u16
             + 2;
+        let fixed_rows = editor_height + 2 + u16::from(model.appearance.diagnostics);
         let overlay_area = Rect {
-            height: area.height.saturating_sub(editor_height + 1),
+            height: area.height.saturating_sub(fixed_rows),
             ..area
         };
         if overlay_area.height < 10 {
@@ -507,7 +791,7 @@ pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
                     " Turns · Up/Down select · End live · Esc close ",
                 );
             } else {
-                let lines = thinking_lines(model);
+                let lines = thinking_lines(model, overlay_area.width.saturating_sub(2));
                 let max = lines
                     .len()
                     .saturating_sub(overlay_area.height.saturating_sub(2) as usize);
@@ -582,22 +866,36 @@ pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
             " Model / effort / usage · next provider request ",
         );
     }
+}
+
+/// Final buffer pass: resolve semantic slots to the active theme and map the
+/// legacy named colors still used by unmigrated overlays. Runs after every
+/// widget has drawn so overlays share the theme.
+pub(super) fn paint(frame: &mut ratatui::Frame<'_>, model: &Model) {
     let t = model.appearance.theme.tokens();
+    let is_slot =
+        |c: Color| matches!(c, Color::Indexed(i) if (slot::BASE..=slot::LAST).contains(&i));
     let buffer = frame.buffer_mut();
     for cell in &mut buffer.content {
         let original_bg = cell.bg;
-        cell.bg = match original_bg {
-            Color::Blue => t.selection,
-            Color::Yellow | Color::Cyan => t.focus,
-            Color::Black | Color::DarkGray => t.surface,
-            Color::Reset => t.background,
-            c => c,
+        let original_fg = cell.fg;
+        cell.bg = if is_slot(original_bg) {
+            t.resolve(original_bg)
+        } else {
+            match original_bg {
+                Color::Blue => t.selection,
+                Color::Yellow | Color::Cyan => t.focus,
+                Color::Black | Color::DarkGray => t.surface,
+                Color::Reset => t.background,
+                c => c,
+            }
         };
-        cell.fg = if matches!(original_bg, Color::Yellow | Color::Cyan) {
+        cell.fg = if is_slot(original_fg) {
+            t.resolve(original_fg)
+        } else if matches!(original_bg, Color::Yellow | Color::Cyan) {
             t.background
         } else {
-            match cell.fg {
-                Color::Reset | Color::White => t.text,
+            match original_fg {
                 Color::Gray | Color::DarkGray => t.secondary,
                 Color::Cyan
                 | Color::Blue
@@ -609,19 +907,20 @@ pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
                 | Color::LightMagenta => t.focus,
                 Color::Green | Color::LightGreen => t.added,
                 Color::Red | Color::LightRed => t.removed,
-                Color::Black => t.text,
                 _ => t.text,
             }
         };
         if cell.modifier.contains(Modifier::DIM) {
             cell.modifier.remove(Modifier::DIM);
-            cell.fg = t.secondary;
+            if !is_slot(original_fg) {
+                cell.fg = t.secondary;
+            }
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crossterm::event::{KeyEvent, KeyModifiers};
     fn key(model: &mut Model, code: KeyCode) {
@@ -634,7 +933,7 @@ mod tests {
             InputAction::None
         );
     }
-    fn preview() -> Model {
+    pub(crate) fn preview() -> Model {
         let mut model = fixture_model("streaming");
         model.projection.view["messages"] = json!([
             {"role":"user","text":"Historical question α"},
@@ -677,7 +976,7 @@ mod tests {
             assert!(!frame.contains("PREVIEW"));
         }
         model.projection.view["provider_view"]["streaming"] = Value::Null;
-        assert!(thinking_lines(&model).iter().any(|line| {
+        assert!(thinking_lines(&model, 80).iter().any(|line| {
             line.to_string()
                 .contains("Public reasoning summary unavailable.")
         }));
@@ -1037,6 +1336,7 @@ mod tests {
                 model.set_appearance(Appearance {
                     layout: *layout,
                     theme: *theme,
+                    diagnostics: false,
                 });
                 for (w, h) in [(80, 24), (120, 40), (180, 45), (80, 24)] {
                     render_frame(&model, w, h).unwrap();
@@ -1116,7 +1416,8 @@ mod tests {
             model.appearance,
             Appearance {
                 layout: ViewLayout::Workbench,
-                theme: Theme::Forest
+                theme: Theme::Forest,
+                diagnostics: false,
             }
         );
         key(&mut model, KeyCode::F(5));
@@ -1152,6 +1453,7 @@ mod tests {
             model.set_appearance(Appearance {
                 layout: *layout,
                 theme: Theme::Forest,
+                diagnostics: false,
             });
             for visible in [false, true] {
                 model.thinking_visible = visible;
@@ -1162,7 +1464,7 @@ mod tests {
                 assert_eq!(state.anchor, Some(start.clone()));
                 assert_eq!(state.selected, Some(id.clone()));
                 assert_eq!(state.selection, Some((start.clone(), end.clone())));
-                assert_eq!(state.copy_selection().as_deref(), Some("Thinking"));
+                assert_eq!(state.copy_selection().as_deref(), Some("THINKING"));
             }
         }
     }
@@ -1223,6 +1525,7 @@ mod tests {
                     model.set_appearance(Appearance {
                         layout: *layout,
                         theme: *theme,
+                        diagnostics: false,
                     });
                     model.preview_reasoning = scenario.starts_with("reasoning");
                     model.thinking_visible = scenario != "reasoning-hidden";

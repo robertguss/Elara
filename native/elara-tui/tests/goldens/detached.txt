@@ -1,18 +1,18 @@
-┌ ember / ember · F4 thinking open ·  transcript · prompt focus · FOLLOW  ─────────────┐
-│you inspect the build                                                                 │
-│ai  I’ll check it.                                                                    │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-└ Tab transcript · F5 thinking · F7 model/effort ──────────────────────────────────────┘
-┌ ask · Enter send · F1 help · F2 safe paste · F11 sessions ───────────────────────────┐
+ ✳ elara                                                                        control
+────────────────────────────────────────────────────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ELARA
+ I’ll check it.
+
+
+
+
+
+ ● Detached; the server-owned session continues.
+┌ PROMPT ─────────────────── ask · Enter send · F1 help · F2 safe paste · F11 sessions ┐
 │                                                                                      │
 └ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────┘
- embedded · exits with TUI · Detached; the server-owned session continues.
+ elara · elara             │ ember / ember · Thinking expanded · F1 help │

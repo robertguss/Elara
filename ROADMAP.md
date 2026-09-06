@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-06 (PLUGIN-1
-> merged; PLUGIN-2 complete; LOOP-1 repeated-call fix in progress) · **Owner:** solo development
+> merged; PLUGIN-2 and LOOP-1 complete) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -10,11 +10,12 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**LOOP-1:** IN PROGRESS. The owner accepted PLUGIN-2's recommendation to allow
-legitimate repeated tool calls while retaining bounded loop protection. The
-fix permits later responses and intervening calls; consecutive identical calls
-within one response remain suppressed. Regression and real Mix workflow checks
-pass; independent review is clear and full-suite verification is in progress.
+**LOOP-1:** DONE and pushed in `20a8eda` on `codex/agent-authored-plugin`.
+Later responses and intervening calls permit useful rechecks; consecutive
+identical calls within one response remain suppressed. All 35 focused checks
+pass, including a real Mix fail → edit → identical rerun and matching replay.
+Independent review is clear. Full suite: 451/461 passed, with the same ten
+failures as the pre-fix run.
 
 **PLUGIN-2:** DONE and pushed at `43b283a` on `codex/agent-authored-plugin`.
 The real model authored
@@ -76,9 +77,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Finish review and publication of LOOP-1, then return to the
-SPLIT-5 owner checkpoint. The daily-driver trial has not started and
-physical-terminal acceptance stays deferred.
+**Next action:** Return to the SPLIT-5 owner checkpoint. The experiment branch
+contains PLUGIN-2 and LOOP-1 and remains unmerged. The next live coding exercise
+can use ordinary identical read/test calls after changes. The daily-driver
+trial has not started and physical-terminal acceptance stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -256,8 +258,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | TUI-8    | IMPLEMENTED | Mockup-faithful presentation with quiet chrome             | CTX-1            |
 | PLUGIN-1 | DONE     | Discover and evolve a useful plugin in a live session         | Owner selection  |
 | PLUGIN-2 | DONE     | Agent-authored plugin during a real coding task              | PLUGIN-1         |
-| LOOP-1   | IN PROGRESS | Permit useful repeated tool calls with bounded loops       | PLUGIN-2         |
-| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, LOOP-1    |
+| LOOP-1   | DONE     | Permit useful repeated tool calls with bounded loops          | PLUGIN-2         |
+| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, LOOP-1    |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2619,8 +2621,8 @@ No tool taxonomy, result cache, progress-scoring policy, or eval framework.
 
 ### Result
 
-**IN PROGRESS (2026-09-06), verification.** Two Core regressions reproduced the
-old rejection: reissuing identical arguments after another tool in the same
+**DONE (2026-09-06).** Pushed `20a8eda` on `codex/agent-authored-plugin`.
+Two Core regressions reproduced the old rejection: reissuing identical arguments after another tool in the same
 response, and observing changed state in a later response. A public-session
 regression also reproduced the failure using real read/edit tools and the
 project plugin's real Mix invocation. After the fix, all 35 Core/project-plugin
@@ -2629,8 +2631,14 @@ reads corrected source with identical arguments, and reruns the exact test
 successfully within one user turn. Its flight recording replays with `:match`.
 Coverage retains consecutive duplicate rejection, deferred-call retry, and
 iteration-limit termination. Formatting and compilation with warnings denied
-pass. Independent review is clear with no actionable findings. Full-suite
-totals and publication are pending.
+pass. Independent review is clear with no actionable findings. The full suite
+passes **451/461** in 196.7 seconds, compared with **447/457** before this fix:
+all four added tests pass and the same ten tests fail. Remaining failures cover
+five context-budget/handoff cases, queued-mutation recovery, saved-session
+listing, two thread path/session-discovery cases, and the isolated-checkout
+HTTP fixture startup timeout. No all-green suite is claimed. Roadmap checks
+also pass (2 tests). No Rust, provider, dependency, or serialization changes
+were needed. This experiment branch has not been merged into `main`.
 
 The guard intentionally does not infer whether an intervening call changed the
 world or whether an identical later request is worthwhile. The configured model

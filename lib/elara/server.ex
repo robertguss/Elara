@@ -109,6 +109,11 @@ defmodule Elara.Server do
     Process.put(:input_images, %{})
 
     Process.put(
+      :plugin_reload,
+      version == 2 and is_list(extensions) and "plugin_reload_v1" in extensions
+    )
+
+    Process.put(
       :thread_communication,
       version == 2 and is_list(extensions) and "thread_communication_v1" in extensions
     )
@@ -146,11 +151,13 @@ defmodule Elara.Server do
               Enum.filter(
                 [
                   "provider_visibility_v1",
+                  "plugin_reload_v1",
                   "input_attachments_v1",
                   "input_queue_v1",
                   "thread_communication_v1"
                 ],
                 fn
+                  "plugin_reload_v1" -> Process.get(:plugin_reload)
                   "thread_communication_v1" -> Process.get(:thread_communication)
                   "provider_visibility_v1" -> Process.get(:provider_visibility)
                   "input_attachments_v1" -> Process.get(:input_attachments)
@@ -396,6 +403,30 @@ defmodule Elara.Server do
 
   defp handle_command(_session, version, {:error, reason}, _provider, _lifetime),
     do: error_message(reason, version)
+
+  defp handle_versioned_command(
+         session,
+         2,
+         %{"command" => "plugins_reload", "extension" => "plugin_reload_v1"},
+         _provider,
+         _lifetime
+       ) do
+    if Process.get(:plugin_reload) do
+      case Elara.attached_command(session, :reload_plugins) do
+        {:ok, plugins} ->
+          %{
+            "type" => "plugins_reloaded",
+            "version" => 2,
+            "plugins" => Enum.map(plugins, &Map.take(&1, [:id, :version, :generation]))
+          }
+
+        {:error, reason} ->
+          session_error("plugins_reload", reason)
+      end
+    else
+      session_error("plugins_reload", :unsupported_extension)
+    end
+  end
 
   defp handle_versioned_command(session, 2, %{"command" => command} = request, provider, lifetime)
        when command in [

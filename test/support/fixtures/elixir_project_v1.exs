@@ -6,7 +6,7 @@ defmodule ElixirProjectPlugin do
   @max_output_bytes 8_000
 
   @impl true
-  def metadata, do: %{id: "elixir_project", version: "2"}
+  def metadata, do: %{id: "elixir_project", version: "1"}
 
   @impl true
   def tools do
@@ -53,35 +53,12 @@ defmodule ElixirProjectPlugin do
         description:
           "Show the last check or test run recorded by this session, useful after reloading the plugin.",
         parameters: empty_schema()
-      },
-      %ToolSpec{
-        name: "elixir_rerun_last",
-        description:
-          "Repeat this session's last Mix invocation, including its focused test target, using the current project files.",
-        parameters: empty_schema()
       }
     ]
   end
 
   @impl true
   def init(_ctx), do: {:ok, %{run_count: 0, last_run: nil}}
-
-  @impl true
-  def migrate(%{last_run: nil} = state, _metadata), do: {:ok, state}
-
-  def migrate(%{last_run: last} = state, %{version: "1"}) do
-    invocation =
-      case last.command do
-        "project_info" -> {"elixir_project_info", %{}}
-        "check:" <> check -> {"elixir_check", %{"check" => check}}
-        "test:all" -> {"elixir_test", %{}}
-        "test:" <> target -> {"elixir_test", %{"target" => target}}
-      end
-
-    {:ok, %{state | last_run: Map.put(last, :invocation, invocation)}}
-  end
-
-  def migrate(state, _metadata), do: {:ok, state}
 
   @impl true
   def handle_tool("elixir_project_info", _args, ctx, state) do
@@ -99,7 +76,7 @@ defmodule ElixirProjectPlugin do
     {status, output, duration_ms} =
       run_mix(["run", "--no-start", "--no-compile", "-e", expression], ctx.cwd)
 
-    finish_run(state, "project_info", {"elixir_project_info", %{}}, status, duration_ms, output)
+    finish_run(state, "project_info", status, duration_ms, output)
   end
 
   def handle_tool("elixir_check", args, ctx, state) do
@@ -121,15 +98,7 @@ defmodule ElixirProjectPlugin do
           end
 
         {status, output, duration_ms} = run_checks(checks, ctx.cwd)
-
-        finish_run(
-          state,
-          "check:#{check}",
-          {"elixir_check", %{"check" => check}},
-          status,
-          duration_ms,
-          output
-        )
+        finish_run(state, "check:#{check}", status, duration_ms, output)
 
       _other ->
         {{:error, "check must be one of: all, format, compile"}, state}
@@ -140,22 +109,14 @@ defmodule ElixirProjectPlugin do
     case Map.get(args, "target") do
       nil ->
         {status, output, duration_ms} = run_mix(["test"], ctx.cwd)
-        finish_run(state, "test:all", {"elixir_test", %{}}, status, duration_ms, output)
+        finish_run(state, "test:all", status, duration_ms, output)
 
       target when is_binary(target) and target != "" ->
         if String.starts_with?(target, "-") do
           {{:error, "test target cannot start with '-'"}, state}
         else
           {status, output, duration_ms} = run_mix(["test", target], ctx.cwd)
-
-          finish_run(
-            state,
-            "test:#{target}",
-            {"elixir_test", %{"target" => target}},
-            status,
-            duration_ms,
-            output
-          )
+          finish_run(state, "test:#{target}", status, duration_ms, output)
         end
 
       _other ->
@@ -175,15 +136,6 @@ defmodule ElixirProjectPlugin do
         "exit=#{last.exit_status} duration_ms=#{last.duration_ms}"
 
     {{:ok, text}, state}
-  end
-
-  def handle_tool("elixir_rerun_last", _args, _ctx, %{last_run: nil} = state) do
-    {{:error, "No Mix invocation to rerun in this session."}, state}
-  end
-
-  def handle_tool("elixir_rerun_last", _args, ctx, state) do
-    {name, args} = state.last_run.invocation
-    handle_tool(name, args, ctx, state)
   end
 
   def handle_tool(_name, _args, _ctx, state), do: {{:error, "unknown elixir project tool"}, state}
@@ -230,12 +182,11 @@ defmodule ElixirProjectPlugin do
     {status, output, System.monotonic_time(:millisecond) - started_at}
   end
 
-  defp finish_run(state, command, invocation, exit_status, duration_ms, output) do
+  defp finish_run(state, command, exit_status, duration_ms, output) do
     status = if exit_status == 0, do: :ok, else: :error
 
     last_run = %{
       command: command,
-      invocation: invocation,
       status: status,
       exit_status: exit_status,
       duration_ms: duration_ms

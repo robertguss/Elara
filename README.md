@@ -225,7 +225,8 @@ before deletion.
 
 `/tree` and `/fork` show branch points (Enter creates and opens a fork);
 `/clone` copies the current path without changing its source. `/reload`
-refreshes the authoritative snapshot; `/why` opens scrollable transition
+refreshes the authoritative snapshot; `/plugins reload` discovers and reloads
+trusted local plugins between turns. `/why` opens scrollable transition
 diagnostics. `/help`, `/appearance`, `/model`, `/effort`, `/interrupt`, and
 `/detach` expose the other controls. Type `/` for matching actions, or `//` for
 a literal slash.

@@ -72,6 +72,8 @@ defmodule Elara do
         handoff_fault_hook: Keyword.get(opts, :handoff_fault_hook, fn _ -> :ok end),
         tool_timeout_ms: tool_timeout_ms,
         plugin_paths: plugin_paths,
+        discover_plugins?:
+          Keyword.get(opts, :discover_plugins?, not Keyword.has_key?(opts, :plugins)),
         router: router,
         workspace_id: workspace_id,
         allowed_capabilities: allowed_capabilities,
@@ -146,7 +148,8 @@ defmodule Elara do
   @doc false
   @spec attached_command(session_ref(), term()) :: :ok | {:error, term()}
   def attached_command(session, command) when is_pid(session) or is_binary(session) do
-    call(session, {:attached_command, command})
+    timeout = if command == :reload_plugins, do: :infinity, else: 5_000
+    call(session, {:attached_command, command}, timeout)
   end
 
   @spec status(session_ref()) :: map() | {:error, :session_not_found}

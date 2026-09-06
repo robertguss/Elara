@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-05 (CTRL-1 and
-> THREAD-1/THREAD-2/CTX-1 pushed; SPLIT-5 next) · **Owner:** solo development
+> **Canonical roadmap and status source** · **Updated:** 2026-09-06 (PLUGIN-1
+> pushed; SPLIT-5 next) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,13 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**PLUGIN-1:** DONE and pushed on `codex/live-plugin-discovery` at `8728298`.
+Discovery, explicit TUI activation, and state-preserving upgrade
+pass focused checks, including real Mix commands and the actual Rust terminal.
+Independent review found and verified fixes for slow-reload connection timeout
+and discovery-policy loss through handoff/resume. Full-suite environment limits
+are recorded in the Result below.
 
 **TUI-8:** IMPLEMENTED in the working tree, not yet committed or pushed. The
 Rust TUI now follows the `docs/design/elara-tui-prototypes.html` mockups for
@@ -231,7 +238,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | THREAD-2 | DONE     | Durable thread communication and TUI navigation               | THREAD-1         |
 | CTX-1    | DONE     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
 | TUI-8    | IMPLEMENTED | Mockup-faithful presentation with quiet chrome             | CTX-1            |
-| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8            |
+| PLUGIN-1 | DONE     | Discover and evolve a useful plugin in a live session         | Owner selection  |
+| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, PLUGIN-1  |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2455,3 +2463,78 @@ instructions/skills, mouse interaction, durable queue/steer, communicating
 threads, and automatic handoff with no approval. The queue now delivers those
 requirements before primary-use measurement. No implementation completion or
 architecture keep/reverse decision is claimed by this roadmap revision.
+
+## PLUGIN-1 — Discover and evolve a useful plugin in a live session
+
+**Scope:** The owner accepted the focused Elixir test→fix→rerun workflow on
+2026-09-06 and authorized implementation. See the
+[decision map](.scratch/live-plugin-runtime/map.md) and captured
+[feature priorities](docs/features-research/priorities.md).
+
+Default-discovery sessions explicitly rescan `.elara/plugins/` between turns.
+Explicit path selections and disabled plugins remain fixed. Existing revisions
+are prepared, additions staged, and the combined catalog validated before
+activation. Ordinary candidate failures stop staged processes and preserve
+working revisions, state, and history. TUI `/plugins reload` negotiates
+`plugin_reload_v1` and enforces controller ownership; `/reload` keeps its
+snapshot behavior. The project plugin gains `elixir_rerun_last`, with structured
+arguments and migration from version-1 state.
+
+**Acceptance:** Start before plugin installation, discover version 1, run a real
+focused failing Mix test, fix using Elara's edit tool, upgrade to version 2 in
+the same session/process, and rerun the remembered target successfully. Reject
+a broken revision and demonstrate another successful call with retained state.
+Cover explicit selections, collisions, staged cleanup, held leases, controller
+ownership, extension negotiation, and actual Rust terminal activation.
+
+**Limits:** Trusted local code; live-session state only; no removal, same-turn
+or model-driven activation, sandbox, crash-atomic multi-plugin commit, or
+rollback of external effects. Existing compiled generations have no retirement
+policy/cap. Dedicated evals and benchmarks remain deferred. Scripted-provider
+acceptance does not measure live-model tool choice. The
+[plugin guide](docs/plugins.md) contains the reproducible workflow and protocol.
+
+### Result
+
+**DONE (2026-09-06).** Pushed `8728298` on `codex/live-plugin-discovery`, including
+implementation `f4fa0aa` and planning capture `63d8610`. Verification:
+
+- 32 focused Mix checks pass: plugins, project-plugin workflow, reload protocol
+  and actual Rust PTY, recorder, skills, and roadmap. Acceptance runs real Mix
+  commands and Elara's built-in edit, observes retained state and history, and
+  successfully reruns after both an upgrade and a rejected revision.
+- Independent review found two issues, now fixed and regression-tested: the
+  attached reload command waits beyond five seconds for migration, and handoff
+  serializes discovery policy separately from its active path list. Reviewer's
+  final context/protocol/plugin/project-plugin run passes all 34 tests, including
+  automatic, disabled, and selected policies through a saved successor resume.
+- `mix format --check-formatted` and `mix compile --warnings-as-errors` pass.
+- Rust TUI: 115 tests pass. Execution stub: 6 pass. Both crates pass format and
+  Clippy with warnings denied. No Rust or Elixir dependencies changed.
+- The first full Mix run passed **441/453**, with the **same 12 failures** as the
+  pre-change **436/448** run. The additional PTY test was added afterward and
+  passed in the final focused run; no all-green suite is claimed.
+- After the review fixes, the full isolated-worktree run passed **438/456**.
+  That worktree inherited an extra 5,058-byte `.codex/AGENTS.md`. Moving it beside
+  the original project removed that extra instruction scope: all five additional
+  server/TUI/input/protocol failures passed on targeted rerun. An additional HTTP
+  fixture startup timeout persisted in the isolated checkout, while the same
+  test passed in the shared checkout; its cause remains unresolved. These runs
+  do not establish a clean, environment-independent full-suite baseline.
+- Baseline failures: five context-budget/handoff failures across attachment,
+  protocol, and TUI tests; three Linux `/proc` assumptions in shell-liveness
+  tests; one queued-mutation timeout; one saved-session listing failure; two
+  thread tests involving macOS path aliases/session discovery. These remain
+  unrelated unresolved work, not hidden prerequisites or fixes in this slice.
+
+Authority work lives in Elixir's session discovery/staging and controller
+command. Rust only adds command discovery and result presentation. Protocol
+work is one negotiated request/reply extension. Cross-runtime verification used
+the real client via a PTY; its test accounts for incremental terminal redraws.
+Effort percentages were not measured. No credential-backed model acceptance or
+general claim of safer core hot upgrades follows from this experiment.
+
+A concurrent task switched the shared checkout's branch during verification;
+publication uses the sibling `Elara-live-plugin-discovery` worktree and preserves
+that task's shared files. Review is complete with no remaining actionable
+findings in this change. No merge to `main` is implied by branch publication.

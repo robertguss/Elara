@@ -126,6 +126,76 @@ defmodule Elara.ContextTest do
     assert length(Store.history(original)) == 2
   end
 
+  test "handoff and persisted resume retain plugin selection without activating new files", %{
+    root: root
+  } do
+    plugin_source = File.read!(Path.expand("../../.elara/plugins/elixir_project.exs", __DIR__))
+
+    for selection <- [:auto, :disabled, :selected] do
+      cwd = Path.join(root, Atom.to_string(selection))
+      File.mkdir_p!(Path.join(cwd, ".elara/plugins"))
+      selected = Path.join(cwd, "selected.exs")
+      File.write!(selected, plugin_source)
+
+      plugin_options =
+        case selection do
+          :auto -> []
+          :disabled -> [plugins: []]
+          :selected -> [plugins: [selected]]
+        end
+
+      {:ok, agent} = Agent.start_link(fn -> [{:ok, %Message.Assistant{text: "continued"}}] end)
+      provider = {Elara.Provider.Scripted, agent}
+
+      {:ok, source} =
+        Elara.start_session(
+          plugin_options ++
+            [
+              cwd: cwd,
+              home: root,
+              skill_paths: [],
+              provider: provider,
+              context_limit: 100_000,
+              max_tool_output_bytes: 1024,
+              system: "test",
+              tools: [],
+              seed_history: [%Message.Assistant{text: String.duplicate("e", 60_000)}]
+            ]
+        )
+
+      before_ids = Enum.map(Elara.plugins(source), & &1.id)
+
+      File.write!(
+        Path.join(cwd, ".elara/plugins/added.exs"),
+        String.replace(plugin_source, "elixir_", "handoff_")
+      )
+
+      assert {:error, :interrupted} = Elara.ask(source, "continue this goal")
+
+      handoff =
+        await(fn ->
+          {:ok, store} = Handoff.store(source)
+
+          case Handoff.outgoing(store) do
+            %{"stage" => "started"} = h -> h
+            _ -> nil
+          end
+        end)
+
+      successor = handoff["id"]
+      await(fn -> Elara.status(successor).phase == :idle end)
+      assert Enum.map(Elara.plugins(successor), & &1.id) == before_ids
+      {:ok, store} = Handoff.store(successor)
+      {:ok, pid} = Elara.session_pid(successor)
+      GenServer.stop(pid)
+      assert {:ok, ^successor} = Elara.start_session(resume: store.path, provider: provider)
+      assert Enum.map(Elara.plugins(successor), & &1.id) == before_ids
+      assert {:ok, plugins} = Elara.reload_plugins(successor)
+      expected = if selection == :auto, do: before_ids ++ ["handoff_project"], else: before_ids
+      assert Enum.map(plugins, & &1.id) == expected
+    end
+  end
+
   for stage <- ~w(prepared created transferred activated started) do
     test "crash at #{stage} retains one successor and one logical continuation", %{root: root} do
       stage = unquote(stage)

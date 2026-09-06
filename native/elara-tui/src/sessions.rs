@@ -50,6 +50,30 @@ pub(super) fn open(model: &mut Model) -> InputAction {
 
 pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
     match frame["type"].as_str() {
+        Some("plugins_reloaded") if frame["version"] == 2 => {
+            let plugins = frame["plugins"]
+                .as_array()
+                .map(|plugins| {
+                    plugins
+                        .iter()
+                        .map(|plugin| {
+                            format!(
+                                "{} v{}",
+                                display(plugin["id"].as_str().unwrap_or("?")),
+                                display(plugin["version"].as_str().unwrap_or("?"))
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default();
+            model.notice = Some(if plugins.is_empty() {
+                "No local plugins found.".into()
+            } else {
+                format!("Plugins reloaded: {plugins}")
+            });
+            true
+        }
         Some("session_list") if frame["version"] == 2 => {
             if let Some(picker) = &mut model.session_picker {
                 picker.loading = false;
@@ -436,6 +460,15 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
         "reload" if control => {
             InputAction::Session(json!({"version":2,"command":"session_reload"}))
         }
+        "plugins" if control && argument == "reload" => {
+            if !model.plugin_reload_supported {
+                model.notice = Some("Plugin reload requires plugin_reload_v1 support.".into());
+                return Some(InputAction::None);
+            }
+            InputAction::Session(
+                json!({"version":2,"command":"plugins_reload","extension":"plugin_reload_v1"}),
+            )
+        }
         "why" => InputAction::Session(json!({"version":2,"command":"inspect"})),
         "interrupt" if control => InputAction::Interrupt,
         "detach" => InputAction::Detach,
@@ -710,6 +743,37 @@ mod tests {
             another.session_picker.as_ref().unwrap().sessions[0]["unread"],
             1
         );
+    }
+
+    #[test]
+    fn plugin_reload_is_explicit_negotiated_and_controller_only() {
+        let mut current = model("control");
+        current.editor.insert("/plugins reload");
+        assert_eq!(palette_command(&mut current), Some(InputAction::None));
+        assert!(
+            current
+                .notice
+                .as_deref()
+                .unwrap()
+                .contains("plugin_reload_v1")
+        );
+        current.plugin_reload_supported = true;
+        assert_eq!(
+            palette_command(&mut current),
+            Some(InputAction::Session(
+                json!({"version":2,"command":"plugins_reload","extension":"plugin_reload_v1"})
+            ))
+        );
+        assert!(current.editor.text().is_empty());
+        reply(
+            &mut current,
+            &json!({"version":2,"type":"plugins_reloaded","plugins":[{"id":"project","version":"2","generation":2}]}),
+        );
+        assert!(current.notice.as_deref().unwrap().contains("project v2"));
+        current.mode = "observe".into();
+        current.editor.insert("/plugins reload");
+        assert_eq!(palette_command(&mut current), Some(InputAction::None));
+        assert!(current.notice.as_deref().unwrap().contains("read-only"));
     }
 
     #[test]

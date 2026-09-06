@@ -53,6 +53,7 @@ defmodule Elara.Session.Handoff do
         tools: Map.values(shell.base_tools),
         system: shell.base_system,
         plugins: Enum.map(shell.plugins, & &1.path),
+        discover_plugins?: shell.discover_plugins?,
         router: shell.router,
         workspace_id: shell.workspace_id,
         allowed_capabilities: shell.allowed_capabilities,

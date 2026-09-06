@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-06 (PLUGIN-1
-> merged; PLUGIN-2 live-model experiment in progress) · **Owner:** solo development
+> merged; PLUGIN-2 live-model experiment verified, publication in progress) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -10,10 +10,13 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**PLUGIN-2:** IN PROGRESS. The owner authorized a live-model coding task that
-authors a useful plugin, pauses for explicit activation, and continues using it.
-The selected task is a macOS shell-liveness regression. PLUGIN-1 is merged to
-`main` at `eb88160`; 34 focused checks passed on the merged tree.
+**PLUGIN-2:** IN PROGRESS, verification and publication. The real model authored
+and used a plugin, fixed the macOS shell-liveness helper, and retained probe state
+across a revision in the same plugin process. All 21 shell tests pass; two turn
+limits and operator/review assistance are recorded in the
+[experiment report](docs/features-research/agent-authored-plugin-experiment.md).
+PLUGIN-1 is merged and pushed to `main` at `eb88160`; 34 focused merged-tree
+checks passed.
 
 **PLUGIN-1:** DONE and pushed on `codex/live-plugin-discovery` at `8728298`.
 Discovery, explicit TUI activation, and state-preserving upgrade
@@ -66,9 +69,11 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Complete PLUGIN-2's live-model task and record the practical
-result, then return to SPLIT-5. That checkpoint has not started;
-physical-terminal acceptance requiring the absent owner stays deferred.
+**Next action:** Publish PLUGIN-2's result and return to the SPLIT-5 owner
+checkpoint. The experiment recommends fixing legitimate repeated-call rejection
+before another larger runtime experiment; that follow-up is not yet queued.
+The daily-driver trial has not started and physical-terminal acceptance stays
+deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -2557,10 +2562,40 @@ single experiment, not a dedicated eval framework or benchmark.
 
 ### Result
 
-**IN PROGRESS (2026-09-06).** Working on `codex/agent-authored-plugin` from merged
-`main` (`eb88160`). The selected S-EFFECT-LIVE test fails on macOS before changes.
-Provider credentials resolve through the existing Codex integration; configured
-model is `gpt-5.5`, effort `low`. The live session will keep repository guidance
-but use an empty user-skill home to avoid the known oversized-catalog confound.
-Activation is performed through the public API after source inspection. Raw
-credentials and private provider payloads will not enter the experiment report.
+**IN PROGRESS (2026-09-06), verified; awaiting publication.** Implementation is
+on `codex/agent-authored-plugin` from merged `main` (`eb88160`). The
+[report](docs/features-research/agent-authored-plugin-experiment.md),
+[exact prompts](docs/features-research/agent-authored-plugin-prompts.md), and
+[archived plugin](docs/features-research/fixtures/shell_liveness.exs) capture the
+actual experiment. The plugin is outside automatic discovery.
+
+Real `gpt-5.5` at `low` effort authored the plugin and test fix using the public
+session API. Repository guidance remained loaded; an empty user-skill home
+avoided the known catalog confound. Explicit inspection/reload discovered version
+1 and upgraded to version 2, generation 2 in the same plugin process. The last
+probe survived across turns and revision. It remains historical evidence after
+the controlled fixture exited, not a fresh liveness assertion.
+
+The macOS helper now falls back from absent `/proc` to `ps`, preserves zombie
+termination, and leaves inconclusive failures unknown. All 21 shell tests pass,
+including the three previously failing lifecycle cases and a new invalid-PID
+regression observed red then green. Plugin compilation and an invalid-PID probe
+also pass. Independent review is clear after corrections to `ps` failure and
+unavailable-procfs classifications. Formatting, compile with warnings denied,
+and diff whitespace checks pass. Final full suite: **447/457 passed**, 10 failed
+in 196.9 seconds. The three prior macOS shell-liveness failures are resolved.
+The remaining failures match previously observed areas: five context-budget/
+handoff cases, queued-mutation recovery, saved-session listing, two thread
+path/session-discovery cases, and the isolated-checkout HTTP fixture startup
+timeout. Their underlying causes remain unresolved; no all-green suite is
+claimed. The final run used the archived plugin outside auto-discovery.
+
+Limits: seven operator prompts, 50 tool results, three repeated-call rejections,
+and two iteration-limit stops. The operator supplied a separately managed shell
+fixture after background-job attempts failed, requested cleanup, provided review
+feedback, and explicitly activated revisions. This was assisted task completion,
+not unattended success or spontaneous plugin invention. No TUI acceptance,
+Linux run, restart persistence, productivity comparison or dedicated eval is
+claimed. Evals remain deferred. The experiment recommends fixing legitimate
+repeated-call rejection next; it does not authorize or queue that implementation.
+No change to core shell execution or persistent background-job support was made.

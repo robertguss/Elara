@@ -148,6 +148,10 @@ defmodule Elara.Effect.OpaqueShellTest do
     close(reopened, journal)
   end
 
+  test "process_state preserves failed ps observations as unknown" do
+    assert process_state_from_ps(-1) == :unknown
+  end
+
   @tag repeated_cross_class: true
   test "S-EFFECT-LIVE separates a satisfied adapter from a still-running shell", context do
     {job, journal, executor, task, pid} = start_lifecycle(context)
@@ -681,11 +685,30 @@ defmodule Elara.Effect.OpaqueShellTest do
         end
 
       {:error, :enoent} ->
-        :terminated
+        process_state_from_ps(pid)
 
       {:error, _reason} ->
         :unknown
     end
+  end
+
+  defp process_state_from_ps(pid) do
+    case System.cmd("ps", ["-p", Integer.to_string(pid), "-o", "stat="], stderr_to_stdout: true) do
+      {stat, 0} ->
+        case String.trim(stat) do
+          "" -> :unknown
+          "Z" <> _rest -> :terminated
+          _other -> :alive
+        end
+
+      {output, 1} ->
+        if String.trim(output) == "", do: :terminated, else: :unknown
+
+      {_output, _status} ->
+        :unknown
+    end
+  rescue
+    _error -> :unknown
   end
 
   defp await_process_state(pid, expected) do

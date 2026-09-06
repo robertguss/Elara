@@ -466,10 +466,10 @@ defmodule Elara.Session.CoreTest do
     assert is_binary(JSON.encode!(text))
   end
 
-  test "repeated identical tool calls are rejected without run_tool" do
+  test "consecutive identical calls in one response are rejected without run_tool" do
     {state, _} = ask(new())
     args = {:ok, %{"n" => 1}}
-    calls = [call("c1", "echo", args), call("c2", "echo", args)]
+    calls = [call("c1", "echo", args), call("c2", "echo", args), call("c3", "echo", args)]
     {state, _} = Core.step(state, {:provider_result, 1, {:ok, asst(nil, calls)}})
     {state, effects} = Core.step(state, {:tool_result, 2, {:ok, "first"}})
 
@@ -485,6 +485,51 @@ defmodule Elara.Session.CoreTest do
 
     refute Enum.any?(effects, &match?({:run_tool, _, _, _}, &1))
     assert match?({:calling_provider, _, 2}, state.phase)
+    assert_wire_legal(state.history)
+  end
+
+  test "an intervening tool permits identical arguments again in the same response" do
+    {state, _} = ask(new())
+    calls = [call("before", "echo"), call("change", "other"), call("after", "echo")]
+    {state, _} = Core.step(state, {:provider_result, 1, {:ok, asst(nil, calls)}})
+    {state, _} = Core.step(state, {:tool_result, 2, {:ok, "before"}})
+    {state, effects} = Core.step(state, {:tool_result, 3, {:ok, "changed"}})
+
+    assert {:run_tool, 4, %ToolCall{id: "after"}, _} = List.last(effects)
+    {state, _} = Core.step(state, {:tool_result, 4, {:ok, "after"}})
+    assert List.last(state.history).outcome == {:ok, "after"}
+    assert_wire_legal(state.history)
+  end
+
+  test "identical calls in later responses can observe change but still reach the turn limit" do
+    {state, _} = ask(new(max_iterations: 3))
+
+    state =
+      Enum.reduce(["pending", "pending", "ready"], state, fn output, state ->
+        {:calling_provider, provider_ref, _iteration} = state.phase
+        tool_call = call("probe-#{provider_ref}", "echo")
+
+        {state, effects} =
+          Core.step(state, {:provider_result, provider_ref, {:ok, asst(nil, [tool_call])}})
+
+        assert {:run_tool, tool_ref, ^tool_call, _} = List.last(effects)
+        {state, _} = Core.step(state, {:tool_result, tool_ref, {:ok, output}})
+        state
+      end)
+
+    assert Core.idle?(state)
+    assert List.last(state.history).outcome == {:ok, "ready"}
+    # No further provider request can be dispatched once the iteration budget ends.
+    assert length(Enum.filter(state.history, &is_struct(&1, Message.Assistant))) == 3
+    assert_wire_legal(state.history)
+  end
+
+  test "a deferred call can be reissued even with identical consecutive arguments" do
+    {state, _} = ask(new())
+    calls = [call("deferred", "echo"), call("retry", "echo")]
+    {state, _} = Core.step(state, {:provider_result, 1, {:ok, asst(nil, calls)}})
+    {_state, effects} = Core.step(state, {:tool_deferred, 2, "scoped instructions"})
+    assert {:run_tool, _, %ToolCall{id: "retry"}, _} = List.last(effects)
   end
 
   test "stale provider result after interrupt converges idle" do

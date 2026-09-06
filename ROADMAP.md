@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-06 (PLUGIN-1
-> live-plugin workflow in progress; SPLIT-5 follows) · **Owner:** solo development
+> pushed; SPLIT-5 next) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -10,8 +10,8 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**PLUGIN-1:** IN PROGRESS on `codex/live-plugin-discovery`, completing review
-and publication. Discovery, explicit TUI activation, and state-preserving upgrade
+**PLUGIN-1:** DONE and pushed on `codex/live-plugin-discovery` at `8728298`.
+Discovery, explicit TUI activation, and state-preserving upgrade
 pass focused checks, including real Mix commands and the actual Rust terminal.
 Independent review found and verified fixes for slow-reload connection timeout
 and discovery-policy loss through handoff/resume. Full-suite environment limits
@@ -61,8 +61,7 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Finish PLUGIN-1 review/publication and record its evidence, then return
-to the SPLIT-5 owner daily-driver checkpoint. SPLIT-5 has not started;
+**Next action:** SPLIT-5 owner daily-driver checkpoint. It has not started;
 physical-terminal acceptance requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -239,8 +238,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | THREAD-2 | DONE     | Durable thread communication and TUI navigation               | THREAD-1         |
 | CTX-1    | DONE     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
 | TUI-8    | IMPLEMENTED | Mockup-faithful presentation with quiet chrome             | CTX-1            |
-| PLUGIN-1 | IN PROGRESS | Discover and evolve a useful plugin in a live session     | Owner selection  |
-| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, PLUGIN-1  |
+| PLUGIN-1 | DONE     | Discover and evolve a useful plugin in a live session         | Owner selection  |
+| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, PLUGIN-1  |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2497,7 +2496,8 @@ acceptance does not measure live-model tool choice. The
 
 ### Result
 
-**IN PROGRESS (2026-09-06): review/publication.** Verification:
+**DONE (2026-09-06).** Pushed `8728298` on `codex/live-plugin-discovery`, including
+implementation `f4fa0aa` and planning capture `63d8610`. Verification:
 
 - 32 focused Mix checks pass: plugins, project-plugin workflow, reload protocol
   and actual Rust PTY, recorder, skills, and roadmap. Acceptance runs real Mix

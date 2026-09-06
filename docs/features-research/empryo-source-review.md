@@ -1,0 +1,75 @@
+# Empryo / archived SoulForge: source review
+
+Research date: 2026-09-06. Requested repository: [proxysoul/Empryo](https://github.com/proxysoul/Empryo). Shallow clone: `/tmp/elara-harness-research-2026-09-06/Empryo`. Inspected revision: **92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0**, committed 2026-09-06. No downloaded program, dependency installer, or test suite was executed; findings below come from source and test inspection.
+
+**The public source is archived SoulForge, not proof of the current Empryo implementation.** The current README describes a newer desktop application and composable engine, but explicitly says the repository retains SoulForge source. Its package remains `@proxysoul/soulforge` version 2.20.25, with Bun, TypeScript, React/OpenTUI, AI SDK adapters and a BUSL-1.1 license declaration. Accordingly, current Empryo benchmark and desktop claims are not conclusions of this review. [README](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/README.md), [package manifest](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/package.json).
+
+## What the implementation contributes
+
+The interesting architecture is a workspace intelligence service attached to a multi-agent coding loop. `runAgentTask` waits for dependencies, enriches child prompts with peer objectives and findings, selects models by task role and cache-sharing tier, retries transient failures, and archives child output before truncating its inline representation. This is more concrete than merely prompting agents to cooperate. Model choice and context inheritance are coupled: the same-model “spark” path can inherit the parent's conversation, whereas different-model work uses a leaner path. [Agent runner, dependency and routing logic](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/agents/agent-runner.ts#L169-L386), [result archival](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/agents/agent-runner.ts#L617-L638).
+
+The following experiments adapt those mechanisms to Elara's existing reducer, supervised threads, durable messaging, handoff and Rust views. They are proposals, not claims of missing features or measured gains.
+
+## 1. Preserve a stable model context prefix while publishing workspace changes
+
+`ContextManager.buildSoulMapSnapshot` freezes the rendered repository map for a configured provider-cache idle window; providers classified as having no prompt cache get a fresh map. `buildSoulMapDiff` publishes bounded changes with edit provenance, symbols, failure annotations and memory markers. It limits a delta to 15 files and five richer symbol blocks, then suppresses duplicate emissions. A new snapshot clears the delta state. [Snapshot and delta implementation](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/context/manager.ts#L1409-L1627).
+
+For Elara, make repository context a versioned projection: a workspace service owns graph generation, while each thread records the generation and content hash supplied to its provider. File events produce small, explicit updates rather than silently replacing the prefix. Publish the same provenance to the Rust inspector. Provider caching is external behavior; the harness can guarantee stable input bytes, not a provider cache hit.
+
+Acceptance scenario: another thread edits a dependency while a request is running. The next request retains its recorded prefix and receives one change notice identifying the writer and revision. After handoff, the fresh projection subsumes that notice without duplicating it. Reject stale graph results using an epoch; expensive parsing should not block the session process.
+
+## 2. Share immutable read artifacts across agents
+
+`AgentBus.acquireFileRead` gives the first reader ownership and makes peers await its result. Completions carry a generation; edits invalidate or update cached data and related tool results. File contents are deliberately not seeded into subsequent dispatches. The bus also bounds cached data and findings. This is an implemented attempt to avoid repeated navigation while managing staleness, not a general coherent filesystem cache. [AgentBus](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/agents/agent-bus.ts#L129-L357).
+
+An Elara workspace process could coordinate in-flight reads, with ETS holding immutable entries and artifacts carrying larger payloads. Key reads by workspace identity, path, content revision and projection arguments. Monitor the producer so its death releases waiters promptly; assign a fresh reference to every generation to reject late replies. This is a better use of lightweight processes than having each agent rediscover the same file independently.
+
+Acceptance scenario: two agents request one symbol, the reader dies, and a third request starts after an edit. Nobody hangs and the old completion cannot populate the new generation. Bound queued waiters and artifact bytes: BEAM mailboxes do not provide automatic backpressure.
+
+## 3. Turn advisory ownership into an explicit workspace write protocol
+
+SoulForge has two different coordination strengths. `AgentBus.acquireEditLock` queues edits within a dispatch and force-releases after a timeout. `WorkspaceCoordinator` records cross-tab file claims, active agents and stale ownership. Its tool wrapper nevertheless allows contested edits and adds a warning. These are useful coordination signals, but cross-tab claims are not an enforced write barrier. [Edit locks](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/agents/agent-bus.ts#L499-L559), [workspace claims](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/coordination/WorkspaceCoordinator.ts#L35-L148), [warning-only behavior](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/coordination/tool-wrapper.ts#L32-L83).
+
+Extend Elara's receipt-backed write path with a monitored owner, lease generation and expected content hash. The write boundary checks both ownership and the file revision immediately before mutation. Expiring a lease must invalidate a late writer; killing its BEAM owner alone cannot retract an external process's filesystem access.
+
+Acceptance scenario: agent A reads a file, B changes it, and A submits its old patch. Reject or rebase with an explicit conflict, leaving B's bytes intact. Start with one shared workspace and a few write operations. Multi-file atomicity and isolated child workspaces are separate design questions.
+
+## 4. Make memory retrieval explainable and cheap to inspect
+
+Memory lives in separate project and global databases. Retrieval combines text search, semantic similarity, edited-file affinity, historical co-change neighbors, usage, recency and pinned status. `buildMemoryRecallMessages` injects summary/id/signal stubs and defers details to `memory(get)`. Its cache incorporates memory generation and edit epoch. [Scoped memory manager](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/memory/manager.ts#L67-L166), [retrieval](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/memory/recall.ts#L76-L181), [co-change and scoring](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/memory/recall.ts#L307-L401), [stub projection](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/context/manager.ts#L226-L293).
+
+The transferable idea is to separate durable evidence, retrieval and prompt presentation. A supervised retrieval worker can return a bounded list of references plus “why this matched,” while a durable store retains details, evidence revision, scope and supersession. The Rust view could expose why a memory was offered and whether its supporting files changed.
+
+Acceptance scenario: an old module-specific warning appears when touching that module, but a superseding decision replaces it after restart. Include a deliberately irrelevant pinned memory to check that importance does not masquerade as relevance. Do not copy the scoring constants as established truth or label generated recall as a new user instruction. ETS is an index, not durable memory.
+
+## 5. Derive working state before discarding context
+
+`WorkingStateManager` tracks task, requirements, plan, file actions, decisions, failures and recent tool summaries. The extractor reads full tool results before pruning, then applies rules and truncation. `buildV2Summary` serializes this structure and skips an LLM call when requested, when no model is available, or when the slot count reaches 15; otherwise it may ask a model to fill gaps. Thus “free compaction” describes a path, not every invocation. [Working-state model](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/compaction/working-state.ts#L4-L138), [extractor](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/compaction/extractor.ts#L42-L199), [summary construction](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/compaction/summarize.ts#L21-L153).
+
+Elara can extend handoff with a deterministic projection from recorded events: verified writes, pending messages, checks and outstanding decisions. Preserve source event ids and full-output artifact references, and use optional narrative summaries for information not captured structurally. A pure fold makes lost facts inspectable and replayable without treating heuristic prose extraction as truth.
+
+Acceptance scenario: compact after a failed check followed by a repair. The continuation retains both the failure and its later resolution, the latest user constraint and the unresolved check. A large slot count alone must not count as evidence of completeness.
+
+## 6. Unify dependency work under bounded supervised jobs
+
+The worker RPC layer manually manages request ids, events, callbacks, deadlines, disposal and up to three automatic restarts. A crash rejects pending calls; restarting a worker does not replay their effects. The agent bus separately tracks dependency completion and trips an abort after clustered provider failures. [Worker lifecycle](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/workers/rpc.ts#L204-L299), [crash/disposal](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/workers/rpc.ts#L401-L435), [dependencies and circuit breaker](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/agents/agent-bus.ts#L705-L754).
+
+Elara already has the more natural substrate for lifecycle ownership. Explore a common job projection for verification, graph scans and agent work: queued/running/settled state, dependency references, cancellation, output artifact, resource budget and retry reason. Use supervised tasks for execution and durable events for decisions. A provider-specific admission controller could prevent an outage from turning many agents into a retry storm.
+
+Acceptance scenario: one provider fails while a local check and a different provider continue. Kill a worker and distinguish safe read retry, failed mutation and uncertain external effect. A Rust subprocess/Port boundary can contain native failure; a crashing in-process NIF may take down the VM. Supervision is neither an OS sandbox nor an exactly-once guarantee.
+
+## 7. Couple continuation and workspace checkpoints honestly
+
+`SessionManager` serializes saves per session, writes temporary files then renames them, and stores UI messages separately from API-facing core messages. This prevents an important concurrent-save race, but several file renames are not one crash-atomic transaction. [Session persistence](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/sessions/manager.ts#L58-L143).
+
+The checkpoint store associates message anchors with Git snapshots and provides undo/redo. Its actual snapshot path uses `git add -A`, a temporary commit and mixed reset. Static inspection also finds that undo collects ownership conflicts but then iterates every file slated for restoration; the CLI describes those conflicts as skipped. That mismatch was not reproduced, but it prevents treating the implementation as evidence of safe conflict preservation. [Checkpoint creation and restoration](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/stores/checkpoints.ts#L336-L501), [CLI message](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/commands/checkpoint.ts#L99-L112).
+
+For Elara experimentation, bind a continuation checkpoint to a durable manifest of event cursor, context generation, active capability versions and workspace artifact hashes. Initially make it inspectable and forkable; restoration should explicitly compare current bytes before writing. Acceptance: restart between artifact creation and manifest publication, then recover either the previous complete checkpoint or the new complete one. Never silently mix their state. BEAM process state makes coordination convenient; durable publication still needs an explicit storage protocol.
+
+## Evidence limits and useful tests
+
+Read tests exercise [shared reads and invalidation](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/tests/agent-bus.test.ts#L176-L303), [worker death and restart limits](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/tests/workers.test.ts#L554-L588), [recall once per turn](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/tests/memory-prepare-step.test.ts#L26-L105) and [concurrent tab saves](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/tests/session-manager.test.ts#L296-L336). Their presence shows intended contracts, not successful execution in this review or proof of every interleaving.
+
+Extensibility includes 13 declared lifecycle events and bounded shell-command hooks with structured decisions. That is additional evidence for separating policy decisions from background observers, but does not require replacing Elara's plugin generation machinery. [Hook types](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/hooks/types.ts#L11-L57), [runner contract](https://github.com/proxysoul/Empryo/blob/92320fb6eeb6b81ee8c69d9fc73e09e032b5b1a0/src/core/hooks/runner.ts#L1-L35).
+
+The strongest first experiments are context generations, monitored workspace ownership and event-derived working state. They build directly on Elara's existing architecture and expose concrete BEAM advantages without requiring daily-driver feature parity, distributed execution, a new UI framework or a dedicated benchmark program.

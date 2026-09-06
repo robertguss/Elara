@@ -12,8 +12,10 @@ roadmaps or archived planning documents in the working tree.
 
 **PLUGIN-1:** IN PROGRESS on `codex/live-plugin-discovery`, completing review
 and publication. Discovery, explicit TUI activation, and state-preserving upgrade
-pass 32 focused checks, including real Mix commands and the actual Rust terminal.
-The full Mix run reproduced the same 12 pre-existing macOS/environment failures.
+pass focused checks, including real Mix commands and the actual Rust terminal.
+Independent review found and verified fixes for slow-reload connection timeout
+and discovery-policy loss through handoff/resume. Full-suite environment limits
+are recorded in the Result below.
 
 **TUI-8:** IMPLEMENTED in the working tree, not yet committed or pushed. The
 Rust TUI now follows the `docs/design/elara-tui-prototypes.html` mockups for
@@ -2501,12 +2503,24 @@ acceptance does not measure live-model tool choice. The
   and actual Rust PTY, recorder, skills, and roadmap. Acceptance runs real Mix
   commands and Elara's built-in edit, observes retained state and history, and
   successfully reruns after both an upgrade and a rejected revision.
+- Independent review found two issues, now fixed and regression-tested: the
+  attached reload command waits beyond five seconds for migration, and handoff
+  serializes discovery policy separately from its active path list. Reviewer's
+  final context/protocol/plugin/project-plugin run passes all 34 tests, including
+  automatic, disabled, and selected policies through a saved successor resume.
 - `mix format --check-formatted` and `mix compile --warnings-as-errors` pass.
 - Rust TUI: 115 tests pass. Execution stub: 6 pass. Both crates pass format and
   Clippy with warnings denied. No Rust or Elixir dependencies changed.
-- The full Mix run passed **441/453**, with the **same 12 failures** as the
+- The first full Mix run passed **441/453**, with the **same 12 failures** as the
   pre-change **436/448** run. The additional PTY test was added afterward and
   passed in the final focused run; no all-green suite is claimed.
+- After the review fixes, the full isolated-worktree run passed **438/456**.
+  That worktree inherited an extra 5,058-byte `.codex/AGENTS.md`. Moving it beside
+  the original project removed that extra instruction scope: all five additional
+  server/TUI/input/protocol failures passed on targeted rerun. An additional HTTP
+  fixture startup timeout persisted in the isolated checkout, while the same
+  test passed in the shared checkout; its cause remains unresolved. These runs
+  do not establish a clean, environment-independent full-suite baseline.
 - Baseline failures: five context-budget/handoff failures across attachment,
   protocol, and TUI tests; three Linux `/proc` assumptions in shell-liveness
   tests; one queued-mutation timeout; one saved-session listing failure; two
@@ -2521,4 +2535,6 @@ Effort percentages were not measured. No credential-backed model acceptance or
 general claim of safer core hot upgrades follows from this experiment.
 
 A concurrent task switched the shared checkout's branch during verification;
-publication uses a separate worktree and preserves that task's shared files.
+publication uses the sibling `Elara-live-plugin-discovery` worktree and preserves
+that task's shared files. Review is complete with no remaining actionable
+findings in this change. No merge to `main` is implied by branch publication.

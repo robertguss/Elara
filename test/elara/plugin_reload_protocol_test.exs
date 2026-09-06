@@ -94,6 +94,56 @@ defmodule Elara.PluginReloadProtocolTest do
     assert Elara.plugins(session) == [active]
   end
 
+  @tag timeout: 15_000
+  test "slow migration returns its result without disconnecting the controller" do
+    dir = Path.join(System.tmp_dir!(), "plugin-slow-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    path = Path.join(dir, "slow.exs")
+    original = File.read!(Path.expand("../../.elara/plugins/elixir_project.exs", __DIR__))
+    File.write!(path, original)
+    {:ok, agent} = Agent.start_link(fn -> [] end)
+    provider = {Elara.Provider.Scripted, agent}
+
+    {:ok, session} =
+      Elara.start_session(
+        cwd: dir,
+        home: dir,
+        skill_paths: [],
+        plugins: [path],
+        tools: [],
+        persist: false,
+        provider: provider
+      )
+
+    {:ok, pid} = Elara.session_pid(session)
+    server = start_supervised!({Elara.Server, port: 0, provider: provider})
+    socket = attach(Elara.Server.port(server), session, "control", ["plugin_reload_v1"])
+
+    on_exit(fn ->
+      :gen_tcp.close(socket)
+      if Process.alive?(pid), do: GenServer.stop(pid)
+      File.rm_rf!(dir)
+    end)
+
+    revised =
+      String.replace(
+        original,
+        "def migrate(%{last_run: nil} = state, _metadata), do: {:ok, state}",
+        "def migrate(%{last_run: nil} = state, _metadata) do Process.sleep(5_200); {:ok, state} end"
+      )
+
+    File.write!(path, revised)
+
+    assert %{"type" => "plugins_reloaded", "plugins" => [%{"generation" => 2}]} =
+             request(
+               socket,
+               %{"command" => "plugins_reload", "extension" => "plugin_reload_v1"},
+               10_000
+             )
+
+    assert request(socket, %{"command" => "session_reload"})["type"] == "snapshot"
+  end
+
   defp attach(port, session, mode, extensions) do
     {:ok, socket} =
       :gen_tcp.connect({127, 0, 0, 1}, port, [:binary, packet: :line, active: false])
@@ -111,9 +161,9 @@ defmodule Elara.PluginReloadProtocolTest do
     socket
   end
 
-  defp request(socket, command) do
+  defp request(socket, command, timeout \\ 5_000) do
     :ok = :gen_tcp.send(socket, Elara.Protocol.encode(Map.put(command, "version", 2)))
-    {:ok, line} = :gen_tcp.recv(socket, 0, 5_000)
+    {:ok, line} = :gen_tcp.recv(socket, 0, timeout)
     {:ok, message} = Elara.Protocol.decode(line)
     message
   end

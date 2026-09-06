@@ -82,10 +82,18 @@ paths; `plugins: []` remains disabled. Removing or renaming a loaded file makes
 reload fail; it does not unload the active plugin. Restore the path or start a
 new session to use a different selection.
 
+New automatic handoffs retain both the active path selection and the discovery
+policy, including after a saved successor is resumed. A handoff does not
+activate newly added files; they still require explicit reload. Handoffs saved
+before discovery-policy tracking retain their saved fixed path selection.
+
 Each session stays on its loaded plugin revision until that session reloads. On
 success, new calls use the new code while the plugin's process and state
 survive. Reload is refused during a turn and while an interrupted plugin call
 still holds its state lease.
+
+The controlling TUI connection waits for compilation and migration to finish,
+including callbacks longer than five seconds, then reports success or failure.
 
 Parsing, compilation, contract validation, tool-name collision, initialization,
 or migration failures leave the previous revision and state active. Newly

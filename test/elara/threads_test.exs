@@ -387,7 +387,7 @@ defmodule Elara.ThreadsTest do
     File.write!(Path.join(child["cwd"], "file.txt"), "root change\n")
     assert {:ok, _} = Threads.integrate(parent, child["id"])
     assert File.read!(Path.join(cwd, "file.txt")) == "root change\n"
-    assert child["parent_cwd"] == cwd
+    assert child["parent_cwd"] == git(cwd, ["rev-parse", "--show-toplevel"])
     assert child["parent_invocation_cwd"] == nested
   end
 

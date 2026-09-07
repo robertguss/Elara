@@ -100,11 +100,23 @@ defmodule Elara.Tool do
   defp read_tool do
     %__MODULE__{
       name: "read",
-      description: "Read a file relative to the working directory.",
+      version: "2",
+      description:
+        "Read a file relative to the working directory, optionally with one-based offset and line limit.",
       parameters: %{
         "type" => "object",
         "properties" => %{
-          "path" => %{"type" => "string", "description" => "Path to read"}
+          "path" => %{"type" => "string", "description" => "Path to read"},
+          "offset" => %{
+            "type" => "integer",
+            "minimum" => 1,
+            "description" => "Optional one-based line offset; defaults to 1 when ranged"
+          },
+          "limit" => %{
+            "type" => "integer",
+            "minimum" => 1,
+            "description" => "Optional positive line limit; defaults to 200 when ranged"
+          }
         },
         "required" => ["path"]
       },
@@ -134,13 +146,19 @@ defmodule Elara.Tool do
   defp edit_tool do
     %__MODULE__{
       name: "edit",
-      description: "Replace exactly one occurrence of old_text with new_text in a file.",
+      version: "2",
+      description:
+        "Replace exactly one occurrence of old_text with new_text in a file, or all occurrences when replace_all is true.",
       parameters: %{
         "type" => "object",
         "properties" => %{
           "path" => %{"type" => "string", "description" => "Path to edit"},
-          "old_text" => %{"type" => "string", "description" => "Exact text to find once"},
-          "new_text" => %{"type" => "string", "description" => "Replacement text"}
+          "old_text" => %{"type" => "string", "description" => "Exact text to find"},
+          "new_text" => %{"type" => "string", "description" => "Replacement text"},
+          "replace_all" => %{
+            "type" => "boolean",
+            "description" => "Replace every non-overlapping occurrence; defaults to false"
+          }
         },
         "required" => ["path", "old_text", "new_text"]
       },

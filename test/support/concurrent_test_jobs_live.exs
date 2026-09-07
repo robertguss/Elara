@@ -27,7 +27,7 @@ case System.argv() do
         revision: String.trim(revision),
         settings: %{model: "gpt-5.5", effort: "low"},
         assistance:
-          "Host starts, rejects, cancels, deduplicates and releases gated real Mix fixtures through TestJobs.run. Owners stay paused through terminal delivery, then host resumes them. Real models only inspect retained status once and interpret completion. No model polling, runtime changes or autonomous cancellation claims. PID markers count fixture entries; process checks cover top-level Mix VMs, not detached descendants.",
+          "Host starts, rejects, cancels, deduplicates and releases gated real Mix fixtures through TestJobs.run. Owners stay paused through terminal delivery, then host resumes them. Real models only inspect retained status once and interpret completion. No model polling, runtime changes or autonomous cancellation claims. Fixture entry markers count admitted test entries; PID markers identify top-level Mix VMs, and process checks do not cover detached descendants.",
         retained_root: root
       })
 

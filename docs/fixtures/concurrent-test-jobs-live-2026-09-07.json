@@ -398,7 +398,7 @@
     "model": "gpt-5.5",
     "effort": "low"
   },
-  "assistance": "Host starts, rejects, cancels, deduplicates and releases gated real Mix fixtures through TestJobs.run. Owners stay paused through terminal delivery, then host resumes them. Real models only inspect retained status once and interpret completion. No model polling, runtime changes or autonomous cancellation claims. PID markers count fixture entries; process checks cover top-level Mix VMs, not detached descendants.",
+  "assistance": "Host starts, rejects, cancels, deduplicates and releases gated real Mix fixtures through TestJobs.run. Owners stay paused through terminal delivery, then host resumes them. Real models only inspect retained status once and interpret completion. No model polling, runtime changes or autonomous cancellation claims. Fixture entry markers count admitted test entries; PID markers identify top-level Mix VMs, and process checks do not cover detached descendants.",
   "retained_root": "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-concurrent-live-79300",
   "checks": {
     "four_slots_held": true,
@@ -790,5 +790,6 @@
   ],
   "elapsed_ms": 6606,
   "cancellation_settlement_ms": 25,
-  "survivor_status_latency_ms": 0.02
+  "survivor_status_latency_ms": 0.02,
+  "annotation_note": "Marker terminology in assistance was clarified after capture; measurements and transcripts are unchanged."
 }

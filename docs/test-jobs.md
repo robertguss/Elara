@@ -157,6 +157,56 @@ rerun. A second real-model session answered during execution. This proves the
 session boundary in one surviving VM, not recovery from execution-VM loss.
 
 
+## Live repository exercise
+
+JOB-8 ran the existing `test/elara/context_test.exs` through the real configured
+model: 15 tests passed in 11.57 seconds, with one start, one automatic completion
+and one status call. No polling, provider error or continuation prompt occurred.
+This is bounded evidence for real repository work, not multi-minute job coverage.
+See the [experiment report](harness-experiments.md) for assistance and limits.
+
+To repeat from a clean committed Elara checkout with the configured Codex login:
+
+```sh
+mix run test/support/test_job_repository_live.exs /tmp/elara-repository-job.json
+```
+
+This is an explicit live-model run. The driver records public evidence, retains
+the session/job record, and leaves the existing repository tests unchanged.
+Each run creates a new session and deliberately executes the test file again.
+
+### Passive live observation (JOB-6)
+
+The repository driver now uses the configured provider directly. Its support
+helper, `test/support/live_session_driver.exs`, observes sessions through
+`Elara.attach/4`. It follows durable `delivery_owner` after the handoff reaches
+`started`, then replays retained successor events. A successor that finishes
+before attachment is still observable. The helper runs its attachments in a
+short-lived task so returning also releases observation.
+
+`LiveSessionDriver.run(session, prompt_or_nil, completion_marker: "DONE")`
+submits one supplied prompt or observes retained work when the prompt is nil.
+A new prompt ignores older terminal events; a later `turn_started` supersedes
+an earlier completion marker. Busy submission is a recorded outcome. Paused
+input returns `paused`; `resume_inputs: true` permits one initial, recorded
+resume and does not clear a later user pause. With a new prompt, submission
+precedes resume so queued work cannot race the prompt into a busy session.
+
+`pending_jobs: ["job-id"]` lets a known job's later completion wake the session
+after a provider error. Without pending work, the error is returned for an
+explicit owner decision. The helper never retries a prompt, reopens a stopped
+session, reruns a command or cancels work on timeout. Cleanup belongs to the
+caller; the repository script cancels its own still-running job when it exits.
+
+Evidence includes initial/final provider settings and conservative context
+budgets, observed owners, terminal events, explicit actions and sequence gaps.
+Observed timings and assistant message counts are not network-request counts
+or latency; assistant messages can include harness-authored handoff indexes. Protocol-v1 live delivery omits inbox-change events, so sequence
+gaps may reflect that omission; replay is bounded and may have an evicted
+prefix. Evidence does not claim a complete event history. No provider-private
+state is included in the repository script's transcript projection.
+
+
 The [JOB-10 concurrency experiment](harness-experiments.md#2026-09-07-concurrent-cancellation-and-capacity-refill--job-10)
 filled all four global slots, rejected a fifth request, cancelled one job, and
 admitted the replacement after settlement. The other three passed, all slots

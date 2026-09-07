@@ -10,9 +10,11 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**JOB-7:** IN PROGRESS; repeat the full live coding workflow with the normal
-provider and JOB-6 observer. Add opt-in exact-text `edit.replace_all`, retain
-unique-match defaults, and verify red/green supervised jobs plus host review.
+**JOB-7:** DONE; feature pushed in `e9bf355` on `codex/edit-replace-all`.
+The normal-provider model completed red → implementation → green in 86 seconds
+with one initial prompt and no recovery intervention. Its production patch is
+retained. All 26 focused checks and fresh live edit acceptance pass. Full suite:
+516/524, with the same eight baseline failures. The experiment stack is unmerged.
 
 **JOB-6:** DONE; observer and live script pushed in `dbc832a` / `5fbd299` on
 `codex/live-driver-ownership`. Twelve driver regressions pass. The normal-provider
@@ -132,9 +134,9 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Complete JOB-7's bounded live attempt, review its patch, verify
-local/public/remote behavior, document assistance and results, then commit and
-push. JOB-4 through JOB-7 remain stacked; no merge in this step. Dedicated evals
+**Next action:** Review the accumulated JOB-4 through JOB-7 stack for integration
+into main before adding another experiment. Keep unrelated active worktrees
+untouched. JOB-7 is published; merging is a separate checkpoint. Dedicated evals
 remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -325,7 +327,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-4    | DONE        | Naturally longer repository context-recovery test job    | JOB-3            |
 | JOB-5    | DONE        | Live feature implementation: optional line-range reads   | JOB-4            |
 | JOB-6    | DONE        | Live driver metadata, handoff observation and resume    | JOB-5            |
-| JOB-7    | IN PROGRESS | Live feature: opt-in exact-text edit replace_all | JOB-6 |
+| JOB-7    | DONE        | Live feature: opt-in exact-text edit replace_all | JOB-6 |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -3149,16 +3151,39 @@ No context, retry, job, UI or dedicated eval changes.
 
 ### Result
 
-**IN PROGRESS.** Started from pushed JOB-6 checkpoint `b5dbcc5` on
-`codex/edit-replace-all`. Prior branch was already fully pushed. Live driver
-records the exact prompt, public transcript, job results and original model
-patch separately from host review. One initial prompt, a 32-iteration turn
-limit and a five-minute observer deadline bound the attempt. The live model
-completed in 86,051 ms: four expected red failures, then five green tests, with
-one initial prompt and no recovery intervention. All runtime/schema changes
-are model-authored and retained. Host review added local/public/remote checks
-and usage documentation: 26 focused tests pass. A fresh normal-provider session
-used edit version 2 once and produced exact expected bytes. Full suite:
-516/524 in 182.0 seconds, with the same eight named JOB-6 baseline failures.
-Formatting, warnings-as-errors compilation and local review pass. All ten new
-tests pass. Publication checkpoint remains pending.
+**DONE.** Feature and host review checks pushed in `e9bf355` on
+`codex/edit-replace-all`, based on JOB-6 `b5dbcc5`. The preceding branch was
+already fully pushed. Historical experiment-driver commit: `5dd4a7f`. The stack
+remains unmerged.
+
+Normal `gpt-5.5`/low session `v6glZVyihHmzf1VGsCpSWA` completed the feature in
+86,051 ms from one detailed host prompt. The red job produced four expected
+failures and one compatibility pass in 514 ms. After one automatic completion
+and status call, the model implemented the feature. A new green job passed all
+five tests in 716 ms, followed by one completion/status and a final summary.
+No provider error, continuation prompt, resume or handoff. Fifteen assistant
+messages across three inputs; both jobs settled and released their slot.
+Source remained stable during each job. The old red result correctly became
+stale after implementation. The observer reports its five sequence gaps.
+
+The model authored all runtime/schema changes and the initial five tests; its
+production patch is unchanged after host review. The host added four
+local/public regressions, one authenticated remote-worker check and fuller
+README usage/limits. All **26 focused tests** pass. Fresh live acceptance in
+session `vmpuZNCszWse51-ctnqM-g` uses version-2 edit exactly once and produces
+`new\r\nα new\nnew`; all five acceptance checks pass in 3,924 ms.
+
+Full suite: **516/524** in 182.0 seconds, all ten added tests pass. The same
+eight named JOB-6 baseline failures remain (attachment/context budgets,
+cold-v2 history, saved-session listing, interactive TUI, real-PTY thread
+path/session discovery and queued unsettled-mutation recovery). Formatting,
+warnings-as-errors compilation, local review and documentation-link checks
+pass. Temporary fixture/home directories are removed; the coding session and
+terminal jobs remain as evidence.
+
+This supports the practicality of a bounded normal-provider coding loop with
+supervised jobs. A detailed contract, selected tools, 32-iteration limit and
+low context pressure limit generalization. No provider/context/retry policy or
+eval framework changed. Evidence and assistance:
+[public record](docs/fixtures/edit-replace-all-live-2026-09-07.json) and
+[experiment assessment](docs/harness-experiments.md).

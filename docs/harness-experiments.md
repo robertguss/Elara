@@ -593,6 +593,83 @@ session/job evidence is retained. The [public artifact](fixtures/live-driver-own
 contains the prompt, per-session public transcript, metadata, job output, gaps
 and check results. Canonical status belongs to
 [JOB-6](../ROADMAP.md#job-6--live-driver-metadata-and-logical-ownership).
-Dedicated evals remain deferred. The next suggested coding experiment is a
-small feature with this normal-provider observer, retaining the full attempt
-and any explicit assistance so the JOB-5 workflow can be reassessed.
+Dedicated evals remain deferred. The follow-up coding experiment is recorded below as JOB-7, retaining the full
+attempt and explicit assistance to reassess the JOB-5 workflow.
+
+## 2026-09-07: Live exact-text replace-all feature — JOB-7
+
+**Question:** With provider identity preserved and logical ownership observed,
+can a live Elara session complete a small harness feature from a supplied
+contract through red tests, implementation and green verification?
+
+**Result: one successful bounded coding attempt.** On driver commit `5dd4a7f`,
+normal `gpt-5.5`/low session `v6glZVyihHmzf1VGsCpSWA` completed the assignment in
+**86,051 ms**. There was one initial host prompt, no continuation prompt, no
+provider error, no resume and no handoff. The model authored all runtime/schema
+changes and the initial five regressions. Host review retained its implementation.
+
+| Stage | Observed evidence |
+| --- | --- |
+| Tests first | New focused test file; red job ran in 514 ms: four expected failures and one compatibility pass. |
+| Red completion | One automatic inbox input and one status call; implementation followed the retained failure evidence. |
+| Implementation | Opt-in boolean `replace_all`, empty-pattern and invalid-flag errors, edit tool version 2, schema and README usage. |
+| Green completion | New job ran in 716 ms: all five tests passed, followed by one automatic completion and one status call. |
+| Host review | Added four local/public tests, one authenticated remote-worker test and fuller usage/limits documentation. All 26 focused checks pass. |
+| Fresh-process live acceptance | Session `vmpuZNCszWse51-ctnqM-g` invoked edit version 2 once with `replace_all: true`; exact result `new\r\nα new\nnew`, all five checks pass in 3,924 ms. |
+
+The attempt produced 15 assistant messages across three inputs (4, 9 and 2),
+15 tool calls (four reads, one write, five edits, one formatting command and
+four test-job calls), and two durable completion inputs. Both jobs settled and
+released their slot. Source stayed unchanged during each job. The red result
+correctly became stale after implementation; the green result matched current
+source at capture. These are observed starts and durable records; no physical
+execution counter was inserted into repository tests.
+
+**Functionality added:** `edit.replace_all` is optional and defaults to false.
+Default/false still requires one exact match. True replaces every non-overlapping
+literal occurrence in one pass, including deletion via empty `new_text`.
+Invalid flags, empty `old_text`, missing matches and ambiguous default requests
+fail without mutation. Empty patterns previously raised from `:binary.matches`;
+they now produce an ordinary tool error. File bytes and line endings are
+preserved. The remote check performs a version-2 edit in the worker workspace
+and rejects a version-1 request without further mutation. This remains a
+whole-file, non-atomic read/write with existing capabilities and confinement;
+there is no new transactional or crash-recovery guarantee. See [README usage](../README.md#built-in-tools).
+
+**Assistance and limits:** the host selected the feature, supplied a detailed
+contract, source pointers, a test-first sequence and fixed job IDs. The session
+had five selected tools, an empty user-skill catalog and a 32-iteration turn
+limit; no turn used more than nine assistant responses. The host reviewed and
+strengthened the patch afterward. This was not an unassisted discovery task or
+an eval/benchmark. No context handoff was needed: the conservative estimate grew
+from 9,843 to 60,976 within the retained 272,000 local catalog limit. The observer
+recorded 186 events and five sequence gaps; protocol-v1 omits live inbox changes.
+We do not infer complete event history or physical network counts from these
+observations.
+
+**Assessment:** useful functionality and encouraging workflow evidence. A normal
+session carried two supervised jobs from red to green without operator recovery,
+and its implementation survived review. The supervised job/inbox mechanisms
+supported the workflow; replace-all itself is ordinary portable Elixir code.
+The different feature, detailed prompt and bounded context mean this is not a
+controlled comparison proving that the JOB-6 driver caused success or that
+heavy-context handoff issues are resolved. Keep the driver and feature; there
+is no new evidence here requiring a different runtime scheduler or retry policy.
+
+The [public artifact](fixtures/edit-replace-all-live-2026-09-07.json) retains the
+exact prompt, original model patch and test file, public transcript, job output,
+metadata, acceptance script and host checks. Provider-private state is omitted.
+For historical red→green reproduction, use a separate checkout of `5dd4a7f`
+and run `mix run test/support/edit_replace_all_live.exs /tmp/edit-replace-all.json`;
+each invocation performs real model calls and creates a new coding attempt.
+The current feature checkout already contains the implementation.
+
+**Final verification:** 26 focused tests pass. Full suite: **516/524** in
+182.0 seconds; all ten added tests pass and the same eight named JOB-6 baseline
+failures remain. Formatting, warnings-as-errors compilation, local review and
+81 local documentation links pass. Temporary fixture/home directories are
+removed; the original coding session and terminal jobs remain as evidence.
+Feature and review checks are pushed in `e9bf355` on `codex/edit-replace-all`,
+stacked on JOB-6 and unmerged. Canonical checkpoint:
+[JOB-7](../ROADMAP.md#job-7--live-edit-replace_all-feature).
+Dedicated evals remain deferred.

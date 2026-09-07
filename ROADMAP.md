@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-07 (DIAG-1
-> captured-check diagnosis in progress) · **Owner:** solo development
+> captured check diagnosis complete) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -10,11 +10,12 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**DIAG-1:** IN PROGRESS on `codex/check-diagnosis`. Owner-authorized after the
-DSPy investigation: capture one check's evidence, run one direct diagnosis with
-a fixed output contract, and verify inspection and cancellation through the
-existing session/runtime boundary. Examples, RLM and automatic optimization
-remain later comparisons.
+**DIAG-1:** DONE; implementation `1b24bfe` pushed on `codex/check-diagnosis`.
+Captured evidence, direct diagnosis, cancellation, persistence and the existing
+Rust inspector pass 76 focused checks. Both live responses identified the cause
+but exceeded the citation-span limit and were rejected. The result is an
+inspectable direct baseline, with no accepted live diagnosis yet. Examples,
+RLM and automatic optimization remain later comparisons.
 
 **LOOP-1:** DONE; implementation `20a8eda`, merged into `main` in `57f9edc`.
 Later responses and intervening calls permit useful rechecks; consecutive
@@ -83,10 +84,11 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Finish DIAG-1's captured evidence, direct diagnosis, inspection
-and cancellation acceptance. SPLIT-5 remains unstarted and physical-terminal
-acceptance remains deferred. The separate background test/wakeup proposal in
-the [harness experiment log](docs/harness-experiments.md) remains a proposal.
+**Next action:** Review DIAG-1's recorded failures before selecting the proposed
+curated-example comparison. SPLIT-5 remains the unstarted owner checkpoint and
+physical-terminal acceptance remains deferred. The separate background
+test/wakeup candidate in the [harness experiment log](docs/harness-experiments.md)
+remains a proposal.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -269,8 +271,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | PLUGIN-1 | DONE     | Discover and evolve a useful plugin in a live session         | Owner selection  |
 | PLUGIN-2 | DONE     | Agent-authored plugin during a real coding task              | PLUGIN-1         |
 | LOOP-1   | DONE     | Permit useful repeated tool calls with bounded loops          | PLUGIN-2         |
-| DIAG-1   | IN PROGRESS | Diagnose a captured failed check with explicit evidence   | LOOP-1           |
-| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, DIAG-1    |
+| DIAG-1   | DONE     | Diagnose a captured failed check with explicit evidence       | LOOP-1           |
+| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, DIAG-1    |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2675,8 +2677,8 @@ unimplemented and unstarted.
 
 ### Result
 
-**IN PROGRESS (2026-09-07): implementation and bounded experiment complete;
-publication pending.** The version 3 project plugin records source/output
+**DONE (2026-09-07).** Implementation and bounded experiment pushed in `1b24bfe`
+on `codex/check-diagnosis`. The version 3 project plugin records source/output
 artifacts and actual executable/argument arrays. The built-in `check_evidence`
 tool inspects the latest capture; `diagnose_check` performs one tool-free
 provider request with `check_diagnosis/v1`, strategy `direct/v1`. Acceptance

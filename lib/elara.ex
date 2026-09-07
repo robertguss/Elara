@@ -72,6 +72,7 @@ defmodule Elara do
         handoff_fault_hook: Keyword.get(opts, :handoff_fault_hook, fn _ -> :ok end),
         tool_timeout_ms: tool_timeout_ms,
         plugin_paths: plugin_paths,
+        discover_plugins?: not Keyword.has_key?(opts, :plugins),
         router: router,
         workspace_id: workspace_id,
         allowed_capabilities: allowed_capabilities,

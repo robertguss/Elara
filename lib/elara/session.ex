@@ -69,6 +69,7 @@ defmodule Elara.Session do
       instruction_targets: [],
       base_tools: %{},
       plugins: [],
+      discover_plugins?: false,
       subscribers: %{},
       attachments: %{},
       controller: nil,
@@ -171,6 +172,7 @@ defmodule Elara.Session do
             handoff_fault_hook: Keyword.fetch!(opts, :handoff_fault_hook),
             tool_timeout_ms: tool_timeout_ms,
             base_tools: core.config.tools,
+            discover_plugins?: Keyword.get(opts, :discover_plugins?, false),
             plugins: plugins
           }
 
@@ -1746,9 +1748,11 @@ defmodule Elara.Session do
     PluginServer.abort_invocation(server, lease)
   end
 
-  defp start_plugins(paths, cwd, base_tools) when is_list(paths) do
+  defp start_plugins(paths, cwd, base_tools, ids \\ MapSet.new())
+
+  defp start_plugins(paths, cwd, base_tools, ids) when is_list(paths) do
     paths
-    |> Enum.reduce_while({:ok, [], MapSet.new(), []}, fn
+    |> Enum.reduce_while({:ok, [], ids, []}, fn
       path, {:ok, plugins, ids, tools} when is_binary(path) ->
         expanded = Path.expand(path, cwd)
         opts = [owner: self(), cwd: cwd, path: expanded]
@@ -1756,53 +1760,67 @@ defmodule Elara.Session do
         case DynamicSupervisor.start_child(Elara.PluginSup, {PluginServer, opts}) do
           {:ok, pid} ->
             info = PluginServer.info(pid)
+            plugin = %{pid: pid, path: expanded}
+            plugins = [plugin | plugins]
 
             if MapSet.member?(ids, info.id) do
-              {:halt, {:error, {:plugin_load_failed, expanded, {:duplicate_plugin_id, info.id}}}}
+              {:halt, {:error, plugins, expanded, {:duplicate_plugin_id, info.id}}}
             else
-              plugin = %{pid: pid, path: expanded}
-
-              {:cont,
-               {:ok, [plugin | plugins], MapSet.put(ids, info.id),
-                PluginServer.tools(pid) ++ tools}}
+              {:cont, {:ok, plugins, MapSet.put(ids, info.id), PluginServer.tools(pid) ++ tools}}
             end
 
           {:error, reason} ->
-            {:halt, {:error, {:plugin_load_failed, expanded, reason}}}
+            {:halt, {:error, plugins, expanded, reason}}
         end
 
-      _path, _acc ->
-        {:halt, {:error, {:plugin_load_failed, "<plugins>", :invalid_plugin_path}}}
+      _path, {:ok, plugins, _, _} ->
+        {:halt, {:error, plugins, "<plugins>", :invalid_plugin_path}}
     end)
     |> case do
       {:ok, plugins, _ids, plugin_tools} ->
         case tool_table(Map.values(base_tools) ++ plugin_tools) do
-          {:ok, tools} -> {:ok, Enum.reverse(plugins), tools}
-          {:error, reason} -> {:error, {:plugin_load_failed, "<registry>", reason}}
+          {:ok, tools} ->
+            {:ok, Enum.reverse(plugins), tools}
+
+          {:error, reason} ->
+            stop_plugins(plugins)
+            {:error, {:plugin_load_failed, "<registry>", reason}}
         end
 
-      {:error, reason} ->
-        {:error, reason}
+      {:error, plugins, path, reason} ->
+        stop_plugins(plugins)
+        {:error, {:plugin_load_failed, path, reason}}
     end
   end
 
-  defp start_plugins(_paths, _cwd, _base_tools) do
+  defp start_plugins(_paths, _cwd, _base_tools, _ids) do
     {:error, {:plugin_load_failed, "<plugins>", :invalid_plugins}}
+  end
+
+  defp stop_plugins(plugins) do
+    Enum.each(plugins, &DynamicSupervisor.terminate_child(Elara.PluginSup, &1.pid))
   end
 
   defp reload_plugins(shell) do
     case prepare_plugins(shell.plugins) do
       {:ok, prepared} ->
-        case prepared_tool_table(shell.base_tools, prepared) do
-          {:ok, tools} ->
-            Enum.each(prepared, fn %{plugin: plugin} ->
-              :ok = PluginServer.commit_reload(plugin.pid)
-            end)
+        with {:ok, tools} <- prepared_tool_table(shell.base_tools, prepared),
+             ids = MapSet.new(shell.plugins, &PluginServer.info(&1.pid).id),
+             paths = new_plugin_paths(shell),
+             {:ok, added, tools} <- start_plugins(paths, shell.cwd, tools, ids) do
+          Enum.each(prepared, fn %{plugin: plugin} ->
+            :ok = PluginServer.commit_reload(plugin.pid)
+          end)
 
-            core = Core.replace_tools(shell.core, tools)
-            recorder = FlightRecorder.segment(shell.recorder, core, :plugins_reloaded)
-            infos = Enum.map(shell.plugins, &PluginServer.info(&1.pid))
-            {:ok, %{shell | core: core, recorder: recorder}, infos}
+          plugins = shell.plugins ++ added
+          core = Core.replace_tools(shell.core, tools)
+          recorder = FlightRecorder.segment(shell.recorder, core, :plugins_reloaded)
+          infos = Enum.map(plugins, &PluginServer.info(&1.pid))
+          {:ok, %{shell | core: core, recorder: recorder, plugins: plugins}, infos}
+        else
+          {:error, {:plugin_load_failed, path, reason}} ->
+            abort_prepared(prepared)
+            {:error, shell, {:plugin_reload_failed, path, reason}}
 
           {:error, path, reason} ->
             abort_prepared(prepared)
@@ -1814,6 +1832,12 @@ defmodule Elara.Session do
         {:error, shell, {:plugin_reload_failed, path, reason}}
     end
   end
+
+  defp new_plugin_paths(%{discover_plugins?: true} = shell) do
+    Elara.Plugin.discover(shell.cwd) -- Enum.map(shell.plugins, & &1.path)
+  end
+
+  defp new_plugin_paths(_shell), do: []
 
   defp prepare_plugins(plugins) do
     Enum.reduce_while(plugins, {:ok, []}, fn plugin, {:ok, prepared} ->
@@ -1859,6 +1883,9 @@ defmodule Elara.Session do
   end
 
   defp handle_attached_command(:input_workspace, shell), do: {:reply, {:ok, shell.cwd}, shell}
+
+  defp handle_attached_command(:reload_plugins, shell),
+    do: handle_call(:reload_plugins, nil, shell)
 
   defp handle_attached_command({:ask_input, prompt, references, images}, shell) do
     with :ok <- input_ready(shell, images),

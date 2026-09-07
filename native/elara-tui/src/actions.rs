@@ -71,7 +71,12 @@ pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
     ("tree", "choose a branch point", false),
     ("fork", "choose and fork a branch point", true),
     ("clone", "clone current path", true),
-    ("reload", "reload this session", true),
+    ("reload", "refresh the session snapshot", true),
+    (
+        "plugins",
+        "reload trusted local plugins: /plugins reload",
+        true,
+    ),
     ("why", "inspect latest event", false),
     ("interrupt", "stop current turn", true),
     ("detach", "leave the session", false),

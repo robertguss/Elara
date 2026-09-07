@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-05 (CTRL-1 and
-> THREAD-1/THREAD-2/CTX-1 pushed; SPLIT-5 next) · **Owner:** solo development
+> **Canonical roadmap and status source** · **Updated:** 2026-09-06 (PLUGIN-1
+> live-plugin workflow in progress; SPLIT-5 follows) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,11 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**PLUGIN-1:** IN PROGRESS on `codex/live-plugin-discovery`. The owner accepted
+the focused test→fix→rerun plugin experiment. Discovery, explicit TUI activation,
+and state-preserving upgrade pass focused checks. Shared checks and the terminal
+acceptance path are being verified against the recorded macOS baseline.
 
 **TUI-8:** IMPLEMENTED in the working tree, not yet committed or pushed. The
 Rust TUI now follows the `docs/design/elara-tui-prototypes.html` mockups for
@@ -54,7 +59,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** SPLIT-5 owner daily-driver checkpoint. It has not started;
+**Next action:** Finish PLUGIN-1 verification and record its evidence, then return
+to the SPLIT-5 owner daily-driver checkpoint. SPLIT-5 has not started;
 physical-terminal acceptance requiring the absent owner stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -231,7 +237,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | THREAD-2 | DONE     | Durable thread communication and TUI navigation               | THREAD-1         |
 | CTX-1    | DONE     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
 | TUI-8    | IMPLEMENTED | Mockup-faithful presentation with quiet chrome             | CTX-1            |
-| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8            |
+| PLUGIN-1 | IN PROGRESS | Discover and evolve a useful plugin in a live session     | Owner selection  |
+| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, PLUGIN-1  |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2455,3 +2462,42 @@ instructions/skills, mouse interaction, durable queue/steer, communicating
 threads, and automatic handoff with no approval. The queue now delivers those
 requirements before primary-use measurement. No implementation completion or
 architecture keep/reverse decision is claimed by this roadmap revision.
+
+## PLUGIN-1 — Discover and evolve a useful plugin in a live session
+
+**Scope:** The owner accepted the focused Elixir test→fix→rerun workflow on
+2026-09-06 and authorized implementation. See the
+[decision map](.scratch/live-plugin-runtime/map.md) and captured
+[feature priorities](docs/features-research/priorities.md).
+
+Default-discovery sessions explicitly rescan `.elara/plugins/` between turns.
+Explicit path selections and disabled plugins remain fixed. Existing revisions
+are prepared, additions staged, and the combined catalog validated before
+activation. Ordinary candidate failures stop staged processes and preserve
+working revisions, state, and history. TUI `/plugins reload` negotiates
+`plugin_reload_v1` and enforces controller ownership; `/reload` keeps its
+snapshot behavior. The project plugin gains `elixir_rerun_last`, with structured
+arguments and migration from version-1 state.
+
+**Acceptance:** Start before plugin installation, discover version 1, run a real
+focused failing Mix test, fix using Elara's edit tool, upgrade to version 2 in
+the same session/process, and rerun the remembered target successfully. Reject
+a broken revision and demonstrate another successful call with retained state.
+Cover explicit selections, collisions, staged cleanup, held leases, controller
+ownership, extension negotiation, and actual Rust terminal activation.
+
+**Limits:** Trusted local code; live-session state only; no removal, same-turn
+or model-driven activation, sandbox, crash-atomic multi-plugin commit, or
+rollback of external effects. Existing compiled generations have no retirement
+policy/cap. Dedicated evals and benchmarks remain deferred. Scripted-provider
+acceptance does not measure live-model tool choice. The
+[plugin guide](docs/plugins.md) contains the reproducible workflow and protocol.
+
+### Result
+
+**IN PROGRESS (2026-09-06).** Focused plugin/protocol/recorder checks pass (22),
+including real Mix failure→edit→upgrade→rerun. Rust TUI tests (115), execution
+stub tests (6), and both crates' format/Clippy checks pass. Shared Mix checks
+and terminal acceptance are still being completed. Before this change, the
+macOS checkout passed 436/448 Mix tests; known failure details are captured in
+the priority assessment. This slice does not repair those unrelated failures.

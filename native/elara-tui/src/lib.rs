@@ -149,6 +149,7 @@ pub struct Model {
     pub editor: Editor,
     attachments: attachments::Draft,
     inbox: inbox::Inbox,
+    plugin_reload_supported: bool,
     pub safe_paste: bool,
     safe_paste_cr: bool,
     pub enhanced_keyboard: bool,
@@ -189,6 +190,7 @@ impl Model {
             editor,
             attachments: attachments::Draft::default(),
             inbox: inbox::Inbox::default(),
+            plugin_reload_supported: false,
             safe_paste: false,
             safe_paste_cr: false,
             enhanced_keyboard: false,
@@ -1172,6 +1174,11 @@ pub fn attached_model(frame: &Value, mode: &str) -> Result<Model, String> {
     let mut model = Model::new(session, mode.to_string(), projection);
     model.cwd = frame["cwd"].as_str().map(str::to_owned);
     model.lifetime = frame["lifetime"].as_str().unwrap_or("unknown").to_string();
+    model.plugin_reload_supported = frame["extensions"].as_array().is_some_and(|extensions| {
+        extensions
+            .iter()
+            .any(|extension| extension == "plugin_reload_v1")
+    });
     model.attachments.supported = frame["extensions"].as_array().is_some_and(|extensions| {
         extensions
             .iter()
@@ -1192,7 +1199,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "create",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, "thread_communication_v1"],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, "thread_communication_v1", "plugin_reload_v1"],
             "mode": mode,
             "cwd": std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).to_string_lossy()
         })
@@ -1200,7 +1207,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "attach",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, "thread_communication_v1"],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, "thread_communication_v1", "plugin_reload_v1"],
             "session_id": target,
             "mode": mode,
             "cursor": cursor.cursor,

@@ -224,6 +224,90 @@ defmodule Elara.PluginTest do
     assert tool_outcomes(session) == [{:ok, "1 count=1"}, {:ok, "1 count=2"}]
   end
 
+  test "reload discovers a new file and preserves its state on later revisions", %{dir: dir} do
+    path = Path.join(dir, ".elara/plugins/counter.exs")
+    File.mkdir_p!(Path.dirname(path))
+
+    provider =
+      script([
+        {:ok, asst(nil, [call("one")])},
+        {:ok, asst("first")},
+        {:ok, asst(nil, [call("two")])},
+        {:ok, asst("second")}
+      ])
+
+    session = start_session(provider: provider, cwd: dir, home: dir, skill_paths: [])
+    assert Elara.plugins(session) == []
+
+    module = module_name()
+    write_counter(path, module, "1")
+    assert {:ok, [first]} = Elara.reload_plugins(session)
+    assert {:ok, "first"} = Elara.ask(session, "use the new tool")
+    write_counter(path, module, "2")
+    assert {:ok, [second]} = Elara.reload_plugins(session)
+    assert second.pid == first.pid
+    assert {:ok, "second"} = Elara.ask(session, "use the revised tool")
+    assert tool_outcomes(session) == [{:ok, "1 count=1"}, {:ok, "2 count=2"}]
+    assert {:ok, %{status: :match}} = Elara.replay(Elara.recording(session))
+  end
+
+  test "explicit plugin selection never discovers additional files", %{dir: dir, path: path} do
+    write_counter(path, module_name(), "1")
+
+    for paths <- [[], [path]] do
+      session = start_session(provider: script([]), cwd: dir, plugins: paths)
+      before = Elara.plugins(session)
+      discovered = Path.join(dir, ".elara/plugins/new.exs")
+      File.mkdir_p!(Path.dirname(discovered))
+      write_counter(discovered, module_name(), "1", id: "new", tool_name: "new")
+      assert {:ok, ^before} = Elara.reload_plugins(session)
+    end
+  end
+
+  test "failed discovery cleans staged processes and preserves prepared existing revisions", %{
+    dir: dir
+  } do
+    directory = Path.join(dir, ".elara/plugins")
+    File.mkdir_p!(directory)
+    existing = Path.join(directory, "existing.exs")
+    module = module_name()
+    write_counter(existing, module, "1")
+    session = start_session(provider: script([]), cwd: dir)
+    before = Elara.plugins(session)
+    children = MapSet.new(DynamicSupervisor.which_children(Elara.PluginSup))
+    write_counter(existing, module, "2")
+    added = Path.join(directory, "a-new.exs")
+    broken = Path.join(directory, "z-broken.exs")
+    write_counter(added, module_name(), "1", id: "added", tool_name: "added")
+    File.write!(broken, "defmodule Broken do")
+
+    assert {:error, {:plugin_reload_failed, ^broken, {:parse_error, _}}} =
+             Elara.reload_plugins(session)
+
+    assert Elara.plugins(session) == before
+    assert MapSet.new(DynamicSupervisor.which_children(Elara.PluginSup)) == children
+    assert :sys.get_state(hd(before).pid).pending == nil
+
+    File.rm!(broken)
+    write_counter(added, module_name(), "1", id: "counter", tool_name: "added")
+
+    assert {:error, {:plugin_reload_failed, ^added, {:duplicate_plugin_id, "counter"}}} =
+             Elara.reload_plugins(session)
+
+    assert Elara.plugins(session) == before
+    assert MapSet.new(DynamicSupervisor.which_children(Elara.PluginSup)) == children
+
+    write_counter(added, module_name(), "1", id: "added", tool_name: "counter")
+    assert {:error, {:plugin_reload_failed, _, _}} = Elara.reload_plugins(session)
+    assert Elara.plugins(session) == before
+    assert MapSet.new(DynamicSupervisor.which_children(Elara.PluginSup)) == children
+
+    write_counter(added, module_name(), "1", id: "added", tool_name: "added")
+    assert {:ok, infos} = Elara.reload_plugins(session)
+    assert Enum.map(infos, & &1.id) == ["counter", "added"]
+    assert Enum.find(infos, &(&1.id == "counter")).generation == 2
+  end
+
   test "a failed multi-plugin reload aborts every prepared candidate", %{
     path: path,
     dir: dir

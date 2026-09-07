@@ -1,14 +1,53 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (JOB-5
-> owner-session crash experiment complete) · **Owner:** solo development
-> with AI collaborators
+> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (experiment
+> integration) · **Owner:** solo development with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**Integration:** VERIFIED; publication pending. Combined main `59aefa7`
+(TEST-1 and the concurrent-job/owner-crash experiments) with feature stack
+`5bef91a`. All **529 Mix tests** and **121 Rust tests** pass. Both histories and
+original evidence are retained. The eight historical branch failures are fixed
+by main's TEST-1 changes.
+
+Canonical ID reconciliation: main keeps JOB-4 (concurrent job) and JOB-5
+(owner crash). The incoming branch's JOB-4 is now **JOB-8** (basic repository
+job), and its JOB-5 is now **JOB-9** (line-range reads). JOB-6 and JOB-7 retain
+their IDs. Original JSON evidence, prompts and commits retain their historical
+labels; use the feature name and linked artifact to disambiguate. Historical
+branch failures below preceded TEST-1 and are not the current baseline.
+
+**JOB-7:** DONE; feature pushed in `e9bf355` on `codex/edit-replace-all`.
+The normal-provider model completed red → implementation → green in 86 seconds
+with one initial prompt and no recovery intervention. Its production patch is
+retained. All 26 focused checks and fresh live edit acceptance pass. Full suite:
+516/524, with the same eight baseline failures. Those branch results are historical; current integration results are above.
+
+**JOB-6:** DONE; observer and live script pushed in `dbc832a` / `5fbd299` on
+`codex/live-driver-ownership`. Twelve driver regressions pass. The normal-provider
+live run passed all six checks: 15 repository tests, one start/completion/status,
+19.8 seconds total, no extra prompts or provider errors. Full suite: 506/514,
+with the same eight baseline failures. Changes stay in experiment support code.
+Current integration results are above.
+
+**JOB-9:** DONE; implementation pushed in `af9778d` on `codex/read-line-ranges`; the live agent implemented line selection and passed six
+regressions after an assisted fresh start. Host review preserved the selection
+logic, added schema bounds, read tool version 2 and stronger local/remote checks.
+All 48 focused tests and a real-model range read pass. Final full suite: 494/502,
+with eight known baseline failures. The failed rollover attempt remains recorded.
+Current integration results are above.
+
+**JOB-8:** DONE; opt-in live driver pushed in `0b58b99` on
+`codex/longer-repository-test-job`. Real `gpt-5.5`/low ran all 15 existing
+context-recovery checks in 11,570 ms: one start, one completion, one status,
+zero polling calls, provider errors or continuation prompts. All five acceptance
+checks pass; source stayed unchanged. JOB-1/JOB-2/JOB-3 are merged and pushed to
+`main` in `63d3dab`, alongside DIAG-1. Current integration results are above.
 
 **JOB-5:** DONE. One 11.88-second job survived an idle owner-session kill and
 passed all 15 tests. Completion remained pending while the owner was offline;
@@ -125,9 +164,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Owner selection of the next experiment. JOB-5 is complete;
-dedicated evals, broader job types, physical-terminal acceptance and SPLIT-5
-remain deferred.
+**Next action:** Publish the verified integration to main from a clean checkout.
+The original checkout is now owned by separate concurrent-job cancellation
+work; preserve its branch and uncommitted files. Dedicated evals,
+physical-terminal acceptance and SPLIT-5 remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -317,6 +357,10 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-5    | DONE | Session crash during a supervised job and explicit reopen | JOB-4 |
 | JOB-4    | DONE | Longer repository job, concurrent session and provider failure | TEST-1 |
 | TEST-1   | DONE | Resolve known suite failures and verify full regression coverage | DIAG-1, JOB-3 |
+| JOB-8    | DONE        | Naturally longer repository context-recovery test job    | JOB-3            |
+| JOB-9    | DONE        | Live feature implementation: optional line-range reads   | JOB-8            |
+| JOB-6    | DONE        | Live driver metadata, handoff observation and resume    | JOB-9            |
+| JOB-7    | DONE        | Live feature: opt-in exact-text edit replace_all | JOB-6 |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -3101,3 +3145,228 @@ Method, assistance and limits: [experiment log](docs/harness-experiments.md#2026
 Published on `codex/session-crash-job-experiment` and integrated into main with
 this result. Next candidate is concurrent cancellation/capacity release;
 owner selection is required before starting it.
+
+
+## JOB-8 — Naturally longer repository test job
+
+**Scope:** Owner-authorized on 2026-09-07 after the JOB-1–JOB-3 merge. One live
+configured model starts the existing context-recovery test file and finishes
+from its automatic completion input. Retain the public transcript, command
+result, source fingerprints, timing and any explicit continuation assistance.
+Keep the driver attached across provider errors; do not inject faults or delays,
+change runtime policy, or add dedicated evals.
+
+### Result
+
+**DONE (2026-09-07).** Driver pushed in `0b58b99` on
+`codex/longer-repository-test-job`, from merged main `63d3dab`. Live session
+`iKlIQVY6UkH283wBlyGuIw` used actual `gpt-5.5` at low effort. It started one
+`repository-context` job for `test/elara/context_test.exs`, ended its turn, then
+received one automatic completion input and inspected status once. All 15 tests
+passed; exit 0, 11,570 ms command duration, 754 output bytes, settled execution
+and released reservation. All 139 fingerprinted source files stayed unchanged.
+
+The run took 23,890 ms end to end with four provider requests and eight public
+messages. The waiting turn ended at 8,715 ms; the completion-driven request began
+at 17,507 ms, leaving an 8,792 ms interval with no provider request starts. There
+were no polling tool calls, injected faults, added delays, provider errors or
+explicit continuation prompts. An expected killed-task log came from the
+existing crash-recovery test; the retained ExUnit result passed.
+
+All five driver acceptance checks pass. The existing repository file exercises
+handoff, pause and continuation ownership, terminal interaction, and fresh BEAM
+recovery at six durable stages. This is a real workload beyond the tiny repair
+and delayed fixture, but still only an 11.57-second local job. The supplied prompt
+and target make it assisted task selection. One start and durable job record are
+observed; no physical execution counter was added to the tests. It does not
+establish multi-minute reliability, coding quality or comparative time/cost.
+
+No harness runtime behavior changed. The new opt-in script records public
+transcripts, provider request timing, command evidence and any explicit recovery
+assistance. Regular tests remain offline. Formatting and both roadmap tests pass;
+the preceding merged tree passed 70 focused checks and 486/493 full-suite checks
+with seven known baseline failures. Local review found no additional runtime
+change necessary. The [experiment report](docs/harness-experiments.md),
+[evidence artifact](docs/fixtures/test-job-repository-context-2026-09-07.json) and
+[test-job guide](docs/test-jobs.md) retain usage and limits. This experiment is
+published on its branch at that checkpoint; current integration is recorded below.
+
+
+## JOB-9 — Live feature implementation with supervised tests
+
+**Scope:** Owner authorized continuing on 2026-09-07. Implement optional line
+selection for the built-in `read` tool. Path-only calls retain exact existing
+whole-file behavior. When either `offset` or `limit` is supplied, use a one-based
+positive integer offset (default 1) and positive integer line limit (default
+200). Return selected content without line-number decoration, preserving line
+endings and a final unterminated line. Reading beyond EOF returns an empty
+string. Invalid supplied values, including nulls, are ordinary tool errors.
+The existing tool-output budget still applies; this feature does not promise a
+file-size or memory bound. Add model-facing schema and concise usage docs.
+
+The live agent owns implementation and regressions in `lib/elara/tools.ex`,
+`lib/elara/tool.ex`, `test/elara/read_range_test.exs` and `README.md`. First run
+new tests through a supervised job and observe missing-feature failure, then
+implement and rerun with a new job ID. Keep the driver attached while waiting.
+The host reviews and independently verifies the final patch, records assistance,
+and handles publication. No commits, dependency changes, background daemons,
+automatic retries, broader cleanup or eval framework in the model's scope.
+
+### Result
+
+**DONE (2026-09-07).** Implementation and evidence pushed in `af9778d`.
+Started from JOB-8 checkpoint `c333213`, with experiment scope
+committed in `b2e41c8` on `codex/read-line-ranges`. The first live session wrote
+six regressions and observed five missing-feature failures through one
+supervised job. Its driver crashed during context handoff. Recovery then stalled
+on paused input delivery and eventually reached the eight-handoff chain limit.
+The counting provider wrapper lost recognized provider settings: fallback
+accounting used 128,000 instead of the configured catalog's 272,000 limit and
+reserved more uncertainty. This was not a transparent observation wrapper.
+
+A fresh normal-provider session with a supplied red-test summary completed the
+implementation in 62,241 ms: 13 assistant responses, 28 public messages, one
+743 ms supervised job, six tests passing, no handoff or extra prompt in that
+fresh run. The overall result is assisted success across sessions. Host review
+kept the line-selection implementation, added positive schema bounds, bumped
+read to tool version 2 to prevent older workers ignoring range arguments, and
+strengthened tests/docs. All 48 focused local/session/worker checks pass; a real
+configured model used the final version-2 read tool once and received the exact
+selected Unicode/CRLF bytes. The initial full run passed 493/501 with eight
+known baseline failures. The final full run passes **494/502** in 176.7 seconds,
+with the same eight failures: two attachment/context cases, two generic TUI
+cases, cold protocol history, saved-session listing, thread PTY/session discovery
+and the known intermittent queued-mutation timeout. All nine added tests pass.
+Formatting and warnings-as-errors compilation pass; all 76 local documentation
+links checked resolve. Temporary empty experiment homes are removed; persistent
+sessions and terminal jobs remain as evidence. Local review is complete.
+
+Evidence: [public live records](docs/fixtures/read-range-feature-live-2026-09-07.json).
+No provider retry or handoff policy changed. Dedicated evals remain deferred.
+
+
+## JOB-6 — Live driver metadata and logical ownership
+
+**Scope:** Owner authorized continuing on 2026-09-07. Replace JOB-8's provider
+counter wrapper with passive observation of the configured provider. A reusable
+experiment support driver follows durable delivery ownership, attaches with
+retained-event replay, and handles an already-completed successor. Paused input
+is reported by default; explicit resume is recorded and applies only at the
+start of the requested run. Provider errors do not restart commands or inject
+owner prompts. A running known test job may deliver a later automatic wakeup.
+No provider/context/paused-input runtime policy or dedicated eval framework is
+changed. Deterministic tests cover races, pause, metadata, and failure boundaries;
+one live repository exercise verifies integration.
+
+### Result
+
+**DONE.** Implementation and review correction pushed in `dbc832a` and
+`5fbd299` on `codex/live-driver-ownership`, based on published JOB-9 `301662e`.
+The preceding branch was already fully pushed. That checkpoint preceded integration.
+
+Twelve driver regressions pass. The integration run passed 43 tests before the
+final pause regression was added; the final driver-only run passed all 12.
+Full suite: **506/514** in 182.6 seconds. The same eight baseline failures remain:
+two attachment context-budget tests, cold-v2 history budget, saved-session Rust
+observer listing, two interactive TUI context-budget cases, real-PTY thread
+path/session discovery, and intermittent unsettled queued-mutation recovery.
+Formatting, warnings-as-errors compilation and local review pass.
+
+Live session `Z4RVjnphCgN00gHfyY8Nbg`, using the normal configured `gpt-5.5`/low
+provider on `5fbd299`, passes all six checks. Fifteen existing context tests pass
+in 13,142 ms, with 19,805 ms total interaction time, one start, one completion,
+one status call, four assistant messages, no errors and no continuation prompt
+or resume. The initial/final metadata retains the 272,000 local catalog budget;
+the job is settled/released and source hashes match. The run needed no handoff;
+controlled regressions separately verify fast/active handoff and paused resume.
+
+The observer reports 104 events and two sequence gaps instead of claiming full
+event history; protocol-v1 omits live inbox changes. Assistant-message counts
+are not provider-request counts. No production provider/context/pause/retry
+policy or eval framework changed. Temporary empty experiment home removed;
+persistent session and terminal job retained. Evidence:
+[public live record](docs/fixtures/live-driver-ownership-2026-09-07.json) and
+[experiment assessment](docs/harness-experiments.md).
+
+
+## JOB-7 — Live edit replace_all feature
+
+**Scope:** Owner authorized the next experiment on 2026-09-07. A normal-provider
+session uses JOB-6 observation to author failing tests, implement optional
+boolean `edit.replace_all`, and verify through two supervised test jobs.
+Omitted/false retains exactly-one-match semantics. True replaces non-overlapping
+literal matches in one pass. Missing/empty old text and invalid options fail
+without mutation; empty replacement is allowed. Preserve file bytes, ordinary
+errors and existing authority boundaries. Publish edit tool version 2 and verify
+worker compatibility. Model scope is the two tool modules, a focused new test
+file and README usage; host owns review, remote checks and experiment evidence.
+No context, retry, job, UI or dedicated eval changes.
+
+### Result
+
+**DONE.** Feature and host review checks pushed in `e9bf355` on
+`codex/edit-replace-all`, based on JOB-6 `b5dbcc5`. The preceding branch was
+already fully pushed. Historical experiment-driver commit: `5dd4a7f`.
+Current integration is recorded below.
+
+Normal `gpt-5.5`/low session `v6glZVyihHmzf1VGsCpSWA` completed the feature in
+86,051 ms from one detailed host prompt. The red job produced four expected
+failures and one compatibility pass in 514 ms. After one automatic completion
+and status call, the model implemented the feature. A new green job passed all
+five tests in 716 ms, followed by one completion/status and a final summary.
+No provider error, continuation prompt, resume or handoff. Fifteen assistant
+messages across three inputs; both jobs settled and released their slot.
+Source remained stable during each job. The old red result correctly became
+stale after implementation. The observer reports its five sequence gaps.
+
+The model authored all runtime/schema changes and the initial five tests; its
+production patch is unchanged after host review. The host added four
+local/public regressions, one authenticated remote-worker check and fuller
+README usage/limits. All **26 focused tests** pass. Fresh live acceptance in
+session `vmpuZNCszWse51-ctnqM-g` uses version-2 edit exactly once and produces
+`new\r\nα new\nnew`; all five acceptance checks pass in 3,924 ms.
+
+Full suite: **516/524** in 182.0 seconds, all ten added tests pass. The same
+eight named JOB-6 baseline failures remain (attachment/context budgets,
+cold-v2 history, saved-session listing, interactive TUI, real-PTY thread
+path/session discovery and queued unsettled-mutation recovery). Formatting,
+warnings-as-errors compilation, local review and documentation-link checks
+pass. Temporary fixture/home directories are removed; the coding session and
+terminal jobs remain as evidence.
+
+This supports the practicality of a bounded normal-provider coding loop with
+supervised jobs. A detailed contract, selected tools, 32-iteration limit and
+low context pressure limit generalization. No provider/context/retry policy or
+eval framework changed. Evidence and assistance:
+[public record](docs/fixtures/edit-replace-all-live-2026-09-07.json) and
+[experiment assessment](docs/harness-experiments.md).
+
+
+## 2026-09-07 integration checkpoint
+
+**VERIFIED; publication pending.** Integration branch `codex/integrate-experiments`
+combines main `59aefa7` with feature stack `5bef91a`. Source changes merge without
+conflicts. Documentation preserves both streams; only the colliding incoming
+JOB-4/JOB-5 IDs become JOB-8/JOB-9. JOB-6 and JOB-7 remain unchanged. Original
+JSON artifacts are byte-for-byte identical to their source branch versions.
+
+Review found no blocking runtime issue. Integration corrections isolate the
+range-read session test's skill home and classify the three new experiment
+support scripts in Mix's ignore filter. The 72 focused integration checks pass.
+The complete suite passes **529/529** in 131.9 seconds, including all 31 tests
+added by the incoming stack. Main's TEST-1 fixes resolve the eight historical
+branch failures. The initial full run reported two support-file discovery
+warnings; the final exact-file filter correction is verified by a warning-free
+`mix test --dry-run` listing the same 529 tests. No test was disabled.
+
+Both native crates pass format, Clippy across all targets with warnings denied,
+and all **121 Rust tests** (115 TUI and 6 execution stub). Mix format and
+warnings-as-errors compilation pass. All 96 checked local documentation links
+resolve; roadmap job IDs are unique and each queue entry has one result section.
+No new live provider call was made during integration; the historical acceptance
+records and merged deterministic checks are the evidence for this checkpoint.
+
+Publication uses a separate clean main checkout because another task started
+`codex/concurrent-job-cancellation` work in the original directory while the
+integration checks ran. Preserve that task's uncommitted files and all other
+worktrees. No new experiment is started by this integration.

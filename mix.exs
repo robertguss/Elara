@@ -73,7 +73,7 @@ defmodule Elara.MixProject do
       start_permanent: Mix.env() == :prod,
       compilers: [:exec_stub] ++ Mix.compilers(),
       test_ignore_filters: [
-        ~r"test/support/(context_restart|test_job_recovery_live|long_context_job_live|session_crash_job_live|fixtures/elixir_project_v1)\.exs$"
+        ~r"test/support/(context_restart|test_job_recovery_live|test_job_repository_live|edit_replace_all_live|live_session_driver|long_context_job_live|session_crash_job_live|fixtures/elixir_project_v1)\.exs$"
       ],
       deps: deps()
     ]

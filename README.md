@@ -392,6 +392,18 @@ from the canonical old/new arguments. It is not a full-file diff or a fresh
 filesystem comparison, and failed or indeterminate edits do not claim a
 successful replacement.
 
+The `read` tool accepts optional positive integer `offset` and `limit` fields.
+For example, `{"path":"lib/elara/tools.ex","offset":10,"limit":20}` returns up
+to 20 lines starting at line 10. If either field is supplied, omitted values
+default to `offset: 1` and `limit: 200`; omitting both retains whole-file reads.
+Selected content preserves line endings and a final unterminated line, without
+line-number decoration. An offset past EOF returns empty content. The existing
+tool-output budget still applies; range reads do not impose a file-size or
+memory-allocation limit.
+The read tool is version 2; remote controllers and workers must both support
+that version. A version mismatch is rejected instead of silently treating a
+range request as a whole-file read.
+
 ## Persistent delegated children
 
 Use a long-lived `mix elara.server` for work that must continue after detaching
@@ -569,11 +581,23 @@ call. Saved handoff headers require this build for resume.
 - `write` atomically writes a workspace-relative regular file and creates parent
   directories. It records durable controller intent and executor receipts before
   and after mutation.
-- `edit` replaces exactly one occurrence of `old_text` with `new_text`.
+- `edit` replaces exactly one occurrence of `old_text` with `new_text`, or every
+  non-overlapping literal occurrence when `replace_all: true`.
 - `bash` runs a shell command with stdout and stderr merged. A supervised Rust
   stub runs each command in its own process group and kills the group on
   interruption, timeout, or output overflow. Stub loss reports an
   `indeterminate` outcome rather than success.
+
+For example, `{"path":"config.exs","old_text":"old_name","new_text":"new_name","replace_all":true}`
+replaces all exact occurrences in that file. Omitting `replace_all` or passing
+`false` keeps the unique-match requirement. The flag must be a boolean and
+`old_text` must be nonempty; invalid values, missing matches and ambiguous
+single-match requests return errors without changing the file. Empty `new_text`
+deletes matched text. Replacement is literal and nonrecursive, preserving
+surrounding bytes and line endings. This is a whole-file read/write operation,
+not an atomic edit or a concurrent-writer protection mechanism. Edit is tool
+version 2; mismatched workers reject the call. Restart existing processes to
+load the updated built-in tool.
 
 Relative paths and shell commands use the session working directory. `write`
 rejects absolute paths, `..`, symlink path components, and non-file targets so

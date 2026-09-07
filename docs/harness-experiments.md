@@ -520,3 +520,324 @@ mix run --no-start test/support/session_crash_job_live.exs OUTPUT.json
 **Next candidate:** exercise cancellation and capacity release under several
 concurrent jobs. This is a proposal, not an authorized queue item; broader job
 types and optimizer work remain deferred.
+
+
+## Experiment ID reconciliation at integration
+
+Main already used JOB-4 for the concurrent context job and JOB-5 for owner
+session crash recovery. On integration, the separate basic repository run
+becomes **JOB-8** (formerly branch-local JOB-4), and line-range reads become
+**JOB-9** (formerly branch-local JOB-5). JOB-6 and JOB-7 are unchanged. This
+log and the roadmap use canonical IDs; original artifacts, scripts and commit
+messages preserve their historical labels. Pre-integration test failures in
+those reports precede main's TEST-1 fixes. Main's JOB-4 intentionally uses a
+provider wrapper for fault injection and an explicit 272,000 context limit;
+that does not preserve normal provider visibility or uncertainty accounting.
+Its concurrency/job results remain bounded evidence, not a normal-provider
+context-pressure experiment. JOB-5 uses the configured provider directly. The integration checkpoint in
+[ROADMAP.md](../ROADMAP.md#2026-09-07-integration-checkpoint) owns current results.
+
+
+
+## 2026-09-07: Naturally longer repository test job — JOB-8
+
+**Question:** Does the supervised wait/completion workflow hold up on existing
+repository tests whose runtime comes from real BEAM recovery work?
+
+**Result:** Actual `gpt-5.5`/low session `iKlIQVY6UkH283wBlyGuIw` started
+`mix test test/elara/context_test.exs` through one `test_job`, ended its turn,
+received one automatic completion and inspected status once. All **15 tests
+passed in 11,570 ms**, exit 0. The job retained all 754 output bytes and released
+its settled reservation. Before/after fingerprints matched across 139 source
+files, and the final status still reported unchanged source.
+
+| Observation | Result |
+| --- | --- |
+| Total live workflow | 23,890 ms |
+| Provider requests | 4 |
+| Model test-job calls | 1 start, 1 status |
+| Completion inputs / public messages | 1 / 8 |
+| Waiting turn ended → completion request began | 8,715 → 17,507 ms; 8,792 ms with no new provider request |
+| Provider errors / continuation prompts / polling calls | 0 / 0 / 0 |
+| Artificial delays / injected faults | None |
+
+The test file exercises persisted handoff, pause and continuation ownership,
+terminal interaction, and recovery in fresh BEAM processes at six durable
+stages. Its crash fixture logs an intentionally killed task; the final ExUnit
+result remains a pass. The file was selected after passing on the merged tree.
+It is longer than JOB-2's roughly one-second repair checks and JOB-1's delayed
+fixture, but it is still an 11.57-second local job within the existing 60-second
+limit. This establishes neither multi-minute reliability nor comparative
+productivity. The host supplied the exact target and workflow; the model did
+not discover the work or write a feature. One start and one durable job record
+are observed; no physical execution counter was added to repository tests.
+
+**Functionality added:** an opt-in reproducible live driver,
+`test/support/test_job_repository_live.exs`. It requires a clean committed
+checkout, records public messages and provider request timings, and stays
+attached across provider errors. If interpretation fails, it can supply one
+explicit continuation using retained evidence and disclose that assistance.
+That fallback was not exercised in this run; JOB-3 retains the controlled
+failure evidence. No harness runtime policy changed and ordinary tests remain
+offline. Persisted session/job records are retained; the temporary empty skill
+home was removed.
+
+**Learning:** BEAM ownership and inbox delivery worked usefully on real restart
+and handoff checks: the model could finish a turn while the command continued,
+then resume with a bounded, source-identified result. The next useful experiment
+is a small real feature from prompt to reviewed patch, using this workflow.
+There is no observed need here for another job type or automatic retry policy.
+Dedicated evals remain deferred.
+
+The driver is published in `0b58b99` on `codex/longer-repository-test-job`, based
+on main merge `63d3dab`. All five live acceptance checks pass; formatting and two
+roadmap tests pass. The merge's broader checks are recorded above. Full prompt,
+public transcript, job output, hashes and timings are in the
+[evidence artifact](fixtures/test-job-repository-context-2026-09-07.json).
+
+
+## 2026-09-07: Live line-range read feature — JOB-9
+
+**Question:** Can a live Elara session take a small harness feature from a
+supplied contract through failing tests, implementation and supervised
+verification, leaving a useful patch for host review?
+
+**Feature added:** `read` accepts optional positive integer `offset` and `limit`.
+Offsets are one-based; once either field is supplied, missing values default to
+1 and 200. Path-only reads retain their old whole-file behavior. Selected bytes
+preserve LF/CRLF, Unicode and an unterminated last line; offsets past EOF return
+empty content. Validation errors and file errors remain ordinary tool results.
+The existing output cap applies; the implementation still reads the file into
+memory. Read is now tool version 2, so worker version checks reject incompatible
+peers rather than silently ignoring range arguments. See the README usage.
+
+**Overall result: assisted feature completion, not one autonomous success.**
+
+| Stage | Observed outcome |
+| --- | --- |
+| Initial live session `MEnvaTWeZn28OE_2ha9oOw` | Authored six regressions; one 539 ms job produced five expected failures and one compatibility pass. No runtime implementation yet. |
+| Driver failure | A context handoff emitted interruption; the driver tried another prompt, received `busy`, and exited. The test and terminal job record survived. |
+| First recovery | Reopened the successor and repeated the assignment. Its next handoff remained paused, as persisted input policy required; the driver waited without resuming it. |
+| Second recovery | Explicit input resume and owner-following progressed through the chain, but repeated context reads reached the existing eight-handoff limit without implementation. Two generic continuation prompts did not help. |
+| Fresh configured-provider session `M8baLOpgdqLVGeD55RdJnQ` | Supplied concise red-test evidence and instructions to avoid a full README reread. Authored the implementation/schema/docs, passed six tests in one 743 ms supervised job, inspected status and finished. 62,241 ms total, 13 assistant responses, 28 public messages, no handoff or further prompt. |
+| Host review | Preserved the selection algorithm; strengthened schema, docs and tests, and added version-2 worker compatibility enforcement. |
+| Final live tool exercise `IGAX0wnt1YKFITHnmbaDeg` | Normal configured model used read exactly once with offset 2/limit 2, receiving exact `α\r\nβ\n` bytes. Two assistant responses; pass. |
+
+The first and fresh sessions each had one test-job start and one logical
+completion. Recovery inspected the original job repeatedly across sessions but
+did not execute it again. One start and durable record are observed per job;
+repository tests were not instrumented with a physical execution counter.
+
+### What the failed attempt teaches
+
+The temporary counting provider wrapper was **not transparent**. The current
+`Provider.Visibility.settings/1` recognizes the concrete Codex provider module;
+the wrapper falls through to unknown settings. `Context.budget/2` therefore uses
+its 128,000 fallback limit with greater uncertainty, while the normal configured
+provider selects this checkout's 272,000 catalog limit. These are local harness
+accounting values, not a measurement of actual provider capacity. Repeated full
+reads and handoff indexes consumed the conservative budget. The successful run
+changed both provider configuration and prompt/history, so it does not isolate
+which intervention caused the improvement or prove normal sessions would hit
+the same rollover loop.
+
+The driver also assumed one session ID for a logical task and initially treated
+handoff interruption as a provider failure. Fixing owner following was necessary
+but insufficient: resumed input delivery retained its pause, and explicit input
+resume was required. These are driver integration failures and useful harness
+observations. They do not justify weakening pause preservation or raising the
+handoff limit. Further context-policy changes need an unwrapped reproduction.
+
+### Review, practicality and next step
+
+The live model supplied the regression suite and all line-selection logic.
+Host review found that the default-200 and final-line behavior needed stronger
+coverage. Added checks cover binary/newline preservation, file errors and the
+public session path. The remote worker resolves tools by name/version; leaving
+read at version 1 would allow an older peer to ignore new arguments. Host work
+added version 2, a real remote range test, wrong-version rejection and schema
+minimums. No provider, pause, job or handoff policy changed.
+
+This is useful functionality: agents can request a source excerpt without a
+shell command or returning the whole file to model context. Its implementation
+is portable Elixir code, not evidence of a unique BEAM advantage. The supervised
+job retained its failed result through driver loss and later produced a verified
+passing result; the difficult part of this exercise was carrying the live
+workflow across context and driver boundaries.
+
+The next recommended experiment is to make the live driver follow logical
+ownership and preserve provider metadata through observation, then repeat a
+small coding task. The driver follow-up is recorded below as JOB-6. Dedicated evals remain deferred.
+The [public records](fixtures/read-range-feature-live-2026-09-07.json) retain
+prompts, the original model patch/tests, job outputs, recovery details and the
+fresh successful transcript. Provider-private state is omitted. Canonical check
+counts and publication status belong to [JOB-9](../ROADMAP.md#job-9--live-feature-implementation-with-supervised-tests).
+
+
+**Final verification:** 48 focused tests pass, including local/session behavior
+and remote execution/version rejection. Formatting and warnings-as-errors
+compilation pass. Full suite: **494/502** in 176.7 seconds; all nine added tests
+pass. The eight remaining failures match the preceding 493/501 run and earlier
+baseline categories, including intermittent queued-mutation recovery. All 76
+local documentation links checked resolve. Temporary empty experiment homes
+were removed; persisted sessions and terminal jobs remain intentional evidence.
+
+**Publication:** implementation, tests and evidence pushed in `af9778d` on
+`codex/read-line-ranges`, stacked on JOB-8 `c333213`. At that branch checkpoint it was not yet merged.
+
+## 2026-09-07: Transparent live observation and ownership — JOB-6
+
+**Question:** Can experiment tooling observe the normal configured provider and
+follow a logical task across handoffs without altering context accounting or
+silently resuming paused work?
+
+**Functionality added:** an experiment-support observer and a refactored live
+repository script. Provider configuration goes directly to `Elara.start_session`;
+there is no counting provider wrapper. The observer follows durable ownership
+once the successor has started and uses retained replay to handle successors
+that finish before attachment. It records busy submissions, provider errors,
+pauses, explicit initial resume, unavailable sessions and deadlines. It does
+not change production provider, context, inbox or retry policy.
+
+**Deterministic evidence:** the original seven regressions failed against a
+stub. The completed set has 12 passing checks: normal-provider metadata and
+catalog budgeting, fast finished successors, paused successor and explicit
+resume, handoff during observation, busy submission, stale markers with new
+prompts and active later turns, timeout without cancellation, one real job
+completing after a provider error, stopped sessions, evicted replay, and a later
+user pause after initial resume. The broader integration run passed 43 tests
+before the final pause regression was added; the final driver-only run passed
+all 12. A stale-marker regression was also observed failing before its fix.
+
+**Learning so far:** delivery ownership is durable before the successor process
+is ready, so attachment must respect activation. An old completion marker is
+not enough when a newer turn has started. Provider instrumentation that changes
+the provider's identity is an experimental confound. These are practical driver
+corrections; the existing runtime supports the tested continuation and pause
+behavior without a new scheduler or retry mechanism.
+
+**Live verification:** normal `gpt-5.5`/low, session
+`Z4RVjnphCgN00gHfyY8Nbg`, on committed driver revision `5fbd299`. The existing
+15 context tests passed in **13,142 ms**; the complete interaction took
+**19,805 ms**. One job start, one automatic completion, one status call, four
+assistant messages, no provider errors and no added prompt or resume. All six
+acceptance checks pass. The job is settled, its slot released and source hashes
+unchanged. Both initial and final snapshots retain model/effort and this
+checkout's **272,000** conservative catalog budget. No live handoff was needed;
+this run verifies integration, while deterministic tests cover handoff races.
+
+The observer recorded 104 events and two single-sequence gaps (28 and 31).
+Protocol-v1 suppresses live inbox-change events; these gaps remain visible in
+the evidence rather than being silently called a complete event history. Event
+timestamps mean observation time; replay timestamps do not reconstruct the
+original event time. Message counts do not measure physical provider requests.
+
+**Assessment:** worthwhile as experiment infrastructure. The runtime already
+provided durable jobs, logical ownership, retained replay and pause semantics;
+the driver now uses those mechanisms without changing provider identity. This
+makes subsequent coding experiments easier to interpret. It does not establish
+better coding quality, faster inference, a unique BEAM productivity advantage,
+or successful normal-provider continuation under heavy context pressure.
+
+**Final checks and publication:** 12 driver regressions pass. Full suite:
+**506/514** in 182.6 seconds, with the same eight named baseline failures as
+JOB-9. Formatting, warnings-as-errors compilation and local review pass. Code
+is pushed in `dbc832a` and `5fbd299` on `codex/live-driver-ownership`, stacked on
+JOB-9; not yet merged at that branch checkpoint. The temporary empty home is removed and persistent
+session/job evidence is retained. The [public artifact](fixtures/live-driver-ownership-2026-09-07.json)
+contains the prompt, per-session public transcript, metadata, job output, gaps
+and check results. Canonical status belongs to
+[JOB-6](../ROADMAP.md#job-6--live-driver-metadata-and-logical-ownership).
+Dedicated evals remain deferred. The follow-up coding experiment is recorded below as JOB-7, retaining the full
+attempt and explicit assistance to reassess the JOB-9 workflow.
+
+## 2026-09-07: Live exact-text replace-all feature — JOB-7
+
+**Question:** With provider identity preserved and logical ownership observed,
+can a live Elara session complete a small harness feature from a supplied
+contract through red tests, implementation and green verification?
+
+**Result: one successful bounded coding attempt.** On driver commit `5dd4a7f`,
+normal `gpt-5.5`/low session `v6glZVyihHmzf1VGsCpSWA` completed the assignment in
+**86,051 ms**. There was one initial host prompt, no continuation prompt, no
+provider error, no resume and no handoff. The model authored all runtime/schema
+changes and the initial five regressions. Host review retained its implementation.
+
+| Stage | Observed evidence |
+| --- | --- |
+| Tests first | New focused test file; red job ran in 514 ms: four expected failures and one compatibility pass. |
+| Red completion | One automatic inbox input and one status call; implementation followed the retained failure evidence. |
+| Implementation | Opt-in boolean `replace_all`, empty-pattern and invalid-flag errors, edit tool version 2, schema and README usage. |
+| Green completion | New job ran in 716 ms: all five tests passed, followed by one automatic completion and one status call. |
+| Host review | Added four local/public tests, one authenticated remote-worker test and fuller usage/limits documentation. All 26 focused checks pass. |
+| Fresh-process live acceptance | Session `vmpuZNCszWse51-ctnqM-g` invoked edit version 2 once with `replace_all: true`; exact result `new\r\nα new\nnew`, all five checks pass in 3,924 ms. |
+
+The attempt produced 15 assistant messages across three inputs (4, 9 and 2),
+15 tool calls (four reads, one write, five edits, one formatting command and
+four test-job calls), and two durable completion inputs. Both jobs settled and
+released their slot. Source stayed unchanged during each job. The red result
+correctly became stale after implementation; the green result matched current
+source at capture. These are observed starts and durable records; no physical
+execution counter was inserted into repository tests.
+
+**Functionality added:** `edit.replace_all` is optional and defaults to false.
+Default/false still requires one exact match. True replaces every non-overlapping
+literal occurrence in one pass, including deletion via empty `new_text`.
+Invalid flags, empty `old_text`, missing matches and ambiguous default requests
+fail without mutation. Empty patterns previously raised from `:binary.matches`;
+they now produce an ordinary tool error. File bytes and line endings are
+preserved. The remote check performs a version-2 edit in the worker workspace
+and rejects a version-1 request without further mutation. This remains a
+whole-file, non-atomic read/write with existing capabilities and confinement;
+there is no new transactional or crash-recovery guarantee. See [README usage](../README.md#built-in-tools).
+
+**Assistance and limits:** the host selected the feature, supplied a detailed
+contract, source pointers, a test-first sequence and fixed job IDs. The session
+had five selected tools, an empty user-skill catalog and a 32-iteration turn
+limit; no turn used more than nine assistant responses. The host reviewed and
+strengthened the patch afterward. This was not an unassisted discovery task or
+an eval/benchmark. No context handoff was needed: the conservative estimate grew
+from 9,843 to 60,976 within the retained 272,000 local catalog limit. The observer
+recorded 186 events and five sequence gaps; protocol-v1 omits live inbox changes.
+We do not infer complete event history or physical network counts from these
+observations.
+
+**Assessment:** useful functionality and encouraging workflow evidence. A normal
+session carried two supervised jobs from red to green without operator recovery,
+and its implementation survived review. The supervised job/inbox mechanisms
+supported the workflow; replace-all itself is ordinary portable Elixir code.
+The different feature, detailed prompt and bounded context mean this is not a
+controlled comparison proving that the JOB-6 driver caused success or that
+heavy-context handoff issues are resolved. Keep the driver and feature; there
+is no new evidence here requiring a different runtime scheduler or retry policy.
+
+The [public artifact](fixtures/edit-replace-all-live-2026-09-07.json) retains the
+exact prompt, original model patch and test file, public transcript, job output,
+metadata, acceptance script and host checks. Provider-private state is omitted.
+For historical red→green reproduction, use a separate checkout of `5dd4a7f`
+and run `mix run test/support/edit_replace_all_live.exs /tmp/edit-replace-all.json`;
+each invocation performs real model calls and creates a new coding attempt.
+The current feature checkout already contains the implementation.
+
+**Final verification:** 26 focused tests pass. Full suite: **516/524** in
+182.0 seconds; all ten added tests pass and the same eight named JOB-6 baseline
+failures remain. Formatting, warnings-as-errors compilation, local review and
+81 local documentation links pass. Temporary fixture/home directories are
+removed; the original coding session and terminal jobs remain as evidence.
+Feature and review checks are pushed in `e9bf355` on `codex/edit-replace-all`,
+stacked on JOB-6 at that branch checkpoint. Canonical checkpoint:
+[JOB-7](../ROADMAP.md#job-7--live-edit-replace_all-feature).
+Dedicated evals remain deferred.
+
+
+## 2026-09-07: Combined experiment integration
+
+The integration candidate combines main `59aefa7` with feature stack `5bef91a`.
+The complete combined suite passes **529/529 Mix tests** and **121 Rust tests**;
+72 focused integration checks pass. Main's TEST-1 fixes resolve the eight
+failures retained in the earlier branch reports. No runtime merge conflict or
+new provider/context policy change was required. The two documentation ID
+collisions are reconciled above; original artifacts remain unchanged. Test
+fixture isolation and exact support-script discovery filters were aligned with
+main. See the [integration checkpoint](../ROADMAP.md#2026-09-07-integration-checkpoint)
+for publication status and verification limits. No new live inference was run.

@@ -132,6 +132,82 @@ defmodule Elara.ExecutorTest do
     refute File.exists?(Path.join(context.brain, "made.txt"))
   end
 
+  test "range reads use a distinct worker tool version", context do
+    token = "worker-secret"
+    worker = start_worker(context.worker, context.workspace_id, token, ["filesystem:read"])
+    on_exit(fn -> if Process.alive?(worker), do: GenServer.stop(worker) end)
+    File.write!(Path.join(context.worker, "range.txt"), "skip\nselected\r\nlast")
+    read = tool("read")
+    assert read.version == "2"
+
+    request = %Request{
+      tool_call_id: "remote-range",
+      session_id: "session",
+      tool_name: "read",
+      tool_version: read.version,
+      arguments: %{"path" => "range.txt", "offset" => 2, "limit" => 1},
+      workspace_id: context.workspace_id,
+      deadline_ms: System.system_time(:millisecond) + 2_000,
+      max_output_bytes: 16_384,
+      cancellation_id: "cancel",
+      required_capabilities: ["filesystem:read"],
+      placement: :remote,
+      mutating: false
+    }
+
+    config = %{port: WorkerServer.port(worker), token: token}
+    assert {:ok, "selected\r\n"} = Remote.execute(config, request, read)
+
+    assert {:executor_error, :rejected, "unknown_tool_version"} =
+             Remote.execute(config, %{request | tool_version: "1"}, %{read | version: "1"})
+  end
+
+  test "replace_all edits require the new worker version and mutate only its workspace",
+       context do
+    token = "worker-secret"
+    worker = start_worker(context.worker, context.workspace_id, token)
+    on_exit(fn -> if Process.alive?(worker), do: GenServer.stop(worker) end)
+    File.write!(Path.join(context.worker, "edit.txt"), "α\r\nα")
+    edit = tool("edit")
+    assert edit.version == "2"
+
+    request = %Request{
+      tool_call_id: "remote-edit-all",
+      session_id: "session",
+      tool_name: "edit",
+      tool_version: edit.version,
+      arguments: %{
+        "path" => "edit.txt",
+        "old_text" => "α",
+        "new_text" => "β",
+        "replace_all" => true
+      },
+      workspace_id: context.workspace_id,
+      deadline_ms: System.system_time(:millisecond) + 2_000,
+      max_output_bytes: 16_384,
+      cancellation_id: "cancel",
+      required_capabilities: ["filesystem:read", "filesystem:write"],
+      placement: :remote,
+      mutating: true
+    }
+
+    config = %{port: WorkerServer.port(worker), token: token}
+    assert {:ok, "edited edit.txt"} = Remote.execute(config, request, edit)
+    assert File.read!(Path.join(context.worker, "edit.txt")) == "β\r\nβ"
+    refute File.exists?(Path.join(context.brain, "edit.txt"))
+
+    old_request = %{
+      request
+      | tool_version: "1",
+        arguments: %{request.arguments | "old_text" => "β", "new_text" => "γ"}
+    }
+
+    assert {:executor_error, :rejected, "unknown_tool_version"} =
+             Remote.execute(config, old_request, %{edit | version: "1"})
+
+    assert File.read!(Path.join(context.worker, "edit.txt")) == "β\r\nβ"
+  end
+
   test "read-only requests retry once on another healthy matching worker", context do
     token = "worker-secret"
     dead = start_worker(context.worker, context.workspace_id, token)
@@ -163,7 +239,7 @@ defmodule Elara.ExecutorTest do
       tool_call_id: "read-retry",
       session_id: "session",
       tool_name: "read",
-      tool_version: "1",
+      tool_version: tool("read").version,
       arguments: %{"path" => "retry.txt"},
       workspace_id: context.workspace_id,
       deadline_ms: System.system_time(:millisecond) + 2_000,
@@ -364,7 +440,7 @@ defmodule Elara.ExecutorTest do
       tool_call_id: "confined-read",
       session_id: "session",
       tool_name: "read",
-      tool_version: "1",
+      tool_version: read.version,
       arguments: %{"path" => "escape/secret.txt"},
       workspace_id: context.workspace_id,
       deadline_ms: System.system_time(:millisecond) + 2_000,

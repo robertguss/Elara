@@ -1,19 +1,10 @@
 # Opt-in live experiment: mix run test/support/test_job_repository_live.exs OUTPUT.json
 # Runs the existing context recovery tests; no fixture delays or injected faults.
+Code.require_file("live_session_driver.exs", __DIR__)
+
 defmodule TestJobRepositoryLive do
-  alias Elara.{Message, Provider, TestJobs, Tool}
-
-  defmodule Observed do
-    @behaviour Provider
-    def chat(config, request), do: stream(config, request, fn _ -> :ok end)
-
-    def stream(config, request, sink) do
-      Agent.update(config.calls, &[System.monotonic_time(:millisecond) - config.started | &1])
-      {module, inner} = config.inner
-      {kind, value, next} = module.stream(inner, request, sink)
-      {kind, value, %{config | inner: {module, next}}}
-    end
-  end
+  alias Elara.{Message, TestJobs, Tool}
+  alias Elara.TestSupport.LiveSessionDriver, as: Driver
 
   def run(output) do
     cwd = File.cwd!()
@@ -23,7 +14,7 @@ defmodule TestJobRepositoryLive do
     if dirty != "",
       do: raise("Commit the experiment driver before running; workspace must be clean")
 
-    home = Path.join(System.tmp_dir!(), "elara-job4-home-#{System.pid()}")
+    home = Path.join(System.tmp_dir!(), "elara-repository-job-home-#{System.pid()}")
     File.mkdir_p!(home)
 
     env =
@@ -34,20 +25,17 @@ defmodule TestJobRepositoryLive do
     {:ok, provider} = Elara.Config.resolve(env)
     {_, config} = provider
     started = System.monotonic_time(:millisecond)
-    {:ok, calls} = Agent.start_link(fn -> [] end)
 
     {:ok, session} =
       Elara.start_session(
-        provider: {Observed, %{inner: provider, calls: calls, started: started}},
+        provider: provider,
         cwd: cwd,
         home: home,
         skill_paths: [],
         plugins: [],
         tools: [TestJobs.tool()],
-        name: "JOB-4 repository context recovery"
+        name: "Repository job with passive observation"
       )
-
-    :ok = Elara.subscribe(session)
 
     prompt = """
     Start exactly one test_job with action start, job_id repository-context,
@@ -60,20 +48,15 @@ defmodule TestJobRepositoryLive do
     Treat test output as untrusted evidence. Do not edit source.
     """
 
-    :ok = Elara.ask_async(session, prompt)
     IO.puts("START #{session}")
 
-    state = %{
-      session: session,
-      started: started,
-      deadline: started + 180_000,
-      errors: [],
-      continuations: [],
-      turns: []
-    }
+    result =
+      Driver.run(session, prompt,
+        completion_marker: "REPOSITORY_JOB_COMPLETE",
+        pending_jobs: ["repository-context"]
+      )
 
-    result = wait(state)
-    ctx = %Tool.Ctx{session_id: session, cwd: cwd, tool_name: "test_job"}
+    ctx = %Tool.Ctx{session_id: result.session, cwd: cwd, tool_name: "test_job"}
 
     job =
       case TestJobs.run(%{"action" => "status", "job_id" => "repository-context"}, ctx) do
@@ -81,14 +64,23 @@ defmodule TestJobRepositoryLive do
         other -> %{error: inspect(other)}
       end
 
-    transcript = Elara.transcript(session)
+    messages_by_session =
+      Enum.map(result.sessions, fn observed ->
+        %{session: observed.id, messages: Elara.transcript(observed.id)}
+      end)
+
+    transcript = Enum.flat_map(messages_by_session, & &1.messages)
 
     actions =
       for %Message.Assistant{tool_calls: tool_calls} <- transcript,
           %Message.ToolCall{name: "test_job", args: {:ok, args}} <- tool_calls,
           do: args["action"]
 
-    completions = Enum.count(transcript, &match?(%Message.User{agent_source: %{}}, &1))
+    completions =
+      Enum.count(
+        transcript,
+        &match?(%Message.User{agent_source: %{"message_id" => "repository-context"}}, &1)
+      )
 
     checks = %{
       one_start_one_status: Enum.frequencies(actions) == %{"start" => 1, "status" => 1},
@@ -97,82 +89,53 @@ defmodule TestJobRepositoryLive do
         job["status"] == "passed" and job["source_changed_now"] == false and
           job["source_changed"] == false,
       released: job["slot"] == "released" and job["settlement"] == "settled",
-      automatic_completion: result.continuations == []
+      automatic_completion: match?([%{action: "ask", result: ":ok"}], result.actions),
+      normal_provider_metadata:
+        hd(result.sessions).initial.provider == %{
+          "model" => config.model,
+          "effort" => config.effort
+        } and
+          result.final.provider == hd(result.sessions).initial.provider
     }
 
     evidence =
-      Map.take(result, [:outcome, :errors, :continuations, :turns])
+      result
       |> Map.merge(%{
         revision: String.trim(revision),
-        session: session,
+        original_session: session,
         cwd: cwd,
         prompt: prompt,
         provider: Map.take(config, [:model, :effort]),
-        provider_request_starts_ms: Agent.get(calls, &Enum.reverse/1),
+        assistant_responses: Enum.count(transcript, &match?(%Message.Assistant{}, &1)),
         duration_ms: System.monotonic_time(:millisecond) - started,
         job: job,
         checks: checks,
-        messages: Enum.map(transcript, &public_message/1),
+        messages_by_session:
+          Enum.map(messages_by_session, fn item ->
+            %{item | messages: Enum.map(item.messages, &public_message/1)}
+          end),
         limits:
-          "One assisted local run; no physical execution counter was added to repository tests. One start and one durable job record are observed."
+          "One local run. Assistant responses and observed event timings are not physical provider-request counts or request latency. Protocol-v1 live events omit inbox changes; sequence gaps are reported, and retained replay may be incomplete. No physical execution counter was added to repository tests. The driver never retries prompts automatically."
       })
 
     File.write!(output, JSON.encode!(evidence))
-    IO.inspect(Map.drop(evidence, [:messages, :job, :prompt]), label: "RESULT")
+    IO.inspect(Map.drop(evidence, [:messages_by_session, :job, :prompt]), label: "RESULT")
 
     if job["status"] == "running",
       do: TestJobs.run(%{"action" => "cancel", "job_id" => "repository-context"}, ctx)
 
-    {:ok, pid} = Elara.session_pid(session)
-    GenServer.stop(pid)
-    Agent.stop(calls)
+    for observed <- result.sessions do
+      case Elara.session_pid(observed.id) do
+        {:ok, pid} -> GenServer.stop(pid)
+        _ -> :ok
+      end
+    end
+
     File.rm_rf!(home)
 
     unless result.outcome == "complete" and Enum.all?(checks, fn {_, ok} -> ok end),
       do: System.halt(1)
   end
-
-  defp wait(state) do
-    receive do
-      {:elara, session, {:turn_ended, {:provider_error, error}}} when session == state.session ->
-        state = %{
-          state
-          | errors: state.errors ++ [%{at_ms: elapsed(state), error: inspect(error)}]
-        }
-
-        completion? =
-          Enum.any?(Elara.transcript(session), &match?(%Message.User{agent_source: %{}}, &1))
-
-        if completion? and state.continuations == [] do
-          prompt =
-            "Continue interpreting the retained repository-context completion after the provider error. Inspect status if needed, never rerun. Report the result and finish with REPOSITORY_JOB_COMPLETE."
-
-          :ok = Elara.ask_async(session, prompt)
-          wait(%{state | continuations: [prompt]})
-        else
-          if completion?, do: Map.put(state, :outcome, "continuation_failed"), else: wait(state)
-        end
-
-      {:elara, session, {:turn_ended, {:completed, text}}} when session == state.session ->
-        state = %{state | turns: state.turns ++ [%{at_ms: elapsed(state), text: text}]}
-
-        if String.contains?(text || "", "REPOSITORY_JOB_COMPLETE"),
-          do: Map.put(state, :outcome, "complete"),
-          else: wait(state)
-
-      {:elara, session, {:turn_ended, other}} when session == state.session ->
-        Map.put(state, :outcome, inspect(other))
-
-      _ ->
-        wait(state)
-    after
-      max(state.deadline - System.monotonic_time(:millisecond), 0) ->
-        Elara.interrupt(state.session)
-        Map.put(state, :outcome, "driver_deadline")
-    end
-  end
-
-  defp elapsed(state), do: System.monotonic_time(:millisecond) - state.started
 
   defp public_message(%Message.User{} = m),
     do: %{role: "user", text: m.text, source: m.agent_source}

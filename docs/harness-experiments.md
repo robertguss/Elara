@@ -512,7 +512,7 @@ workflow across context and driver boundaries.
 
 The next recommended experiment is to make the live driver follow logical
 ownership and preserve provider metadata through observation, then repeat a
-small coding task. That work is not started. Dedicated evals remain deferred.
+small coding task. The driver follow-up is recorded below as JOB-6. Dedicated evals remain deferred.
 The [public records](fixtures/read-range-feature-live-2026-09-07.json) retain
 prompts, the original model patch/tests, job outputs, recovery details and the
 fresh successful transcript. Provider-private state is omitted. Canonical check
@@ -529,3 +529,40 @@ were removed; persisted sessions and terminal jobs remain intentional evidence.
 
 **Publication:** implementation, tests and evidence pushed in `af9778d` on
 `codex/read-line-ranges`, stacked on JOB-4 `c333213`. No merge into main yet.
+
+## 2026-09-07: Transparent live observation and ownership — JOB-6
+
+**Question:** Can experiment tooling observe the normal configured provider and
+follow a logical task across handoffs without altering context accounting or
+silently resuming paused work?
+
+**Functionality added:** an experiment-support observer and a refactored live
+repository script. Provider configuration goes directly to `Elara.start_session`;
+there is no counting provider wrapper. The observer follows durable ownership
+once the successor has started and uses retained replay to handle successors
+that finish before attachment. It records busy submissions, provider errors,
+pauses, explicit initial resume, unavailable sessions and deadlines. It does
+not change production provider, context, inbox or retry policy.
+
+**Deterministic evidence:** the original seven regressions failed against a
+stub. The completed set has 12 passing checks: normal-provider metadata and
+catalog budgeting, fast finished successors, paused successor and explicit
+resume, handoff during observation, busy submission, stale markers with new
+prompts and active later turns, timeout without cancellation, one real job
+completing after a provider error, stopped sessions, evicted replay, and a later
+user pause after initial resume. The broader integration run passed 43 tests
+before the final pause regression was added; the final driver-only run passed
+all 12. A stale-marker regression was also observed failing before its fix.
+
+**Learning so far:** delivery ownership is durable before the successor process
+is ready, so attachment must respect activation. An old completion marker is
+not enough when a newer turn has started. Provider instrumentation that changes
+the provider's identity is an experimental confound. These are practical driver
+corrections; the existing runtime supports the tested continuation and pause
+behavior without a new scheduler or retry mechanism.
+
+**Live verification:** pending the committed-driver repository run. Publication
+and final check results belong to [JOB-6](../ROADMAP.md#job-6--live-driver-metadata-and-logical-ownership).
+Dedicated evals remain deferred. The next suggested coding experiment is a
+small feature with this normal-provider observer, retaining the full attempt
+and any explicit assistance so the JOB-5 workflow can be reassessed.

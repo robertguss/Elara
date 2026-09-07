@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-07 (DIAG-1 and
-> JOB-5 line-range read feature) · **Owner:** solo development
+> JOB-6 live driver ownership) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,10 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-6:** IN PROGRESS; preserve normal provider identity in live observation,
+follow durable session ownership, replay successor events, and require explicit
+resume for paused recovery. Implementation stays in experiment support code.
 
 **JOB-5:** DONE; implementation pushed in `af9778d` on `codex/read-line-ranges`; the live agent implemented line selection and passed six
 regressions after an assisted fresh start. Host review preserved the selection
@@ -121,11 +125,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Review JOB-5's assisted result, then make live experiment
-observation preserve provider metadata and follow logical ownership across
-handoffs with explicit resume policy. This follow-up is not started. JOB-4 and
-JOB-5 are published on stacked branches and remain unmerged. Dedicated evals,
-physical-terminal acceptance and SPLIT-5 remain deferred.
+**Next action:** Complete JOB-6 with deterministic lifecycle regressions and a
+normal-provider live repository job, document limits, commit and push. JOB-4
+through JOB-6 remain stacked; no merge is authorized in this step. Dedicated
+evals, physical-terminal acceptance and SPLIT-5 remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -314,6 +317,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
 | JOB-4    | DONE        | Naturally longer repository context-recovery test job    | JOB-3            |
 | JOB-5    | DONE        | Live feature implementation: optional line-range reads   | JOB-4            |
+| JOB-6    | IN PROGRESS | Live driver metadata, handoff observation and resume    | JOB-5            |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -3076,3 +3080,27 @@ sessions and terminal jobs remain as evidence. Local review is complete.
 
 Evidence: [public live records](docs/fixtures/read-range-feature-live-2026-09-07.json).
 No provider retry or handoff policy changed. Dedicated evals remain deferred.
+
+
+## JOB-6 — Live driver metadata and logical ownership
+
+**Scope:** Owner authorized continuing on 2026-09-07. Replace JOB-4's provider
+counter wrapper with passive observation of the configured provider. A reusable
+experiment support driver follows durable delivery ownership, attaches with
+retained-event replay, and handles an already-completed successor. Paused input
+is reported by default; explicit resume is recorded and applies only at the
+start of the requested run. Provider errors do not restart commands or inject
+owner prompts. A running known test job may deliver a later automatic wakeup.
+No provider/context/paused-input runtime policy or dedicated eval framework is
+changed. Deterministic tests cover races, pause, metadata, and failure boundaries;
+one live repository exercise verifies integration.
+
+### Result
+
+**IN PROGRESS.** Started from published JOB-5 checkpoint `301662e` on
+`codex/live-driver-ownership`. Previous branch was already fully pushed. The observer and repository script
+are implemented. Twelve driver regressions pass, including normal-provider
+metadata, fast/active handoff, explicit resume, stale markers, pending-job error
+recovery and honest timeout/stop behavior. The broader integration run passed
+43 tests before the last pause regression was added. Full-suite verification
+and the clean-commit live repository run are pending.

@@ -526,3 +526,6 @@ pass. The eight remaining failures match the preceding 493/501 run and earlier
 baseline categories, including intermittent queued-mutation recovery. All 76
 local documentation links checked resolve. Temporary empty experiment homes
 were removed; persisted sessions and terminal jobs remain intentional evidence.
+
+**Publication:** implementation, tests and evidence pushed in `af9778d` on
+`codex/read-line-ranges`, stacked on JOB-4 `c333213`. No merge into main yet.

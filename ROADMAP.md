@@ -10,12 +10,12 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**JOB-5:** IN PROGRESS; the live agent implemented line selection and passed six
+**JOB-5:** DONE; implementation pushed in `af9778d` on `codex/read-line-ranges`; the live agent implemented line selection and passed six
 regressions after an assisted fresh start. Host review preserved the selection
 logic, added schema bounds, read tool version 2 and stronger local/remote checks.
 All 48 focused tests and a real-model range read pass. Final full suite: 494/502,
-with eight known baseline failures. Publication is pending; the failed rollover
-attempt remains recorded.
+with eight known baseline failures. The failed rollover attempt remains recorded.
+This branch is stacked on JOB-4 and has not been merged into main.
 
 **JOB-4:** DONE; opt-in live driver pushed in `0b58b99` on
 `codex/longer-repository-test-job`. Real `gpt-5.5`/low ran all 15 existing
@@ -121,9 +121,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Complete JOB-5's live test-first implementation, review the patch,
-verify the runtime and document assistance before publishing. JOB-4 remains on
-its published branch; this experiment is stacked on it. Dedicated evals,
+**Next action:** Review JOB-5's assisted result, then make live experiment
+observation preserve provider metadata and follow logical ownership across
+handoffs with explicit resume policy. This follow-up is not started. JOB-4 and
+JOB-5 are published on stacked branches and remain unmerged. Dedicated evals,
 physical-terminal acceptance and SPLIT-5 remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -312,7 +313,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
 | JOB-4    | DONE        | Naturally longer repository context-recovery test job    | JOB-3            |
-| JOB-5    | IN PROGRESS | Live feature implementation: optional line-range reads   | JOB-4            |
+| JOB-5    | DONE        | Live feature implementation: optional line-range reads   | JOB-4            |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -3046,7 +3047,8 @@ automatic retries, broader cleanup or eval framework in the model's scope.
 
 ### Result
 
-**IN PROGRESS.** Started from JOB-4 checkpoint `c333213`, with experiment scope
+**DONE (2026-09-07).** Implementation and evidence pushed in `af9778d`.
+Started from JOB-4 checkpoint `c333213`, with experiment scope
 committed in `b2e41c8` on `codex/read-line-ranges`. The first live session wrote
 six regressions and observed five missing-feature failures through one
 supervised job. Its driver crashed during context handoff. Recovery then stalled

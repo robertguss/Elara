@@ -520,3 +520,90 @@ mix run --no-start test/support/session_crash_job_live.exs OUTPUT.json
 **Next candidate:** exercise cancellation and capacity release under several
 concurrent jobs. This is a proposal, not an authorized queue item; broader job
 types and optimizer work remain deferred.
+
+
+## 2026-09-07: Concurrent cancellation and capacity refill — JOB-10
+
+**Result:** one real-provider run on `3da41ed` passed all 16 invariants.
+This experiment was initially labeled JOB-6; parallel publication used that ID
+for live-driver ownership, so its canonical ID is JOB-10. Historical commits
+retain their original label; the named artifact identifies this experiment. Four
+isolated real Mix test jobs occupied the four global slots. A fifth request was
+rejected without a durable job record or fixture entry. Cancelling one job
+produced terminal cancellation evidence and released one slot; the waiting job
+then started while the other three were still running. Those three and the
+replacement passed. All five owners received one completion and inspected the
+matching retained status once. No runtime fix was needed. See the
+[full evidence](fixtures/concurrent-test-jobs-live-2026-09-07.json).
+
+| Observation | Result |
+| --- | --- |
+| Initial capacity | Four running jobs, all slots held |
+| Fifth admission at capacity | Rejected; no record or execution marker |
+| Cancellation settlement | 25 ms from request through observed released slot |
+| Cancelled execution | SIGKILL, termination cancelled, settled, slot released; Mix PID stopped |
+| Other three jobs | Still running after cancellation, then all passed |
+| Per-owner limit with global room | Second job for a running owner rejected; no record |
+| Refilled capacity | Replacement entered its fixture; four jobs held slots again |
+| Duplicate cancel/start using cancelled ID | Retained cancelled result; no rerun |
+| Execution markers | One fixture entry for each of five admitted jobs |
+| Final results | One cancelled, four passed; every slot released and settled |
+| Paused delivery | All five inputs accepted before host resumed them |
+| Model interpretation | Five correct outcomes; one successful matching status call and one consumed completion each |
+| Source identity | Each fixture's three declared source files unchanged |
+| End-to-end observation | 6,606 ms, including real-model interpretation |
+| Reported usage | 10,206 tokens across five gpt-5.5/low sessions |
+
+The admitted commands lasted 479 ms (cancelled), 871/864/860 ms (survivors),
+and 347 ms (replacement). These durations include startup and driver-controlled
+waiting; they are not throughput measurements. A single survivor-status API
+call took 0.020 ms after cancellation. It confirms that call returned while
+other jobs ran; it is not a latency distribution or benchmark.
+
+**Method and assistance:** one shared scenario drives both the offline test and
+the opt-in run. The host uses `TestJobs.run/2` to start, reject, cancel and
+reinspect jobs, and file gates to release their fixtures. Owners remain paused
+through terminal delivery. The host subscribes/resumes them; real models only
+inspect status and interpret completion. There is no claim of autonomous model
+cancellation or model-selected scheduling. Fixture markers count entries into
+the controlled tests, not every attempted OS launch. Durable records, missing
+records for rejected jobs, successful replacement entry, and observed Mix PIDs
+provide complementary evidence. Explicit duplicate-delivery attempts produce
+one consumed input per owner. Private fixture/session records remain under the
+reported temporary root; cleanup observed settled jobs and stopped Mix PIDs
+before stopping sessions. No network calls occur in the ExUnit version.
+
+**Discovered boundary:** two initial offline runs used a fixture whose test
+opened an external `sleep 60` through a BEAM Port. Cancellation did not release
+its slot within 15 seconds. Process inspection showed the top-level Mix VM was
+gone, but the sleep was reparented to PID 1 with its own process group/session
+(`PGID == PID`, `Ss`). It escaped the assigned command process group and retained
+an output descriptor. The Rust guardian waits for command status and output EOF
+before emitting terminal evidence, so capacity correctly remained held.
+
+This is the existing detached-descendant exclusion, not a concurrency-accounting
+failure. Independent diagnosis confirmed it against the stub and the documented
+boundary. The final fixture removes that detached Port child and verifies the
+admitted Mix process. Existing execution-layer tests cover ordinary descendants
+remaining in the assigned process group; this run adds no proof for escaped
+children, entire-VM loss or cross-platform behavior. Releasing capacity merely
+because cancellation was requested would have concealed this uncertainty.
+A broader detached-child policy remains a separate design decision.
+
+**Verification and review:** the concurrent test passes all 16 assertions using
+real Mix processes and a scripted provider. The combined job/roadmap checks
+passed 19 tests. The full suite passed **499/499** in 128.5 seconds; after the
+reviewed exceptional-cleanup amendment, the focused test passed again in 1.3
+seconds. Cleanup now waits for released slots and stopped marked PIDs before
+allowing offline fixture-directory deletion, retaining records if settlement
+cannot be confirmed. Formatting, warnings-as-errors compilation and independent
+review pass. No production or Rust code changed.
+
+Reproduce the opt-in real-provider run with the existing Codex login:
+
+```bash
+mix run --no-start test/support/concurrent_test_jobs_live.exs OUTPUT.json
+```
+
+**Next decision:** whether to investigate a bounded execution policy for detached
+children retaining output. That work is proposed, not authorized by JOB-10.

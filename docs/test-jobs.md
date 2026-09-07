@@ -46,7 +46,7 @@ create another session/process group (for example an external command spawned
 through a BEAM Port) can escape it. An escaped descendant retaining the output
 pipe can delay terminal evidence and therefore capacity release. A cancellation
 request alone is not proof of settlement; inspect `slot` and `settlement` before
-expecting capacity to be reusable. JOB-6's initial fixture exposed this existing
+expecting capacity to be reusable. JOB-10's initial fixture exposed this existing
 boundary; it did not justify releasing a slot while execution remained uncertain.
 
 ## Evidence and delivery
@@ -155,3 +155,12 @@ owner remained offline through job completion; explicitly reopening and
 subscribing delivered one completion input without a continuation prompt or
 rerun. A second real-model session answered during execution. This proves the
 session boundary in one surviving VM, not recovery from execution-VM loss.
+
+
+The [JOB-10 concurrency experiment](harness-experiments.md#2026-09-07-concurrent-cancellation-and-capacity-refill--job-10)
+filled all four global slots, rejected a fifth request, cancelled one job, and
+admitted the replacement after settlement. The other three passed, all slots
+were released, and five real-model owners each consumed one completion and
+inspected its retained status once. Execution and cancellation were host-driven.
+An initial detached Port-child fixture exposed the process-group limit described
+above; the final run verifies ordinary Mix jobs, not detached-descendant cleanup.

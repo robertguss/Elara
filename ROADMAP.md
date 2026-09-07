@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (JOB-5
-> owner-session crash experiment complete) · **Owner:** solo development
+> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (JOB-10
+> concurrent cancellation experiment complete) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,13 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-10:** DONE. Four global slots filled; fifth rejected; cancellation released
+one slot in 25 ms and admitted a replacement while three jobs survived.
+One cancelled and four passed; each real-model owner consumed one completion
+and inspected status once. Full suite: 499/499 passed. No runtime change.
+Initial fixture diagnosis confirmed the existing detached-child cancellation
+limit; details and assistance are in the experiment log.
 
 **JOB-5:** DONE. One 11.88-second job survived an idle owner-session kill and
 passed all 15 tests. Completion remained pending while the owner was offline;
@@ -125,7 +132,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** JOB-6: verify cancellation and capacity release with concurrent jobs;
+**Next action:** Owner selection after JOB-10. Candidate: bounded execution policy
+for detached children retaining output;
 dedicated evals, broader job types, physical-terminal acceptance and SPLIT-5
 remain deferred.
 
@@ -314,7 +322,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
-| JOB-6    | IN PROGRESS | Concurrent cancellation and capacity release | JOB-5 |
+| JOB-10    | DONE | Concurrent cancellation and capacity release | JOB-5 |
 | JOB-5    | DONE | Session crash during a supervised job and explicit reopen | JOB-4 |
 | JOB-4    | DONE | Longer repository job, concurrent session and provider failure | TEST-1 |
 | TEST-1   | DONE | Resolve known suite failures and verify full regression coverage | DIAG-1, JOB-3 |
@@ -3104,7 +3112,7 @@ this result. Next candidate is concurrent cancellation/capacity release;
 owner selection is required before starting it.
 
 
-## JOB-6 — Concurrent cancellation and capacity release
+## JOB-10 — Concurrent cancellation and capacity release
 
 **Scope:** Owner authorized on 2026-09-07. Fill all four global slots using
 isolated gated Mix fixtures, reject a fifth, cancel one, verify process-group
@@ -3113,4 +3121,35 @@ completion once. Host controls execution; real models interpret retained results
 
 ### Result
 
-**IN PROGRESS.** Offline characterization and an opt-in real-provider run.
+**DONE (2026-09-07).** Implementation `3da41ed` adds one shared scenario,
+an offline test and an opt-in real-provider driver. The live run passed all 16
+invariants: four global reservations; fifth request rejected without record or
+fixture entry; cancellation settled and released its slot in 25 ms; the other
+three remained running; replacement admitted and entered its fixture. A second
+job for a running owner was rejected with global room available. Duplicate
+cancel/start of the cancelled identity did not rerun it. Final results were one
+cancelled and four passed, all settled/released, with five fixture entries total.
+
+Five paused owners received one accepted completion each, then host resume led
+each real gpt-5.5/low model to inspect one matching retained status and correctly
+report its result. Total usage: 10,206 tokens. Host controls execution, file
+gates, cancellation and resume; autonomous scheduling is not claimed. Every
+fixture's source remained unchanged. Mix PIDs stopped before cleanup.
+
+Two initial offline attempts exposed the existing detached-child boundary:
+a BEAM Port child escaped the assigned process group and retained the output
+pipe after Mix was killed, delaying terminal evidence and capacity release.
+Independent diagnosis confirmed this is outside the documented guarantee.
+The corrected fixture covers admitted Mix processes; no runtime repair or
+broader descendant-killing policy is included.
+
+Combined checks: 19 passed. Full suite: **499/499 passed**, 128.5 seconds.
+The focused test passed again after review strengthened exceptional cleanup.
+Format, warnings-as-errors compile and independent review pass. Evidence and
+source claims were checked before publication. Published on
+`codex/concurrent-job-cancellation` and integrated into main with this result.
+
+Evidence: [live record](docs/fixtures/concurrent-test-jobs-live-2026-09-07.json).
+Method and limitations: [experiment log](docs/harness-experiments.md#2026-09-07-concurrent-cancellation-and-capacity-refill--job-10).
+The next candidate is a bounded execution policy for detached children retaining
+output; owner selection is required before starting it.

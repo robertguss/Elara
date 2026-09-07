@@ -10,12 +10,12 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**DIAG-1:** DONE; implementation `1b24bfe` pushed on `codex/check-diagnosis`.
-Captured evidence, direct diagnosis, cancellation, persistence and the existing
-Rust inspector pass 76 focused checks. Both live responses identified the cause
-but exceeded the citation-span limit and were rejected. The result is an
-inspectable direct baseline, with no accepted live diagnosis yet. Examples,
-RLM and automatic optimization remain later comparisons.
+**DIAG-1:** DONE; original implementation `1b24bfe`, merged in `f54350e`.
+The citation-range correction removes the arbitrary 10-line maximum while
+retaining artifact/range validation and byte bounds. Both saved responses pass
+offline revalidation; one fresh direct live diagnosis is accepted, including
+its 17-line failure citation. All 77 focused checks pass. Examples, RLM and
+automatic optimization remain unimplemented.
 
 **LOOP-1:** DONE; implementation `20a8eda`, merged into `main` in `57f9edc`.
 Later responses and intervening calls permit useful rechecks; consecutive
@@ -84,8 +84,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Review DIAG-1's recorded failures before selecting the proposed
-curated-example comparison. SPLIT-5 remains the unstarted owner checkpoint and
+**Next action:** Review the corrected direct baseline before selecting further
+experiments. SPLIT-5 remains the unstarted owner checkpoint and
 physical-terminal acceptance remains deferred. The separate background
 test/wakeup candidate in the [harness experiment log](docs/harness-experiments.md)
 remains a proposal.
@@ -2696,7 +2696,7 @@ active capture, clone/fork start without one, and resume adopts the selected
 store. Usage is a Core fact and typed tool-result field, including failure and
 interruption after usage arrives. Older persisted messages remain readable.
 
-**Live quality result: 0 accepted diagnoses from 2 assisted calls on one tiny
+**Initial live quality result: 0 accepted diagnoses from 2 assisted calls on one tiny
 fixture.** Both actual `gpt-5.5`/low responses identified the missing
 `NameHelper.normalize(nil)` clause on manual inspection; both cited a 17-line
 log span against the unchanged 10-line limit and were rejected. The requests
@@ -2704,7 +2704,8 @@ took 7,670 ms / 1,706 tokens and 7,161 ms / 1,747 tokens respectively. Each run
 also used four ordinary assistant responses. The operator supplied the project,
 two explicit prompts and source selections, then deliberately fixed the fixture
 after capture. A separate current-workspace check passed. No automatic retry or
-repair was added, and no live accepted-result or productivity claim is made.
+repair was added. These initial runs made no accepted-result or productivity
+claim; the correction and fresh accepted run are recorded below.
 
 **Checks:** 76 focused tests pass, including real Mix failure, encoding repair,
 immutable source, persisted restart and usage, clone/fork/resume/rewind,
@@ -2744,5 +2745,30 @@ execution.
 Guide: [captured check diagnosis](docs/check-diagnosis.md). Evidence and
 assistance: [experiment log](docs/harness-experiments.md#2026-09-07-captured-check-diagnosis--diag-1)
 and [full live records](docs/features-research/check-diagnosis-live-runs.json).
-The next proposed comparison is a small curated-example strategy under the
-same contract. It has not started.
+
+**Citation-range correction (2026-09-07):** implementation `d5ef3b1` pushed on
+`codex/diagnosis-citation-ranges`. Removed the arbitrary 10-line
+maximum from the direct prompt and host validator. Existing artifact IDs and
+ordered, in-bounds line ranges remain required; capture, text, report and
+512-byte citation-preview bounds remain in place. Both original saved responses
+pass unchanged in regression tests. One fresh direct `gpt-5.5`/low response
+correctly identifies the missing nil clause and is accepted with the same
+17-line failure block. Its single diagnosis call took 6,659 ms and 1,737 tokens;
+four ordinary assistant responses surrounded it. The operator supplied the
+fixture/prompts and edited after capture; the separate current check passed.
+There were no examples, retries or automatic repair. This is one assisted
+fixture, not general quality or productivity evidence.
+
+**Correction verification:** 77 focused tests pass, including the original
+responses and longer citations through the real Rust inspector. The full Mix
+suite passes **467/476** in 167.5 seconds; all nine failures also appear in the
+previous 465/475 run above. The timing-dependent restored-input recovery test
+passes this run. No new failing test was identified, but the suite remains red.
+Mix formatting and warnings-as-errors compilation pass. Both Rust crates pass
+format, Clippy with warnings denied and all 121 tests (115 TUI, 6 execution
+stub). Independent review is clear; all 37 local documentation links checked
+resolve. The original checkout's 15 unrelated files retain their prior hashes.
+
+Follow-up evidence: [direct rerun](docs/features-research/check-diagnosis-citation-fix-live-run.json).
+The earlier suggestion to add examples was premature; no further comparison
+has started.

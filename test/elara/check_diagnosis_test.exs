@@ -71,13 +71,35 @@ defmodule Elara.CheckDiagnosisTest do
 
     assert {:error, _} = CheckDiagnosis.validate(JSON.encode!(beyond), evidence)
 
-    long_span =
-      put_in(result, ["supporting_evidence"], [
-        %{"artifact_id" => log["id"], "start_line" => 1, "end_line" => 17}
-      ])
+    for {first, last} <- [{0, 1}, {2, 1}, {1, 17}] do
+      invalid_range =
+        put_in(result, ["supporting_evidence"], [
+          %{"artifact_id" => log["id"], "start_line" => first, "end_line" => last}
+        ])
 
-    assert {:error, "Invalid diagnosis: evidence reference spans 17 lines; maximum is 10"} =
-             CheckDiagnosis.validate(JSON.encode!(long_span), evidence)
+      assert {:error, "Invalid diagnosis: evidence reference is outside the captured line range"} =
+               CheckDiagnosis.validate(JSON.encode!(invalid_range), evidence)
+    end
+  end
+
+  test "the original live diagnoses accept their complete captured failure blocks" do
+    records =
+      Path.expand("../../docs/features-research/check-diagnosis-live-runs.json", __DIR__)
+      |> File.read!()
+      |> JSON.decode!()
+
+    for run <- records["runs"] do
+      text = run["diagnosis"]["raw_response"]
+      expected = JSON.decode!(text)
+
+      assert Enum.any?(
+               expected["supporting_evidence"],
+               &(&1["end_line"] - &1["start_line"] >= 10)
+             )
+
+      assert CheckEvidence.valid?(run["evidence"])
+      assert {:ok, ^expected} = CheckDiagnosis.validate(text, run["evidence"])
+    end
   end
 
   test "malformed, oversized, or empty diagnoses remain failures", %{cwd: cwd} do

@@ -98,6 +98,10 @@ defmodule Elara.CheckDiagnosisSessionTest do
 
     assert result["result"]["likely_cause"] =~ ":wrong"
     assert Enum.any?(result["citations"], &String.contains?(&1["excerpt"], ":wrong"))
+    log_citation = Enum.find(result["citations"], &(&1["name"] == "check output"))
+    assert log_citation["end_line"] - log_citation["start_line"] >= 10
+    assert log_citation["excerpt_clipped"]
+    assert byte_size(log_citation["excerpt"]) <= 512
 
     assert_receive {:diagnosis_request, _, request}
     refute_receive {:diagnosis_request, _, _}
@@ -277,6 +281,7 @@ defmodule Elara.CheckDiagnosisSessionTest do
 
   def answer(request) do
     evidence = JSON.decode!(hd(request.messages).text)
+    log = Enum.find(evidence["artifacts"], &(&1["kind"] == "log"))
 
     source =
       Enum.find(evidence["artifacts"], &(&1["kind"] == "source")) || hd(evidence["artifacts"])
@@ -285,6 +290,11 @@ defmodule Elara.CheckDiagnosisSessionTest do
       "observed_failure" => "The test expected :correct and received :wrong.",
       "likely_cause" => "Example.answer returns :wrong.",
       "supporting_evidence" => [
+        %{
+          "artifact_id" => log["id"],
+          "start_line" => 1,
+          "end_line" => length(String.split(log["numbered_content"], "\n"))
+        },
         %{"artifact_id" => source["id"], "start_line" => 1, "end_line" => 1}
       ],
       "unknowns" => [],

@@ -198,7 +198,7 @@ defmodule Elara.CheckDiagnosis do
           Return ONLY one JSON object with exactly these five fields:
           {"observed_failure":"...","likely_cause":null,"supporting_evidence":[{"artifact_id":"...","start_line":1,"end_line":1}],"unknowns":["..."],"next_check":null}
           observed_failure is nonempty text (at most 1000 UTF-8 bytes). likely_cause and next_check are null or nonempty text (at most 1000 bytes each).
-          supporting_evidence contains 1 to 5 references to supplied artifact IDs and their numbered lines; each reference spans at most 10 lines.
+          supporting_evidence contains 1 to 5 references to supplied artifact IDs. Each line range must exist within its captured artifact.
           unknowns contains at most 6 nonempty strings, each at most 500 bytes. next_check is a suggestion, not an executed command.
           """,
       messages: [Message.user(JSON.encode!(evidence))],
@@ -293,15 +293,10 @@ defmodule Elara.CheckDiagnosis do
         {:error, "evidence reference names an unknown captured artifact"}
 
       artifact ->
-        cond do
-          last - first >= 10 ->
-            {:error, "evidence reference spans #{last - first + 1} lines; maximum is 10"}
-
-          first < 1 or last < first or last > length(CheckEvidence.lines(artifact)) ->
-            {:error, "evidence reference is outside the captured line range"}
-
-          true ->
-            :ok
+        if first < 1 or last < first or last > length(CheckEvidence.lines(artifact)) do
+          {:error, "evidence reference is outside the captured line range"}
+        else
+          :ok
         end
     end
   end

@@ -139,3 +139,11 @@ ran the unchanged context-recovery test file for 11.93 seconds. Completion woke
 the owner after an injected provider failure while a second real-model session
 remained usable. It recorded one target launch, one completion input and no
 model polling. This is one assisted run, not a general concurrency benchmark.
+
+
+The [JOB-5 owner-crash experiment](harness-experiments.md#2026-09-07-owner-session-crash-with-retained-job-completion--job-5)
+confirmed one 11.88-second execution across an idle session-process kill. The
+owner remained offline through job completion; explicitly reopening and
+subscribing delivered one completion input without a continuation prompt or
+rerun. A second real-model session answered during execution. This proves the
+session boundary in one surviving VM, not recovery from execution-VM loss.

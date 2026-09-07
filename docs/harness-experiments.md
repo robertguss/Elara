@@ -447,3 +447,76 @@ private session/job records and launch log in the reported temporary directory;
 both sessions are stopped after evidence capture. Ordinary ExUnit remains
 offline and does not load this driver. See JOB-4 in [ROADMAP.md](../ROADMAP.md)
 for final verification and publication.
+
+
+## 2026-09-07: Owner session crash with retained job completion — JOB-5
+
+**Result:** one live run on `d0b8b16` passed all eight checks. The existing
+`test/elara/context_test.exs` executed once and passed all 15 tests in 11,878 ms.
+The driver deliberately killed the idle owning session after observing the
+command launch. The job remained running across the kill, finished while its
+owner stayed offline, and retained its terminal result with delivery pending.
+Explicit reopen of the same saved session, followed by subscription, delivered
+one completion input and triggered successful interpretation. No production
+runtime change was needed. The [full evidence](fixtures/session-crash-job-live-2026-09-07.json)
+includes before/after-kill records, the offline terminal record, public
+transcripts, source fingerprints and latency samples.
+
+| Observation | Result |
+| --- | --- |
+| Target command launches | 1, exact argv counted by PATH shim before exec |
+| Target result | 11,878 ms, exit 0, 15 passed |
+| Owner lifecycle | Killed PID replaced only by explicit reopen; same session ID |
+| Retained offline evidence | Passed, delivery pending |
+| Completion after reopen | 1 input, consumed; delivery accepted; slot released |
+| Model job actions | 1 start, 1 status; no polling or rerun |
+| Additional owner prompts | 0; driver explicitly reopened and subscribed |
+| Secondary real-model response | `17 * 23` → `391` in 1,384 ms, job still running |
+| Secondary status API during job | 108 samples; median 0.029 ms, maximum 0.635 ms |
+| Source identity | 140 declared files unchanged before/after and at final status |
+| Reported usage | Owner 7,157 tokens; secondary 911; total 8,068 |
+
+Relative to driver start, the owner was confirmed killed at 3.659 seconds,
+the secondary response arrived at 5.048 seconds, terminal evidence was observed
+at 14.037 seconds, the owner was explicitly reopened at 14.046 seconds, and its
+final interpretation arrived at 19.693 seconds. Both sessions used real
+`gpt-5.5` at low effort. There was no injected provider failure in this run.
+The error log inside the target output is an expected context-recovery fixture;
+the target's final result is 15 passed.
+
+**What this establishes:** job execution and retained completion survive loss
+of the conversation process within a surviving BEAM VM. The existing temporary
+session restart policy is intentional: the supervisor does not recreate the
+owner. Reopen is an explicit host/operator action, after which completion drives
+the model without another prompt. This confirms useful isolation and durable
+result delivery within the current architecture.
+
+**Limits and assistance:** the driver supplied both prompts, the exact target,
+the kill and the explicit reopen. It killed an idle session after its waiting
+reply, not an in-flight inference or tool call. The PATH shim observes command
+launch before exec, not the first test assertion. Durable running records were
+checked before and after the kill; these are host observations rather than
+precise OS execution timestamps. This is one controlled run, not proof of
+recovery from loss of the execution stub, runner, entire VM or machine. Those
+boundaries retain their existing indeterminate/no-retry policy. API samples
+measure local secondary-session status latency, not TUI latency or comparative
+runtime performance. Source identity covers the declared file set. Private
+session/job records and the launch log remain in the driver's reported temporary
+directory; both live sessions stop after capture.
+
+The offline characterization uses a real controlled Mix fixture, waits for its
+execution marker before killing the owner, releases the job while the owner is
+absent, and verifies one consumed completion after reopen. A forced delivery
+retry produces no duplicate input or model request. All 16 job tests and both
+roadmap tests pass; the full suite passes **498/498** in 129.5 seconds. Formatting,
+compilation with warnings denied, static driver compilation and independent
+review pass. Review found no blocking issues. The live driver requires explicit
+invocation and remains excluded from ordinary ExUnit:
+
+```bash
+mix run --no-start test/support/session_crash_job_live.exs OUTPUT.json
+```
+
+**Next candidate:** exercise cancellation and capacity release under several
+concurrent jobs. This is a proposal, not an authorized queue item; broader job
+types and optimizer work remain deferred.

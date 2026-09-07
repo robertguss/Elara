@@ -85,6 +85,52 @@ defmodule Elara.ExecIntegrationTest do
     assert_eventually(fn -> marker_pids(fixture.marker) == [] end)
   end
 
+  test "explicit cancellation retains the owner's terminal result" do
+    fixture = fixture("elara_explicit_cancel")
+    token = Exec.token()
+
+    task =
+      Task.async(fn -> Exec.run(["bash", "-c", "touch ready; sleep 30"], cwd: fixture.root) end)
+
+    assert_eventually(fn -> File.exists?(fixture.ready) end)
+    assert {:ok, :requested} = Exec.cancel(task.pid)
+    assert {:ok, %Exec.Result{termination: :cancelled}} = Task.await(task, 3000)
+    assert {:ok, :not_running} = Exec.cancel(task.pid)
+    assert :settled = Exec.settlement(task.pid, token)
+    assert :unknown = Exec.settlement(task.pid, Map.put(token, "generation", -1))
+    assert :pending = Exec.settlement(self(), token)
+
+    assert {:error, {:not_started, _}} =
+             Exec.run(["touch", "must-not-start"], cwd: fixture.root, expected_token: %{})
+
+    refute File.exists?(Path.join(fixture.root, "must-not-start"))
+  end
+
+  test "a queued submission from a dead caller never starts" do
+    fixture = fixture("elara_dead_caller")
+    exec = Process.whereis(Exec)
+    :ok = :sys.suspend(exec)
+
+    try do
+      {:ok, caller} = Task.start(fn -> Exec.run(["touch", "ready"], cwd: fixture.root) end)
+
+      assert_eventually(fn ->
+        {:messages, messages} = Process.info(exec, :messages)
+        Enum.any?(messages, &match?({:"$gen_call", {^caller, _}, {:run, _, _}}, &1))
+      end)
+
+      ref = Process.monitor(caller)
+      Process.exit(caller, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^caller, :killed}
+    after
+      :sys.resume(exec)
+    end
+
+    # A synchronous barrier confirms the earlier queued run has been handled.
+    assert Exec.status().available
+    refute File.exists?(fixture.ready)
+  end
+
   test "public tool timeout kills its process group and reports timed out" do
     fixture = fixture("elara_timeout")
     command = long_sleep_command(fixture)

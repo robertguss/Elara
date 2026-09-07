@@ -607,6 +607,8 @@ exactly-once execution guarantee.
 
 - [Harness experiments](docs/harness-experiments.md): what we tried, what we
   learned, and which functionality the experiments added.
+- [Supervised test jobs](docs/test-jobs.md): run a focused Mix test between model
+  turns and receive completion through the inbox without polling.
 - [Sessions and chat](docs/sessions.md): resume, branch, clone, and inspect why
   an event occurred.
 - [Live plugins](docs/plugins.md): add trusted, stateful local tools and reload

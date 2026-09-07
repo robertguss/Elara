@@ -114,7 +114,7 @@ do not retain a capture from the wrong history. Flight-recorder replay matches.
 The Rust PTY exercise searches the result, redraws it at a different size, copies
 the complete canonical report and submits the draft preserved during inspection.
 
-**Live result: both responses were rejected.** Two assisted runs used actual
+**Initial live result: both responses were rejected.** Two assisted runs used actual
 `gpt-5.5` at low effort through the subscription provider. The synthetic Mix
 project's `NameHelper.normalize/1` handled strings, while a test required `nil`
 to produce an empty string. Both responses correctly identified the missing
@@ -130,8 +130,8 @@ The first response also mistook the plugin's `test:...` label for a command.
 That prompted retaining the actual executable/argument arrays and explaining
 their meaning. The second response used those arguments. This is a local
 observation across two development revisions, not evidence of a reliable
-improvement. The acceptance limit was kept intact; no automatic repair or
-hidden retry was added.
+improvement. The initial implementation kept the acceptance limit intact; the follow-up
+below removes it. No automatic repair or hidden retry was added.
 
 **Assistance:** each run used a supplied minimal project, selected source files,
 and two explicit owner prompts: run only the check, then diagnose that run once.
@@ -142,13 +142,43 @@ ordinary assistant responses in addition to the one direct diagnosis request.
 The full prompts, captured excerpts, raw rejected responses, final replies and
 usage totals are retained in [the live records](features-research/check-diagnosis-live-runs.json).
 
-**Learning:** supervised execution, immutable evidence and explicit acceptance
-make a failed model operation inspectable. They do not make its output comply
-with a schema or prove its causal claims. The direct strategy has not produced
-an accepted live result in this exercise. A useful next comparison would add a
-few curated examples while preserving the contract and recording failures as
-well as successes. No example strategy, RLM, GEPA or optimizer is implemented,
-and there is no broad evaluation program or throughput claim.
+**Learning:** inspectable evidence exposed a mistake in our acceptance policy:
+the 10-line maximum rejected a complete, relevant failure block. The initial
+recommendation to add curated examples was premature. Correct the unnecessary
+constraint before deciding whether model optimization is warranted. Structure
+and valid references still do not prove a diagnosis's causal claims.
+
+### Citation-range correction and direct rerun
+
+Removed the arbitrary per-reference line-count maximum from the prompt and
+validator. References must still name captured artifacts and contain valid,
+ordered line bounds. The one-to-five reference count, text/report byte bounds,
+source/output capture bounds and 512-byte citation previews remain unchanged.
+The five-field `check_diagnosis/v1` schema and `direct/v1` strategy are unchanged.
+
+Both original saved responses now pass validation **without changing their
+text or evidence**. This is offline revalidation, not two new successful live
+calls; the original records above preserve their historical rejection outcomes.
+
+One fresh assisted `gpt-5.5`/low run on the same fixture was **accepted**. It
+correctly identified the missing `normalize(nil)` clause and again cited the
+17-line failure block at lines 29–45. The preview was clipped to 512 bytes and
+marked accordingly. The direct call took **6,659 ms**, reporting **1,428 input +
+309 output = 1,737 tokens**. There was one diagnosis call, no automatic retry,
+repair or curated example, plus four ordinary assistant responses.
+
+The operator used the same source selections and two prompts, replacing only
+the run ID, and again inserted the nil clause after capture. Diagnosis used the
+original source; a separate current-workspace check passed both tests. The
+model did not perform that fix. Full evidence, prompts, accepted report and
+final reply are in [the follow-up live record](features-research/check-diagnosis-citation-fix-live-run.json).
+
+Regression tests exercise the two original responses, invalid/out-of-range
+references, and a longer accepted range with a bounded preview through the
+session and Rust inspector. This shows the correction works on the recorded
+case; one assisted synthetic fixture does not measure general diagnosis
+quality or productivity. No example strategy, RLM, GEPA or optimizer is
+implemented, and no new comparison has started.
 
 Guide: [captured check diagnosis](check-diagnosis.md). Publication and shared
 verification results: [DIAG-1 in the roadmap](../ROADMAP.md#diag-1--diagnose-a-captured-failed-check).

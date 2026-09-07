@@ -68,7 +68,7 @@ instructions/settings, and **no tools**. The accepted `result` has exactly:
 | --- | --- |
 | `observed_failure` | Nonempty text, at most 1,000 UTF-8 bytes. |
 | `likely_cause` | A hypothesis of at most 1,000 bytes, or `null`. |
-| `supporting_evidence` | One to five artifact/line references, each spanning at most 10 captured lines. |
+| `supporting_evidence` | One to five artifact/line references, each wholly within its captured artifact. |
 | `unknowns` | Up to six nonempty strings, at most 500 bytes each. |
 | `next_check` | A suggestion of at most 1,000 bytes, or `null`; it is not executed. |
 
@@ -80,8 +80,10 @@ correct or that a cited passage actually supports the claim.
 
 The report records contract/strategy revisions, invocation and run IDs,
 request settings, response model, request duration, reported usage, and cited
-excerpts. Invalid model text remains inspectable up to 2,048 bytes with a
-rejection reason. There is no automatic repair, retry, or acceptance based on
+excerpts. Each citation preview is capped at 512 UTF-8 bytes and marked when
+clipped; a valid reference may span any captured line range. Use `check_evidence`
+to inspect the retained evidence beyond that preview. Invalid model text remains
+inspectable up to 2,048 bytes with a rejection reason. There is no automatic repair, retry, or acceptance based on
 the model's confidence. Private provider state and reasoning are not copied
 into the report.
 
@@ -124,6 +126,7 @@ Rust PTY check searches, redraws and copies the diagnosis and submits the
 preserved draft. Physical-key acceptance remains separately owner-deferred.
 
 Curated examples, an RLM implementation, GEPA, strategy selection and automatic
-optimization remain unimplemented. The next comparison should keep this result
-contract fixed and record whether a few curated examples improve useful
-diagnoses, including refusals and misleading results.
+optimization remain unimplemented. Removing the arbitrary citation-span limit
+accepted both saved responses on revalidation and one fresh direct live response.
+That corrects an acceptance-policy mistake; this single assisted fixture does
+not establish general diagnostic quality or a need for curated examples.

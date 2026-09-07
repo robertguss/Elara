@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-06 (
-> JOB-1 supervised test-job experiment in progress) · **Owner:** solo development
+> JOB-1 supervised test-job experiment published) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -10,12 +10,13 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**JOB-1:** IN PROGRESS. The owner authorized the supervised focused test-job
-experiment. Twelve job checks and eight execution checks pass. The real model
-started one delayed test, ended its turn, then automatically received completion
-and inspected status once. All 20 focused checks pass; full suite passes 465/475 with the same ten known
-failures. Review is clear; publication is next.
-The contract and usage are in [supervised test jobs](docs/test-jobs.md).
+**JOB-1:** DONE and pushed on `codex/supervised-test-jobs`: implementation
+`1d9117c`, contract and evidence `2fb5915`. All 20 focused checks pass; full suite
+passes 465/475 with the same ten known failures. Final independent review is
+clear. The real model started one delayed test, ended its turn, automatically
+received completion, and inspected status once. See
+[supervised test jobs](docs/test-jobs.md) and the
+[experiment evidence](docs/harness-experiments.md). Branch is not yet merged.
 
 **LOOP-1:** DONE; implementation `20a8eda`, merged into `main` in `57f9edc`.
 Later responses and intervening calls permit useful rechecks; consecutive
@@ -84,10 +85,11 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Finish JOB-1 review, verification, and publication on
-`codex/supervised-test-jobs`. The SPLIT-5 owner checkpoint remains unstarted;
-physical-terminal acceptance stays deferred. PLUGIN-2 and LOOP-1 are merged into
-`main` at `57f9edc`.
+**Next action:** Review `codex/supervised-test-jobs` for merge. The next proposed
+experiment is a small real repository repair using the new test-job completion
+workflow; no eval framework is required. The SPLIT-5 owner checkpoint remains
+unstarted and physical-terminal acceptance stays deferred. PLUGIN-2 and LOOP-1
+are merged into `main` at `57f9edc`.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -270,7 +272,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | PLUGIN-1 | DONE     | Discover and evolve a useful plugin in a live session         | Owner selection  |
 | PLUGIN-2 | DONE     | Agent-authored plugin during a real coding task              | PLUGIN-1         |
 | LOOP-1   | DONE     | Permit useful repeated tool calls with bounded loops          | PLUGIN-2         |
-| JOB-1    | IN PROGRESS | Supervised focused test jobs and completion wakeup         | LOOP-1           |
+| JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-1     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -2676,7 +2678,9 @@ new UI framework, or dedicated eval framework.
 
 ### Result
 
-**IN PROGRESS (2026-09-06).** Implementation on `codex/supervised-test-jobs`.
+**DONE (2026-09-06).** Implementation pushed in `1d9117c`, with execution and
+record foundations in `59a1ae9` and `48f38df`; contract and live evidence pushed
+in `2fb5915` on `codex/supervised-test-jobs`. Not yet merged into main.
 The supervised owner persists intent before launching a linked temporary runner
 and evidence before inbox delivery. A manager/runner crash cannot restart the
 command. Offline sessions are not resurrected. Existing report-input pause and
@@ -2718,4 +2722,4 @@ manual completion delivery, or rerun was needed. This bounded fixture establishe
 live continuation; it is not a long coding trial or comparative productivity
 measurement. The [experiment report](docs/harness-experiments.md) and
 [sanitized transcript](docs/fixtures/test-job-live-2026-09-06.json) retain the
-evidence. Publication is pending.
+evidence. All changes are published on the experiment branch.

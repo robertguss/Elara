@@ -832,7 +832,7 @@ Dedicated evals remain deferred.
 
 ## 2026-09-07: Combined experiment integration
 
-The integration candidate combines main `59aefa7` with feature stack `5bef91a`.
+Merge `306ca87`, pushed to main, combines main `59aefa7` with feature stack `5bef91a`.
 The complete combined suite passes **529/529 Mix tests** and **121 Rust tests**;
 72 focused integration checks pass. Main's TEST-1 fixes resolve the eight
 failures retained in the earlier branch reports. No runtime merge conflict or

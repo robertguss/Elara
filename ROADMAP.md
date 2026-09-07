@@ -9,7 +9,7 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**Integration:** VERIFIED; publication pending. Combined main `59aefa7`
+**Integration:** DONE; merged and pushed to main in `306ca87`. Combined main `59aefa7`
 (TEST-1 and the concurrent-job/owner-crash experiments) with feature stack
 `5bef91a`. All **529 Mix tests** and **121 Rust tests** pass. Both histories and
 original evidence are retained. The eight historical branch failures are fixed
@@ -164,9 +164,9 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Publish the verified integration to main from a clean checkout.
-The original checkout is now owned by separate concurrent-job cancellation
-work; preserve its branch and uncommitted files. Dedicated evals,
+**Next action:** Coordinate with the existing concurrent-job cancellation task
+before selecting another experiment. Integration is published; the original
+checkout's active branch and uncommitted files are preserved. Dedicated evals,
 physical-terminal acceptance and SPLIT-5 remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -3344,8 +3344,9 @@ eval framework changed. Evidence and assistance:
 
 ## 2026-09-07 integration checkpoint
 
-**VERIFIED; publication pending.** Integration branch `codex/integrate-experiments`
-combines main `59aefa7` with feature stack `5bef91a`. Source changes merge without
+**DONE; merged and pushed to main in `306ca87`.** Integration branch
+`codex/integrate-experiments` combines main `59aefa7` with feature stack `5bef91a`.
+Source changes merge without
 conflicts. Documentation preserves both streams; only the colliding incoming
 JOB-4/JOB-5 IDs become JOB-8/JOB-9. JOB-6 and JOB-7 remain unchanged. Original
 JSON artifacts are byte-for-byte identical to their source branch versions.
@@ -3361,12 +3362,12 @@ warnings; the final exact-file filter correction is verified by a warning-free
 
 Both native crates pass format, Clippy across all targets with warnings denied,
 and all **121 Rust tests** (115 TUI and 6 execution stub). Mix format and
-warnings-as-errors compilation pass. All 96 checked local documentation links
+warnings-as-errors compilation pass. All checked local documentation links
 resolve; roadmap job IDs are unique and each queue entry has one result section.
 No new live provider call was made during integration; the historical acceptance
 records and merged deterministic checks are the evidence for this checkpoint.
 
-Publication uses a separate clean main checkout because another task started
+Publication used the separate `Elara-main-integration` checkout because another task started
 `codex/concurrent-job-cancellation` work in the original directory while the
 integration checks ran. Preserve that task's uncommitted files and all other
 worktrees. No new experiment is started by this integration.

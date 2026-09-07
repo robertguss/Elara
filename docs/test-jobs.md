@@ -67,6 +67,13 @@ apply, and an offline recipient receives the evidence after explicit reopen.
 Do not resurrect stopped sessions. Ordinary session interrupt pauses input;
 explicit job cancellation separately stops the background command.
 
+Session processes use a temporary restart policy. Killing an owner does not
+restart it automatically and does not cancel its admitted job. Completion stays
+pending while the owner is offline. Explicitly reopen the saved session and
+attach/subscribe to consume that evidence; no new command execution is needed.
+This boundary differs from losing the job runner or execution VM, which can
+leave execution indeterminate as described above.
+
 Inbox acceptance, input consumption, and successful model completion are
 different milestones. A completion input becomes `consumed` when inference
 starts. If that provider turn fails, the input becomes `failed` and retains its

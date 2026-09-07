@@ -148,6 +148,55 @@ defmodule Elara.TestJobsTest do
     assert File.read!(Path.join(root, "started")) == "1"
   end
 
+  test "killed owner stays offline while its job finishes and receives completion once on reopen",
+       %{session: session, ctx: ctx, root: root} do
+    model = start_for_recovery(session)
+    answer(model, "Waiting for completion.")
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, _}}}, 2000
+    await(fn -> File.exists?(Path.join(root, "started")) end)
+    {:ok, old} = Elara.session_pid(session)
+    store = GenServer.call(old, :thread_store)
+    monitor = Process.monitor(old)
+    Process.exit(old, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^old, :killed}, 2000
+    assert Elara.session_pid(session) == {:error, :session_not_found}
+    assert status(ctx)["status"] == "running"
+
+    File.write!(Path.join(root, "release"), "")
+    await(fn -> status(ctx)["status"] == "passed" end)
+    assert status(ctx)["delivery"] == "pending"
+    assert Elara.session_pid(session) == {:error, :session_not_found}
+    refute_receive {:model, _, _}, 150
+
+    assert {:ok, ^session} =
+             Elara.start_session(
+               resume: store.path,
+               cwd: root,
+               home: root,
+               skill_paths: [],
+               plugins: [],
+               provider: {Controlled, self()}
+             )
+
+    {:ok, resumed} = Elara.session_pid(session)
+    on_exit(fn -> if Process.alive?(resumed), do: GenServer.stop(resumed) end)
+    assert resumed != old
+    :ok = Elara.subscribe(session)
+    assert_receive {:model, model, request}, 5000
+    assert List.last(request.messages).agent_source["message_id"] == "focused"
+    answer(model, "Retained result passes.")
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, _}}}, 2000
+    await(fn -> status(ctx)["delivery"] == "accepted" end)
+
+    assert {:ok, %{state: :consumed}} =
+             Elara.input_status(session, "test-job:" <> status(ctx)["key"])
+
+    send(TestJobs, :deliver)
+    refute_receive {:model, _, _}, 150
+    assert length(inbox(session)) == 1
+    assert File.read!(Path.join(root, "started")) == "1"
+  end
+
   test "failed completion interpretation survives reopen and needs explicit continuation",
        %{session: session, ctx: ctx, root: root} do
     model = start_for_recovery(session)

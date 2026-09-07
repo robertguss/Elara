@@ -119,7 +119,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Owner selection of the next experiment. JOB-4 is complete;
+**Next action:** Run JOB-5: kill the owner after command launch, retain completion
+while offline, reopen explicitly, and verify one execution and one completion. JOB-4 is complete;
 dedicated evals, broader job types, physical-terminal acceptance and SPLIT-5
 remain deferred.
 
@@ -308,6 +309,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
+| JOB-5    | IN PROGRESS | Session crash during a supervised job and explicit reopen | JOB-4 |
 | JOB-4    | DONE | Longer repository job, concurrent session and provider failure | TEST-1 |
 | TEST-1   | DONE | Resolve known suite failures and verify full regression coverage | DIAG-1, JOB-3 |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
@@ -3059,3 +3061,16 @@ Method and limitations: [experiment log](docs/harness-experiments.md#2026-09-07-
 Final full suite: **497/497 passed** in 129.1 seconds. Formatting and
 compilation with warnings denied pass. Evidence invariants and local
 documentation links pass; independent review is clear.
+
+
+## JOB-5 — Session crash during a supervised job
+
+**Scope:** Owner authorized on 2026-09-07. Kill the owning session process after
+observing command launch, keep another session usable, and verify retained
+completion after explicit reopen. Preserve the temporary-session restart policy.
+No automatic command retry or broader execution guarantees are proposed.
+
+### Result
+
+**IN PROGRESS.** Add offline characterization, run the existing context tests
+with a real model, record assistance and execution/delivery counts, and verify.

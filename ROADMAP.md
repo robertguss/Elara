@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-07 (DIAG-1 and
-> JOB-4 live repository test) · **Owner:** solo development
+> JOB-5 line-range read feature) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,11 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-5:** IN PROGRESS; a live Elara coding session will implement optional line
+selection in `read`, verify a failing regression and the implementation through
+supervised test jobs, and leave a patch for host review. This is the selected
+small feature experiment; dedicated evals remain deferred.
 
 **JOB-4:** DONE; opt-in live driver pushed in `0b58b99` on
 `codex/longer-repository-test-job`. Real `gpt-5.5`/low ran all 15 existing
@@ -114,10 +119,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Review JOB-4's recorded result, then select one small real feature
-for an end-to-end coding experiment using supervised tests. No further experiment
-has started. Dedicated evals, broader job types, physical-terminal acceptance
-and the SPLIT-5 owner checkpoint remain deferred.
+**Next action:** Complete JOB-5's live test-first implementation, review the patch,
+verify the runtime and document assistance before publishing. JOB-4 remains on
+its published branch; this experiment is stacked on it. Dedicated evals,
+physical-terminal acceptance and SPLIT-5 remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -305,6 +310,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
 | JOB-4    | DONE        | Naturally longer repository context-recovery test job    | JOB-3            |
+| JOB-5    | IN PROGRESS | Live feature implementation: optional line-range reads   | JOB-4            |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -3014,3 +3020,30 @@ change necessary. The [experiment report](docs/harness-experiments.md),
 [evidence artifact](docs/fixtures/test-job-repository-context-2026-09-07.json) and
 [test-job guide](docs/test-jobs.md) retain usage and limits. This experiment is
 published on its branch; it has not been merged into main.
+
+
+## JOB-5 — Live feature implementation with supervised tests
+
+**Scope:** Owner authorized continuing on 2026-09-07. Implement optional line
+selection for the built-in `read` tool. Path-only calls retain exact existing
+whole-file behavior. When either `offset` or `limit` is supplied, use a one-based
+positive integer offset (default 1) and positive integer line limit (default
+200). Return selected content without line-number decoration, preserving line
+endings and a final unterminated line. Reading beyond EOF returns an empty
+string. Invalid supplied values, including nulls, are ordinary tool errors.
+The existing tool-output budget still applies; this feature does not promise a
+file-size or memory bound. Add model-facing schema and concise usage docs.
+
+The live agent owns implementation and regressions in `lib/elara/tools.ex`,
+`lib/elara/tool.ex`, `test/elara/read_range_test.exs` and `README.md`. First run
+new tests through a supervised job and observe missing-feature failure, then
+implement and rerun with a new job ID. Keep the driver attached while waiting.
+The host reviews and independently verifies the final patch, records assistance,
+and handles publication. No commits, dependency changes, background daemons,
+automatic retries, broader cleanup or eval framework in the model's scope.
+
+### Result
+
+**IN PROGRESS.** Started from JOB-4 checkpoint `c333213` on
+`codex/read-line-ranges`. Existing `read` accepts only `path` and reads the whole
+file. No live attempt has run yet.

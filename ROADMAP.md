@@ -178,8 +178,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Owner selection after JOB-11. Candidate: two specialist sessions
-collaborating on one bounded coding task. Dedicated evals, broader job types,
+**Next action:** JOB-12: test specialist authors red regressions, implementation
+specialist consumes its durable report and implements optional numbered reads. Dedicated evals, broader job types,
 physical-terminal acceptance and SPLIT-5 remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -367,6 +367,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
+| JOB-12 | IN PROGRESS | Two specialist sessions implementing numbered reads | JOB-11 |
 | JOB-11 | DONE | Bounded cancellation uncertainty and explicit cleanup confirmation | JOB-10 |
 | JOB-10 | DONE | Concurrent cancellation and capacity refill | JOB-5 |
 | JOB-5    | DONE | Session crash during a supervised job and explicit reopen | JOB-4 |
@@ -3475,3 +3476,19 @@ and integrated into main with this result.
 Method and limits: [experiment log](docs/harness-experiments.md#2026-09-07-bounded-cancellation-uncertainty--job-11).
 Behavior and operator API: [test-job guide](docs/test-jobs.md). The next proposed
 slice is two specialist sessions collaborating on one coding task; it is unstarted.
+
+
+## JOB-12 — Two-specialist numbered-read feature
+
+**Scope:** Owner authorized the next bounded collaboration experiment on 2026-09-07.
+A coding child owns independent regressions for optional `read.line_numbers`;
+the parent implementation specialist owns the two tool modules and README.
+The host integrates/commits the red tests, then prompts/resumes the implementer.
+Each specialist uses one supervised test job and durable related-thread evidence.
+False/omitted preserves existing reads; true prefixes original line numbers
+without changing line bytes, ranges or EOF behavior. Read tool version becomes 3.
+Host owns compatibility checks, review, documentation and publication.
+
+### Result
+
+**IN PROGRESS.** Preparing one normal-provider attempt with retained evidence.

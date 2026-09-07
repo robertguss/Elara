@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-06 (PLUGIN-1
-> merged; PLUGIN-2 and LOOP-1 complete) · **Owner:** solo development
+> PLUGIN-2 and LOOP-1 merged to main) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -10,14 +10,14 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**LOOP-1:** DONE and pushed in `20a8eda` on `codex/agent-authored-plugin`.
+**LOOP-1:** DONE; implementation `20a8eda`, merged into `main` in `57f9edc`.
 Later responses and intervening calls permit useful rechecks; consecutive
 identical calls within one response remain suppressed. All 35 focused checks
 pass, including a real Mix fail → edit → identical rerun and matching replay.
 Independent review is clear. Full suite: 451/461 passed, with the same ten
 failures as the pre-fix run.
 
-**PLUGIN-2:** DONE and pushed at `43b283a` on `codex/agent-authored-plugin`.
+**PLUGIN-2:** DONE; implementation `43b283a`, merged into `main` in `57f9edc`.
 The real model authored
 and used a plugin, fixed the macOS shell-liveness helper, and retained probe state
 across a revision in the same plugin process. All 21 shell tests pass; two turn
@@ -77,10 +77,12 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Return to the SPLIT-5 owner checkpoint. The experiment branch
-contains PLUGIN-2 and LOOP-1 and remains unmerged. The next live coding exercise
-can use ordinary identical read/test calls after changes. The daily-driver
-trial has not started and physical-terminal acceptance stays deferred.
+**Next action:** The SPLIT-5 owner checkpoint remains unstarted. The recommended
+next experiment is a supervised focused test job whose completion wakes the
+agent through the inbox. Its bounded scope and acceptance exercise are in the
+[harness experiment log](docs/harness-experiments.md). This is a recommendation,
+not a newly authorized queue item. Physical-terminal acceptance remains deferred.
+PLUGIN-2 and LOOP-1 are merged into `main` at `57f9edc`.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -2561,7 +2563,7 @@ general claim of safer core hot upgrades follows from this experiment.
 A concurrent task switched the shared checkout's branch during verification;
 publication uses the sibling `Elara-live-plugin-discovery` worktree and preserves
 that task's shared files. Review is complete with no remaining actionable
-findings in this change. No merge to `main` is implied by branch publication.
+findings in this change. Subsequently merged into `main` at `eb88160`.
 
 ## PLUGIN-2 — Agent-authored plugin during a real coding task
 
@@ -2576,7 +2578,7 @@ single experiment, not a dedicated eval framework or benchmark.
 
 **DONE (2026-09-06), assisted experiment complete.** Implementation and evidence
 are pushed in `43b283a` on `codex/agent-authored-plugin`, from merged `main`
-(`eb88160`). The experiment branch has not been merged into `main`. The
+(`eb88160`). Subsequently merged into `main` at `57f9edc`. The
 [report](docs/features-research/agent-authored-plugin-experiment.md),
 [exact prompts](docs/features-research/agent-authored-plugin-prompts.md), and
 [archived plugin](docs/features-research/fixtures/shell_liveness.exs) capture the
@@ -2642,7 +2644,12 @@ five context-budget/handoff cases, queued-mutation recovery, saved-session
 listing, two thread path/session-discovery cases, and the isolated-checkout
 HTTP fixture startup timeout. No all-green suite is claimed. Roadmap checks
 also pass (2 tests). No Rust, provider, dependency, or serialization changes
-were needed. This experiment branch has not been merged into `main`.
+were needed. Subsequently merged into `main` at `57f9edc`. The merged tree
+passes 80 focused Core, project-plugin, plugin, reload-protocol, recorder,
+shell-lifecycle and roadmap checks. Formatting, compilation with warnings
+denied, and the experiment index's local links also pass. Runtime and test
+sources are unchanged from the 451/461 full-suite run; concurrent additions to
+`main` were research documentation.
 
 The guard intentionally does not infer whether an intervening call changed the
 world or whether an identical later request is worthwhile. The configured model

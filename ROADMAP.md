@@ -10,6 +10,10 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
+**TEST-1:** IN PROGRESS. Owner-authorized cleanup of all known failing tests,
+including baseline failures. Fixes cover nonblocking receipt recovery, saved
+session lookup through directory aliases, and deterministic test fixtures.
+
 **DIAG-1:** DONE; original implementation `1b24bfe`, merged in `f54350e`.
 The citation-range correction removes the arbitrary 10-line maximum while
 retaining artifact/range validation and byte bounds. Both saved responses pass
@@ -84,8 +88,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Review the corrected direct baseline before selecting further
-experiments. SPLIT-5 remains the unstarted owner checkpoint and
+**Next action:** Finish TEST-1 and publish a fully passing verification run.
+SPLIT-5 remains the unstarted owner checkpoint and
 physical-terminal acceptance remains deferred. The separate background
 test/wakeup candidate in the [harness experiment log](docs/harness-experiments.md)
 remains a proposal.
@@ -272,7 +276,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | PLUGIN-2 | DONE     | Agent-authored plugin during a real coding task              | PLUGIN-1         |
 | LOOP-1   | DONE     | Permit useful repeated tool calls with bounded loops          | PLUGIN-2         |
 | DIAG-1   | DONE     | Diagnose a captured failed check with explicit evidence       | LOOP-1           |
-| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, DIAG-1    |
+| TEST-1   | IN PROGRESS | Resolve known suite failures and verify full regression coverage | DIAG-1 |
+| SPLIT-5  | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, DIAG-1    |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2772,3 +2777,38 @@ resolve. The original checkout's 15 unrelated files retain their prior hashes.
 Follow-up evidence: [direct rerun](docs/features-research/check-diagnosis-citation-fix-live-run.json).
 The earlier suggestion to add examples was premature; no further comparison
 has started.
+
+
+## TEST-1 — Resolve known test failures
+
+**Scope:** Owner authorized fixing previous failures regardless of who caused
+them. Preserve the unrelated original checkout. Restore meaningful full-suite
+coverage without disabling tests or weakening runtime context/effect safeguards.
+
+### Result
+
+**IN PROGRESS (2026-09-07).** The nine previous failures reproduce in context
+fixtures, saved-session lifecycle and queued-mutation recovery. Additional
+coverage protects workspace alias resumption and executor-query responsiveness.
+Receipt queries now run outside the Session process, retaining the queued-input
+barrier until a terminal receipt is durable. A linked monitor stops the query
+worker if its session dies, including untrappable exits; the executor's pending
+mutation is left intact. Existing effect crash/reconciliation semantics remain.
+
+Saved-session lookup recognizes filesystem-equivalent directory paths, including
+macOS temporary-path aliases. Resume derives its runtime workspace/effect
+identity from the saved store; live listing and deletion use the same directory
+identity check. Existing storage keys are preserved. Lookup still enumerates
+workspace buckets/files but reads only enough headers to identify each bucket,
+then loads histories only from matching workspaces.
+
+Scripted attachment/TUI fixtures supply their own skill-discovery home. The
+large-history protocol fixture declares its context budget. Queue assertions
+wait for actual assistant completion, the opaque-shell timeout fixture controls
+when the file mutation may happen, and the Rust child-inspection fixture scrolls
+to metadata below the initial viewport. The Mix test-file warning is corrected
+by identifying the versioned plugin fixture as support code. No tests were
+disabled and no runtime context limit was relaxed.
+
+Independent review found and verified the alias-deletion and owner-death fixes.
+Final full-suite verification and publication are pending.

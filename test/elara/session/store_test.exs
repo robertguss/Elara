@@ -31,6 +31,56 @@ defmodule Elara.Session.StoreTest do
     {:ok, root: root, cwd: Path.join(root, "project")}
   end
 
+  test "resuming through an alias preserves the saved workspace identity", %{cwd: cwd, root: root} do
+    File.mkdir_p!(cwd)
+    alias_path = Path.join(root, "workspace-alias")
+    File.ln_s!(cwd, alias_path)
+    {:ok, agent} = Agent.start_link(fn -> [] end)
+
+    opts = [
+      provider: {Elara.Provider.Scripted, agent},
+      tools: [],
+      plugins: [],
+      home: root,
+      skill_paths: []
+    ]
+
+    {:ok, id} = Elara.start_session([cwd: cwd, name: "saved"] ++ opts)
+    workspace_id = Elara.child_config(id).workspace_id
+    :ok = Elara.name_session(id, "saved")
+    {:ok, pid} = Elara.session_pid(id)
+    GenServer.stop(pid)
+    {:ok, info} = Store.find(alias_path, id)
+    {:ok, ^id} = Elara.start_session([cwd: alias_path, resume: info.path] ++ opts)
+    {:ok, resumed_pid} = Elara.session_pid(id)
+    on_exit(fn -> if Process.alive?(resumed_pid), do: GenServer.stop(resumed_pid) end)
+    assert Elara.child_config(id).workspace_id == workspace_id
+    assert Elara.cwd(id) == cwd
+  end
+
+  test "workspace aliases find and reopen existing saved sessions", %{cwd: cwd, root: root} do
+    File.mkdir_p!(cwd)
+    alias_path = Path.join(root, "workspace-alias")
+    File.ln_s!(cwd, alias_path)
+    {:ok, original} = Store.append(Store.new(cwd), Message.user("original"))
+    {:ok, aliased} = Store.append(Store.new(alias_path), Message.user("alias"))
+
+    for path <- [cwd, alias_path] do
+      assert MapSet.new(Enum.map(Store.list(path), & &1.id)) ==
+               MapSet.new([original.id, aliased.id])
+
+      assert {:ok, reopened} = Store.open(original.path, path)
+      assert reopened.id == original.id
+      assert {:ok, found} = Store.find(path, aliased.id)
+      assert found.id == aliased.id
+    end
+
+    other = Path.join(root, "other-workspace")
+    File.mkdir_p!(other)
+    assert Store.list(other) == []
+    assert {:error, _} = Store.open(original.path, other)
+  end
+
   test "message codecs round-trip domain structs" do
     calls = [
       %ToolCall{id: "call-1", name: "read", args: {:ok, %{"path" => "README.md"}}},

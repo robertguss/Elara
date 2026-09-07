@@ -238,19 +238,59 @@ defmodule Elara.Session.Store do
   def list(cwd, opts \\ []) when is_binary(cwd) do
     cwd = Path.expand(cwd)
 
-    with {:ok, root} <- root(),
-         {:ok, names} <- File.ls(Path.join(root, cwd_key(cwd))) do
-      dir = Path.join(root, cwd_key(cwd))
+    with {:ok, root} <- root() do
+      # Keep existing path-derived storage keys readable through filesystem aliases.
+      Path.wildcard(Path.join(root, "*"))
+      |> Enum.flat_map(fn directory ->
+        paths = Path.wildcard(Path.join(directory, "*.jsonl"))
 
-      names
-      |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
-      |> Enum.flat_map(
-        &info_for_path(Path.join(dir, &1), cwd, Keyword.get(opts, :include_empty, false))
-      )
+        stored_cwd =
+          Enum.find_value(paths, fn path ->
+            case workspace_header(path) do
+              cwd when is_binary(cwd) ->
+                if cwd_key(cwd) == Path.basename(directory), do: cwd
+
+              _ ->
+                nil
+            end
+          end)
+
+        if stored_cwd && same_cwd?(stored_cwd, cwd), do: paths, else: []
+      end)
+      |> Enum.flat_map(&info_for_path(&1, cwd, Keyword.get(opts, :include_empty, false)))
       |> Enum.sort_by(fn info -> {-info.timestamp, info.path} end)
     else
       _ -> []
     end
+  end
+
+  defp workspace_header(path) do
+    # One valid header per bucket identifies its workspace. Do not read unrelated histories.
+    case File.open(path, [:read], fn file ->
+           with line when is_binary(line) <- IO.read(file, :line),
+                {:ok, %{"cwd" => stored_cwd}} when is_binary(stored_cwd) <- JSON.decode(line) do
+             stored_cwd
+           else
+             _ -> nil
+           end
+         end) do
+      {:ok, cwd} -> cwd
+      _ -> nil
+    end
+  end
+
+  @doc "Whether two workspace paths name the same directory, including symlink aliases."
+  def same_cwd?(left, right) when is_binary(left) and is_binary(right) do
+    Path.expand(left) == Path.expand(right) or
+      case {File.stat(left), File.stat(right)} do
+        {{:ok, %File.Stat{type: :directory, inode: inode, major_device: device}},
+         {:ok, %File.Stat{type: :directory, inode: inode, major_device: device}}}
+        when inode > 0 ->
+          true
+
+        _ ->
+          false
+      end
   end
 
   @spec newest(String.t()) :: {:ok, Info.t()} | {:error, :no_session}
@@ -820,7 +860,7 @@ defmodule Elara.Session.Store do
   defp validate_expected_cwd(_stored_cwd, nil), do: :ok
 
   defp validate_expected_cwd(stored_cwd, expected_cwd) when is_binary(expected_cwd) do
-    if stored_cwd == Path.expand(expected_cwd), do: :ok, else: {:error, :cwd_mismatch}
+    if same_cwd?(stored_cwd, expected_cwd), do: :ok, else: {:error, :cwd_mismatch}
   end
 
   defp validate_expected_cwd(_stored_cwd, _expected_cwd), do: {:error, :cwd_mismatch}

@@ -266,7 +266,7 @@ defmodule Elara.Server do
 
     sessions =
       Elara.live_sessions()
-      |> Enum.filter(&(&1.cwd == cwd))
+      |> Enum.filter(&Elara.Session.Store.same_cwd?(&1.cwd, cwd))
       |> Enum.reduce(saved, fn status, sessions ->
         Map.put(sessions, status.id, %{
           "id" => status.id,

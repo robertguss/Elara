@@ -31,6 +31,16 @@ defmodule Elara do
 
   defp do_start_session_under(supervisor, opts) do
     cwd = Keyword.get_lazy(opts, :cwd, &File.cwd!/0)
+
+    with {:ok, provider} <- fetch_provider(opts),
+         {:ok, store} <- prepare_store(opts, cwd) do
+      start_prepared_session(supervisor, opts, provider, store)
+    end
+  end
+
+  defp start_prepared_session(supervisor, opts, provider, store) do
+    # Resuming via an alias must retain the workspace identity used by durable effects.
+    cwd = store.cwd
     tools = Keyword.get_lazy(opts, :tools, &Tool.builtins/0)
     base_system = Keyword.get_lazy(opts, :system, &Prompt.base/0)
     skills = Elara.Skills.discover(cwd, Keyword.take(opts, [:skill_paths, :home]))
@@ -44,9 +54,7 @@ defmodule Elara do
     workspace_id = Keyword.get_lazy(opts, :workspace_id, fn -> workspace_id(cwd) end)
     allowed_capabilities = Keyword.get(opts, :allowed_capabilities, :all)
 
-    with {:ok, provider} <- fetch_provider(opts),
-         {:ok, store} <- prepare_store(opts, cwd),
-         {:ok, store} <- seed_store(store, Keyword.get(opts, :seed_history, [])),
+    with {:ok, store} <- seed_store(store, Keyword.get(opts, :seed_history, [])),
          {:ok, effect_executor, effect_executor_explicit?} <-
            prepare_effect_executor(opts, tools, cwd, workspace_id) do
       effect_journal_path = Keyword.get(opts, :effect_journal_path) || effect_journal_path(store)

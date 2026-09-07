@@ -138,6 +138,11 @@ defmodule Elara.InputQueueRecoveryTest do
       match?({:ok, %{state: :consumed}}, Elara.input_status(resumed, "queued"))
     end)
 
+    # Consumed marks provider handoff, so wait for its completed assistant turn.
+    assert_eventually(fn ->
+      Enum.any?(Elara.transcript(resumed), &match?(%Message.Assistant{text: "queued done"}, &1))
+    end)
+
     assert Agent.get(resumed_agent, & &1) == []
 
     assert Enum.count(
@@ -210,24 +215,24 @@ defmodule Elara.InputQueueRecoveryTest do
 
     assert {:ok, _} = Elara.submit_input(session, attrs("active", "start live mutation"))
     assert_receive {:mutation_started, mutation_task}, @timeout
+    on_exit(:release_mutation, fn -> send(mutation_task, :release) end)
     assert {:ok, _} = Elara.submit_input(session, attrs("queued", "after live timeout"))
 
     assert_eventually(fn ->
       Enum.any?(tool_results(session), &match?(%ToolResult{outcome: {:error, "timed out"}}, &1))
     end)
 
-    assert_eventually(fn ->
-      match?({:ok, %{state: :consumed}}, Elara.input_status(session, "active"))
-    end)
+    assert_queued_input_responsive(session)
 
-    assert {:ok, %{state: :queued}} = Elara.input_status(session, "queued")
-    assert Agent.get(provider_agent, & &1) == [queued_reply]
+    assert_eventually(fn -> Agent.get(provider_agent, & &1) == [queued_reply] end)
 
     Process.sleep(75)
-    assert {:ok, %{state: :queued}} = Elara.input_status(session, "queued")
+    assert_queued_input_responsive(session)
+    assert {:ok, %{state: :consumed}} = Elara.input_status(session, "active")
     assert Agent.get(provider_agent, & &1) == [queued_reply]
 
     send(mutation_task, :release)
+    on_exit(:release_mutation, fn -> :ok end)
     job_id = only_job_id(journal_path)
 
     assert_eventually(fn ->
@@ -236,6 +241,10 @@ defmodule Elara.InputQueueRecoveryTest do
 
     assert_eventually(fn ->
       match?({:ok, %{state: :consumed}}, Elara.input_status(session, "queued"))
+    end)
+
+    assert_eventually(fn ->
+      Enum.any?(Elara.transcript(session), &match?(%Message.Assistant{text: "queued done"}, &1))
     end)
 
     assert Agent.get(provider_agent, & &1) == []
@@ -249,6 +258,79 @@ defmodule Elara.InputQueueRecoveryTest do
              Elara.transcript(session),
              &match?(%Message.Assistant{text: "queued done"}, &1)
            ) == 1
+  end
+
+  test "killing a session terminates its receipt query without killing the mutation" do
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "elara-input-owner-death-#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(root)
+    on_exit(fn -> File.rm_rf!(root) end)
+    Process.register(self(), :input_queue_recovery_owner)
+
+    executor_path = Path.join(root, "executor.sqlite3")
+    journal_path = Path.join(root, "controller.sqlite3")
+    {:ok, executor} = TestExecutor.start_link(id: "executor-1", path: executor_path)
+    Process.unlink(executor)
+
+    provider =
+      script([
+        {:ok,
+         assistant(nil, [
+           %ToolCall{
+             id: "owner-death-mutation",
+             name: "mutation",
+             args: {:ok, %{"owner" => "input_queue_recovery_owner"}}
+           }
+         ])},
+        {:ok, assistant("active timed out")},
+        {:ok, assistant("queued done")}
+      ])
+
+    {:ok, session} =
+      Elara.start_session(
+        provider: provider,
+        tools: [mutation_tool()],
+        plugins: [],
+        cwd: root,
+        effect_executor: executor,
+        effect_journal_path: journal_path,
+        tool_timeout_ms: 50
+      )
+
+    on_exit(fn ->
+      if match?({:ok, _}, Elara.session_pid(session)), do: stop_session(session)
+      if Process.alive?(executor), do: TestExecutor.close(executor)
+    end)
+
+    assert {:ok, _} = Elara.submit_input(session, attrs("active", "start mutation"))
+    assert_receive {:mutation_started, mutation_task}, @timeout
+    on_exit(fn -> send(mutation_task, :release) end)
+    assert {:ok, _} = Elara.submit_input(session, attrs("queued", "after mutation"))
+    {:ok, session_pid} = Elara.session_pid(session)
+
+    assert_eventually(fn ->
+      match?(%Task{}, :sys.get_state(session_pid).effect_recovery_task)
+    end)
+
+    %Task{pid: query_pid} = :sys.get_state(session_pid).effect_recovery_task
+    monitor = Process.monitor(query_pid)
+    assert Process.alive?(query_pid)
+    kill_session(session)
+
+    assert_receive {:DOWN, ^monitor, :process, ^query_pid, _reason}, @timeout
+    assert Process.alive?(executor)
+    assert Process.alive?(mutation_task)
+  end
+
+  defp assert_queued_input_responsive(session) do
+    task = Task.async(fn -> Elara.input_status(session, "queued") end)
+    reply = Task.yield(task, @timeout) || Task.shutdown(task, :brutal_kill)
+
+    assert {:ok, {:ok, %{state: :queued}}} = reply
   end
 
   defp mutation_tool do

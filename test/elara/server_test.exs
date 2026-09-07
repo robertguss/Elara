@@ -229,6 +229,38 @@ defmodule Elara.ServerTest do
     assert %{"type" => "session_error", "error" => "switch_first"} = recv_json(resumed)
   end
 
+  test "a workspace alias can list and delete an uncontrolled live session" do
+    root =
+      Path.join(System.tmp_dir!(), "elara-alias-delete-#{System.unique_integer([:positive])}")
+
+    cwd = Path.join(root, "workspace")
+    alias_path = Path.join(root, "alias")
+    File.mkdir_p!(cwd)
+    File.ln_s!(cwd, alias_path)
+    on_exit(fn -> File.rm_rf!(root) end)
+
+    {:ok, target} =
+      Elara.start_session(cwd: cwd, provider: script([]), tools: [], home: root, skill_paths: [])
+
+    :ok = Elara.name_session(target, "delete through alias")
+    {:ok, target_pid} = Elara.session_pid(target)
+    on_exit(fn -> if Process.alive?(target_pid), do: GenServer.stop(target_pid) end)
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+    socket = connect(Elara.Server.port(server))
+    send_json(socket, %{"version" => 2, "command" => "create", "cwd" => alias_path})
+    assert %{"type" => "attached", "session_id" => current} = recv_json(socket)
+    {:ok, current_pid} = Elara.session_pid(current)
+    on_exit(fn -> if Process.alive?(current_pid), do: GenServer.stop(current_pid) end)
+    send_json(socket, %{"version" => 2, "command" => "session_list"})
+    assert %{"type" => "session_list", "sessions" => sessions} = recv_json(socket)
+    assert %{"state" => "idle"} = Enum.find(sessions, &(&1["id"] == target))
+    send_json(socket, %{"version" => 2, "command" => "session_delete", "session_id" => target})
+    assert %{"type" => "session_result", "command" => "session_delete"} = recv_json(socket)
+    assert {:error, :session_not_found} = Elara.session_pid(target)
+    assert {:error, :session_not_found} = Elara.Session.Store.find(alias_path, target)
+    :gen_tcp.close(socket)
+  end
+
   test "observers can list and tree but cannot mutate" do
     assistant = asst("done")
     provider = script([{:stream, [{:sleep, 300}], {:ok, assistant}}])

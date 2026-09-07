@@ -220,20 +220,23 @@ defmodule Elara.Effect.OpaqueShellTest do
   @tag repeated_cross_class: true
   test "S-TIMEOUT reports possible execution without blocking on the busy executor", context do
     {job, journal, executor, task, pid} = start_lifecycle(context, timeout: 300)
-    File.touch!(context.allow_effect)
-    await_file(context.primary)
 
+    # Keep the effect gated until the timeout snapshot is complete; waiting for
+    # the file afterward cannot change a result the sidecar already returned.
     assert %Result{
              status: :terminal,
              outcome: {:indeterminate, message},
-             workspace: %Workspace{state: :exact_postimage},
+             workspace: %Workspace{state: :absent},
              process_lifetime: :alive,
              causal: :unproven,
              historical: :unknown,
-             safe_action: :postcondition_satisfied_no_retry
+             safe_action: :manual_investigation
            } = Task.await(task, @bound_ms)
 
     assert message =~ "completion_timeout"
+    refute File.exists?(context.primary)
+    File.touch!(context.allow_effect)
+    await_file(context.primary)
     kill_executor(executor)
     reopened = start_executor(context.executor_path)
 

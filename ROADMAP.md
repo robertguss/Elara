@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-07 (DIAG-1 and
-> JOB-6 live driver ownership) · **Owner:** solo development
+> JOB-7 live edit replace_all feature) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,10 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-7:** IN PROGRESS; repeat the full live coding workflow with the normal
+provider and JOB-6 observer. Add opt-in exact-text `edit.replace_all`, retain
+unique-match defaults, and verify red/green supervised jobs plus host review.
 
 **JOB-6:** DONE; observer and live script pushed in `dbc832a` / `5fbd299` on
 `codex/live-driver-ownership`. Twelve driver regressions pass. The normal-provider
@@ -128,11 +132,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Repeat a small real coding task with the corrected normal-provider
-observer, using a bounded feature contract and preserving the full attempt plus
-any explicit assistance. This reassesses JOB-5 without its provider-wrapper
-confound before changing context or retry policy. JOB-4 through JOB-6 remain
-stacked; no merge is authorized in this step. Dedicated evals remain deferred.
+**Next action:** Complete JOB-7's bounded live attempt, review its patch, verify
+local/public/remote behavior, document assistance and results, then commit and
+push. JOB-4 through JOB-7 remain stacked; no merge in this step. Dedicated evals
+remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -322,6 +325,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-4    | DONE        | Naturally longer repository context-recovery test job    | JOB-3            |
 | JOB-5    | DONE        | Live feature implementation: optional line-range reads   | JOB-4            |
 | JOB-6    | DONE        | Live driver metadata, handoff observation and resume    | JOB-5            |
+| JOB-7    | IN PROGRESS | Live feature: opt-in exact-text edit replace_all | JOB-6 |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -3128,3 +3132,25 @@ policy or eval framework changed. Temporary empty experiment home removed;
 persistent session and terminal job retained. Evidence:
 [public live record](docs/fixtures/live-driver-ownership-2026-09-07.json) and
 [experiment assessment](docs/harness-experiments.md).
+
+
+## JOB-7 — Live edit replace_all feature
+
+**Scope:** Owner authorized the next experiment on 2026-09-07. A normal-provider
+session uses JOB-6 observation to author failing tests, implement optional
+boolean `edit.replace_all`, and verify through two supervised test jobs.
+Omitted/false retains exactly-one-match semantics. True replaces non-overlapping
+literal matches in one pass. Missing/empty old text and invalid options fail
+without mutation; empty replacement is allowed. Preserve file bytes, ordinary
+errors and existing authority boundaries. Publish edit tool version 2 and verify
+worker compatibility. Model scope is the two tool modules, a focused new test
+file and README usage; host owns review, remote checks and experiment evidence.
+No context, retry, job, UI or dedicated eval changes.
+
+### Result
+
+**IN PROGRESS.** Started from pushed JOB-6 checkpoint `b5dbcc5` on
+`codex/edit-replace-all`. Prior branch was already fully pushed. Live driver
+records the exact prompt, public transcript, job results and original model
+patch separately from host review. One initial prompt, a 32-iteration turn
+limit and a five-minute observer deadline bound the attempt.

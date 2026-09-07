@@ -58,6 +58,7 @@ defmodule Elara.Session do
       :effect_journal_path,
       :effect_executor,
       :effect_executor_explicit?,
+      :effect_recovery_task,
       :effect_fault_hook,
       :base_system,
       :context_limit,
@@ -197,6 +198,7 @@ defmodule Elara.Session do
 
   @impl true
   def terminate(_reason, shell) do
+    if shell.effect_recovery_task, do: Task.shutdown(shell.effect_recovery_task, :brutal_kill)
     close_effect_journal(shell.effect_journal)
     FlightRecorder.close(shell.recorder)
     Store.release(shell.store)
@@ -632,7 +634,7 @@ defmodule Elara.Session do
 
   def handle_call({:session_delete, requesting_cwd}, _from, shell) do
     cond do
-      Path.expand(requesting_cwd) != shell.cwd ->
+      not Store.same_cwd?(requesting_cwd, shell.cwd) ->
         {:reply, {:error, :session_not_found}, shell}
 
       Handoff.frozen?(shell.store) ->
@@ -685,19 +687,52 @@ defmodule Elara.Session do
     end
   end
 
-  def handle_info(:check_effect_recovery, shell) do
-    case pending_receipt_effects(shell) do
-      [] ->
-        shell = %{shell | effect_recovery_pending: []}
-        {shell, recovered?} = finish_restart_recovery(shell)
-        if recovered?, do: send(self(), :inbox_changed)
-        send(self(), :drain_inputs)
-        {:noreply, shell}
+  def handle_info(:check_effect_recovery, %{effect_recovery_task: %Task{}} = shell),
+    do: {:noreply, shell}
 
-      pending ->
-        Process.send_after(self(), :check_effect_recovery, 25)
-        {:noreply, %{shell | effect_recovery_pending: pending}}
+  def handle_info(:check_effect_recovery, shell) do
+    pending = pending_receipt_effects(shell)
+
+    if pending == [] do
+      {:noreply, finish_effect_recovery(%{shell | effect_recovery_pending: []})}
+    else
+      executor = shell.effect_executor
+      owner = self()
+
+      task =
+        Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
+          watch_recovery_owner(owner)
+
+          for %Job{} = job <- pending do
+            {job, safe_executor_query(executor, job.job_id)}
+          end
+        end)
+
+      {:noreply, %{shell | effect_recovery_pending: pending, effect_recovery_task: task}}
     end
+  end
+
+  def handle_info({ref, observations}, %{effect_recovery_task: %Task{ref: ref}} = shell) do
+    Process.demonitor(ref, [:flush])
+
+    for {%Job{operation_digest: digest}, {state, %Record{operation_digest: digest} = record}} <-
+          observations,
+        state in [:completed, :failed] do
+      ControllerJournal.observe(shell.effect_journal, record)
+    end
+
+    shell = %{shell | effect_recovery_task: nil}
+
+    {:noreply,
+     finish_effect_recovery(%{shell | effect_recovery_pending: pending_receipt_effects(shell)})}
+  end
+
+  def handle_info(
+        {:DOWN, ref, :process, _pid, _reason},
+        %{effect_recovery_task: %Task{ref: ref}} = shell
+      ) do
+    Process.send_after(self(), :check_effect_recovery, 25)
+    {:noreply, %{shell | effect_recovery_task: nil}}
   end
 
   def handle_info({:finish_input, outcome}, shell) do
@@ -932,19 +967,36 @@ defmodule Elara.Session do
         true
 
       _ ->
-        query_receipt_terminal?(shell, job)
+        false
     end
   end
 
-  defp query_receipt_terminal?(shell, job) do
-    case safe_executor_query(shell.effect_executor, job.job_id) do
-      {state, %Record{operation_digest: digest} = record}
-      when state in [:completed, :failed] and digest == job.operation_digest ->
-        match?({:ok, _}, ControllerJournal.observe(shell.effect_journal, record))
+  defp watch_recovery_owner(owner) do
+    worker = self()
 
-      _not_terminal_or_authoritative ->
-        false
-    end
+    # A blocked GenServer.call cannot handle DOWN itself. This linked watcher
+    # also covers :kill, which bypasses the session's terminate callback.
+    spawn_link(fn ->
+      owner_ref = Process.monitor(owner)
+      worker_ref = Process.monitor(worker)
+
+      receive do
+        {:DOWN, ^owner_ref, :process, ^owner, _} -> Process.exit(worker, :kill)
+        {:DOWN, ^worker_ref, :process, ^worker, _} -> :ok
+      end
+    end)
+  end
+
+  defp finish_effect_recovery(%{effect_recovery_pending: []} = shell) do
+    {shell, recovered?} = finish_restart_recovery(shell)
+    if recovered?, do: send(self(), :inbox_changed)
+    send(self(), :drain_inputs)
+    shell
+  end
+
+  defp finish_effect_recovery(shell) do
+    Process.send_after(self(), :check_effect_recovery, 25)
+    shell
   end
 
   defp safe_executor_query(nil, _job_id), do: :unavailable
@@ -2412,6 +2464,8 @@ defmodule Elara.Session do
       shell
       | effect_recovery_pending: pending_receipt_effects(%{shell | effect_recovery_pending: jobs})
     }
+
+    if shell.effect_recovery_pending != [], do: send(self(), :check_effect_recovery)
 
     case Handoff.prepare(shell) do
       {:ok, shell} ->

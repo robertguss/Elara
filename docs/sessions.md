@@ -25,6 +25,12 @@ sidecars exist only while a database is open and may have a mode determined by
 SQLite and the process umask. Starting plain `mix elara.chat` creates a new
 session; it does not silently continue an old one.
 
+Directory aliases that resolve to the same existing directory share session
+listing and lookup, including macOS `/var` and `/private/var` paths. Resuming
+keeps the saved workspace path and effect identity. Existing storage keys and
+files are preserved; lookup reads a header from each workspace bucket to find
+aliases before loading matching histories.
+
 Only one turn runs in a session at a time. A second prompt and commands that
 change history are refused until the active turn finishes or you run
 `/interrupt`. Provider failures return to the `> ` prompt without ending chat.

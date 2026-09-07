@@ -211,6 +211,9 @@ defmodule Elara.TuiTest do
             {:ok, asst("accepted")}
           ]),
         tools: [],
+        cwd: Path.dirname(context.state_dir),
+        home: Path.dirname(context.state_dir),
+        skill_paths: [],
         persist: false
       )
 
@@ -260,6 +263,8 @@ defmodule Elara.TuiTest do
             {:ok, asst("accepted")}
           ]),
         cwd: cwd,
+        home: cwd,
+        skill_paths: [],
         persist: false
       )
 

@@ -220,6 +220,9 @@ defmodule Elara.ProtocolV2Test do
     {:ok, session} =
       Elara.start_session(
         provider: script(List.duplicate({:ok, asst("answer")}, turns)),
+        home: System.tmp_dir!(),
+        skill_paths: [],
+        context_limit: 1_000_000,
         tools: [],
         persist: false
       )

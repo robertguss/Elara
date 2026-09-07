@@ -633,3 +633,10 @@ The interactive TUI tests also require Python 3 and a Unix PTY. Tests use
 `Elara.Provider.Scripted` and do not call external networks. One
 crash-recovery test intentionally logs a `RuntimeError) boom` error; the final
 test result determines whether the run passed.
+
+Tests that are not exercising discovery should supply a fixture `home` and
+`skill_paths: []` when starting sessions, so local user skills cannot change
+request size or trigger a context handoff. Large-history protocol fixtures use
+an explicit `context_limit`; production context safeguards remain enabled.
+Queued input consumption is not completion: await the assistant result when
+asserting that the provider has finished.

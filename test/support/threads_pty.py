@@ -117,7 +117,10 @@ try:
     resize(120, 40)
     send(b"PTY coding")
     send(b"\t")
-    wait(lambda: b"parent_id" in output, "Tab inspects durable child metadata")
+    wait_visible(lambda: b"Inspection" in output, "Tab opens durable child metadata")
+    # Completion notifications can push parent_id below the initial viewport.
+    send(b"\x1b[6~")
+    wait_visible(lambda: b"parent_id" in output, "scroll inspects durable parent metadata")
     send(b"\x1b")
     command("/children")
     send(b"PTY coding\r")

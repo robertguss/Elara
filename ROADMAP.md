@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (DIAG-1 and
-> JOB-1–JOB-3 integration) · **Owner:** solo development
+> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (TEST-1
+> full-suite cleanup complete) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,12 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**TEST-1:** DONE. Fixes in `c6ebf10`, integrated with the supervised test-job
+stack in `110d75c`. All **497 Mix tests** and **121 Rust tests** pass. Recovery
+queries stay responsive and stop with their session; workspace aliases preserve
+session/effect identity; test fixtures no longer depend on local skills or
+racy completion assumptions. Historical suite failures below precede TEST-1.
 
 **DIAG-1:** DONE; original implementation `1b24bfe`, merged in `f54350e`.
 The citation-range correction removes the arbitrary 10-line maximum while
@@ -107,10 +113,9 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Exercise the existing `test/elara/context_test.exs` as a naturally
-longer supervised repository job, with the live driver kept attached across
-provider errors. The JOB-1/JOB-2/JOB-3 integration with DIAG-1 is verified. Dedicated evals, broader job types,
-physical-terminal acceptance and the SPLIT-5 owner checkpoint remain deferred.
+**Next action:** Owner selection of the next experiment. The longer supervised
+context-test experiment, dedicated evals, broader job types, physical-terminal
+acceptance and the SPLIT-5 owner checkpoint remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -297,6 +302,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
+| TEST-1   | DONE | Resolve known suite failures and verify full regression coverage | DIAG-1, JOB-3 |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -2961,3 +2967,50 @@ saved-session listing and thread PTY/session discovery. Both queued-recovery
 cases and the provider HTTP fixture pass this run; this merge does not repair
 them. All context-recovery checks pass. Local merge review found no additional
 code changes needed beyond preserving both built-in tool registrations.
+
+
+## TEST-1 — Resolve known test failures
+
+**Scope:** Owner authorized fixing previous failures regardless of who caused
+them. Preserve the unrelated original checkout. Restore meaningful full-suite
+coverage without disabling tests or weakening runtime context/effect safeguards.
+
+### Result
+
+**DONE (2026-09-07).** Fixes in `c6ebf10`; integrated with main's supervised
+test-job work in `110d75c`. The nine previous failures reproduced in context
+fixtures, saved-session lifecycle and queued-mutation recovery. Additional
+coverage protects workspace alias resumption and executor-query responsiveness.
+Receipt queries now run outside the Session process, retaining the queued-input
+barrier until a terminal receipt is durable. A linked monitor stops the query
+worker if its session dies, including untrappable exits; the executor's pending
+mutation is left intact. Existing effect crash/reconciliation semantics remain.
+
+Saved-session lookup recognizes filesystem-equivalent directory paths, including
+macOS temporary-path aliases. Resume derives its runtime workspace/effect
+identity from the saved store; live listing and deletion use the same directory
+identity check. Existing storage keys are preserved. Lookup still enumerates
+workspace buckets/files but reads only enough headers to identify each bucket,
+then loads histories only from matching workspaces.
+
+Scripted attachment/TUI fixtures supply their own skill-discovery home. The
+large-history protocol fixture declares its context budget. Queue assertions
+wait for actual assistant completion, the opaque-shell timeout fixture controls
+when the file mutation may happen, and the Rust child-inspection fixture scrolls
+to metadata below the initial viewport. The Mix test-file warning is corrected
+by identifying the versioned plugin fixture as support code. No tests were
+disabled and no runtime context limit was relaxed.
+
+Independent review found and verified the alias-deletion and owner-death fixes.
+The complete pre-integration suite passed **480/480** in 119.6 seconds. After
+merging main `63d3dab` and preserving its Git-root assertion and job experiment
+history, the integrated suite passes **497/497** in 129.8 seconds. All tests
+remain enabled. Four new regressions cover alias lookup, alias resume identity,
+alias live deletion and recovery-worker death with its owner.
+
+Both native crates pass formatting, Clippy with warnings denied and all **121
+Rust tests** (115 TUI, 6 execution stub). Mix formatting and compilation with
+warnings denied pass. The newly integrated opt-in live driver is also identified
+as support code, removing its discovery warning; the roadmap checks pass after
+that filter change. Independent review is clear. The original checkout's 15
+unrelated files retain their original hashes. No live-model call was needed.

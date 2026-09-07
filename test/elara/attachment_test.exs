@@ -134,7 +134,13 @@ defmodule Elara.AttachmentTest do
     {:ok, agent} = Agent.start_link(fn -> [{:ok, assistant}, {:ok, assistant}] end)
 
     {:ok, session} =
-      Elara.start_session(provider: {Elara.Provider.Scripted, agent}, cwd: cwd, persist: false)
+      Elara.start_session(
+        provider: {Elara.Provider.Scripted, agent},
+        cwd: cwd,
+        home: cwd,
+        skill_paths: [],
+        persist: false
+      )
 
     {:ok, pid} = Elara.session_pid(session)
     on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -150,6 +156,8 @@ defmodule Elara.AttachmentTest do
       Elara.start_session(
         provider: {Elara.Provider.Scripted, agent},
         cwd: cwd,
+        home: cwd,
+        skill_paths: [],
         persist: false,
         seed_history: Elara.Session.Store.history(reopened)
       )
@@ -168,7 +176,15 @@ defmodule Elara.AttachmentTest do
       {Elara.Provider.OpenAI,
        %Elara.Provider.OpenAI{model: "test", base_url: "http://127.0.0.1:1", api_key: "test"}}
 
-    {:ok, session} = Elara.start_session(provider: provider, cwd: cwd, persist: false)
+    {:ok, session} =
+      Elara.start_session(
+        provider: provider,
+        cwd: cwd,
+        home: cwd,
+        skill_paths: [],
+        persist: false
+      )
+
     {:ok, pid} = Elara.session_pid(session)
     on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
@@ -185,7 +201,13 @@ defmodule Elara.AttachmentTest do
     {:ok, agent} = Agent.start_link(fn -> [] end)
 
     {:ok, session} =
-      Elara.start_session(provider: {Elara.Provider.Scripted, agent}, cwd: cwd, persist: false)
+      Elara.start_session(
+        provider: {Elara.Provider.Scripted, agent},
+        cwd: cwd,
+        home: cwd,
+        skill_paths: [],
+        persist: false
+      )
 
     {:ok, pid} = Elara.session_pid(session)
     {:ok, server} = Elara.Server.start_link(port: 0)
@@ -280,7 +302,13 @@ defmodule Elara.AttachmentTest do
       Agent.start_link(fn -> [{:stream, ["started", {:sleep, 5_000}], {:ok, assistant}}] end)
 
     {:ok, session} =
-      Elara.start_session(provider: {Elara.Provider.Scripted, agent}, cwd: cwd, persist: false)
+      Elara.start_session(
+        provider: {Elara.Provider.Scripted, agent},
+        cwd: cwd,
+        home: cwd,
+        skill_paths: [],
+        persist: false
+      )
 
     {:ok, pid} = Elara.session_pid(session)
     on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -325,7 +353,13 @@ defmodule Elara.AttachmentTest do
     {:ok, agent} = Agent.start_link(fn -> [{:ok, assistant}] end)
 
     {:ok, session} =
-      Elara.start_session(provider: {Elara.Provider.Scripted, agent}, cwd: cwd, persist: false)
+      Elara.start_session(
+        provider: {Elara.Provider.Scripted, agent},
+        cwd: cwd,
+        home: cwd,
+        skill_paths: [],
+        persist: false
+      )
 
     {:ok, pid} = Elara.session_pid(session)
     on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -381,7 +415,13 @@ defmodule Elara.AttachmentTimeoutTest do
     {:ok, agent} = Agent.start_link(fn -> [{:ok, assistant}] end)
 
     {:ok, session} =
-      Elara.start_session(provider: {Elara.Provider.Scripted, agent}, cwd: cwd, persist: false)
+      Elara.start_session(
+        provider: {Elara.Provider.Scripted, agent},
+        cwd: cwd,
+        home: cwd,
+        skill_paths: [],
+        persist: false
+      )
 
     {:ok, pid} = Elara.session_pid(session)
 

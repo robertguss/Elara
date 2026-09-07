@@ -392,6 +392,18 @@ from the canonical old/new arguments. It is not a full-file diff or a fresh
 filesystem comparison, and failed or indeterminate edits do not claim a
 successful replacement.
 
+The `read` tool accepts optional positive integer `offset` and `limit` fields.
+For example, `{"path":"lib/elara/tools.ex","offset":10,"limit":20}` returns up
+to 20 lines starting at line 10. If either field is supplied, omitted values
+default to `offset: 1` and `limit: 200`; omitting both retains whole-file reads.
+Selected content preserves line endings and a final unterminated line, without
+line-number decoration. An offset past EOF returns empty content. The existing
+tool-output budget still applies; range reads do not impose a file-size or
+memory-allocation limit.
+The read tool is version 2; remote controllers and workers must both support
+that version. A version mismatch is rejected instead of silently treating a
+range request as a whole-file read.
+
 ## Persistent delegated children
 
 Use a long-lived `mix elara.server` for work that must continue after detaching

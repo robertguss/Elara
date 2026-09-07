@@ -10,10 +10,12 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**JOB-5:** IN PROGRESS; a live Elara coding session will implement optional line
-selection in `read`, verify a failing regression and the implementation through
-supervised test jobs, and leave a patch for host review. This is the selected
-small feature experiment; dedicated evals remain deferred.
+**JOB-5:** IN PROGRESS; the live agent implemented line selection and passed six
+regressions after an assisted fresh start. Host review preserved the selection
+logic, added schema bounds, read tool version 2 and stronger local/remote checks.
+All 48 focused tests and a real-model range read pass. Final full suite: 494/502,
+with eight known baseline failures. Publication is pending; the failed rollover
+attempt remains recorded.
 
 **JOB-4:** DONE; opt-in live driver pushed in `0b58b99` on
 `codex/longer-repository-test-job`. Real `gpt-5.5`/low ran all 15 existing
@@ -3044,6 +3046,31 @@ automatic retries, broader cleanup or eval framework in the model's scope.
 
 ### Result
 
-**IN PROGRESS.** Started from JOB-4 checkpoint `c333213` on
-`codex/read-line-ranges`. Existing `read` accepts only `path` and reads the whole
-file. No live attempt has run yet.
+**IN PROGRESS.** Started from JOB-4 checkpoint `c333213`, with experiment scope
+committed in `b2e41c8` on `codex/read-line-ranges`. The first live session wrote
+six regressions and observed five missing-feature failures through one
+supervised job. Its driver crashed during context handoff. Recovery then stalled
+on paused input delivery and eventually reached the eight-handoff chain limit.
+The counting provider wrapper lost recognized provider settings: fallback
+accounting used 128,000 instead of the configured catalog's 272,000 limit and
+reserved more uncertainty. This was not a transparent observation wrapper.
+
+A fresh normal-provider session with a supplied red-test summary completed the
+implementation in 62,241 ms: 13 assistant responses, 28 public messages, one
+743 ms supervised job, six tests passing, no handoff or extra prompt in that
+fresh run. The overall result is assisted success across sessions. Host review
+kept the line-selection implementation, added positive schema bounds, bumped
+read to tool version 2 to prevent older workers ignoring range arguments, and
+strengthened tests/docs. All 48 focused local/session/worker checks pass; a real
+configured model used the final version-2 read tool once and received the exact
+selected Unicode/CRLF bytes. The initial full run passed 493/501 with eight
+known baseline failures. The final full run passes **494/502** in 176.7 seconds,
+with the same eight failures: two attachment/context cases, two generic TUI
+cases, cold protocol history, saved-session listing, thread PTY/session discovery
+and the known intermittent queued-mutation timeout. All nine added tests pass.
+Formatting and warnings-as-errors compilation pass; all 76 local documentation
+links checked resolve. Temporary empty experiment homes are removed; persistent
+sessions and terminal jobs remain as evidence. Local review is complete.
+
+Evidence: [public live records](docs/fixtures/read-range-feature-live-2026-09-07.json).
+No provider retry or handoff policy changed. Dedicated evals remain deferred.

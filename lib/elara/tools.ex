@@ -5,12 +5,15 @@ defmodule Elara.Tools do
   alias Elara.Tool.Ctx
 
   @spec read(map(), Ctx.t()) :: Elara.Tool.outcome()
-  def read(%{"path" => path}, %Ctx{cwd: cwd}) when is_binary(path) do
-    full = Path.expand(path, cwd)
+  def read(%{"path" => path} = args, %Ctx{cwd: cwd}) when is_binary(path) do
+    with {:ok, offset} <- positive_integer_arg(args, "offset", 1),
+         {:ok, limit} <- positive_integer_arg(args, "limit", 200) do
+      full = Path.expand(path, cwd)
 
-    case File.read(full) do
-      {:ok, content} -> {:ok, content}
-      {:error, reason} -> {:error, "read failed: #{describe_posix(reason)} (#{path})"}
+      case File.read(full) do
+        {:ok, content} -> {:ok, maybe_range(content, args, offset, limit)}
+        {:error, reason} -> {:error, "read failed: #{describe_posix(reason)} (#{path})"}
+      end
     end
   end
 
@@ -93,6 +96,53 @@ defmodule Elara.Tools do
     {:error,
      "output truncated: bytes_total=#{result.bytes_total} bytes_sent=#{result.bytes_sent}\n" <>
        result.output}
+  end
+
+  defp positive_integer_arg(args, key, default) do
+    case Map.fetch(args, key) do
+      :error -> {:ok, default}
+      {:ok, value} when is_integer(value) and value > 0 -> {:ok, value}
+      {:ok, _value} -> {:error, "read #{key} must be a positive integer"}
+    end
+  end
+
+  defp maybe_range(content, args, offset, limit) do
+    if Map.has_key?(args, "offset") or Map.has_key?(args, "limit") do
+      content
+      |> drop_lines(offset - 1)
+      |> take_lines(limit, [])
+    else
+      content
+    end
+  end
+
+  defp drop_lines(content, 0), do: content
+  defp drop_lines("", _count), do: ""
+
+  defp drop_lines(content, count) do
+    content
+    |> line_rest()
+    |> drop_lines(count - 1)
+  end
+
+  defp take_lines(_content, 0, acc), do: IO.iodata_to_binary(Enum.reverse(acc))
+  defp take_lines("", _count, acc), do: IO.iodata_to_binary(Enum.reverse(acc))
+
+  defp take_lines(content, count, acc) do
+    {line, rest} = next_line(content)
+    take_lines(rest, count - 1, [line | acc])
+  end
+
+  defp line_rest(content) do
+    {_line, rest} = next_line(content)
+    rest
+  end
+
+  defp next_line(content) do
+    case :binary.match(content, "\n") do
+      :nomatch -> {content, ""}
+      {index, 1} -> :erlang.split_binary(content, index + 1)
+    end
   end
 
   defp describe_posix(:enoent), do: "no such file"

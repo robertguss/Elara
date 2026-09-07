@@ -439,3 +439,90 @@ on main merge `63d3dab`. All five live acceptance checks pass; formatting and tw
 roadmap tests pass. The merge's broader checks are recorded above. Full prompt,
 public transcript, job output, hashes and timings are in the
 [evidence artifact](fixtures/test-job-repository-context-2026-09-07.json).
+
+
+## 2026-09-07: Live line-range read feature — JOB-5
+
+**Question:** Can a live Elara session take a small harness feature from a
+supplied contract through failing tests, implementation and supervised
+verification, leaving a useful patch for host review?
+
+**Feature added:** `read` accepts optional positive integer `offset` and `limit`.
+Offsets are one-based; once either field is supplied, missing values default to
+1 and 200. Path-only reads retain their old whole-file behavior. Selected bytes
+preserve LF/CRLF, Unicode and an unterminated last line; offsets past EOF return
+empty content. Validation errors and file errors remain ordinary tool results.
+The existing output cap applies; the implementation still reads the file into
+memory. Read is now tool version 2, so worker version checks reject incompatible
+peers rather than silently ignoring range arguments. See the README usage.
+
+**Overall result: assisted feature completion, not one autonomous success.**
+
+| Stage | Observed outcome |
+| --- | --- |
+| Initial live session `MEnvaTWeZn28OE_2ha9oOw` | Authored six regressions; one 539 ms job produced five expected failures and one compatibility pass. No runtime implementation yet. |
+| Driver failure | A context handoff emitted interruption; the driver tried another prompt, received `busy`, and exited. The test and terminal job record survived. |
+| First recovery | Reopened the successor and repeated the assignment. Its next handoff remained paused, as persisted input policy required; the driver waited without resuming it. |
+| Second recovery | Explicit input resume and owner-following progressed through the chain, but repeated context reads reached the existing eight-handoff limit without implementation. Two generic continuation prompts did not help. |
+| Fresh configured-provider session `M8baLOpgdqLVGeD55RdJnQ` | Supplied concise red-test evidence and instructions to avoid a full README reread. Authored the implementation/schema/docs, passed six tests in one 743 ms supervised job, inspected status and finished. 62,241 ms total, 13 assistant responses, 28 public messages, no handoff or further prompt. |
+| Host review | Preserved the selection algorithm; strengthened schema, docs and tests, and added version-2 worker compatibility enforcement. |
+| Final live tool exercise `IGAX0wnt1YKFITHnmbaDeg` | Normal configured model used read exactly once with offset 2/limit 2, receiving exact `α\r\nβ\n` bytes. Two assistant responses; pass. |
+
+The first and fresh sessions each had one test-job start and one logical
+completion. Recovery inspected the original job repeatedly across sessions but
+did not execute it again. One start and durable record are observed per job;
+repository tests were not instrumented with a physical execution counter.
+
+### What the failed attempt teaches
+
+The temporary counting provider wrapper was **not transparent**. The current
+`Provider.Visibility.settings/1` recognizes the concrete Codex provider module;
+the wrapper falls through to unknown settings. `Context.budget/2` therefore uses
+its 128,000 fallback limit with greater uncertainty, while the normal configured
+provider selects this checkout's 272,000 catalog limit. These are local harness
+accounting values, not a measurement of actual provider capacity. Repeated full
+reads and handoff indexes consumed the conservative budget. The successful run
+changed both provider configuration and prompt/history, so it does not isolate
+which intervention caused the improvement or prove normal sessions would hit
+the same rollover loop.
+
+The driver also assumed one session ID for a logical task and initially treated
+handoff interruption as a provider failure. Fixing owner following was necessary
+but insufficient: resumed input delivery retained its pause, and explicit input
+resume was required. These are driver integration failures and useful harness
+observations. They do not justify weakening pause preservation or raising the
+handoff limit. Further context-policy changes need an unwrapped reproduction.
+
+### Review, practicality and next step
+
+The live model supplied the regression suite and all line-selection logic.
+Host review found that the default-200 and final-line behavior needed stronger
+coverage. Added checks cover binary/newline preservation, file errors and the
+public session path. The remote worker resolves tools by name/version; leaving
+read at version 1 would allow an older peer to ignore new arguments. Host work
+added version 2, a real remote range test, wrong-version rejection and schema
+minimums. No provider, pause, job or handoff policy changed.
+
+This is useful functionality: agents can request a source excerpt without a
+shell command or returning the whole file to model context. Its implementation
+is portable Elixir code, not evidence of a unique BEAM advantage. The supervised
+job retained its failed result through driver loss and later produced a verified
+passing result; the difficult part of this exercise was carrying the live
+workflow across context and driver boundaries.
+
+The next recommended experiment is to make the live driver follow logical
+ownership and preserve provider metadata through observation, then repeat a
+small coding task. That work is not started. Dedicated evals remain deferred.
+The [public records](fixtures/read-range-feature-live-2026-09-07.json) retain
+prompts, the original model patch/tests, job outputs, recovery details and the
+fresh successful transcript. Provider-private state is omitted. Canonical check
+counts and publication status belong to [JOB-5](../ROADMAP.md#job-5--live-feature-implementation-with-supervised-tests).
+
+
+**Final verification:** 48 focused tests pass, including local/session behavior
+and remote execution/version rejection. Formatting and warnings-as-errors
+compilation pass. Full suite: **494/502** in 176.7 seconds; all nine added tests
+pass. The eight remaining failures match the preceding 493/501 run and earlier
+baseline categories, including intermittent queued-mutation recovery. All 76
+local documentation links checked resolve. Temporary empty experiment homes
+were removed; persisted sessions and terminal jobs remain intentional evidence.

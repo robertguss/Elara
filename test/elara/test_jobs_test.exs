@@ -11,6 +11,7 @@ defmodule Elara.TestJobsTest do
 
       receive do
         {:answer, answer} -> {:ok, answer, owner}
+        {:fail, error} -> {:error, error, owner}
       end
     end
 
@@ -98,6 +99,124 @@ defmodule Elara.TestJobsTest do
   defp inbox(session) do
     {:ok, pid} = Elara.session_pid(session)
     GenServer.call(pid, :thread_store).inbox
+  end
+
+  defp start_for_recovery(session) do
+    :ok = Elara.subscribe(session)
+    :ok = Elara.ask_async(session, "run the focused test")
+    assert_receive {:model, model, _}, 2000
+
+    call = %Message.ToolCall{
+      id: "recovery-start",
+      name: "test_job",
+      args: {:ok, %{"action" => "start", "job_id" => "focused", "target" => "test/job_test.exs"}}
+    }
+
+    answer(model, nil, [call])
+    assert_receive {:model, model, _}, 2000
+    model
+  end
+
+  defp fail_provider(model, session) do
+    error = %Elara.Provider.Error{
+      kind: :bad_response,
+      message: "injected empty assistant response"
+    }
+
+    send(model, {:fail, error})
+    assert_receive {:elara, ^session, {:turn_ended, {:provider_error, ^error}}}, 2000
+  end
+
+  test "attached session continues on later completion after a provider failure",
+       %{session: session, ctx: ctx, root: root} do
+    model = start_for_recovery(session)
+    await(fn -> File.exists?(Path.join(root, "started")) end)
+    fail_provider(model, session)
+    File.write!(Path.join(root, "release"), "")
+    assert_receive {:model, model, request}, 5000
+    completion = List.last(request.messages)
+    assert completion.agent_source["message_id"] == "focused"
+    assert completion.text =~ "passed"
+    answer(model, "Recovered from the later completion.")
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, _}}}, 2000
+    assert status(ctx)["status"] == "passed"
+
+    assert {:ok, %{state: :consumed}} =
+             Elara.input_status(session, "test-job:" <> status(ctx)["key"])
+
+    refute_receive {:model, _, _}, 150
+    assert File.read!(Path.join(root, "started")) == "1"
+  end
+
+  test "failed completion interpretation survives reopen and needs explicit continuation",
+       %{session: session, ctx: ctx, root: root} do
+    model = start_for_recovery(session)
+    answer(model, "Waiting for completion.")
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, _}}}, 2000
+    File.write!(Path.join(root, "release"), "")
+    assert_receive {:model, model, request}, 5000
+    assert List.last(request.messages).agent_source["message_id"] == "focused"
+    input_id = "test-job:" <> status(ctx)["key"]
+    assert {:ok, %{state: :consumed}} = Elara.input_status(session, input_id)
+    fail_provider(model, session)
+    await(fn -> match?({:ok, %{state: :failed}}, Elara.input_status(session, input_id)) end)
+    assert {:ok, %{state: :failed, error: reason}} = Elara.input_status(session, input_id)
+    assert reason =~ "injected empty assistant response"
+    :ok = Elara.resume_inputs(session)
+    refute_receive {:model, _, _}, 150
+
+    {:ok, pid} = Elara.session_pid(session)
+    store = GenServer.call(pid, :thread_store)
+    GenServer.stop(pid)
+
+    assert {:ok, ^session} =
+             Elara.start_session(
+               resume: store.path,
+               cwd: root,
+               home: root,
+               skill_paths: [],
+               plugins: [],
+               pause_inputs: false,
+               provider: {Controlled, self()}
+             )
+
+    {:ok, resumed} = Elara.session_pid(session)
+    on_exit(fn -> if Process.alive?(resumed), do: GenServer.stop(resumed) end)
+    :ok = Elara.subscribe(session)
+    :ok = Elara.resume_inputs(session)
+    assert {:ok, %{state: :failed}} = Elara.input_status(session, input_id)
+    refute_receive {:model, _, _}, 150
+
+    :ok =
+      Elara.ask_async(session, "Interpret the retained completion without rerunning the test.")
+
+    assert_receive {:model, model, request}, 2000
+    [retained] = Enum.filter(request.messages, &match?(%Message.User{agent_source: %{}}, &1))
+    assert retained.agent_source["message_id"] == "focused"
+    assert retained.text =~ "passed"
+    answer(model, "Retained test result passes.")
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, _}}}, 2000
+    refute_receive {:model, _, _}, 150
+    assert File.read!(Path.join(root, "started")) == "1"
+    assert status(ctx)["status"] == "passed"
+    assert {:ok, %{state: :failed}} = Elara.input_status(session, input_id)
+  end
+
+  test "provider failure does not override an explicit pause before completion",
+       %{session: session, ctx: ctx, root: root} do
+    model = start_for_recovery(session)
+    fail_provider(model, session)
+    Elara.interrupt(session)
+    File.write!(Path.join(root, "release"), "")
+    await(fn -> status(ctx)["delivery"] == "accepted" end)
+    assert {:ok, %{state: state}} = Elara.input_status(session, "test-job:" <> status(ctx)["key"])
+    assert state in [:queued, :accepted]
+    refute_receive {:model, _, _}, 150
+    :ok = Elara.resume_inputs(session)
+    assert_receive {:model, model, _}, 2000
+    answer(model, "Explicitly resumed completion.")
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, _}}}, 2000
+    assert File.read!(Path.join(root, "started")) == "1"
   end
 
   test "public tool starts a real test and one completion wakes the idle agent without polling",

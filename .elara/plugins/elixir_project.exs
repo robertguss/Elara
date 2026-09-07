@@ -2,11 +2,12 @@ defmodule ElixirProjectPlugin do
   @behaviour Elara.Plugin
 
   alias Elara.Plugin.ToolSpec
+  alias Elara.CheckEvidence
 
   @max_output_bytes 8_000
 
   @impl true
-  def metadata, do: %{id: "elixir_project", version: "2"}
+  def metadata, do: %{id: "elixir_project", version: "3"}
 
   @impl true
   def tools do
@@ -20,10 +21,11 @@ defmodule ElixirProjectPlugin do
       %ToolSpec{
         name: "elixir_check",
         description:
-          "Run Elixir project checks with compact output. Use 'all' before completing a code change.",
+          "Run Elixir project checks with compact output. Select up to four evidence_paths before running to retain source excerpts for diagnose_check. Use 'all' before completing a code change.",
         parameters: %{
           "type" => "object",
           "properties" => %{
+            "evidence_paths" => evidence_paths_schema(),
             "check" => %{
               "type" => "string",
               "enum" => ["all", "format", "compile"],
@@ -36,10 +38,11 @@ defmodule ElixirProjectPlugin do
       %ToolSpec{
         name: "elixir_test",
         description:
-          "Run the whole ExUnit suite or a focused test file/path:line. Returns compact failure output.",
+          "Run the whole ExUnit suite or a focused test file/path:line. Select up to four evidence_paths to capture source before running; the focused test file is captured by default. Returns an evidence_run_id for check_evidence and diagnose_check.",
         parameters: %{
           "type" => "object",
           "properties" => %{
+            "evidence_paths" => evidence_paths_schema(),
             "target" => %{
               "type" => "string",
               "description" => "Optional test file or path:line; omit to run the full suite"
@@ -120,16 +123,11 @@ defmodule ElixirProjectPlugin do
               [{"compile", ["compile", "--warnings-as-errors"]}]
           end
 
-        {status, output, duration_ms} = run_checks(checks, ctx.cwd)
+        commands = Enum.map(checks, fn {_name, arguments} -> ["mix" | arguments] end)
 
-        finish_run(
-          state,
-          "check:#{check}",
-          {"elixir_check", %{"check" => check}},
-          status,
-          duration_ms,
-          output
-        )
+        recorded_run(state, "check:#{check}", {"elixir_check", args}, ctx, commands, fn ->
+          run_checks(checks, ctx.cwd)
+        end)
 
       _other ->
         {{:error, "check must be one of: all, format, compile"}, state}
@@ -139,22 +137,23 @@ defmodule ElixirProjectPlugin do
   def handle_tool("elixir_test", args, ctx, state) do
     case Map.get(args, "target") do
       nil ->
-        {status, output, duration_ms} = run_mix(["test"], ctx.cwd)
-        finish_run(state, "test:all", {"elixir_test", %{}}, status, duration_ms, output)
+        recorded_run(state, "test:all", {"elixir_test", args}, ctx, [["mix", "test"]], fn ->
+          run_mix(["test"], ctx.cwd)
+        end)
 
       target when is_binary(target) and target != "" ->
         if String.starts_with?(target, "-") do
           {{:error, "test target cannot start with '-'"}, state}
         else
-          {status, output, duration_ms} = run_mix(["test", target], ctx.cwd)
-
-          finish_run(
+          recorded_run(
             state,
             "test:#{target}",
-            {"elixir_test", %{"target" => target}},
-            status,
-            duration_ms,
-            output
+            {"elixir_test", args},
+            ctx,
+            [["mix", "test", target]],
+            fn ->
+              run_mix(["test", target], ctx.cwd)
+            end
           )
         end
 
@@ -192,6 +191,58 @@ defmodule ElixirProjectPlugin do
     %{"type" => "object", "properties" => %{}, "additionalProperties" => false}
   end
 
+  defp evidence_paths_schema do
+    %{
+      "type" => "array",
+      "items" => %{"type" => "string"},
+      "maxItems" => 4,
+      "description" =>
+        "Workspace-relative files to capture before the check; at most 4096 bytes per file"
+    }
+  end
+
+  defp recorded_run(state, command, {name, args}, ctx, commands, run) do
+    paths = Map.get(args, "evidence_paths", default_evidence_paths(args))
+
+    with {:ok, sources} <- CheckEvidence.capture(ctx.cwd, paths) do
+      {status, output, duration_ms} = run.()
+
+      evidence =
+        CheckEvidence.finish(ctx.cwd, sources, command, status, duration_ms, output)
+        |> Map.put("commands", commands)
+
+      invocation = {name, Map.put(args, "evidence_paths", paths)}
+
+      {{kind, text}, next_state} =
+        finish_run(
+          state,
+          command,
+          invocation,
+          status,
+          duration_ms,
+          String.replace_invalid(output)
+        )
+
+      suffix =
+        case CheckEvidence.record(ctx, evidence) do
+          :ok -> "\nevidence_run_id=#{evidence["id"]} (inspect with check_evidence)"
+          {:error, reason} -> "\nEvidence was not retained: #{inspect(reason)}"
+        end
+
+      {{kind, text <> suffix}, next_state}
+    else
+      {:error, reason} ->
+        {{:error, "Check not run: cannot capture selected evidence: #{inspect(reason)}"}, state}
+    end
+  end
+
+  defp default_evidence_paths(%{"target" => target}) when is_binary(target) do
+    path = String.replace(target, ~r/:\d+$/, "")
+    if String.ends_with?(path, ".exs"), do: [path], else: []
+  end
+
+  defp default_evidence_paths(_), do: []
+
   defp run_checks(checks, cwd) do
     started_at = System.monotonic_time(:millisecond)
 
@@ -209,7 +260,7 @@ defmodule ElixirProjectPlugin do
     output =
       Enum.map_join(results, "\n\n", fn {name, check_status, check_output} ->
         label = if check_status == 0, do: "ok", else: "failed (exit #{check_status})"
-        body = compact(check_output)
+        body = check_output
         if body == "", do: "#{name}: #{label}", else: "#{name}: #{label}\n#{body}"
       end)
 

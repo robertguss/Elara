@@ -73,7 +73,7 @@ defmodule Elara.Tool do
       bash_tool(),
       Elara.Skills.tool(),
       Elara.Threads.tool()
-    ] ++ Elara.Threads.Communication.tools()
+    ] ++ Elara.Threads.Communication.tools() ++ Elara.CheckDiagnosis.tools()
   end
 
   @doc false

@@ -504,13 +504,15 @@ defmodule Elara.Protocol do
     }
   end
 
-  defp encode_message(%ToolResult{call_id: id, name: name, outcome: outcome}) do
-    %{
+  defp encode_message(%ToolResult{call_id: id, name: name, outcome: outcome, usage: usage}) do
+    message = %{
       "role" => "tool",
       "call_id" => id,
       "name" => name,
       "outcome" => encode_tool_outcome(outcome)
     }
+
+    if usage, do: Map.put(message, "usage", usage), else: message
   end
 
   defp decode_message(%{"role" => "user", "text" => text, "agent_source" => source}),
@@ -548,36 +550,27 @@ defmodule Elara.Protocol do
     end
   end
 
-  defp decode_message(%{
-         "role" => "tool",
-         "call_id" => id,
-         "name" => name,
-         "outcome" => outcome
-       })
+  defp decode_message(
+         %{
+           "role" => "tool",
+           "call_id" => id,
+           "name" => name,
+           "outcome" => outcome
+         } = message
+       )
        when is_binary(id) and is_binary(name) do
-    with {:ok, outcome} <- decode_tool_outcome(outcome) do
-      {:ok, %ToolResult{call_id: id, name: name, outcome: outcome}}
+    with usage = Map.get(message, "usage"),
+         true <- valid_public_usage?(usage),
+         {:ok, outcome} <- decode_tool_outcome(outcome) do
+      {:ok, %ToolResult{call_id: id, name: name, outcome: outcome, usage: usage}}
+    else
+      _ -> {:error, :invalid_event}
     end
   end
 
   defp decode_message(_message), do: {:error, :invalid_event}
 
-  defp valid_public_usage?(nil), do: true
-
-  defp valid_public_usage?(usage) when is_map(usage) do
-    Enum.all?(usage, fn {key, value} ->
-      key in [
-        "input_tokens",
-        "output_tokens",
-        "total_tokens",
-        "cached_input_tokens",
-        "cache_write_tokens",
-        "reasoning_tokens"
-      ] and is_integer(value) and value >= 0
-    end)
-  end
-
-  defp valid_public_usage?(_), do: false
+  defp valid_public_usage?(usage), do: Elara.Provider.Visibility.valid_usage?(usage)
 
   defp valid_request_settings?(nil), do: true
 

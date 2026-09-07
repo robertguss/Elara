@@ -450,6 +450,9 @@ defmodule Elara.FlightRecorder do
   defp cause(recorder, {:tool_result, ref, _}),
     do: Map.get(recorder.causes, {:tool, ref}, :external)
 
+  defp cause(recorder, {:tool_usage, ref, _}),
+    do: Map.get(recorder.causes, {:tool, ref}, :external)
+
   defp cause(recorder, {:tool_deferred, ref, _}),
     do: Map.get(recorder.causes, {:tool, ref}, :external)
 
@@ -501,6 +504,11 @@ defmodule Elara.FlightRecorder do
         do: normalized,
         else: Map.put(normalized, :deferred_calls, state.deferred_calls)
 
+    normalized =
+      if state.tool_usage,
+        do: Map.put(normalized, :tool_usage, state.tool_usage),
+        else: normalized
+
     case state.streaming do
       nil -> normalized
       %{text: "", public_content: []} -> normalized
@@ -522,6 +530,7 @@ defmodule Elara.FlightRecorder do
       history: Enum.map(state.history, &denormalize_message/1),
       phase: denormalize_phase(state.phase),
       streaming: Map.get(state, :streaming),
+      tool_usage: Map.get(state, :tool_usage),
       deferred_calls: Map.get(state, :deferred_calls, []),
       next_ref: state.next_ref
     }
@@ -545,6 +554,9 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_fact({:tool_result, ref, outcome}),
     do: %{kind: :tool_result, ref: ref, outcome: normalize_outcome(outcome)}
+
+  defp normalize_fact({:tool_usage, ref, usage}),
+    do: %{kind: :tool_usage, ref: ref, usage: usage}
 
   defp normalize_fact({:tool_deferred, ref, system}),
     do: %{kind: :tool_deferred, ref: ref, system: system}
@@ -579,6 +591,9 @@ defmodule Elara.FlightRecorder do
 
   defp denormalize_fact(%{kind: :tool_result, ref: ref, outcome: outcome}),
     do: {:tool_result, ref, denormalize_outcome(outcome)}
+
+  defp denormalize_fact(%{kind: :tool_usage, ref: ref, usage: usage}),
+    do: {:tool_usage, ref, usage}
 
   defp denormalize_fact(%{kind: :tool_deferred, ref: ref, system: system}),
     do: {:tool_deferred, ref, system}
@@ -663,12 +678,14 @@ defmodule Elara.FlightRecorder do
   end
 
   defp normalize_message(%ToolResult{} = result) do
-    %{
+    message = %{
       kind: :tool_result,
       call_id: result.call_id,
       name: result.name,
       outcome: normalize_outcome(result.outcome)
     }
+
+    if result.usage, do: Map.put(message, :usage, result.usage), else: message
   end
 
   defp denormalize_message(%{kind: :user, text: text, attachments: attachments}),
@@ -692,6 +709,7 @@ defmodule Elara.FlightRecorder do
     do: %ToolResult{
       call_id: result.call_id,
       name: result.name,
+      usage: Map.get(result, :usage),
       outcome: denormalize_outcome(result.outcome)
     }
 

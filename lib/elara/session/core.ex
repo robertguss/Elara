@@ -46,6 +46,7 @@ defmodule Elara.Session.Core do
             history: [Message.t()],
             phase: Elara.Session.Core.phase(),
             streaming: Elara.Session.Core.streaming() | nil,
+            tool_usage: Elara.Provider.Visibility.usage() | nil,
             next_ref: pos_integer()
           }
     defstruct [
@@ -53,6 +54,7 @@ defmodule Elara.Session.Core do
       history: [],
       phase: :idle,
       streaming: nil,
+      tool_usage: nil,
       next_ref: 1,
       deferred_calls: [],
       steering?: false
@@ -66,6 +68,7 @@ defmodule Elara.Session.Core do
           | {:provider_settings, Elara.Provider.Visibility.settings()}
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
           | {:tool_result, ref(), Tool.outcome()}
+          | {:tool_usage, ref(), Elara.Provider.Visibility.usage()}
           | {:tool_deferred, ref(), String.t()}
           | {:instruction_context, String.t()}
           | {:tool_crashed, ref(), reason :: String.t()}
@@ -245,6 +248,14 @@ defmodule Elara.Session.Core do
     )
   end
 
+  def step(
+        %State{phase: {:running_tool, r, _, _, _}, tool_usage: nil} = state,
+        {:tool_usage, r, usage}
+      )
+      when is_map(usage) do
+    {%{state | tool_usage: usage}, []}
+  end
+
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_result, r, outcome}) do
     finish_tool(
       state,
@@ -268,13 +279,14 @@ defmodule Elara.Session.Core do
     interrupted = [call | rest]
 
     {history, emits} =
-      Enum.reduce(interrupted, {state.history, []}, fn c, {hist, evs} ->
-        result = Message.tool_result(c, {:error, "interrupted"})
+      Enum.reduce(Enum.with_index(interrupted), {state.history, []}, fn {c, index}, {hist, evs} ->
+        usage = if index == 0, do: state.tool_usage, else: nil
+        result = Message.tool_result(c, {:error, "interrupted"}, usage)
         {hist ++ [result], evs ++ [{:emit, {:message_appended, result}}]}
       end)
 
     effects = emits ++ [{:emit, {:turn_ended, :interrupted}}]
-    {%{state | history: history, phase: :idle, steering?: false}, effects}
+    {%{state | history: history, phase: :idle, steering?: false, tool_usage: nil}, effects}
   end
 
   def step(%State{} = state, _fact), do: {state, []}
@@ -328,9 +340,9 @@ defmodule Elara.Session.Core do
   end
 
   defp finish_tool(state, call, rest, it, outcome) do
-    result = Message.tool_result(call, outcome)
+    result = Message.tool_result(call, outcome, state.tool_usage)
     history = state.history ++ [result]
-    state = %{state | history: history, phase: :idle}
+    state = %{state | history: history, phase: :idle, tool_usage: nil}
 
     {state, more} =
       if state.steering? do

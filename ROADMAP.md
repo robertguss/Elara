@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-06 (PLUGIN-1
-> PLUGIN-2 and LOOP-1 merged to main) · **Owner:** solo development
+> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (DIAG-1
+> captured-check diagnosis in progress) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,12 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**DIAG-1:** IN PROGRESS on `codex/check-diagnosis`. Owner-authorized after the
+DSPy investigation: capture one check's evidence, run one direct diagnosis with
+a fixed output contract, and verify inspection and cancellation through the
+existing session/runtime boundary. Examples, RLM and automatic optimization
+remain later comparisons.
 
 **LOOP-1:** DONE; implementation `20a8eda`, merged into `main` in `57f9edc`.
 Later responses and intervening calls permit useful rechecks; consecutive
@@ -77,12 +83,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** The SPLIT-5 owner checkpoint remains unstarted. The recommended
-next experiment is a supervised focused test job whose completion wakes the
-agent through the inbox. Its bounded scope and acceptance exercise are in the
-[harness experiment log](docs/harness-experiments.md). This is a recommendation,
-not a newly authorized queue item. Physical-terminal acceptance remains deferred.
-PLUGIN-2 and LOOP-1 are merged into `main` at `57f9edc`.
+**Next action:** Finish DIAG-1's captured evidence, direct diagnosis, inspection
+and cancellation acceptance. SPLIT-5 remains unstarted and physical-terminal
+acceptance remains deferred. The separate background test/wakeup proposal in
+the [harness experiment log](docs/harness-experiments.md) remains a proposal.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -265,7 +269,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | PLUGIN-1 | DONE     | Discover and evolve a useful plugin in a live session         | Owner selection  |
 | PLUGIN-2 | DONE     | Agent-authored plugin during a real coding task              | PLUGIN-1         |
 | LOOP-1   | DONE     | Permit useful repeated tool calls with bounded loops          | PLUGIN-2         |
-| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, LOOP-1    |
+| DIAG-1   | IN PROGRESS | Diagnose a captured failed check with explicit evidence   | LOOP-1           |
+| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, DIAG-1    |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2657,3 +2662,85 @@ iteration budget bounds such loops. Execution receipts, capability checks, and
 uncertain mutation handling remain separate. The scripted provider makes the
 regression deterministic; this is not another live-model experiment or an
 unattended productivity claim. Evals remain deferred.
+
+## DIAG-1 — Diagnose a captured failed check
+
+**Scope:** Owner-authorized after the DSPy investigation on 2026-09-06. Capture
+selected source before a focused project check, retain bounded output, and run
+one direct diagnosis behind a fixed result contract. Use the existing BEAM
+session/task ownership and Rust tool inspector. Verify source identity,
+cancellation, late-result rejection, independent sessions and persistence.
+Curated examples, alternative strategies, RLM, GEPA and broader evals remain
+unimplemented and unstarted.
+
+### Result
+
+**IN PROGRESS (2026-09-07): implementation and bounded experiment complete;
+publication pending.** The version 3 project plugin records source/output
+artifacts and actual executable/argument arrays. The built-in `check_evidence`
+tool inspects the latest capture; `diagnose_check` performs one tool-free
+provider request with `check_diagnosis/v1`, strategy `direct/v1`. Acceptance
+checks all five output fields, text bounds and captured line references.
+Invalid text stays inspectable with a rejection reason. Each invocation records
+its identity, settings, response model, duration and reported usage.
+
+The session owns capture persistence and accepts updates only from its current
+diagnosis worker. Cancellation terminates that worker and fences late results;
+another session can finish independently. Worker crash leaves evidence
+available. Review found and corrected capture storage interfering with ordinary
+history operations, abandoned-branch evidence after rewind, and diagnostic
+usage missing from canonical totals and public protocol. Rewind clears the
+active capture, clone/fork start without one, and resume adopts the selected
+store. Usage is a Core fact and typed tool-result field, including failure and
+interruption after usage arrives. Older persisted messages remain readable.
+
+**Live quality result: 0 accepted diagnoses from 2 assisted calls on one tiny
+fixture.** Both actual `gpt-5.5`/low responses identified the missing
+`NameHelper.normalize(nil)` clause on manual inspection; both cited a 17-line
+log span against the unchanged 10-line limit and were rejected. The requests
+took 7,670 ms / 1,706 tokens and 7,161 ms / 1,747 tokens respectively. Each run
+also used four ordinary assistant responses. The operator supplied the project,
+two explicit prompts and source selections, then deliberately fixed the fixture
+after capture. A separate current-workspace check passed. No automatic retry or
+repair was added, and no live accepted-result or productivity claim is made.
+
+**Checks:** 76 focused tests pass, including real Mix failure, encoding repair,
+immutable source, persisted restart and usage, clone/fork/resume/rewind,
+concurrent cancellation, worker crash, invalid output, Core terminal cases,
+Store/protocol round trips, recorder replay, plugin reload and roadmap checks.
+The real Rust PTY exercises 120x40 and 140x42 viewports, search, resize redraw,
+canonical report copying, preserved-draft submission and clean detach. Physical
+Ghostty/WezTerm key acceptance remains owner-deferred. Independent review is
+clear. Mix formatting and warnings-as-errors compilation pass. Both Rust crates
+pass format, Clippy with warnings denied, and all test targets (115 TUI tests
+and 6 execution-stub tests). All 36 local documentation links checked resolve.
+
+The final full Mix run passes **465/475** in 167.1 seconds, including all 14
+added tests. The initial unchanged-main baseline passed 451/461. Nine failures
+overlap that baseline: two attachment/context cases, cold protocol history,
+saved-session observer listing, two generic TUI cases, two thread cases and
+live queued-mutation recovery. The HTTP fixture passes in the final run;
+instead, the restored-input recovery assertion fails. Both recovery tests pass
+in an isolated feature run. The live recovery timeout also occurs on unchanged
+`main`; its restored-input test passes repeated unmodified runs, but an isolated
+test variant with a 25 ms provider delay reproduces the same assertion on
+unchanged `main`. That assertion assumes an input being consumed means its
+provider response has completed. No recovery source or test was changed here.
+The suite remains red; these observations do not claim all-green regression
+coverage.
+
+**Boundary work:** Elixir changes own evidence, validation, invocation lifetime,
+metering and persistence. The public protocol adds optional tool-result usage
+metadata; its decoder accepts older messages without it. The existing Rust
+viewer needed no product-code changes. Cross-runtime effort went into the
+actual PTY workflow and handling incremental ANSI redraws in its assertions;
+no time or percentage breakdown was measured. The plugin's Mix execution still
+uses its existing `System.cmd` path: retained evidence bounds do not bound total
+command allocation, add background command ownership or establish exactly-once
+execution.
+
+Guide: [captured check diagnosis](docs/check-diagnosis.md). Evidence and
+assistance: [experiment log](docs/harness-experiments.md#2026-09-07-captured-check-diagnosis--diag-1)
+and [full live records](docs/features-research/check-diagnosis-live-runs.json).
+The next proposed comparison is a small curated-example strategy under the
+same contract. It has not started.

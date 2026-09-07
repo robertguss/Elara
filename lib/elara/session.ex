@@ -357,6 +357,61 @@ defmodule Elara.Session do
     {:reply, shell.cwd, shell}
   end
 
+  def handle_call({:record_check, evidence}, {caller, _}, shell) do
+    with {:ok, _ref, call} <- active_tool(shell, caller),
+         true <- call.name in ["elixir_check", "elixir_test", "elixir_rerun_last"],
+         true <- Elara.CheckEvidence.valid?(evidence),
+         {:ok, store} <-
+           Store.save(%{shell.store | check_evidence: evidence}) do
+      {:reply, :ok, %{shell | store: store}}
+    else
+      _ ->
+        {:reply, {:error, "Check evidence could not be retained for this active invocation"},
+         shell}
+    end
+  end
+
+  def handle_call({:check_evidence, run_id}, _from, shell) do
+    {:reply, Elara.CheckEvidence.fetch(shell.store.check_evidence, run_id), shell}
+  end
+
+  def handle_call({:diagnosis_context, run_id}, {caller, _}, shell) do
+    with {:ok, ref, %{name: "diagnose_check"}} <- active_tool(shell, caller),
+         {:ok, evidence} <-
+           Elara.CheckEvidence.fetch(shell.store.check_evidence, run_id) do
+      context = %{
+        evidence: evidence,
+        provider:
+          Provider.Visibility.configure(shell.provider, shell.core.config.provider_settings),
+        settings: shell.core.config.provider_settings,
+        system: instruction_system(shell),
+        operation_id: "#{shell.incarnation}:#{ref}"
+      }
+
+      {:reply, {:ok, context}, shell}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, shell}
+      _ -> {:reply, {:error, "Diagnosis invocation is no longer active"}, shell}
+    end
+  end
+
+  def handle_call(
+        {:diagnosis_provider, operation_id, {module, config}, usage},
+        {caller, _},
+        shell
+      ) do
+    with {:ok, ref, %{name: "diagnose_check"}} <- active_tool(shell, caller),
+         true <- operation_id == "#{shell.incarnation}:#{ref}",
+         true <- module == elem(shell.provider, 0),
+         true <- Provider.Visibility.valid_usage?(usage) do
+      shell = %{shell | provider: {module, config}}
+      shell = if usage, do: feed({:tool_usage, ref, usage}, shell), else: shell
+      {:reply, :ok, shell}
+    else
+      _ -> {:reply, {:error, "Diagnosis invocation is no longer active"}, shell}
+    end
+  end
+
   def handle_call({:replace_effect_executor, executor}, _from, shell) do
     shell = %{shell | effect_executor: executor, effect_executor_explicit?: true}
     {:reply, :ok, resume_pending_effects(shell)}
@@ -1396,9 +1451,19 @@ defmodule Elara.Session do
 
     case PluginServer.checkout(plugin.server, plugin.generation) do
       {:ok, lease, module, plugin_state} ->
-        ctx = %Ctx{cwd: shell.cwd}
         request = tool_request(shell, call, tool, args)
         {shell, request, _job} = commit_tool_intent(shell, effect_id, request, tool)
+
+        ctx = %Ctx{
+          cwd: shell.cwd,
+          session_id: shell.id,
+          tool_name: tool.name,
+          plugin: plugin,
+          job_id: request.job_id,
+          timeout_ms: shell.tool_timeout_ms,
+          max_output_bytes: request.max_output_bytes
+        }
+
         config = %{module: module, plugin_state: plugin_state, ctx: ctx}
 
         task =
@@ -1663,6 +1728,15 @@ defmodule Elara.Session do
   defp track_task(shell, %Task{ref: ref, pid: pid}, kind, core_ref, plugin_lease \\ nil) do
     %{shell | tasks: Map.put(shell.tasks, ref, {kind, core_ref, pid, plugin_lease})}
   end
+
+  defp active_tool(%{core: %{phase: {:running_tool, ref, call, _, _}}} = shell, caller) do
+    case find_task_by_core_ref(shell, ref, :tool) do
+      {_monitor, ^caller, _lease} -> {:ok, ref, call}
+      _ -> {:error, "Caller does not own the active tool invocation"}
+    end
+  end
+
+  defp active_tool(_shell, _caller), do: {:error, "No active tool invocation"}
 
   defp track_tool_task(shell, task, core_ref, plugin_lease) do
     timer = Process.send_after(self(), {:tool_deadline, core_ref}, shell.tool_timeout_ms)

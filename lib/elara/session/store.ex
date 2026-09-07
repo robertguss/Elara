@@ -43,6 +43,7 @@ defmodule Elara.Session.Store do
           name: String.t() | nil,
           parent_session: String.t() | nil,
           provider_settings: Elara.Provider.Visibility.settings() | nil,
+          check_evidence: map() | nil,
           lock_path: String.t() | nil,
           lock_handle: port() | nil,
           persist?: boolean()
@@ -56,6 +57,7 @@ defmodule Elara.Session.Store do
     :name,
     :parent_session,
     :provider_settings,
+    :check_evidence,
     :lock_path,
     :lock_handle,
     context: %{},
@@ -127,6 +129,7 @@ defmodule Elara.Session.Store do
          name: header.name,
          parent_session: header.parent_session,
          provider_settings: header.provider_settings,
+         check_evidence: header.check_evidence,
          context: header.context,
          inbox: header.inbox,
          agent_wake_count: header.agent_wake_count,
@@ -188,7 +191,7 @@ defmodule Elara.Session.Store do
         {:error, :invalid_entry}
 
       entry ->
-        case save(%{store | leaf: entry.parent_id}) do
+        case save(%{store | leaf: entry.parent_id, check_evidence: nil}) do
           {:ok, store} -> {:ok, store, entry.message.text}
           error -> error
         end
@@ -428,13 +431,11 @@ defmodule Elara.Session.Store do
     %{"assistant" => assistant}
   end
 
-  def encode_message(%ToolResult{call_id: call_id, name: name, outcome: outcome}) do
+  def encode_message(%ToolResult{call_id: call_id, name: name, outcome: outcome, usage: usage}) do
     %{
-      "toolResult" => %{
-        "callId" => call_id,
-        "name" => name,
-        "outcome" => encode_outcome(outcome)
-      }
+      "toolResult" =>
+        %{"callId" => call_id, "name" => name, "outcome" => encode_outcome(outcome)}
+        |> put_optional("usage", usage)
     }
   end
 
@@ -508,10 +509,13 @@ defmodule Elara.Session.Store do
 
   def decode_message(%{"toolResult" => payload} = encoded) when map_size(encoded) == 1 do
     with %{"callId" => call_id, "name" => name, "outcome" => encoded_outcome} = result
-         when map_size(result) == 3 and is_binary(call_id) and call_id != "" and
+         when map_size(result) in [3, 4] and is_binary(call_id) and call_id != "" and
                 is_binary(name) and name != "" <- payload,
+         true <- Enum.all?(Map.keys(result), &(&1 in ["callId", "name", "outcome", "usage"])),
+         usage = Map.get(result, "usage"),
+         true <- Elara.Provider.Visibility.valid_usage?(usage),
          {:ok, outcome} <- decode_outcome(encoded_outcome) do
-      {:ok, %ToolResult{call_id: call_id, name: name, outcome: outcome}}
+      {:ok, %ToolResult{call_id: call_id, name: name, outcome: outcome, usage: usage}}
     else
       _ -> {:error, :invalid_message}
     end
@@ -550,6 +554,7 @@ defmodule Elara.Session.Store do
     |> put_optional("name", store.name)
     |> put_optional("parentSession", store.parent_session)
     |> put_optional("providerSettings", store.provider_settings)
+    |> put_optional("checkEvidence", store.check_evidence)
     |> put_optional("context", if(store.context != %{}, do: store.context))
     |> put_optional("agentWakeCount", if(store.agent_wake_count > 0, do: store.agent_wake_count))
     |> put_optional(
@@ -667,6 +672,7 @@ defmodule Elara.Session.Store do
         "name",
         "parentSession",
         "providerSettings",
+        "checkEvidence",
         "context",
         "agentWakeCount",
         "inbox"
@@ -700,6 +706,8 @@ defmodule Elara.Session.Store do
       true ->
         with count when is_integer(count) and count >= 0 <- Map.get(header, "agentWakeCount", 0),
              context when is_map(context) <- Map.get(header, "context", %{}),
+             check_evidence = Map.get(header, "checkEvidence"),
+             true <- is_nil(check_evidence) or Elara.CheckEvidence.valid?(check_evidence),
              {:ok, inbox, paused, active_id} <- decode_inbox(Map.get(header, "inbox")),
              true <- Enum.all?(inbox, &(&1.session_id == id)) do
           {:ok,
@@ -711,6 +719,7 @@ defmodule Elara.Session.Store do
              name: Map.get(header, "name"),
              parent_session: Map.get(header, "parentSession"),
              provider_settings: Map.get(header, "providerSettings"),
+             check_evidence: check_evidence,
              context: context,
              inbox: inbox,
              agent_wake_count: count,

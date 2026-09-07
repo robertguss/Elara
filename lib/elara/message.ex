@@ -44,8 +44,13 @@ defmodule Elara.Message do
   end
 
   defmodule ToolResult do
-    @type t :: %__MODULE__{call_id: String.t(), name: String.t(), outcome: Elara.Tool.outcome()}
-    defstruct [:call_id, :name, :outcome]
+    @type t :: %__MODULE__{
+            call_id: String.t(),
+            name: String.t(),
+            outcome: Elara.Tool.outcome(),
+            usage: Elara.Provider.Visibility.usage() | nil
+          }
+    defstruct [:call_id, :name, :outcome, :usage]
   end
 
   @type t :: User.t() | Assistant.t() | ToolResult.t()
@@ -69,8 +74,9 @@ defmodule Elara.Message do
   @spec user(String.t()) :: User.t()
   def user(text) when is_binary(text), do: %User{text: text}
 
-  @spec tool_result(ToolCall.t(), Elara.Tool.outcome()) :: ToolResult.t()
-  def tool_result(%ToolCall{} = call, outcome) do
-    %ToolResult{call_id: call.id, name: call.name, outcome: outcome}
+  @spec tool_result(ToolCall.t(), Elara.Tool.outcome(), Elara.Provider.Visibility.usage() | nil) ::
+          ToolResult.t()
+  def tool_result(%ToolCall{} = call, outcome, usage \\ nil) do
+    %ToolResult{call_id: call.id, name: call.name, outcome: outcome, usage: usage}
   end
 end

@@ -561,8 +561,38 @@ the provider's identity is an experimental confound. These are practical driver
 corrections; the existing runtime supports the tested continuation and pause
 behavior without a new scheduler or retry mechanism.
 
-**Live verification:** pending the committed-driver repository run. Publication
-and final check results belong to [JOB-6](../ROADMAP.md#job-6--live-driver-metadata-and-logical-ownership).
+**Live verification:** normal `gpt-5.5`/low, session
+`Z4RVjnphCgN00gHfyY8Nbg`, on committed driver revision `5fbd299`. The existing
+15 context tests passed in **13,142 ms**; the complete interaction took
+**19,805 ms**. One job start, one automatic completion, one status call, four
+assistant messages, no provider errors and no added prompt or resume. All six
+acceptance checks pass. The job is settled, its slot released and source hashes
+unchanged. Both initial and final snapshots retain model/effort and this
+checkout's **272,000** conservative catalog budget. No live handoff was needed;
+this run verifies integration, while deterministic tests cover handoff races.
+
+The observer recorded 104 events and two single-sequence gaps (28 and 31).
+Protocol-v1 suppresses live inbox-change events; these gaps remain visible in
+the evidence rather than being silently called a complete event history. Event
+timestamps mean observation time; replay timestamps do not reconstruct the
+original event time. Message counts do not measure physical provider requests.
+
+**Assessment:** worthwhile as experiment infrastructure. The runtime already
+provided durable jobs, logical ownership, retained replay and pause semantics;
+the driver now uses those mechanisms without changing provider identity. This
+makes subsequent coding experiments easier to interpret. It does not establish
+better coding quality, faster inference, a unique BEAM productivity advantage,
+or successful normal-provider continuation under heavy context pressure.
+
+**Final checks and publication:** 12 driver regressions pass. Full suite:
+**506/514** in 182.6 seconds, with the same eight named baseline failures as
+JOB-5. Formatting, warnings-as-errors compilation and local review pass. Code
+is pushed in `dbc832a` and `5fbd299` on `codex/live-driver-ownership`, stacked on
+JOB-5; no merge into main. The temporary empty home is removed and persistent
+session/job evidence is retained. The [public artifact](fixtures/live-driver-ownership-2026-09-07.json)
+contains the prompt, per-session public transcript, metadata, job output, gaps
+and check results. Canonical status belongs to
+[JOB-6](../ROADMAP.md#job-6--live-driver-metadata-and-logical-ownership).
 Dedicated evals remain deferred. The next suggested coding experiment is a
 small feature with this normal-provider observer, retaining the full attempt
 and any explicit assistance so the JOB-5 workflow can be reassessed.

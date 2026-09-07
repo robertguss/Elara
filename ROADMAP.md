@@ -10,9 +10,12 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**JOB-6:** IN PROGRESS; preserve normal provider identity in live observation,
-follow durable session ownership, replay successor events, and require explicit
-resume for paused recovery. Implementation stays in experiment support code.
+**JOB-6:** DONE; observer and live script pushed in `dbc832a` / `5fbd299` on
+`codex/live-driver-ownership`. Twelve driver regressions pass. The normal-provider
+live run passed all six checks: 15 repository tests, one start/completion/status,
+19.8 seconds total, no extra prompts or provider errors. Full suite: 506/514,
+with the same eight baseline failures. Changes stay in experiment support code;
+JOB-4 through JOB-6 remain stacked and unmerged.
 
 **JOB-5:** DONE; implementation pushed in `af9778d` on `codex/read-line-ranges`; the live agent implemented line selection and passed six
 regressions after an assisted fresh start. Host review preserved the selection
@@ -125,10 +128,11 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Complete JOB-6 with deterministic lifecycle regressions and a
-normal-provider live repository job, document limits, commit and push. JOB-4
-through JOB-6 remain stacked; no merge is authorized in this step. Dedicated
-evals, physical-terminal acceptance and SPLIT-5 remain deferred.
+**Next action:** Repeat a small real coding task with the corrected normal-provider
+observer, using a bounded feature contract and preserving the full attempt plus
+any explicit assistance. This reassesses JOB-5 without its provider-wrapper
+confound before changing context or retry policy. JOB-4 through JOB-6 remain
+stacked; no merge is authorized in this step. Dedicated evals remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -317,7 +321,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
 | JOB-4    | DONE        | Naturally longer repository context-recovery test job    | JOB-3            |
 | JOB-5    | DONE        | Live feature implementation: optional line-range reads   | JOB-4            |
-| JOB-6    | IN PROGRESS | Live driver metadata, handoff observation and resume    | JOB-5            |
+| JOB-6    | DONE        | Live driver metadata, handoff observation and resume    | JOB-5            |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -3097,10 +3101,30 @@ one live repository exercise verifies integration.
 
 ### Result
 
-**IN PROGRESS.** Started from published JOB-5 checkpoint `301662e` on
-`codex/live-driver-ownership`. Previous branch was already fully pushed. The observer and repository script
-are implemented. Twelve driver regressions pass, including normal-provider
-metadata, fast/active handoff, explicit resume, stale markers, pending-job error
-recovery and honest timeout/stop behavior. The broader integration run passed
-43 tests before the last pause regression was added. Full-suite verification
-and the clean-commit live repository run are pending.
+**DONE.** Implementation and review correction pushed in `dbc832a` and
+`5fbd299` on `codex/live-driver-ownership`, based on published JOB-5 `301662e`.
+The preceding branch was already fully pushed. No merge into main.
+
+Twelve driver regressions pass. The integration run passed 43 tests before the
+final pause regression was added; the final driver-only run passed all 12.
+Full suite: **506/514** in 182.6 seconds. The same eight baseline failures remain:
+two attachment context-budget tests, cold-v2 history budget, saved-session Rust
+observer listing, two interactive TUI context-budget cases, real-PTY thread
+path/session discovery, and intermittent unsettled queued-mutation recovery.
+Formatting, warnings-as-errors compilation and local review pass.
+
+Live session `Z4RVjnphCgN00gHfyY8Nbg`, using the normal configured `gpt-5.5`/low
+provider on `5fbd299`, passes all six checks. Fifteen existing context tests pass
+in 13,142 ms, with 19,805 ms total interaction time, one start, one completion,
+one status call, four assistant messages, no errors and no continuation prompt
+or resume. The initial/final metadata retains the 272,000 local catalog budget;
+the job is settled/released and source hashes match. The run needed no handoff;
+controlled regressions separately verify fast/active handoff and paused resume.
+
+The observer reports 104 events and two sequence gaps instead of claiming full
+event history; protocol-v1 omits live inbox changes. Assistant-message counts
+are not provider-request counts. No production provider/context/pause/retry
+policy or eval framework changed. Temporary empty experiment home removed;
+persistent session and terminal job retained. Evidence:
+[public live record](docs/fixtures/live-driver-ownership-2026-09-07.json) and
+[experiment assessment](docs/harness-experiments.md).

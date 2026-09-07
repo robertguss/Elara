@@ -66,7 +66,10 @@ defmodule TestJobRepositoryLive do
 
     messages_by_session =
       Enum.map(result.sessions, fn observed ->
-        %{session: observed.id, messages: Elara.transcript(observed.id)}
+        case Elara.transcript(observed.id) do
+          messages when is_list(messages) -> %{session: observed.id, messages: messages}
+          error -> %{session: observed.id, messages: [], error: inspect(error)}
+        end
       end)
 
     transcript = Enum.flat_map(messages_by_session, & &1.messages)
@@ -82,6 +85,8 @@ defmodule TestJobRepositoryLive do
         &match?(%Message.User{agent_source: %{"message_id" => "repository-context"}}, &1)
       )
 
+    initial = List.first(result.sessions)
+
     checks = %{
       one_start_one_status: Enum.frequencies(actions) == %{"start" => 1, "status" => 1},
       one_completion: completions == 1,
@@ -91,11 +96,11 @@ defmodule TestJobRepositoryLive do
       released: job["slot"] == "released" and job["settlement"] == "settled",
       automatic_completion: match?([%{action: "ask", result: ":ok"}], result.actions),
       normal_provider_metadata:
-        hd(result.sessions).initial.provider == %{
+        get_in(initial, [:initial, :provider]) == %{
           "model" => config.model,
           "effort" => config.effort
         } and
-          result.final.provider == hd(result.sessions).initial.provider
+          get_in(result.final, [:provider]) == get_in(initial, [:initial, :provider])
     }
 
     evidence =
@@ -106,7 +111,7 @@ defmodule TestJobRepositoryLive do
         cwd: cwd,
         prompt: prompt,
         provider: Map.take(config, [:model, :effort]),
-        assistant_responses: Enum.count(transcript, &match?(%Message.Assistant{}, &1)),
+        assistant_messages: Enum.count(transcript, &match?(%Message.Assistant{}, &1)),
         duration_ms: System.monotonic_time(:millisecond) - started,
         job: job,
         checks: checks,
@@ -115,7 +120,7 @@ defmodule TestJobRepositoryLive do
             %{item | messages: Enum.map(item.messages, &public_message/1)}
           end),
         limits:
-          "One local run. Assistant responses and observed event timings are not physical provider-request counts or request latency. Protocol-v1 live events omit inbox changes; sequence gaps are reported, and retained replay may be incomplete. No physical execution counter was added to repository tests. The driver never retries prompts automatically."
+          "One local run. Assistant message counts include any handoff indexes; they and observed event timings are not physical provider-request counts or request latency. Protocol-v1 live events omit inbox changes; sequence gaps are reported, and retained replay may be incomplete. No physical execution counter was added to repository tests. The driver never retries prompts automatically."
       })
 
     File.write!(output, JSON.encode!(evidence))

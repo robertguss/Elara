@@ -170,8 +170,8 @@ caller; the repository script cancels its own still-running job when it exits.
 
 Evidence includes initial/final provider settings and conservative context
 budgets, observed owners, terminal events, explicit actions and sequence gaps.
-Observed timings and assistant response counts are not network-request counts
-or latency. Protocol-v1 live delivery omits inbox-change events, so sequence
+Observed timings and assistant message counts are not network-request counts
+or latency; assistant messages can include harness-authored handoff indexes. Protocol-v1 live delivery omits inbox-change events, so sequence
 gaps may reflect that omission; replay is bounded and may have an evicted
 prefix. Evidence does not claim a complete event history. No provider-private
 state is included in the repository script's transcript projection.

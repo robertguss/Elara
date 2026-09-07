@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-06 (PLUGIN-1
-> PLUGIN-2 and LOOP-1 merged to main) · **Owner:** solo development
+> **Canonical roadmap and status source** · **Updated:** 2026-09-06 (
+> JOB-1 supervised test-job experiment in progress) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,13 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-1:** IN PROGRESS. The owner authorized the supervised focused test-job
+experiment. Twelve job checks and eight execution checks pass. The real model
+started one delayed test, ended its turn, then automatically received completion
+and inspected status once. All 20 focused checks pass; full suite passes 465/475 with the same ten known
+failures. Review is clear; publication is next.
+The contract and usage are in [supervised test jobs](docs/test-jobs.md).
 
 **LOOP-1:** DONE; implementation `20a8eda`, merged into `main` in `57f9edc`.
 Later responses and intervening calls permit useful rechecks; consecutive
@@ -77,12 +84,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** The SPLIT-5 owner checkpoint remains unstarted. The recommended
-next experiment is a supervised focused test job whose completion wakes the
-agent through the inbox. Its bounded scope and acceptance exercise are in the
-[harness experiment log](docs/harness-experiments.md). This is a recommendation,
-not a newly authorized queue item. Physical-terminal acceptance remains deferred.
-PLUGIN-2 and LOOP-1 are merged into `main` at `57f9edc`.
+**Next action:** Finish JOB-1 review, verification, and publication on
+`codex/supervised-test-jobs`. The SPLIT-5 owner checkpoint remains unstarted;
+physical-terminal acceptance stays deferred. PLUGIN-2 and LOOP-1 are merged into
+`main` at `57f9edc`.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -265,7 +270,8 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | PLUGIN-1 | DONE     | Discover and evolve a useful plugin in a live session         | Owner selection  |
 | PLUGIN-2 | DONE     | Agent-authored plugin during a real coding task              | PLUGIN-1         |
 | LOOP-1   | DONE     | Permit useful repeated tool calls with bounded loops          | PLUGIN-2         |
-| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, LOOP-1    |
+| JOB-1    | IN PROGRESS | Supervised focused test jobs and completion wakeup         | LOOP-1           |
+| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-1     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2657,3 +2663,59 @@ iteration budget bounds such loops. Execution receipts, capability checks, and
 uncertain mutation handling remain separate. The scripted provider makes the
 regression deterministic; this is not another live-model experiment or an
 unattended productivity claim. Evals remain deferred.
+
+
+## JOB-1 — Supervised focused test jobs and completion wakeup
+
+**Scope:** Owner-authorized on 2026-09-06. One local focused Mix target, stable
+job identity, bounded output and runtime, explicit cancellation, source evidence,
+and one logical completion input through the existing inbox. The
+[contract and guide](docs/test-jobs.md) records execution/delivery boundaries.
+Tests remain trusted commands; no automatic replay, daemons, cron, remote jobs,
+new UI framework, or dedicated eval framework.
+
+### Result
+
+**IN PROGRESS (2026-09-06).** Implementation on `codex/supervised-test-jobs`.
+The supervised owner persists intent before launching a linked temporary runner
+and evidence before inbox delivery. A manager/runner crash cannot restart the
+command. Offline sessions are not resurrected. Existing report-input pause and
+wake-budget rules apply. The new `test_job` tool provides start/status/cancel;
+`Exec.cancel/1` preserves the caller's terminal response while requesting process
+group cancellation. A declared Mix source set is fingerprinted before/after and
+on status; it is not an isolated snapshot or proof about external dependencies.
+
+Twelve deterministic job checks pass, including the public real-Mix path, a second
+usable session while waiting, duplicate delivery after adapter restart, paused/
+offline resume, target validation, session limits/ownership, explicit cancellation,
+changed source, handoff lineage, malformed-record rejection, lost execution
+epochs with operator reconciliation, and manager/runner failure without command
+replay. Eight execution integration checks pass, including rejection of a queued
+command after its caller dies. Formatting and compilation with warnings denied
+pass. Full suite: 465/475 passed with the same ten failures as the earlier
+458/468 run: two attachment context-budget cases, two TUI context-budget cases,
+one protocol cold-attach context case, queued-mutation settlement timing, saved
+session listing, two thread path/discovery cases, and HTTP fixture startup.
+The final schema-tightening changes were followed by all 20 focused checks and
+successful validation of the retained live record. Final independent review is
+clear. Rust execution behavior is reused unchanged; no new Rust code.
+
+Review prompted three corrections: retain job reservations until process cleanup
+settles (unknown execution epochs need operator confirmation), index pending
+records instead of rescanning all history on every retry, and validate saved
+records without crash-looping the manager. Further review moved slow inbox
+delivery to a separate task, rejected queued starts from stopped callers, and
+validated lifecycle and terminal-metadata consistency. All have regressions,
+including handoff ownership. Durable intent defines admission; a tool timeout
+near admission requires inspecting the same stable ID, not assuming no execution.
+
+Live session `id7yreQ1ln5OSrXkd_5_OA` used the configured Codex provider. The model
+started `live-completion` for `test/answer_test.exs`, ended its first turn waiting,
+then received one automatic inbox completion and invoked status exactly once.
+The 5-second arithmetic test returned exit 0, one test passed, 5,331 ms execution,
+and unchanged source fingerprints. No polling tool calls, corrective follow-up,
+manual completion delivery, or rerun was needed. This bounded fixture establishes
+live continuation; it is not a long coding trial or comparative productivity
+measurement. The [experiment report](docs/harness-experiments.md) and
+[sanitized transcript](docs/fixtures/test-job-live-2026-09-06.json) retain the
+evidence. Publication is pending.

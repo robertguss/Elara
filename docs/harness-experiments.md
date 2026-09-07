@@ -91,53 +91,60 @@ behavior, rather than an additional BEAM mechanism.
 
 Guide: the execution limits and repeated-call policy in [README.md](../README.md).
 
-## Recommended next experiment: supervised test completion and agent wakeup
+## 2026-09-06: Supervised test completion and agent wakeup — JOB-1
 
-**Proposal, not implementation authorization.** Run one focused test command as
-an explicitly owned background job. Let the agent wait without polling the
-model; deliver its completion through the existing inbox so the agent can
-inspect the evidence and continue the coding task.
+**Question:** Can a supervised test run outlive a model turn and bring the agent
+back with evidence, without model polling or operator-managed shell lifetime?
 
-This follows the observed failure to retain fixtures through ordinary `bash`
-calls. Keep that tool's process-group cleanup intact. A managed job needs an
-explicit lifetime and cancellation contract; adding `nohup` is not that contract.
-Existing thread waits, completion delivery, stable input IDs and wake budgets
-are the starting points. General execution-job completion delivery is new work.
+**Functionality added:** the local `test_job` tool starts one focused Mix target,
+returns a stable job record, supports status and explicit cancellation, and sends
+completion through the existing inbox. Intent and results are stored before
+execution/delivery. Admission holds one reservation per logical session and four
+globally, with a 60-second limit and 16 KiB output cap. Source fingerprints expose changed source;
+paused input stays paused and offline sessions require explicit reopen.
 
-**First useful slice:** one local Mix test target, a stable job ID, bounded
-output, recorded exit status, a workspace/source identity, explicit cancellation,
-and one logical completion input. Display the job and outcome through existing
-tool results and history before designing a new inspector.
+**Deterministic evidence:** real Mix fixtures cover start → idle wait → completion,
+a second usable session, stable start IDs and conflicting retries, one logical
+inbox acceptance after duplicate redelivery and adapter restart, paused/offline
+resume, explicit cancellation, source changes, target validation, session limits/
+ownership, handoff lineage, blocked inbox delivery without blocking cancellation,
+rejection of queued starts from stopped callers, malformed and contradictory saved records,
+lost execution epochs with explicit operator reconciliation, and runner/manager
+crashes without command replay. The execution stub's cancellation API retains confirmed terminal evidence instead of killing
+the caller and losing its result. Current check totals and publication status
+belong to JOB-1's Result in the roadmap.
 
-**Acceptance exercise:**
+**Live evidence:** session `id7yreQ1ln5OSrXkd_5_OA` used the configured Codex
+provider with an empty user-skill home, persistent history, and no plugins.
+The fixture deliberately waited five seconds, then checked 17 × 23 = 391. The
+model called `test_job start`, ended its turn waiting, received one completion
+input, called `test_job status` once, and reported exit 0 with unchanged source.
+Execution reported 5,331 ms and one passing test. There were two completed turns,
+one completion input, and exactly two tool calls: start and status. No model
+polling calls, corrective follow-up, manual completion injection, or rerun.
+The [sanitized public transcript](fixtures/test-job-live-2026-09-06.json) retains
+the exact prompt and outcomes, with no credentials or private provider state.
 
-1. Start the focused job and wait. Another session stays usable and the waiting
-   agent makes no model requests merely to poll for completion.
-2. Deliver completion twice. Accept one logical input and retain inspectable
-   output; do not run the test command a second time.
-3. Pause/stop the recipient before completion. Preserve evidence without waking
-   it against the owner's instruction; explicit resume can consume the result.
-4. Cancel or crash the runner. Report cancellation/failure/uncertainty honestly;
-   supervision must not blindly replay a command with possible side effects.
-5. Change the relevant source while the job runs. Mark the result as evidence
-   for the captured source identity, not proof that the new source passes.
+**Learning:** supervision and message delivery now support useful work between
+model turns. This removes the need to keep a shell alive through ordinary
+foreground `bash` calls or repeatedly ask a model whether a test finished. The
+new behavior reuses the Rust execution stub and the inbox; it does not introduce
+another model loop or replace the session reducer.
 
-**Feasibility:** medium for this bounded slice. The difficult parts are lifetime,
-delivery, cancellation and source identity, not spawning a Task. Initially
-limit execution to one live Elara runtime; VM loss must not imply automatic
-command retry. Durable resumption of execution, arbitrary daemons, cron,
-distributed jobs and generic exactly-once effects are separate work.
+**Limits:** this was a delayed arithmetic fixture, not a sustained repository
+coding task or productivity comparison. Commands still execute trusted project
+code and may have effects. A lost runner/owner produces indeterminate evidence;
+commands are never automatically replayed. Source hashes are observations of a
+declared file set, not isolation from concurrent edits or external dependencies.
+The agent must inspect current status before treating old results as current.
+Results persist, but running execution does not resume after VM loss. Evidence
+records accumulate on disk; automatic retention/pruning is not implemented.
+Uncertain execution retains its capacity reservation until settlement is known;
+losing the execution epoch requires operator confirmation that the old command
+has stopped. Malformed records block new admission and require repair. Delivery
+retries use a pending index rather than rescanning all retained history.
 
-**BEAM question:** can independently supervised work and message delivery make
-agent waiting useful and understandable without adding another authority for
-session state? **Practical question:** can a test finish and bring the agent
-back with sufficient evidence, without operator-managed fixtures or repeated
-polling? Passing these exercises would justify trying the workflow on real
-coding work; it would not establish comparative speed or cost savings.
-
-This recommendation favors friction observed in the live experiment. Earlier
-[harness research](features-research/harness-ideas-beam-2026-09-06.md) also proposes
-background context preparation and a completion-event adapter. The newer
-[DSPy investigation](features-research/dspy-for-elara-2026-09-06.md) proposes a
-typed evidence-analysis operation. Those remain distinct candidates; neither
-has been implemented or silently substituted into the roadmap queue.
+Guide and boundaries: [Supervised focused test jobs](test-jobs.md). Broader
+[context/wakeup research](features-research/harness-ideas-beam-2026-09-06.md) and
+[typed-operation research](features-research/dspy-for-elara-2026-09-06.md) remain
+separate proposals. Evals and benchmarks remain deferred.

@@ -997,3 +997,85 @@ terminal evidence before the grace expires retains its prior behavior.
 The next proposed experiment is two specialist sessions collaborating on one
 bounded coding task using supervised jobs and durable result delivery. It is
 not started by JOB-11.
+
+## 2026-09-07: Two specialists deliver numbered reads — JOB-12
+
+**Result:** two real Elara sessions delivered a small feature through an isolated
+coding worktree, a durable related-thread report, and supervised test jobs.
+The test specialist authored seven independent regressions; six failed against
+read version 2. After host integration and commit, the implementation specialist
+read the durable report and changed only the two tool modules and README. The
+same seven tests passed unchanged. The implementation adds optional boolean
+`read.line_numbers`, preserving original line numbers and all underlying bytes;
+read version 3 fences remote workers that cannot support this option.
+
+The [captured evidence](fixtures/two-specialist-read-live-2026-09-07.json) includes
+assignments, public transcripts, usage, observer gaps, source snapshots, job
+records, the authored tests and the original model patch. The driver was committed
+at `59deb1f`; the host committed the red tests as `beb3d4b`. Both sessions used
+normal `openai-codex` resolution with observed `gpt-5.5` / `low` and the normal
+272,000-token context limit. Neither required a context handoff or provider retry.
+
+| Observation | Test specialist | Implementation specialist |
+| --- | --- | --- |
+| Workspace | Isolated coding child | Parent repository |
+| Supervised job | 1 start, 1 status | 1 start, 1 status |
+| Focused result | 1 passed, 6 failed | 7 passed |
+| Job elapsed | 3,700 ms | 715 ms |
+| Observer duration | 54,597 ms after provisioning | 90,696 ms |
+| Recorded input / output tokens | 92,639 / 1,696 | 175,762 / 2,806 |
+| Cached input tokens (part of input) | 17,920 | 57,344 |
+
+Job timings include different compilation work and are not a performance
+comparison. Usage totals reflect recorded assistant usage, not independently
+measured request counts. The child first completed a tool-free readiness turn
+(1,960 ms); the host then copied ignored dependency/build directories and sent
+`ENVIRONMENT_READY`. Its public transcript confirms no tools preceded readiness.
+The parent stayed paused until the host integrated and committed the tests and
+submitted its implementation assignment before resuming inputs. Host review of
+the actual red assertions occurred after that reversible integration, before
+publication; the driver's automatic admission check alone is not semantic review.
+
+**A limitation surfaced:** automatic child turn-completion reports accumulate
+alongside the explicit contract message. The test specialist consumed its own
+job-completion message. The implementer instead woke on an older queued child
+report, inspected its already-passed green job once, and finished. Its captured
+transcript does **not** contain its own green job-completion input; the durable
+job's `delivery: accepted` records inbox acceptance, not model consumption.
+Another child report appears after the final answer. Thus the run demonstrates
+successful report transfer and unchanged red-to-green tests, but does not prove
+both models resumed specifically from their own job completion. The observer
+stopped at the requested final marker and cleanup stopped retained owners; no
+claim is made that all queued reports drained. Event gaps remain in the artifact.
+
+**Host verification:** added coverage for numbered ranges with omitted defaults,
+invalid ranges and file errors; fresh-process public-session execution; remote
+numbered output and rejection of read versions 1 and 2. The 25 focused checks
+pass. The full suite passes **539/539** in 138.3 seconds; formatting and
+warnings-as-errors compilation pass. Independent review found no required code
+changes and confirmed the completion-consumption caveat.
+The original specialist test file and production patch remain unchanged by host
+review. No Rust code changed.
+
+**Limits and next candidate:** this was sequential collaboration with detailed
+owner assignments and host provisioning, integration, commit and resume. It does
+not establish autonomous integration, speedup, or general specialist quality.
+The next useful bounded experiment is distinguishing awaited job completions
+from unrelated child reports, with explicit evidence of which message caused
+resumption. It is unstarted. The result supports using BEAM session processes,
+supervised jobs and durable inboxes as collaboration infrastructure; it also
+shows why application-level message meaning matters beyond delivery reliability.
+
+The opt-in driver is `test/support/two_specialist_read_live.exs`. Its feature
+contract is tied to the historical baseline; running it on the completed feature
+will no longer produce the expected red result. To reproduce, use a disposable
+clean checkout at `59deb1f`, configured provider authentication and built deps,
+and write output outside the repository:
+
+```sh
+mix run --no-start test/support/two_specialist_read_live.exs /tmp/two-specialists.json
+```
+
+The driver makes real model requests, integrates and commits tests in that
+checkout, and retains isolated sessions/worktree/build data under its reported
+temporary root for inspection.

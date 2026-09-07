@@ -100,9 +100,9 @@ defmodule Elara.Tool do
   defp read_tool do
     %__MODULE__{
       name: "read",
-      version: "2",
+      version: "3",
       description:
-        "Read a file relative to the working directory, optionally with one-based offset and line limit.",
+        "Read a file relative to the working directory, optionally with one-based offset, line limit, and line numbers.",
       parameters: %{
         "type" => "object",
         "properties" => %{
@@ -116,6 +116,11 @@ defmodule Elara.Tool do
             "type" => "integer",
             "minimum" => 1,
             "description" => "Optional positive line limit; defaults to 200 when ranged"
+          },
+          "line_numbers" => %{
+            "type" => "boolean",
+            "description" =>
+              "Prefix selected logical lines with original one-based line numbers; defaults to false"
           }
         },
         "required" => ["path"]

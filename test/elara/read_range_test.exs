@@ -46,6 +46,24 @@ defmodule Elara.ReadRangeTest do
     assert Tools.read(%{"path" => "many.txt"}, ctx) == {:ok, content}
   end
 
+  test "numbered ranges retain omitted-field defaults and validation", %{ctx: ctx, dir: dir} do
+    File.write!(Path.join(dir, "many.txt"), Enum.map_join(1..205, "", &"line #{&1}\n"))
+
+    assert Tools.read(%{"path" => "many.txt", "offset" => 2, "line_numbers" => true}, ctx) ==
+             {:ok, Enum.map_join(2..201, "", &"#{&1}: line #{&1}\n")}
+
+    assert Tools.read(%{"path" => "many.txt", "limit" => 2, "line_numbers" => true}, ctx) ==
+             {:ok, "1: line 1\n2: line 2\n"}
+
+    for field <- ["offset", "limit"], value <- [nil, 0, -1, 1.0, "1"] do
+      assert {:error, _} =
+               Tools.read(%{"path" => "many.txt", field => value, "line_numbers" => true}, ctx)
+    end
+
+    assert Tools.read(%{"path" => "missing", "line_numbers" => true}, ctx) ==
+             {:error, "read failed: no such file (missing)"}
+  end
+
   test "empty files and offsets past EOF return empty string", %{ctx: ctx, dir: dir} do
     File.write!(Path.join(dir, "empty.txt"), "")
     File.write!(Path.join(dir, "short.txt"), "one\ntwo")
@@ -85,13 +103,13 @@ defmodule Elara.ReadRangeTest do
     assert Tools.read(%{"path" => "bytes", "offset" => 2}, ctx) == {:ok, <<13, 10, 254>>}
   end
 
-  test "public session executes the model's range arguments", %{dir: dir} do
+  test "public session executes the model's numbered range arguments", %{dir: dir} do
     File.write!(Path.join(dir, "source.txt"), "skip\r\nselected\r\nlast")
 
     call = %Elara.Message.ToolCall{
       id: "read-range",
       name: "read",
-      args: {:ok, %{"path" => "source.txt", "offset" => 2, "limit" => 1}}
+      args: {:ok, %{"path" => "source.txt", "offset" => 2, "limit" => 1, "line_numbers" => true}}
     }
 
     {:ok, script} =
@@ -122,7 +140,7 @@ defmodule Elara.ReadRangeTest do
 
     assert {:ok, "done"} = Elara.ask(session, "read the second line")
 
-    assert [%Elara.Message.ToolResult{outcome: {:ok, "selected\r\n"}}] =
+    assert [%Elara.Message.ToolResult{outcome: {:ok, "2: selected\r\n"}}] =
              Enum.filter(Elara.transcript(session), &is_struct(&1, Elara.Message.ToolResult))
   end
 

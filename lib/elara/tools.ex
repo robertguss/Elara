@@ -7,11 +7,12 @@ defmodule Elara.Tools do
   @spec read(map(), Ctx.t()) :: Elara.Tool.outcome()
   def read(%{"path" => path} = args, %Ctx{cwd: cwd}) when is_binary(path) do
     with {:ok, offset} <- positive_integer_arg(args, "offset", 1),
-         {:ok, limit} <- positive_integer_arg(args, "limit", 200) do
+         {:ok, limit} <- positive_integer_arg(args, "limit", 200),
+         {:ok, line_numbers} <- read_boolean_arg(args, "line_numbers", false) do
       full = Path.expand(path, cwd)
 
       case File.read(full) do
-        {:ok, content} -> {:ok, maybe_range(content, args, offset, limit)}
+        {:ok, content} -> {:ok, maybe_range(content, args, offset, limit, line_numbers)}
         {:error, reason} -> {:error, "read failed: #{describe_posix(reason)} (#{path})"}
       end
     end
@@ -127,7 +128,15 @@ defmodule Elara.Tools do
     end
   end
 
-  defp maybe_range(content, args, offset, limit) do
+  defp read_boolean_arg(args, key, default) do
+    case Map.fetch(args, key) do
+      :error -> {:ok, default}
+      {:ok, value} when is_boolean(value) -> {:ok, value}
+      {:ok, _value} -> {:error, "read #{key} must be a boolean"}
+    end
+  end
+
+  defp maybe_range(content, args, offset, limit, false) do
     if Map.has_key?(args, "offset") or Map.has_key?(args, "limit") do
       content
       |> drop_lines(offset - 1)
@@ -135,6 +144,15 @@ defmodule Elara.Tools do
     else
       content
     end
+  end
+
+  defp maybe_range(content, args, offset, limit, true) do
+    start_line =
+      if Map.has_key?(args, "offset") or Map.has_key?(args, "limit"), do: offset, else: 1
+
+    content
+    |> maybe_range(args, offset, limit, false)
+    |> number_lines(start_line, [])
   end
 
   defp drop_lines(content, 0), do: content
@@ -152,6 +170,13 @@ defmodule Elara.Tools do
   defp take_lines(content, count, acc) do
     {line, rest} = next_line(content)
     take_lines(rest, count - 1, [line | acc])
+  end
+
+  defp number_lines("", _line_number, acc), do: IO.iodata_to_binary(Enum.reverse(acc))
+
+  defp number_lines(content, line_number, acc) do
+    {line, rest} = next_line(content)
+    number_lines(rest, line_number + 1, [line, ": ", Integer.to_string(line_number) | acc])
   end
 
   defp line_rest(content) do

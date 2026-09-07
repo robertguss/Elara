@@ -1,13 +1,19 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (JOB-11 bounded
-> cancellation) · **Owner:** solo development with AI collaborators
+> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (JOB-12 specialist
+> collaboration) · **Owner:** solo development with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-12:** DONE. Two real specialist sessions delivered optional numbered reads:
+independent red tests, durable report consumption, unchanged green tests, and
+read tool version 3. Host integration/resume remained explicit. Queued child
+reports exposed a completion-consumption caveat documented in the experiment log.
+Full suite: **539/539 passed**.
 
 **JOB-11:** DONE. Cancellation without terminal evidence now publishes an
 indeterminate result after a one-second grace period, retains the runner and
@@ -178,8 +184,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** JOB-12: test specialist authors red regressions, implementation
-specialist consumes its durable report and implements optional numbered reads. Dedicated evals, broader job types,
+**Next candidate (unstarted):** distinguish awaited job completions from unrelated
+child reports and verify which message causes model resumption. Dedicated evals, broader job types,
 physical-terminal acceptance and SPLIT-5 remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -367,7 +373,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
-| JOB-12 | IN PROGRESS | Two specialist sessions implementing numbered reads | JOB-11 |
+| JOB-12 | DONE | Two specialist sessions implementing numbered reads | JOB-11 |
 | JOB-11 | DONE | Bounded cancellation uncertainty and explicit cleanup confirmation | JOB-10 |
 | JOB-10 | DONE | Concurrent cancellation and capacity refill | JOB-5 |
 | JOB-5    | DONE | Session crash during a supervised job and explicit reopen | JOB-4 |
@@ -3491,4 +3497,18 @@ Host owns compatibility checks, review, documentation and publication.
 
 ### Result
 
-**IN PROGRESS.** Preparing one normal-provider attempt with retained evidence.
+**DONE.** One normal-provider attempt completed with two `gpt-5.5` / `low`
+sessions. Child authored seven tests (six expected failures); parent consumed its
+durable report and made all seven pass without modifying them. Host integrated
+and committed red tests, then added remote/public-session/default-range checks.
+The 25 focused checks and full suite (**539/539**, 138.3 seconds) pass.
+Formatting, warnings-as-errors compilation and independent review pass.
+
+The feature preserves line bytes, EOF behavior and range defaults and rejects
+nonboolean flags. Read version 3 rejects incompatible remote versions. The
+implementer woke on a queued child report and read its passed job status; its
+own job completion was accepted into the inbox but is absent from the captured
+model transcript. This is a successful bounded collaboration, not proof of both
+owners consuming their own completion, autonomous integration or parallel speedup.
+See [the experiment log](docs/harness-experiments.md#2026-09-07-two-specialists-deliver-numbered-reads--job-12)
+and its retained public evidence. No Rust code or runtime scheduling policy changed.

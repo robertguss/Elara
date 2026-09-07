@@ -132,13 +132,13 @@ defmodule Elara.ExecutorTest do
     refute File.exists?(Path.join(context.brain, "made.txt"))
   end
 
-  test "range reads use a distinct worker tool version", context do
+  test "range and numbered reads use a distinct worker tool version", context do
     token = "worker-secret"
     worker = start_worker(context.worker, context.workspace_id, token, ["filesystem:read"])
     on_exit(fn -> if Process.alive?(worker), do: GenServer.stop(worker) end)
     File.write!(Path.join(context.worker, "range.txt"), "skip\nselected\r\nlast")
     read = tool("read")
-    assert read.version == "2"
+    assert read.version == "3"
 
     request = %Request{
       tool_call_id: "remote-range",
@@ -157,6 +157,12 @@ defmodule Elara.ExecutorTest do
 
     config = %{port: WorkerServer.port(worker), token: token}
     assert {:ok, "selected\r\n"} = Remote.execute(config, request, read)
+
+    numbered = %{request | arguments: Map.put(request.arguments, "line_numbers", true)}
+    assert {:ok, "2: selected\r\n"} = Remote.execute(config, numbered, read)
+
+    assert {:executor_error, :rejected, "unknown_tool_version"} =
+             Remote.execute(config, %{numbered | tool_version: "2"}, %{read | version: "2"})
 
     assert {:executor_error, :rejected, "unknown_tool_version"} =
              Remote.execute(config, %{request | tool_version: "1"}, %{read | version: "1"})

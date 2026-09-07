@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-07 (DIAG-1 and
-> JOB-1–JOB-3 integration) · **Owner:** solo development
+> JOB-4 live repository test) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,11 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-4:** IN PROGRESS; owner authorized a naturally longer repository test job.
+JOB-1/JOB-2/JOB-3 are merged and pushed to `main` in `63d3dab`, alongside DIAG-1.
+The selected workload is the existing `test/elara/context_test.exs`; no artificial
+delay, fault injection or runtime policy change.
 
 **DIAG-1:** DONE; original implementation `1b24bfe`, merged in `f54350e`.
 The citation-range correction removes the arbitrary 10-line maximum while
@@ -297,6 +302,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
+| JOB-4    | IN PROGRESS | Naturally longer repository context-recovery test job    | JOB-3            |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -2961,3 +2967,21 @@ saved-session listing and thread PTY/session discovery. Both queued-recovery
 cases and the provider HTTP fixture pass this run; this merge does not repair
 them. All context-recovery checks pass. Local merge review found no additional
 code changes needed beyond preserving both built-in tool registrations.
+
+
+## JOB-4 — Naturally longer repository test job
+
+**Scope:** Owner-authorized on 2026-09-07 after the JOB-1–JOB-3 merge. One live
+configured model starts the existing context-recovery test file and finishes
+from its automatic completion input. Retain the public transcript, command
+result, source fingerprints, timing and any explicit continuation assistance.
+Keep the driver attached across provider errors; do not inject faults or delays,
+change runtime policy, or add dedicated evals.
+
+### Result
+
+**IN PROGRESS.** Merge `63d3dab` is pushed to main. The opt-in driver is prepared;
+full merged-suite verification selected this file because its real restart and
+handoff checks passed and include a 6,030 ms fresh-BEAM recovery test. The driver
+will record one durable job and model start/status calls; it does not instrument
+repository tests with a physical execution counter.

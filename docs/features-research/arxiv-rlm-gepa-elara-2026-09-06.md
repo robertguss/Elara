@@ -2,6 +2,8 @@
 
 Research cutoff: **2026-09-06**. Companion to the [repository and Stencil investigation](harness-ideas-beam-2026-09-06.md). This is research and a set of proposed experiments; it does not change the roadmap or implement the proposals.
 
+The subsequent [DSPy source investigation](dspy-for-elara-2026-09-06.md) examines how signatures, trace bootstrapping, RLM, GEPA, and experimental Flex could fit behind one Elara operation contract.
+
 **RLM is the strongest additional architecture experiment for Elara. GEPA is a useful way to improve selected harness behavior once there is trustworthy feedback.** I would connect them through a durable evidence service: agents operate on identified artifacts, their work produces attributable traces, and proposed policy changes remain versioned and independently selectable.
 
 The BEAM opportunity is to make that work observable, interruptible, bounded, and recoverable. Cheap processes do not imply cheap model calls, and none of the papers below demonstrates that an Elixir implementation improves model accuracy. The Elara designs in this report are our hypotheses.

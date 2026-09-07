@@ -113,9 +113,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Owner selection of the next experiment. The longer supervised
-context-test experiment, dedicated evals, broader job types, physical-terminal
-acceptance and the SPLIT-5 owner checkpoint remain deferred.
+**Next action:** JOB-4 runs the repository context-recovery tests through a
+supervised job with a disclosed provider failure and a concurrent session.
+Dedicated evals, broader job types, physical-terminal acceptance and SPLIT-5
+remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -302,6 +303,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
+| JOB-4    | IN PROGRESS | Longer repository job, concurrent session and provider failure | TEST-1 |
 | TEST-1   | DONE | Resolve known suite failures and verify full regression coverage | DIAG-1, JOB-3 |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
@@ -3014,3 +3016,18 @@ warnings denied pass. The newly integrated opt-in live driver is also identified
 as support code, removing its discovery warning; the roadmap checks pass after
 that filter change. Independent review is clear. The original checkout's 15
 unrelated files retain their original hashes. No live-model call was needed.
+
+
+## JOB-4 — Longer repository job with concurrent session
+
+**Scope:** Owner authorized on 2026-09-07. Run `test/elara/context_test.exs`
+through the existing test-job tool, inject one provider error while it runs,
+keep the owner subscribed, and exercise a second session. Record command count,
+completion delivery, source identity, responsiveness and model usage.
+
+### Result
+
+**IN PROGRESS.** Checkout starts from current main `594384a`; the saved
+`codex/harness-harvesting-ideas` branch remains intact. An opt-in driver counts
+exact target command launches through a PATH shim and uses real Codex calls.
+No production behavior or target-test changes are proposed.

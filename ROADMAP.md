@@ -3153,4 +3153,12 @@ No context, retry, job, UI or dedicated eval changes.
 `codex/edit-replace-all`. Prior branch was already fully pushed. Live driver
 records the exact prompt, public transcript, job results and original model
 patch separately from host review. One initial prompt, a 32-iteration turn
-limit and a five-minute observer deadline bound the attempt.
+limit and a five-minute observer deadline bound the attempt. The live model
+completed in 86,051 ms: four expected red failures, then five green tests, with
+one initial prompt and no recovery intervention. All runtime/schema changes
+are model-authored and retained. Host review added local/public/remote checks
+and usage documentation: 26 focused tests pass. A fresh normal-provider session
+used edit version 2 once and produced exact expected bytes. Full suite:
+516/524 in 182.0 seconds, with the same eight named JOB-6 baseline failures.
+Formatting, warnings-as-errors compilation and local review pass. All ten new
+tests pass. Publication checkpoint remains pending.

@@ -35,30 +35,33 @@ defmodule Elara.Tools do
   def write(_args, _ctx), do: {:error, "write requires path and content"}
 
   @spec edit(map(), Ctx.t()) :: Elara.Tool.outcome()
-  def edit(%{"path" => path, "old_text" => old_text, "new_text" => new_text}, %Ctx{cwd: cwd})
+  def edit(%{"path" => path, "old_text" => old_text, "new_text" => new_text} = args, %Ctx{
+        cwd: cwd
+      })
       when is_binary(path) and is_binary(old_text) and is_binary(new_text) do
-    full = Path.expand(path, cwd)
+    with {:ok, replace_all} <- boolean_arg(args, "replace_all", false),
+         :ok <- nonempty_old_text(old_text) do
+      full = Path.expand(path, cwd)
 
-    case File.read(full) do
-      {:ok, content} ->
-        case :binary.matches(content, old_text) do
-          [] ->
-            {:error, "old_text not found in #{path}"}
+      case File.read(full) do
+        {:ok, content} ->
+          case :binary.matches(content, old_text) do
+            [] ->
+              {:error, "old_text not found in #{path}"}
 
-          [_] ->
-            updated = String.replace(content, old_text, new_text, global: false)
+            [_] ->
+              write_edit(full, path, String.replace(content, old_text, new_text, global: false))
 
-            case File.write(full, updated) do
-              :ok -> {:ok, "edited #{path}"}
-              {:error, reason} -> {:error, "edit write failed: #{describe_posix(reason)}"}
-            end
+            _matches when replace_all ->
+              write_edit(full, path, String.replace(content, old_text, new_text, global: true))
 
-          matches ->
-            {:error, "old_text matched #{length(matches)} times in #{path}; need exactly one"}
-        end
+            matches ->
+              {:error, "old_text matched #{length(matches)} times in #{path}; need exactly one"}
+          end
 
-      {:error, reason} ->
-        {:error, "edit read failed: #{describe_posix(reason)} (#{path})"}
+        {:error, reason} ->
+          {:error, "edit read failed: #{describe_posix(reason)} (#{path})"}
+      end
     end
   end
 
@@ -97,6 +100,24 @@ defmodule Elara.Tools do
      "output truncated: bytes_total=#{result.bytes_total} bytes_sent=#{result.bytes_sent}\n" <>
        result.output}
   end
+
+  defp write_edit(full, path, updated) do
+    case File.write(full, updated) do
+      :ok -> {:ok, "edited #{path}"}
+      {:error, reason} -> {:error, "edit write failed: #{describe_posix(reason)}"}
+    end
+  end
+
+  defp boolean_arg(args, key, default) do
+    case Map.fetch(args, key) do
+      :error -> {:ok, default}
+      {:ok, value} when is_boolean(value) -> {:ok, value}
+      {:ok, _value} -> {:error, "edit #{key} must be a boolean"}
+    end
+  end
+
+  defp nonempty_old_text(""), do: {:error, "edit old_text must not be empty"}
+  defp nonempty_old_text(_old_text), do: :ok
 
   defp positive_integer_arg(args, key, default) do
     case Map.fetch(args, key) do

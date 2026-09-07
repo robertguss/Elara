@@ -581,11 +581,23 @@ call. Saved handoff headers require this build for resume.
 - `write` atomically writes a workspace-relative regular file and creates parent
   directories. It records durable controller intent and executor receipts before
   and after mutation.
-- `edit` replaces exactly one occurrence of `old_text` with `new_text`.
+- `edit` replaces exactly one occurrence of `old_text` with `new_text`, or every
+  non-overlapping literal occurrence when `replace_all: true`.
 - `bash` runs a shell command with stdout and stderr merged. A supervised Rust
   stub runs each command in its own process group and kills the group on
   interruption, timeout, or output overflow. Stub loss reports an
   `indeterminate` outcome rather than success.
+
+For example, `{"path":"config.exs","old_text":"old_name","new_text":"new_name","replace_all":true}`
+replaces all exact occurrences in that file. Omitting `replace_all` or passing
+`false` keeps the unique-match requirement. The flag must be a boolean and
+`old_text` must be nonempty; invalid values, missing matches and ambiguous
+single-match requests return errors without changing the file. Empty `new_text`
+deletes matched text. Replacement is literal and nonrecursive, preserving
+surrounding bytes and line endings. This is a whole-file read/write operation,
+not an atomic edit or a concurrent-writer protection mechanism. Edit is tool
+version 2; mismatched workers reject the call. Restart existing processes to
+load the updated built-in tool.
 
 Relative paths and shell commands use the session working directory. `write`
 rejects absolute paths, `..`, symlink path components, and non-file targets so

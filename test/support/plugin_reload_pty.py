@@ -50,7 +50,7 @@ try:
     plugin.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, plugin)
     os.write(master, b"/plugins reload\r")
-    wait_for((b"Plugins", b"reloaded:", b"elixir_project", b"v2"))
+    wait_for((b"Plugins", b"reloaded:", b"elixir_project", b"v3"))
     plugin.write_text("defmodule Broken do")
     os.write(master, b"/plugins reload\r")
     # The old notice can leave unchanged characters between newly drawn spans.

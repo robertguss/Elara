@@ -49,6 +49,52 @@ defmodule Elara.Session.CoreTest do
     %ToolCall{id: id, name: name, args: args}
   end
 
+  test "nested provider usage is retained once on tool completion or interruption and crosses public boundaries" do
+    usage = %{"input_tokens" => 100, "output_tokens" => 20, "total_tokens" => 120}
+    {waiting, _} = ask(new())
+
+    {running, _} =
+      Core.step(
+        waiting,
+        {:provider_result, 1, {:ok, asst(nil, [call("a", "echo"), call("b", "other")])}}
+      )
+
+    {metered, []} = Core.step(running, {:tool_usage, 2, usage})
+    assert {^metered, []} = Core.step(metered, {:tool_usage, 2, usage})
+    assert {^metered, []} = Core.step(metered, {:tool_usage, 999, usage})
+
+    for fact <- [
+          {:tool_result, 2, {:ok, "done"}},
+          {:tool_result, 2, {:error, "invalid output"}},
+          {:tool_crashed, 2, "crash after usage was received"},
+          {:tool_timeout, 2},
+          :interrupt
+        ] do
+      {finished, _} = Core.step(metered, fact)
+      results = Enum.filter(finished.history, &is_struct(&1, Message.ToolResult))
+      [result | rest] = results
+      assert result.usage == usage
+      assert Enum.all?(rest, &is_nil(&1.usage))
+      assert finished.tool_usage == nil
+      assert Elara.Provider.Visibility.totals(finished.history) == usage
+
+      assert {:ok, ^result} =
+               result
+               |> Elara.Session.Store.encode_message()
+               |> Elara.Session.Store.decode_message()
+
+      event = Elara.Protocol.event(1, {:message_appended, result})["event"]
+      assert {:ok, {:message_appended, ^result}} = Elara.Protocol.decode_event(event)
+      snapshot = Elara.Protocol.snapshot("session", "incarnation", finished)
+      assert Enum.find(snapshot["messages"], &(&1["role"] == "tool"))["usage"] == usage
+
+      legacy = update_in(event, ["message"], &Map.delete(&1, "usage"))
+      assert {:ok, {:message_appended, %{usage: nil}}} = Elara.Protocol.decode_event(legacy)
+      invalid = put_in(event, ["message", "usage"], %{"private_reasoning" => "secret"})
+      assert {:error, :invalid_event} = Elara.Protocol.decode_event(invalid)
+    end
+  end
+
   test "public parts upsert, interrupt persist, and resume without private state" do
     part = %{
       "kind" => "reasoning_summary",

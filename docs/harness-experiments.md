@@ -91,7 +91,69 @@ behavior, rather than an additional BEAM mechanism.
 
 Guide: the execution limits and repeated-call policy in [README.md](../README.md).
 
-## Recommended next experiment: supervised test completion and agent wakeup
+## 2026-09-07: Captured check diagnosis — DIAG-1
+
+**Question:** Can a small model-backed operation keep an explicit result contract
+while Elara owns immutable evidence, execution, cancellation and acceptance?
+This is the first direct slice of the [DSPy proposal](features-research/dspy-for-elara-2026-09-06.md).
+
+**Functionality added:** the version 3 project plugin captures up to four selected
+source excerpts before a check and retains its output afterward. `check_evidence`
+inspects that bundle; `diagnose_check` performs one additional tool-free provider
+request using `check_diagnosis/v1`, strategy `direct/v1`. The session validates
+required fields and captured artifact/line references. The existing Rust tool
+viewer shows and copies the report, including rejection details. Usage is
+retained in the typed transcript and canonical totals, persistence and protocol.
+
+**Runtime evidence:** real Mix failure and source-edit fixtures pass through the
+public session API. The original source remains available after edits and
+restart. Cancelling one gated diagnosis terminates its worker and rejects a late
+result while another session finishes independently. Worker crash preserves the
+capture. Rewind clears active evidence; clone/fork and resuming another session
+do not retain a capture from the wrong history. Flight-recorder replay matches.
+The Rust PTY exercise searches the result, redraws it at a different size, copies
+the complete canonical report and submits the draft preserved during inspection.
+
+**Live result: both responses were rejected.** Two assisted runs used actual
+`gpt-5.5` at low effort through the subscription provider. The synthetic Mix
+project's `NameHelper.normalize/1` handled strings, while a test required `nil`
+to produce an empty string. Both responses correctly identified the missing
+clause on manual inspection, but each cited log lines 29–45: **17 lines against
+a 10-line limit**. Neither became an accepted diagnosis.
+
+| Run | Direct request duration | Reported direct-request tokens | Outcome |
+| --- | --- | --- | --- |
+| Initial implementation | 7,670 ms | 1,395 input + 311 output = 1,706 | Rejected; generic validation reason. |
+| With command metadata and specific rejection reasons | 7,161 ms | 1,436 input + 311 output = 1,747 | Rejected; explicitly reports the 17-line span and 10-line maximum. |
+
+The first response also mistook the plugin's `test:...` label for a command.
+That prompted retaining the actual executable/argument arrays and explaining
+their meaning. The second response used those arguments. This is a local
+observation across two development revisions, not evidence of a reliable
+improvement. The acceptance limit was kept intact; no automatic repair or
+hidden retry was added.
+
+**Assistance:** each run used a supplied minimal project, selected source files,
+and two explicit owner prompts: run only the check, then diagnose that run once.
+The operator inserted the missing clause after capture and separately verified
+the current workspace passed after diagnosis. That deliberate edit tested
+historical evidence; the model did not make the fix. Each run included four
+ordinary assistant responses in addition to the one direct diagnosis request.
+The full prompts, captured excerpts, raw rejected responses, final replies and
+usage totals are retained in [the live records](features-research/check-diagnosis-live-runs.json).
+
+**Learning:** supervised execution, immutable evidence and explicit acceptance
+make a failed model operation inspectable. They do not make its output comply
+with a schema or prove its causal claims. The direct strategy has not produced
+an accepted live result in this exercise. A useful next comparison would add a
+few curated examples while preserving the contract and recording failures as
+well as successes. No example strategy, RLM, GEPA or optimizer is implemented,
+and there is no broad evaluation program or throughput claim.
+
+Guide: [captured check diagnosis](check-diagnosis.md). Publication and shared
+verification results: [DIAG-1 in the roadmap](../ROADMAP.md#diag-1--diagnose-a-captured-failed-check).
+
+## Separate candidate: supervised test completion and agent wakeup
 
 **Proposal, not implementation authorization.** Run one focused test command as
 an explicitly owned background job. Let the agent wait without polling the

@@ -132,6 +132,12 @@ labels. The old `test:all` label is interpreted as a full-suite invocation;
 version 1 could not distinguish that from a literal test target named `all`.
 Version 2 retains that distinction for new invocations.
 
+Version 3 adds `evidence_paths` to checks/tests and captures immutable source
+and output excerpts for [check diagnosis](check-diagnosis.md). Version 2's
+remembered invocations remain usable; they acquire evidence when rerun. The
+last completed capture belongs to the session store and survives persistence;
+plugin reload does not replace it or invent evidence for an earlier run.
+
 The offline acceptance test runs real Mix commands and a built-in edit through
 the public session API with a scripted provider:
 `mix test test/elara/elixir_project_plugin_test.exs`. It verifies the runtime

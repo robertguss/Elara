@@ -61,7 +61,11 @@ defmodule Elara.Provider.Visibility do
     last =
       core.history
       |> Enum.reverse()
-      |> Enum.find(&is_struct(&1, Elara.Message.Assistant))
+      |> Enum.find(fn
+        %Elara.Message.Assistant{} -> true
+        %Elara.Message.ToolResult{usage: usage} -> is_map(usage)
+        _ -> false
+      end)
 
     images? =
       Enum.any?(core.history, fn
@@ -139,11 +143,23 @@ defmodule Elara.Provider.Visibility do
 
   def totals(history) do
     Enum.reduce(history, %{}, fn
-      %Elara.Message.Assistant{usage: usage}, totals when is_map(usage) ->
+      %{__struct__: type, usage: usage}, totals
+      when type in [Elara.Message.Assistant, Elara.Message.ToolResult] and is_map(usage) ->
         Map.merge(totals, usage, fn _key, a, b -> a + b end)
 
       _, totals ->
         totals
     end)
   end
+
+  def valid_usage?(nil), do: true
+
+  def valid_usage?(usage) when is_map(usage) do
+    Enum.all?(usage, fn {key, value} ->
+      key in ~w(input_tokens output_tokens total_tokens cached_input_tokens cache_write_tokens reasoning_tokens) and
+        is_integer(value) and value >= 0
+    end)
+  end
+
+  def valid_usage?(_), do: false
 end

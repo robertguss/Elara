@@ -42,7 +42,7 @@ defmodule Elara.PluginReloadProtocolTest do
 
     assert status == 0, output
     assert output =~ "PTY passed"
-    assert [%{id: "elixir_project", version: "2", generation: 1}] = Elara.plugins(session)
+    assert [%{id: "elixir_project", version: "3", generation: 1}] = Elara.plugins(session)
     assert Elara.transcript(session) == []
   end
 

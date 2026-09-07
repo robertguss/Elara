@@ -142,7 +142,7 @@ defmodule Elara.ElixirProjectPluginTest do
 
     File.cp!(@plugin, plugin)
     assert {:ok, [version2]} = Elara.reload_plugins(session)
-    assert version2.version == "2"
+    assert version2.version == "3"
     assert version2.pid == version1.pid
     assert version2.generation == 2
     assert Elara.transcript(session) == before_history

@@ -72,6 +72,9 @@ defmodule TwoSpecialistReadLive do
     assignment = """
     You are the test specialist. You are not alone: another specialist implements
     the feature in the parent workspace. Do not revert or edit other people's work.
+    On your FIRST turn, do not call tools or edit files. Reply ONLY with
+    WAITING_FOR_ENVIRONMENT and stop. Execute the assignment below only after
+    receiving the host's ENVIRONMENT_READY message.
     Own ONLY the new file #{@test} in this isolated coding worktree. Do not modify
     production files, existing tests, README, Git state or experiment support.
     #{@contract}
@@ -111,7 +114,19 @@ defmodule TwoSpecialistReadLive do
     capture(output, report)
 
     try do
-      # The child writes tests before execution; provision only ignored build data.
+      readiness =
+        Driver.run(child_id, nil,
+          completion_marker: "WAITING_FOR_ENVIRONMENT",
+          timeout_ms: 120_000
+        )
+
+      report = Map.put(report, :readiness_observation, readiness)
+      capture(output, report)
+
+      unless readiness.outcome == "complete",
+        do: raise("Test specialist did not wait for environment provisioning")
+
+      # Provision ignored build data only after the child's initial turn settles.
       {_, 0} = System.cmd("cp", ["-R", Path.join(cwd, "deps"), Path.join(child["cwd"], "deps")])
 
       {_, 0} =

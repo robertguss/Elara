@@ -125,3 +125,10 @@ identity isolated in its workspace helper and durable schema in its record helpe
 `Elara.submit_input/2` for delivery. The session reducer, Rust protocol, and
 generic effect-recovery guarantees do not need a replacement. No cron, remote
 jobs, automatic command replay, new UI framework, or dedicated eval framework.
+
+
+The [JOB-4 repository experiment](harness-experiments.md#2026-09-07-longer-context-recovery-job-and-concurrent-session--job-4)
+ran the unchanged context-recovery test file for 11.93 seconds. Completion woke
+the owner after an injected provider failure while a second real-model session
+remained usable. It recorded one target launch, one completion input and no
+model polling. This is one assisted run, not a general concurrency benchmark.

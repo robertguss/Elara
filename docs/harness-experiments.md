@@ -382,3 +382,68 @@ new runtime policy was introduced. All 70 focused integration checks pass, as
 do formatting and warnings-as-errors compilation. The full merged suite passes
 486/493 in 128.0 seconds, with seven previously recorded baseline failures.
 The next authorized experiment uses the existing context-recovery test file.
+
+## 2026-09-07: Longer context-recovery job and concurrent session — JOB-4
+
+**Result:** one live run passed all checks on revision `cf29908`, based on the
+fully repaired main `594384a`. The existing `test/elara/context_test.exs` ran
+through `test_job` without changes to the tests or production runtime. Both
+sessions used actual `gpt-5.5` at low effort. The
+[full evidence](fixtures/long-context-job-live-2026-09-07.json) retains prompts,
+public messages, command output, usage, source hashes and all latency samples.
+
+| Observation | Result |
+| --- | --- |
+| Focused command | 11,930 ms, exit 0, 15 tests passed |
+| Exact target command launches | 1, counted by a PATH shim before exec of real Mix |
+| Provider error | 1 deliberately injected immediately after start returned `running` |
+| Completion inputs | 1; accepted automatically by the subscribed owner |
+| Owner model tool calls | 1 start, 1 status; no polling or rerun |
+| Continuation prompts after failure | 0 |
+| Independent real-model request | `17 * 23` → `391` in 2,060 ms; job record still `running` at reply |
+| Owner status API during job | 122 samples; median 0.029 ms, maximum 0.147 ms |
+| Source identity | All 139 files in the declared source set unchanged before/after and at status |
+| Owner provider requests | 4 attempts, of which 3 reached the real provider and 1 was injected |
+| Secondary provider requests | 1 real request |
+| Reported token usage | Owner 5,758; secondary 921; total 6,679 |
+
+Relative to driver start, the provider error was observed at 4.317 seconds,
+the second session finished at 6.377 seconds, job completion was observed at
+16.265 seconds, and the owner finished interpreting it at 20.884 seconds. No
+real owner provider request occurred between the injected error and observed
+completion. The completion timestamp comes from host observation of the durable
+record, not an exact process-exit timestamp. The command duration comes from
+the execution result. The error log inside the target's output is an expected
+crash-recovery fixture; its final result is 15 passed.
+
+**What this establishes:** the admitted job survives a failed provider turn,
+its retained completion starts another turn without an operator prompt, and a
+second session can complete useful inference while the job is outstanding.
+This exercises separate job, session and inference lifetimes using the existing
+BEAM supervisors, processes and inbox delivery. No runtime change was needed.
+
+**Limits and assistance:** the driver supplied the target, stable job ID,
+completion instructions and secondary arithmetic prompt. The provider failure
+was synthetic and occurred after admission, not a natural transport outage or
+a crash of the owning VM. The exact-command counter does not count the target's
+expected nested subprocesses as duplicate target launches. The driver sampled
+local APIs; these are not TUI/network latency measurements. Twelve seconds is
+longer than the earlier five-second fixture, but is not a multi-minute stress
+run or evidence of superiority over another runtime. Source hashes cover the
+declared files, not all dependencies or transient filesystem changes.
+
+The opt-in driver is reproducible with the existing Codex login:
+
+```bash
+mix run --no-start test/support/long_context_job_live.exs OUTPUT.json
+```
+
+`--no-start` is required: the driver installs its launch-count environment before
+starting Elara's Rust execution process. Review caught and fixed the initial
+post-start instrumentation mistake before any live request. Review also changed
+the overlap assertion to inspect the job state at the secondary reply, rather
+than infer it from a later sampled completion timestamp. The run retains its
+private session/job records and launch log in the reported temporary directory;
+both sessions are stopped after evidence capture. Ordinary ExUnit remains
+offline and does not load this driver. See JOB-4 in [ROADMAP.md](../ROADMAP.md)
+for final verification and publication.

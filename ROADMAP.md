@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-06 (
-> JOB-1 supervised test-job experiment published) · **Owner:** solo development
+> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (
+> JOB-2 real repository repair published) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,14 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-2:** DONE; repair pushed in `f241b20` on
+`codex/test-job-repository-repair`, stacked on JOB-1. The real model completed
+three supervised jobs, with one explicit continuation prompt after a provider
+error. Host review reduced its patch to one line while preserving the exact
+invocation-path assertion. The focused regression passes; full suite: 468/475,
+with seven known baseline failures remaining. Formatting, compilation and review
+are clear. See the [experiment report](docs/harness-experiments.md). Not merged.
 
 **JOB-1:** DONE and pushed on `codex/supervised-test-jobs`: implementation
 `1d9117c`, contract and evidence `2fb5915`. All 20 focused checks pass; full suite
@@ -85,11 +93,12 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Review `codex/supervised-test-jobs` for merge. The next proposed
-experiment is a small real repository repair using the new test-job completion
-workflow; no eval framework is required. The SPLIT-5 owner checkpoint remains
-unstarted and physical-terminal acceptance stays deferred. PLUGIN-2 and LOOP-1
-are merged into `main` at `57f9edc`.
+**Next action:** Review the stacked JOB-1/JOB-2 branches for merge. The next
+proposed experiment is bounded recovery after a provider failure: keep the driver
+attached and distinguish queued completion, consumed input, and failed inference
+before deciding which harness behavior needs to change. Then try a naturally
+longer test/build task. The SPLIT-5 owner checkpoint, physical-terminal acceptance,
+and dedicated evals remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -273,6 +282,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | PLUGIN-2 | DONE     | Agent-authored plugin during a real coding task              | PLUGIN-1         |
 | LOOP-1   | DONE     | Permit useful repeated tool calls with bounded loops          | PLUGIN-2         |
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
+| JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-1     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -2723,3 +2733,50 @@ live continuation; it is not a long coding trial or comparative productivity
 measurement. The [experiment report](docs/harness-experiments.md) and
 [sanitized transcript](docs/fixtures/test-job-live-2026-09-06.json) retain the
 evidence. All changes are published on the experiment branch.
+
+
+## JOB-2 — Real repository repair with supervised test jobs
+
+**Scope:** Owner authorized continuing the next experiment on 2026-09-07.
+One existing repository failure; real configured Codex provider; ordinary
+read/write/edit/bash tools plus `test_job`; persistent session with no plugins
+or user skills. Reproduce and rerun through separate job IDs and automatic
+completion inputs. No model polling, manual completion injection, dedicated eval
+framework, or broad baseline cleanup. The host agent reviews, independently
+verifies, documents and publishes the resulting patch.
+
+### Result
+
+**DONE (2026-09-07).** Final repair pushed in `f241b20` on
+`codex/test-job-repository-repair`. Real `gpt-5.5` low-effort session
+`RA0iisPNya1AkewF5SSkrw` completed the scoped repair. Baseline
+`mix test test/elara/threads_test.exs:374` failed the `parent_cwd` equality assertion:
+Git returns `/private/var/...` while the test expects `/var/...`; the preceding
+repository-root content assertion passes.
+
+The model's three supervised jobs produced original failure (1,323 ms), an
+invalid `File.realpath!/1` repair failure (975 ms), then a passing physical-path
+comparison repair (899 ms). All three completion inputs were retained; six
+start/status calls used no polling. Public history has 43 messages and 18 tool
+calls. The provider returned an empty response after the first repair's job
+started. The driver closed the session; reopening and resuming inputs alone did
+not restart its already-consumed completion. One explicit continuation prompt
+was necessary; no diagnosis or code repair was supplied. This was assisted
+success. The initial failed run also logged fixture-cleanup trouble.
+
+The [experiment report](docs/harness-experiments.md) and
+[evidence artifact](docs/fixtures/test-job-repository-repair-2026-09-07.json)
+retain the original model patch, public transcript, job evidence, and assistance.
+The [test-job guide](docs/test-jobs.md) now distinguishes accepted/consumed input
+from successful inference and explains explicit continuation without rerunning
+an already-completed test. Review found that the model's physical-path comparison weakened the literal
+invocation-path assertion. The host reduced the final patch to one line using
+`git(cwd, ["rev-parse", "--show-toplevel"])` for the expected repository root,
+preserving `parent_invocation_cwd == nested`. Independent review is clear;
+formatting, compilation with warnings denied, and the focused regression pass.
+Full suite: 468/475 passed. The seven remaining failures are the two attachment
+context-budget cases, two TUI context-budget cases, protocol cold attach, saved
+session listing, and the other thread PTY/session-discovery case. The formerly
+failing provider HTTP fixture and queued-mutation timing tests passed this run;
+this patch did not repair them. No new failure category appeared. Final code,
+evidence, and usage notes are published on the experiment branch. Branch starts at JOB-1's `3f8a300`; no merge into main occurred.

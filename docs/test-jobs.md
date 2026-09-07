@@ -67,6 +67,14 @@ apply, and an offline recipient receives the evidence after explicit reopen.
 Do not resurrect stopped sessions. Ordinary session interrupt pauses input;
 explicit job cancellation separately stops the background command.
 
+Inbox acceptance, input consumption, and successful model completion are
+different milestones. If inference fails after a completion input is consumed,
+reopening the session or resuming inputs does not replay that consumed input.
+Inspect the retained job and explicitly continue the session as needed. A new
+job ID requests another execution; it is unnecessary when only the model's
+interpretation needs to continue. The [repository repair experiment](harness-experiments.md)
+records this recovery boundary in a live run.
+
 Source identity covers Mix files and project lib/config/test contents, excluding
 generated build/dependency directories. Capture before and after execution and
 compare again on status. Changed or unreadable source is visibly stale/unknown.

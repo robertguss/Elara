@@ -148,3 +148,66 @@ Guide and boundaries: [Supervised focused test jobs](test-jobs.md). Broader
 [context/wakeup research](features-research/harness-ideas-beam-2026-09-06.md) and
 [typed-operation research](features-research/dspy-for-elara-2026-09-06.md) remain
 separate proposals. Evals and benchmarks remain deferred.
+
+## 2026-09-07: Real repository repair with test-job continuation — JOB-2
+
+**Question:** Can a real model use retained test evidence and automatic completion
+to diagnose, repair, and verify an existing repository failure?
+
+**Setup:** `gpt-5.5`, low effort, persistent session
+`RA0iisPNya1AkewF5SSkrw`, no plugins or user skills, and the ordinary
+read/write/edit/bash tools plus `test_job`. The host selected and reproduced the
+existing nested-parent thread-integration failure, then gave the model the test
+name and workflow without supplying the diagnosis or patch. This branch builds
+on JOB-1 at `3f8a300`. The run used the public session API, not a live TUI
+acceptance exercise.
+
+**Observed sequence:**
+
+| Job | Outcome | Execution time | Evidence |
+| --- | --- | --- | --- |
+| `job2-before` | Failed, exit 1 | 1,323 ms | `/var/...` and `/private/var/...` compared as strings despite identifying the same directory |
+| `job2-after` | Failed, exit 1 | 975 ms | The model introduced nonexistent `File.realpath!/1`; the test caught it |
+| `job2-after2` | Passed, exit 0 | 899 ms | Model replaced its invalid helper with physical-directory resolution; current source unchanged |
+
+All three jobs delivered retained completion inputs, and status was inspected
+once per completed job. Across the saved session there were 43 public messages,
+18 tool calls (six test-job calls, three reads, five shell calls, four edits),
+one initial prompt, and one explicit continuation prompt. Shell calls searched
+source, inspected function availability, and formatted the patch; tests ran
+through `test_job`, without polling or manual completion injection.
+
+**Assistance and failure:** the provider returned an empty-assistant-response
+error after the first repair's test was started. The experiment driver closed
+the session; the second completion had already been consumed by the time it was
+reopened. Resuming inputs alone did not restart inference. The host reopened the
+session and supplied one continuation prompt, without a diagnosis or code fix.
+The model then corrected its own invalid API choice and finished. This was
+assisted success, not uninterrupted autonomous repair. The first failing run
+also logged a fixture cleanup error after its path assertion failed.
+
+**Functionality and review:** this experiment repairs test portability. The real
+repository-root content integration already worked; production thread behavior
+does not need to change. The original model patch and exact public prompts,
+tool calls, results, and job evidence are retained in the
+[evidence artifact](fixtures/test-job-repository-repair-2026-09-07.json).
+Review found that normalizing both paths weakened the exact invocation-path
+assertion. The host reduced the shipped patch to one line: compare `parent_cwd`
+with Git's repository-root path using the existing helper, while preserving
+`parent_invocation_cwd == nested`. The focused test passes independently on that
+final patch; the model's passing job applies to its earlier, larger patch.
+Current full-suite checks and publication status are recorded in JOB-2's Result
+in [ROADMAP.md](../ROADMAP.md).
+
+**Learning and practical value:** durable execution and completion delivery
+survived a provider failure and session reopen, and test evidence prevented an
+invented API from being mistaken for a successful repair. Delivered evidence
+does not guarantee that the model finishes acting on it: consumed input and
+failed inference are separate states. Drivers should account for a pending or
+already-started continuation when handling a provider error.
+
+The mechanism is useful for work that must outlive a model turn. These tests
+took about a second each, so this trial does not establish a speed or cost
+advantage over ordinary foreground execution. The next practical priority is
+reliable continuation after inference failure, followed by a naturally longer
+test or build task. No dedicated eval or benchmark framework was added.

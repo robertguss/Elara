@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (TEST-1
-> full-suite cleanup complete) · **Owner:** solo development
+> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (JOB-4
+> longer repository experiment complete) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,12 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-4:** DONE. One 11.93-second context-recovery test job passed all 15 tests,
+survived a disclosed provider error after admission, and woke its owner without
+a continuation prompt or model polling. A second real-model session finished
+in 2.06 seconds while the job was running. Full suite: 497/497 passed. Details
+and limitations are in the [experiment log](docs/harness-experiments.md#2026-09-07-longer-context-recovery-job-and-concurrent-session--job-4).
 
 **TEST-1:** DONE. Fixes in `c6ebf10`, integrated with the supervised test-job
 stack in `110d75c`. All **497 Mix tests** and **121 Rust tests** pass. Recovery
@@ -113,9 +119,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** JOB-4 runs the repository context-recovery tests through a
-supervised job with a disclosed provider failure and a concurrent session.
-Dedicated evals, broader job types, physical-terminal acceptance and SPLIT-5
+**Next action:** Owner selection of the next experiment. JOB-4 is complete;
+dedicated evals, broader job types, physical-terminal acceptance and SPLIT-5
 remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -303,7 +308,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
-| JOB-4    | IN PROGRESS | Longer repository job, concurrent session and provider failure | TEST-1 |
+| JOB-4    | DONE | Longer repository job, concurrent session and provider failure | TEST-1 |
 | TEST-1   | DONE | Resolve known suite failures and verify full regression coverage | DIAG-1, JOB-3 |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
@@ -3027,7 +3032,30 @@ completion delivery, source identity, responsiveness and model usage.
 
 ### Result
 
-**IN PROGRESS.** Checkout starts from current main `594384a`; the saved
+**DONE (2026-09-07).** Driver `cf29908` starts from main `594384a`; the saved
 `codex/harness-harvesting-ideas` branch remains intact. An opt-in driver counts
 exact target command launches through a PATH shim and uses real Codex calls.
 No production behavior or target-test changes are proposed.
+
+The live run on `cf29908` passed: one target command launch, 11,930 ms, exit 0,
+15 context tests passed. One deliberately injected error after admission did
+not prevent automatic completion delivery or interpretation. The owner used
+three real provider requests plus one injected attempt, with one model start
+and one status call; no polling, rerun or continuation prompt. A second real
+`gpt-5.5`/low session answered correctly in 2,060 ms while the job was running.
+All 122 local owner-status samples were below 1 ms (median 0.029, max 0.147).
+Both source fingerprints and the final status check agree across 139 files.
+Reported usage totals 6,679 tokens across both sessions.
+
+This is a 12-second assisted repository run with a synthetic provider error,
+not a natural outage, owning-VM crash, TUI latency benchmark or comparative
+runtime study. The driver retains its private records and exact-launch log;
+both sessions stop after capture. Independent review corrected instrumentation
+startup ordering and overlap measurement before the live run. The 17 focused
+job/roadmap tests, formatting and compilation with warnings denied pass.
+
+Evidence: [full live record](docs/fixtures/long-context-job-live-2026-09-07.json).
+Method and limitations: [experiment log](docs/harness-experiments.md#2026-09-07-longer-context-recovery-job-and-concurrent-session--job-4).
+Final full suite: **497/497 passed** in 129.1 seconds. Formatting and
+compilation with warnings denied pass. Evidence invariants and local
+documentation links pass; independent review is clear.

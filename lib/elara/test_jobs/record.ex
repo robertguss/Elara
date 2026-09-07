@@ -66,7 +66,7 @@ defmodule Elara.TestJobs.Record do
       (not Map.has_key?(r, "source_changed") or r["source_changed"] in [true, false, "unknown"]) and
       (execution?(r["execution"]) and
          (not is_nil(r["execution"]) or r["status"] in ~w(prepared not_started))) and
-      lifecycle?(r) and result?(r)
+      cancellation_wait?(r) and lifecycle?(r) and result?(r)
   end
 
   defp valid?(_, _), do: false
@@ -103,6 +103,20 @@ defmodule Elara.TestJobs.Record do
   end
 
   defp lifecycle?(r), do: r["slot"] == "released" and r["settlement"] == "settled"
+
+  defp cancellation_wait?(r) do
+    case Map.get(r, "cancellation_wait_expired", false) do
+      false ->
+        true
+
+      true ->
+        r["status"] == "indeterminate" and r["cancel_requested"] and
+          (r["slot"] == "held" or r["settlement"] == "operator_confirmed")
+
+      _ ->
+        false
+    end
+  end
 
   defp valid_pid?(pid) do
     pid |> String.to_charlist() |> :erlang.list_to_pid() |> is_pid()

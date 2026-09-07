@@ -172,8 +172,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Owner selection after JOB-10. Candidate: bounded execution policy
-for detached children retaining output. Dedicated evals, broader job types,
+**Next action:** JOB-11: bound cancellation waiting, retain uncertain capacity,
+and verify explicit cleanup confirmation. Dedicated evals, broader job types,
 physical-terminal acceptance and SPLIT-5 remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -361,6 +361,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
+| JOB-11 | IN PROGRESS | Bounded cancellation uncertainty and explicit cleanup confirmation | JOB-10 |
 | JOB-10 | DONE | Concurrent cancellation and capacity refill | JOB-5 |
 | JOB-5    | DONE | Session crash during a supervised job and explicit reopen | JOB-4 |
 | JOB-4    | DONE | Longer repository job, concurrent session and provider failure | TEST-1 |
@@ -3428,3 +3429,18 @@ rerun during integration; the captured run remains tied to `3da41ed`.
 
 The next candidate is a bounded execution policy for detached children retaining
 output; owner selection is required before starting it.
+
+
+## JOB-11 — Bounded cancellation uncertainty
+
+**Scope:** Owner authorized on 2026-09-07. After an execution cancellation request
+is accepted, publish an indeterminate test-job result if settlement does not
+arrive within one second. Keep the runner tracked and capacity held. Late output
+closure must not rewrite the result or release its slot; explicit operator
+confirmation is required after execution tracking is no longer pending.
+No detached-process-tree killing or Rust protocol change is proposed.
+
+### Result
+
+**IN PROGRESS.** The detached-child regression fails before the change and passes
+after the TestJobs policy and optional durable record flag are added.

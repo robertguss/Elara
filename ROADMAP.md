@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (JOB-4
-> longer repository experiment complete) · **Owner:** solo development
+> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (JOB-5
+> owner-session crash experiment complete) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,12 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-5:** DONE. One 11.88-second job survived an idle owner-session kill and
+passed all 15 tests. Completion remained pending while the owner was offline;
+explicit reopen delivered it once without a continuation prompt or rerun.
+The second real-model session answered in 1.38 seconds during execution.
+Full suite: 498/498 passed. Runtime policy unchanged.
 
 **JOB-4:** DONE. One 11.93-second context-recovery test job passed all 15 tests,
 survived a disclosed provider error after admission, and woke its owner without
@@ -119,7 +125,7 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Owner selection of the next experiment. JOB-4 is complete;
+**Next action:** Owner selection of the next experiment. JOB-5 is complete;
 dedicated evals, broader job types, physical-terminal acceptance and SPLIT-5
 remain deferred.
 
@@ -308,6 +314,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
+| JOB-5    | DONE | Session crash during a supervised job and explicit reopen | JOB-4 |
 | JOB-4    | DONE | Longer repository job, concurrent session and provider failure | TEST-1 |
 | TEST-1   | DONE | Resolve known suite failures and verify full regression coverage | DIAG-1, JOB-3 |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
@@ -3059,3 +3066,38 @@ Method and limitations: [experiment log](docs/harness-experiments.md#2026-09-07-
 Final full suite: **497/497 passed** in 129.1 seconds. Formatting and
 compilation with warnings denied pass. Evidence invariants and local
 documentation links pass; independent review is clear.
+
+
+## JOB-5 — Session crash during a supervised job
+
+**Scope:** Owner authorized on 2026-09-07. Kill the owning session process after
+observing command launch, keep another session usable, and verify retained
+completion after explicit reopen. Preserve the temporary-session restart policy.
+No automatic command retry or broader execution guarantees are proposed.
+
+### Result
+
+**DONE (2026-09-07).** Implementation/checkpoint `d0b8b16` adds the opt-in
+live driver and offline characterization. One live run passed all eight checks:
+exactly one target launch, 11,878 ms, exit 0, 15 tests passed. The owner was
+killed after its waiting reply and observed launch; running evidence spans the
+kill. It remained offline through terminal evidence, with delivery pending.
+Explicit reopen preserved session identity and delivered one consumed input.
+The model issued one start and one status call, with no rerun, polling or
+continuation prompt. Another real-model session answered in 1,384 ms while the
+job was running. Both used gpt-5.5/low; total usage 8,068 tokens. All 140 declared
+source files were unchanged before/after and at final status.
+
+The existing temporary-session policy required no runtime repair. This is an
+idle conversation-process crash within a surviving VM, not execution-runner or
+VM-loss recovery. Explicit reopen is disclosed operator assistance. The offline
+test additionally forces redelivery and verifies no duplicate input or model
+request. All 16 job checks, 2 roadmap checks and the **498-test full suite** pass
+(full suite 129.5 seconds). Format, warnings-as-errors compile, static driver
+compile and independent review pass. No production code or Rust changes.
+
+Evidence: [live record](docs/fixtures/session-crash-job-live-2026-09-07.json).
+Method, assistance and limits: [experiment log](docs/harness-experiments.md#2026-09-07-owner-session-crash-with-retained-job-completion--job-5).
+Published on `codex/session-crash-job-experiment` and integrated into main with
+this result. Next candidate is concurrent cancellation/capacity release;
+owner selection is required before starting it.

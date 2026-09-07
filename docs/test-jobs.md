@@ -67,6 +67,13 @@ apply, and an offline recipient receives the evidence after explicit reopen.
 Do not resurrect stopped sessions. Ordinary session interrupt pauses input;
 explicit job cancellation separately stops the background command.
 
+Session processes use a temporary restart policy. Killing an owner does not
+restart it automatically and does not cancel its admitted job. Completion stays
+pending while the owner is offline. Explicitly reopen the saved session and
+attach/subscribe to consume that evidence; no new command execution is needed.
+This boundary differs from losing the job runner or execution VM, which can
+leave execution indeterminate as described above.
+
 Inbox acceptance, input consumption, and successful model completion are
 different milestones. A completion input becomes `consumed` when inference
 starts. If that provider turn fails, the input becomes `failed` and retains its
@@ -132,3 +139,11 @@ ran the unchanged context-recovery test file for 11.93 seconds. Completion woke
 the owner after an injected provider failure while a second real-model session
 remained usable. It recorded one target launch, one completion input and no
 model polling. This is one assisted run, not a general concurrency benchmark.
+
+
+The [JOB-5 owner-crash experiment](harness-experiments.md#2026-09-07-owner-session-crash-with-retained-job-completion--job-5)
+confirmed one 11.88-second execution across an idle session-process kill. The
+owner remained offline through job completion; explicitly reopening and
+subscribing delivered one completion input without a continuation prompt or
+rerun. A second real-model session answered during execution. This proves the
+session boundary in one surviving VM, not recovery from execution-VM loss.

@@ -211,3 +211,71 @@ took about a second each, so this trial does not establish a speed or cost
 advantage over ordinary foreground execution. The next practical priority is
 reliable continuation after inference failure, followed by a naturally longer
 test or build task. No dedicated eval or benchmark framework was added.
+
+## 2026-09-07: Provider failure with the driver attached — JOB-3
+
+**Question:** Did JOB-2 expose a missing runtime recovery mechanism, or did its
+driver stop before the existing continuation path could finish?
+
+**Method:** three deterministic checks use real Mix fixtures and a controlled
+provider. Two additional live cases use `gpt-5.5` at low effort, with a wrapper
+that returns exactly one deliberate `bad_response` at a chosen request boundary.
+The other requests reach the real provider. These are injected failures, not
+observations of a natural outage. The driver stays attached. Fixtures wait for
+a release marker outside the fingerprinted source set and count physical runs.
+
+| Boundary | Live observation | Intervention |
+| --- | --- | --- |
+| Failure after starting a job, before completion | Session `VvASbbDp-Py6XNDK-GgR4Q`: later completion automatically starts a successful interpretation turn | No continuation prompt |
+| Failure during completion interpretation | Session `T1rQU69dEEwkSHU3xz_Zpw`: input retains `failed` and its provider error; existing result remains available | Driver sends one explicit continuation prompt |
+
+Each case recorded **one command execution, one completion input, one model
+start call, and one model status call**, with a passing result and unchanged
+source. The first case made four provider attempts, including the injected
+failure (three real requests); the second made five (four real requests). The
+short Mix fixtures reported 354 ms and 5,024 ms respectively. Those times include
+fixture gating and are not performance benchmarks. The
+[public evidence](fixtures/test-job-failure-recovery-2026-09-07.json) includes
+prompts, outcomes, source evidence, intervention counts and invariant checks.
+Both cases also passed before review; the published pair was rerun after adding
+exact failed-receipt checks and successful-fixture cleanup. The earlier run's
+summaries remain in the evidence. Successful fixture directories are removed
+after evidence capture; failed/uncertain fixtures are retained for diagnosis.
+Persisted sessions and job records remain available.
+
+**Deterministic findings:** all 15 job checks pass, including the three new
+cases. They prove automatic continuation from a later completion, failed-input
+and error retention through session reopen, no retry from `resume_inputs`, an
+explicit new prompt using the existing evidence, and preservation of an explicit
+pause. No command is rerun. The first characterization incorrectly expected a
+failed provider turn to leave the entry `consumed`; it exposed the stronger
+existing behavior: the entry becomes `failed`. The test expectation was
+corrected after inspecting the implementation; runtime policy was not changed.
+
+**Functionality retained:** regression coverage, a reusable opt-in experiment
+driver, and a more precise [recovery guide](test-jobs.md). Existing supervision,
+inbox state transitions and explicit continuation were sufficient for these
+cases. No automatic provider-retry policy or new execution mechanism was added.
+JOB-2's result remains assisted; this controlled follow-up explains the boundary
+without reclassifying that earlier run as autonomous success.
+
+To repeat the live cases with the configured Codex login:
+
+```sh
+mix run test/support/test_job_recovery_live.exs /tmp/elara-recovery.json
+```
+
+This command uses real model requests and creates persistent experimental
+sessions. Ordinary `mix test` runs only the offline characterization checks.
+The script injects the fault and supplies the disclosed continuation in the
+second case; the model does not autonomously decide to retry inference.
+
+**Assessment:** useful confirmation of the BEAM supervision and inbox design.
+Execution, evidence delivery, and inference success have separate lifetimes,
+and Elara already exposes the failed-input state needed to act on them. Keep
+explicit continuation for failed interpretation and preserve user pauses.
+These two cases do not establish general resilience to transport outages,
+streaming interruption, auth failures, or repeated provider errors. The next
+experiment should use a naturally longer repository test/build task, with this
+driver-lifetime lesson applied. Current checks and publication belong to JOB-3
+in [ROADMAP.md](../ROADMAP.md); evals and benchmarks remain deferred.

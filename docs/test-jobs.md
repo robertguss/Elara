@@ -68,12 +68,23 @@ Do not resurrect stopped sessions. Ordinary session interrupt pauses input;
 explicit job cancellation separately stops the background command.
 
 Inbox acceptance, input consumption, and successful model completion are
-different milestones. If inference fails after a completion input is consumed,
-reopening the session or resuming inputs does not replay that consumed input.
-Inspect the retained job and explicitly continue the session as needed. A new
-job ID requests another execution; it is unnecessary when only the model's
-interpretation needs to continue. The [repository repair experiment](harness-experiments.md)
-records this recovery boundary in a live run.
+different milestones. A completion input becomes `consumed` when inference
+starts. If that provider turn fails, the input becomes `failed` and retains its
+error; the job's execution result stays separate.
+
+| Failure or pause boundary | What happens next |
+| --- | --- |
+| Provider fails while the job is still running | A later completion can start a new turn automatically if the session stays attached, idle and unpaused, within its wake budget |
+| Provider fails while interpreting a completion | The input retains `failed` status; reopening or `resume_inputs` does not retry it; explicitly continue the session using its retained evidence |
+| User pauses before completion | Evidence remains queued/accepted until explicit resume; provider failure does not override the pause |
+
+Use `Elara.input_status/2` to inspect an input's state and error. An explicit
+continuation starts a new owner turn; it does not rewrite the earlier failed
+input as successful. A new job ID requests another command execution and is
+unnecessary when only interpretation needs to continue. The
+[recovery experiment](harness-experiments.md) verifies these boundaries. Drivers
+should stay subscribed after a provider error when job completion is still
+pending so the later result can drive a new turn.
 
 Source identity covers Mix files and project lib/config/test contents, excluding
 generated build/dependency directories. Capture before and after execution and

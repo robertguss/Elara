@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-07 (
-> JOB-2 real repository repair published) · **Owner:** solo development
+> JOB-3 provider-failure recovery published) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,13 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-3:** DONE; tests and live driver pushed in `4ec91cb` on
+`codex/test-job-failure-recovery`, stacked on JOB-2. All 15 job checks pass.
+Both live injected-failure cases pass with one physical execution each: a later
+completion wakes automatically, while failed interpretation uses one explicit
+prompt. The existing runtime policy is sufficient for these cases. Review is
+clear; full suite: 470/478 with eight known baseline failures. No merge yet.
 
 **JOB-2:** DONE; repair pushed in `f241b20` on
 `codex/test-job-repository-repair`, stacked on JOB-1. The real model completed
@@ -93,12 +100,11 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Review the stacked JOB-1/JOB-2 branches for merge. The next
-proposed experiment is bounded recovery after a provider failure: keep the driver
-attached and distinguish queued completion, consumed input, and failed inference
-before deciding which harness behavior needs to change. Then try a naturally
-longer test/build task. The SPLIT-5 owner checkpoint, physical-terminal acceptance,
-and dedicated evals remain deferred.
+**Next action:** Merge the reviewed stacked JOB-1/JOB-2/JOB-3 experiments after
+owner authorization, then exercise a naturally longer repository test/build job
+with the driver kept attached across provider errors. Dedicated evals, broader
+job types, physical-terminal acceptance, and the SPLIT-5 owner checkpoint remain
+deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -283,6 +289,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | LOOP-1   | DONE     | Permit useful repeated tool calls with bounded loops          | PLUGIN-2         |
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
+| JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-1     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -2780,3 +2787,49 @@ session listing, and the other thread PTY/session-discovery case. The formerly
 failing provider HTTP fixture and queued-mutation timing tests passed this run;
 this patch did not repair them. No new failure category appeared. Final code,
 evidence, and usage notes are published on the experiment branch. Branch starts at JOB-1's `3f8a300`; no merge into main occurred.
+
+
+## JOB-3 — Provider-failure recovery across completion boundaries
+
+**Scope:** Owner authorized continuing on 2026-09-07. Keep the driver attached;
+separate failure before job completion, failure while consuming its evidence,
+and an explicit user pause. Verify one physical command and one retained input.
+Use deterministic failure injection plus a disclosed live-model wrapper; no
+assumption that automatic retries or a runtime policy change are needed.
+
+### Result
+
+**DONE (2026-09-07).** Tests and opt-in live driver pushed in `4ec91cb` on
+`codex/test-job-failure-recovery`, based on JOB-2 `14f3352`. All 15 job
+checks pass, including the three new characterization cases. A failed provider
+turn moves its active inbox entry from consumed to failed and retains the error.
+Resume/reopen does not retry that failed entry; an explicit owner prompt uses the
+retained evidence without rerunning the command. A failure before completion
+still permits a later automatic report wakeup, and explicit pause is preserved.
+The initial characterization expected consumed instead of failed; its assertion
+was corrected after inspecting existing code. Runtime policy did not change.
+
+Live `gpt-5.5` low-effort cases deliberately injected one bad_response each.
+`VvASbbDp-Py6XNDK-GgR4Q` continued from later completion with zero continuation
+prompts; `T1rQU69dEEwkSHU3xz_Zpw` retained failed-input/error state and completed
+after one driver-authored continuation. Each has one physical command, one
+completion input, and exactly one model start/status pair. Four/five provider
+attempts include the one injected failure; three/four requests reached the real
+provider. Results passed on unchanged source. These are controlled faults, not
+natural outages, and the second case is explicit assisted recovery.
+
+The [experiment report](docs/harness-experiments.md),
+[public evidence](docs/fixtures/test-job-failure-recovery-2026-09-07.json), and
+[recovery guide](docs/test-jobs.md) record the state boundaries and limits.
+The opt-in `test/support/test_job_recovery_live.exs` driver reproduces both live
+cases; ordinary ExUnit runs stay offline. Full suite: 470/478 passed, with the
+seven JOB-2 baseline failures plus the previously known intermittent queued-
+mutation timeout. Formatting and compilation with warnings denied pass. Review
+strengthened unpaused-reopen, retained-message, duplicate-wakeup and exact failed-
+receipt assertions, and added successful-fixture cleanup. All 15 focused checks
+and both live cases passed again afterward; final review is clear. Both initial
+live cases had also passed, and their summaries are retained in the evidence.
+Successful fixture directories were removed after evidence capture; failed or
+uncertain fixtures are retained with diagnostic paths. Persisted session/job
+records remain intentional evidence. No production retry policy changed, and
+no merge into main occurred.

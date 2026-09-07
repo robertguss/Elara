@@ -1,13 +1,19 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (JOB-10 cancellation
-> integration) · **Owner:** solo development with AI collaborators
+> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (JOB-11 bounded
+> cancellation) · **Owner:** solo development with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
 and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**JOB-11:** DONE. Cancellation without terminal evidence now publishes an
+indeterminate result after a one-second grace period, retains the runner and
+holds capacity for explicit cleanup confirmation. Late results cannot rewrite
+or redeliver it. The real detached-child regression proves restart preservation
+and replacement admission only after acknowledgement. Full suite: 531/531 passed.
 
 **JOB-10:** DONE. Four global slots filled; fifth rejected; cancellation released
 one slot in 25 ms and admitted a replacement while three jobs survived.
@@ -172,8 +178,8 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Owner selection after JOB-10. Candidate: bounded execution policy
-for detached children retaining output. Dedicated evals, broader job types,
+**Next action:** Owner selection after JOB-11. Candidate: two specialist sessions
+collaborating on one bounded coding task. Dedicated evals, broader job types,
 physical-terminal acceptance and SPLIT-5 remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
@@ -361,6 +367,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
+| JOB-11 | DONE | Bounded cancellation uncertainty and explicit cleanup confirmation | JOB-10 |
 | JOB-10 | DONE | Concurrent cancellation and capacity refill | JOB-5 |
 | JOB-5    | DONE | Session crash during a supervised job and explicit reopen | JOB-4 |
 | JOB-4    | DONE | Longer repository job, concurrent session and provider failure | TEST-1 |
@@ -3428,3 +3435,43 @@ rerun during integration; the captured run remains tied to `3da41ed`.
 
 The next candidate is a bounded execution policy for detached children retaining
 output; owner selection is required before starting it.
+
+
+## JOB-11 — Bounded cancellation uncertainty
+
+**Scope:** Owner authorized on 2026-09-07. After an execution cancellation request
+is accepted, publish an indeterminate test-job result if settlement does not
+arrive within one second. Keep the runner tracked and capacity held. Late output
+closure must not rewrite the result or release its slot; explicit operator
+confirmation is required after execution tracking is no longer pending.
+No detached-process-tree killing or Rust protocol change is proposed.
+
+### Result
+
+**DONE (2026-09-07).** Implementation `cd8a8a8` starts one fenced timer only
+after execution cancellation is accepted. If native settlement has not arrived
+within 1,000 ms, the manager publishes one immutable indeterminate completion
+with a source snapshot and `cancellation_wait_expired: true`, keeping the runner
+tracked and capacity held. Late terminal results only retire bookkeeping.
+Settled tracking becomes unknown for these records; only operator confirmation
+can release the reservation. Existing records and normal fast cancellation retain
+their behavior. No Rust/protocol or detached-child-killing change.
+
+The real Mix/Port detached-child regression failed before implementation
+(3.7 seconds total, no completion within the assertion window) and passed after
+it. It proves bounded reporting, one completion, pending acknowledgement rejection,
+blocked replacement, late result immutability, durable hold across manager restart,
+explicit confirmation, then successful replacement execution. Record tests reject
+invalid/contradictory flag values. Twenty focused checks pass; the full suite
+passes **531/531** in 137.0 seconds. Format, warnings-as-errors compilation and
+independent review pass. Review corrected cancellation wording in the tool.
+
+Verification uses real OS processes and a controlled provider; no fresh real-model
+call or performance benchmark was needed. The grace period bounds result
+publication, not the lifetime of detached processes. Operator confirmation must
+follow independent cleanup verification. Published on `codex/bounded-job-cancellation`
+and integrated into main with this result.
+
+Method and limits: [experiment log](docs/harness-experiments.md#2026-09-07-bounded-cancellation-uncertainty--job-11).
+Behavior and operator API: [test-job guide](docs/test-jobs.md). The next proposed
+slice is two specialist sessions collaborating on one coding task; it is unstarted.

@@ -936,3 +936,64 @@ all measurements and transcripts are unchanged.
 
 **Next decision:** whether to investigate a bounded execution policy for detached
 children retaining output. That work is proposed, not authorized by JOB-10.
+
+
+## 2026-09-07: Bounded cancellation uncertainty — JOB-11
+
+**Result:** implementation `cd8a8a8` gives supervised test jobs a one-second
+cancellation grace period after `Exec.cancel/1` accepts the termination request.
+If native terminal evidence has not arrived, the manager publishes one
+indeterminate completion, retains the active runner and holds its reservation.
+The optional durable `cancellation_wait_expired` flag records why automatic
+release is forbidden. Existing records without the flag remain valid.
+
+| Boundary | Outcome | Settlement | Capacity |
+| --- | --- | --- | --- |
+| Cancellation requested, no terminal evidence yet | running | pending | held |
+| One-second cancellation grace expires | indeterminate | pending | held |
+| Runner/output tracking later settles | indeterminate | unknown | held |
+| Operator independently confirms cleanup and acknowledges | indeterminate | operator_confirmed | released |
+
+The published completion includes a source snapshot and a clear explanation
+that output may still be held by a detached child. The late native result cannot
+rewrite that outcome or create another completion. Only execution bookkeeping
+is retired. The manager's periodic hold check deliberately maps settled tracking
+to unknown for these records, since output EOF alone does not prove detached
+children have stopped. Explicit acknowledgement is rejected while execution is
+still pending. Once tracking is no longer pending, the existing operator API
+can record independently confirmed cleanup and release capacity.
+
+**Reproduction and verification:** the new regression executes a real Mix fixture
+that opens a detached `sleep 30` through a BEAM Port. Before implementation, the
+test failed because no completion reached the owner within its three-second
+assertion window (3.7 seconds total). After implementation, the same case passed
+(initial green run: 2.3 seconds). It verifies one indeterminate completion,
+retained capacity, rejection of premature acknowledgement/replacement, and no
+rerun on repeated start/cancel of the same identity. The test then terminates
+the known fixture child, observes settled tracking become unknown, restarts the
+job manager, and verifies the held reservation survives. Explicit acknowledgement
+releases it; a deliberately requested replacement job then passes. The original
+completion and source snapshot remain unchanged and no duplicate model request
+appears. Record validation rejects malformed or contradictory flag values.
+
+Twenty focused job/concurrency/roadmap checks pass. The full suite passes
+**531/531** in 137.0 seconds; formatting and warnings-as-errors compilation pass.
+This is a real OS-process
+regression with a controlled provider, not a fresh real-model experiment. No
+model inference policy, native protocol or detached-process-tree killing was
+added. Independent review confirmed timer ordering, task-reference fencing,
+late-result immutability, schema compatibility and acknowledgement behavior.
+Review corrected the tool description to say cancellation *requests* termination.
+
+**Limits:** the grace period bounds publication of the job outcome; it does not
+bound the lifetime of an escaped external process or close its output pipe.
+The runner remains supervised while cleanup is unresolved. An operator must
+independently confirm the command and descendants have stopped before using
+`Elara.TestJobs.acknowledge_stopped/2`; that API records the confirmation rather
+than discovering or killing arbitrary detached children. No new automatic
+release, retry, or workload benchmark is claimed. Cancellation reaching normal
+terminal evidence before the grace expires retains its prior behavior.
+
+The next proposed experiment is two specialist sessions collaborating on one
+bounded coding task using supervised jobs and durable result delivery. It is
+not started by JOB-11.

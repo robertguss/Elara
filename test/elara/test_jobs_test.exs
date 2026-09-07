@@ -424,6 +424,9 @@ defmodule Elara.TestJobsTest do
           }),
           Map.put(valid, "bytes_sent", valid["bytes_total"] + 1),
           Map.put(valid, "output", 12),
+          Map.put(valid, "cancellation_wait_expired", true),
+          Map.put(valid, "cancellation_wait_expired", "true"),
+          Map.put(valid, "cancellation_wait_expired", nil),
           Map.delete(valid, "exit_code"),
           put_in(valid, ["execution", "pid"], "<0.999999999999999999999999999.0>")
         ] do
@@ -627,6 +630,93 @@ defmodule Elara.TestJobsTest do
     assert result["source_changed"]
     assert result["termination"] == "cancelled"
     refute_receive {:model, _, _}, 100
+  end
+
+  test "cancellation wait expires without releasing capacity or rewriting its completion",
+       %{ctx: ctx, root: root, session: session} do
+    original_test = File.read!(Path.join(root, "test/job_test.exs"))
+
+    File.write!(Path.join(root, "test/job_test.exs"), """
+    defmodule DetachedJobFixtureTest do
+      use ExUnit.Case
+      test "detached child retains output" do
+        File.write!("os_pid", System.pid())
+        Port.open({:spawn_executable, System.find_executable("sh")},
+          [:binary, :exit_status, args: ["-c", "echo $$ > child_pid; exec sleep 30"]])
+        File.write!("started", "1", [:append])
+        Process.sleep(30_000)
+      end
+    end
+    """)
+
+    on_exit(fn ->
+      case File.read(Path.join(root, "child_pid")) do
+        {:ok, pid} -> System.cmd("kill", ["-TERM", String.trim(pid)], stderr_to_stdout: true)
+        _ -> :ok
+      end
+    end)
+
+    model = start_for_recovery(session)
+    answer(model, "Waiting for completion.")
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, _}}}, 2000
+    await(fn -> File.exists?(Path.join(root, "child_pid")) end)
+    assert {:ok, _} = run(ctx, "cancel")
+    assert_receive {:model, model, request}, 3000
+    completion = List.last(request.messages)
+    assert completion.text =~ "indeterminate"
+    assert completion.text =~ "Cancellation did not settle within 1000 ms"
+    answer(model, "Cleanup needs confirmation; I will not rerun the job.")
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, _}}}, 2000
+    result = status(ctx)
+    assert result["status"] == "indeterminate"
+    assert result["cancellation_wait_expired"] == true
+    assert {:ok, _} = run(ctx, "cancel")
+    assert {:ok, _} = run(ctx, "start", %{"target" => "test/job_test.exs"})
+    assert result["slot"] == "held"
+    assert result["settlement"] == "pending"
+    assert {:error, _} = TestJobs.acknowledge_stopped(session, "focused")
+
+    assert {:error, _} =
+             run(ctx, "start", %{"job_id" => "replacement", "target" => "test/job_test.exs"})
+
+    child = File.read!(Path.join(root, "child_pid")) |> String.trim()
+    {_, 0} = System.cmd("kill", ["-TERM", child])
+    await(fn -> status(ctx)["settlement"] == "unknown" end)
+    assert status(ctx)["slot"] == "held"
+    assert status(ctx)["output"] == result["output"]
+    assert File.read!(Path.join(root, "started")) == "1"
+    refute_receive {:model, _, _}, 150
+
+    # The requirement for explicit confirmation must survive manager recovery.
+    old = Process.whereis(TestJobs)
+    Process.exit(old, :kill)
+    await(fn -> is_pid(Process.whereis(TestJobs)) and Process.whereis(TestJobs) != old end)
+    send(TestJobs, :deliver)
+    assert status(ctx)["slot"] == "held"
+    assert status(ctx)["settlement"] == "unknown"
+    assert status(ctx)["status"] == "indeterminate"
+
+    assert {:ok, %{"slot" => "released", "settlement" => "operator_confirmed"}} =
+             TestJobs.acknowledge_stopped(session, "focused")
+
+    assert status(ctx)["status"] == "indeterminate"
+    assert length(inbox(session)) == 1
+    refute_receive {:model, _, _}, 150
+
+    Elara.interrupt(session)
+    File.write!(Path.join(root, "test/job_test.exs"), original_test)
+    File.write!(Path.join(root, "release"), "")
+
+    assert {:ok, _} =
+             run(ctx, "start", %{"job_id" => "replacement", "target" => "test/job_test.exs"})
+
+    await(fn ->
+      {:ok, text} = run(ctx, "status", %{"job_id" => "replacement"})
+      JSON.decode!(text)["status"] == "passed"
+    end)
+
+    assert File.read!(Path.join(root, "started")) == "11"
+    assert status(ctx)["source_after"] == result["source_after"]
   end
 
   test "manager crash does not replay the command and preserves uncertainty",

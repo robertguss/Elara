@@ -44,10 +44,25 @@ races may finish normally; missing terminal evidence is indeterminate.
 Cancellation targets the command's assigned OS process group. Descendants that
 create another session/process group (for example an external command spawned
 through a BEAM Port) can escape it. An escaped descendant retaining the output
-pipe can delay terminal evidence and therefore capacity release. A cancellation
-request alone is not proof of settlement; inspect `slot` and `settlement` before
-expecting capacity to be reusable. JOB-10's initial fixture exposed this existing
-boundary; it did not justify releasing a slot while execution remained uncertain.
+pipe can delay native terminal evidence. After the execution manager accepts a
+cancellation request, the test-job manager waits up to one second for settlement.
+If no terminal result has arrived, it publishes an `indeterminate` completion
+with `cancellation_wait_expired: true`. Its message explains that output may
+still be held and that cleanup must be confirmed. The job retains `slot: "held"`
+and the runner stays supervised. Repeated cancel requests do not reset the grace
+period. A normal terminal result arriving first retains ordinary cancellation
+behavior.
+
+The one-second grace bounds result publication, not detached-process lifetime.
+Late native completion does not rewrite the published indeterminate result or
+produce another completion input. While execution tracking is pending,
+`settlement` remains `pending`; after tracking settles it becomes `unknown`,
+which still holds capacity. Independently confirm that the command and its
+descendants have stopped, then use `Elara.TestJobs.acknowledge_stopped/2` as
+described below. It rejects confirmation while tracking is pending, and otherwise
+records `operator_confirmed` and releases the slot without changing the outcome.
+This requirement survives job-manager restart. No detached-child killing,
+command retry, or automatic inference retry is added.
 
 ## Evidence and delivery
 
@@ -59,8 +74,10 @@ record recovered without terminal evidence becomes indeterminate; a surviving
 terminal record is redelivered without executing.
 
 An indeterminate job retains its reservation while its runner or process-group
-cleanup is outstanding. The execution manager checks the saved runner identity
-within the same execution epoch before releasing it. Losing that epoch leaves
+cleanup is outstanding. For ordinary indeterminate jobs, the execution manager checks the saved runner
+identity within the same execution epoch before releasing it. Jobs marked
+`cancellation_wait_expired: true` always require operator confirmation even after
+the saved runner settles. Losing that epoch leaves
 `slot: "held"` and `settlement: "unknown"`, preventing overlapping replacement
 jobs. Status exposes this condition. After independently confirming that the
 old command and descendants have stopped, an operator can call
@@ -116,6 +133,9 @@ delivery and held reservations; periodic retries do not rescan all history.
 A separate supervised delivery task handles slow inbox recipients so they cannot
 block the manager from admitting or cancelling other jobs. Accepted inbox IDs
 remain stable across delivery-task or manager restarts.
+The optional `cancellation_wait_expired` flag is backward compatible with old
+records. When true, it is valid only for cancelled-request indeterminate outcomes
+whose slot is held or explicitly operator-confirmed.
 Malformed records block new-job admission without crashing the manager. Inspect
 and repair or archive the affected `_test_jobs/*.json` file, then restart
 `Elara.TestJobs` to reload the index. Preserve uncertain execution records until

@@ -6,13 +6,15 @@ defmodule Elara.TestJobs do
   alias Elara.Session.Handoff
   alias Elara.TestJobs.{Record, Workspace}
 
+  @cancellation_wait_ms 1_000
+
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
   def tool do
     %Tool{
       name: "test_job",
       description:
-        "Start, inspect or cancel one local focused Mix test job. Use a stable job_id; start requires target test/*_test.exs[:line]. After starting, end this turn: completion arrives through the inbox without polling. Interrupt pauses delivery; cancel stops the job. Inspect status before treating earlier results as current.",
+        "Start, inspect or cancel one local focused Mix test job. Use a stable job_id; start requires target test/*_test.exs[:line]. After starting, end this turn: completion arrives through the inbox without polling. Interrupt pauses delivery; cancel requests termination. Inspect status before treating earlier results as current.",
       parameters: %{
         "type" => "object",
         "properties" => %{
@@ -158,7 +160,7 @@ defmodule Elara.TestJobs do
         })
 
       state = persist(state, record)
-      state = put_in(state.active[key], %{task: task, owner: owner})
+      state = put_in(state.active[key], %{task: task, owner: owner, cancel_timer: nil})
       send(task.pid, :dispatch)
       {:reply, {:ok, view(record)}, state}
     else
@@ -213,12 +215,50 @@ defmodule Elara.TestJobs do
   end
 
   def handle_info({:cancel, key}, state) do
-    with %{task: task} <- state.active[key],
-         {:ok, :not_running} <- Exec.cancel(task.pid) do
-      Process.send_after(self(), {:cancel, key}, 25)
-    end
+    case state.active[key] do
+      %{task: task, cancel_timer: nil} ->
+        case Exec.cancel(task.pid) do
+          {:ok, :not_running} ->
+            Process.send_after(self(), {:cancel, key}, 25)
+            {:noreply, state}
 
-    {:noreply, state}
+          {:ok, :requested} ->
+            timer =
+              Process.send_after(
+                self(),
+                {:cancel_wait_expired, key, task.ref},
+                @cancellation_wait_ms
+              )
+
+            {:noreply, put_in(state.active[key].cancel_timer, timer)}
+
+          _ ->
+            {:noreply, state}
+        end
+
+      _ ->
+        {:noreply, state}
+    end
+  end
+
+  def handle_info({:cancel_wait_expired, key, ref}, state) do
+    with %{task: %{ref: ^ref}} <- state.active[key],
+         {:ok, %{"status" => "running", "cancel_requested" => true} = record} <- Record.load(key) do
+      message =
+        "Cancellation did not settle within #{@cancellation_wait_ms} ms; output may still be held by a detached child. " <>
+          "The slot remains held. Confirm command and descendant cleanup before operator acknowledgement; do not rerun."
+
+      record =
+        record
+        |> Map.put("cancellation_wait_expired", true)
+        |> result_record({:indeterminate, message})
+
+      state = persist(state, record)
+      send(self(), :deliver)
+      {:noreply, state}
+    else
+      _ -> {:noreply, state}
+    end
   end
 
   def handle_info(:tick, state) do
@@ -258,6 +298,22 @@ defmodule Elara.TestJobs do
 
   defp finish(state, key, result) do
     {:ok, record} = Record.load(key)
+    if timer = state.active[key].cancel_timer, do: Process.cancel_timer(timer)
+
+    # A late native result settles runner bookkeeping, not the published outcome.
+    state =
+      if record["cancellation_wait_expired"] do
+        state
+      else
+        state = persist(state, result_record(record, result))
+        send(self(), :deliver)
+        state
+      end
+
+    %{state | active: Map.delete(state.active, key)}
+  end
+
+  defp result_record(record, result) do
     after_source = Workspace.fingerprint(record["cwd"])
 
     record =
@@ -268,14 +324,9 @@ defmodule Elara.TestJobs do
         "source_changed" => Workspace.changed(record["source_before"], after_source)
       })
 
-    record =
-      if record["status"] == "indeterminate",
-        do: record,
-        else: Map.merge(record, %{"slot" => "released", "settlement" => "settled"})
-
-    state = persist(state, record)
-    send(self(), :deliver)
-    %{state | active: Map.delete(state.active, key)}
+    if record["status"] == "indeterminate",
+      do: record,
+      else: Map.merge(record, %{"slot" => "released", "settlement" => "settled"})
   end
 
   defp terminal({:ok, %Exec.Result{} = result}) do
@@ -349,6 +400,12 @@ defmodule Elara.TestJobs do
     Enum.reduce(state.held, state, fn {_, record}, state ->
       if record["status"] == "indeterminate" do
         settlement = settlement(record)
+
+        settlement =
+          if settlement == :settled and record["cancellation_wait_expired"],
+            do: :unknown,
+            else: settlement
+
         updated = Map.put(record, "settlement", Atom.to_string(settlement))
 
         updated =

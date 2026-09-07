@@ -183,53 +183,202 @@ implemented, and no new comparison has started.
 Guide: [captured check diagnosis](check-diagnosis.md). Publication and shared
 verification results: [DIAG-1 in the roadmap](../ROADMAP.md#diag-1--diagnose-a-captured-failed-check).
 
-## Separate candidate: supervised test completion and agent wakeup
+## 2026-09-06: Supervised test completion and agent wakeup — JOB-1
 
-**Proposal, not implementation authorization.** Run one focused test command as
-an explicitly owned background job. Let the agent wait without polling the
-model; deliver its completion through the existing inbox so the agent can
-inspect the evidence and continue the coding task.
+**Question:** Can a supervised test run outlive a model turn and bring the agent
+back with evidence, without model polling or operator-managed shell lifetime?
 
-This follows the observed failure to retain fixtures through ordinary `bash`
-calls. Keep that tool's process-group cleanup intact. A managed job needs an
-explicit lifetime and cancellation contract; adding `nohup` is not that contract.
-Existing thread waits, completion delivery, stable input IDs and wake budgets
-are the starting points. General execution-job completion delivery is new work.
+**Functionality added:** the local `test_job` tool starts one focused Mix target,
+returns a stable job record, supports status and explicit cancellation, and sends
+completion through the existing inbox. Intent and results are stored before
+execution/delivery. Admission holds one reservation per logical session and four
+globally, with a 60-second limit and 16 KiB output cap. Source fingerprints expose changed source;
+paused input stays paused and offline sessions require explicit reopen.
 
-**First useful slice:** one local Mix test target, a stable job ID, bounded
-output, recorded exit status, a workspace/source identity, explicit cancellation,
-and one logical completion input. Display the job and outcome through existing
-tool results and history before designing a new inspector.
+**Deterministic evidence:** real Mix fixtures cover start → idle wait → completion,
+a second usable session, stable start IDs and conflicting retries, one logical
+inbox acceptance after duplicate redelivery and adapter restart, paused/offline
+resume, explicit cancellation, source changes, target validation, session limits/
+ownership, handoff lineage, blocked inbox delivery without blocking cancellation,
+rejection of queued starts from stopped callers, malformed and contradictory saved records,
+lost execution epochs with explicit operator reconciliation, and runner/manager
+crashes without command replay. The execution stub's cancellation API retains confirmed terminal evidence instead of killing
+the caller and losing its result. Current check totals and publication status
+belong to JOB-1's Result in the roadmap.
 
-**Acceptance exercise:**
+**Live evidence:** session `id7yreQ1ln5OSrXkd_5_OA` used the configured Codex
+provider with an empty user-skill home, persistent history, and no plugins.
+The fixture deliberately waited five seconds, then checked 17 × 23 = 391. The
+model called `test_job start`, ended its turn waiting, received one completion
+input, called `test_job status` once, and reported exit 0 with unchanged source.
+Execution reported 5,331 ms and one passing test. There were two completed turns,
+one completion input, and exactly two tool calls: start and status. No model
+polling calls, corrective follow-up, manual completion injection, or rerun.
+The [sanitized public transcript](fixtures/test-job-live-2026-09-06.json) retains
+the exact prompt and outcomes, with no credentials or private provider state.
 
-1. Start the focused job and wait. Another session stays usable and the waiting
-   agent makes no model requests merely to poll for completion.
-2. Deliver completion twice. Accept one logical input and retain inspectable
-   output; do not run the test command a second time.
-3. Pause/stop the recipient before completion. Preserve evidence without waking
-   it against the owner's instruction; explicit resume can consume the result.
-4. Cancel or crash the runner. Report cancellation/failure/uncertainty honestly;
-   supervision must not blindly replay a command with possible side effects.
-5. Change the relevant source while the job runs. Mark the result as evidence
-   for the captured source identity, not proof that the new source passes.
+**Learning:** supervision and message delivery now support useful work between
+model turns. This removes the need to keep a shell alive through ordinary
+foreground `bash` calls or repeatedly ask a model whether a test finished. The
+new behavior reuses the Rust execution stub and the inbox; it does not introduce
+another model loop or replace the session reducer.
 
-**Feasibility:** medium for this bounded slice. The difficult parts are lifetime,
-delivery, cancellation and source identity, not spawning a Task. Initially
-limit execution to one live Elara runtime; VM loss must not imply automatic
-command retry. Durable resumption of execution, arbitrary daemons, cron,
-distributed jobs and generic exactly-once effects are separate work.
+**Limits:** this was a delayed arithmetic fixture, not a sustained repository
+coding task or productivity comparison. Commands still execute trusted project
+code and may have effects. A lost runner/owner produces indeterminate evidence;
+commands are never automatically replayed. Source hashes are observations of a
+declared file set, not isolation from concurrent edits or external dependencies.
+The agent must inspect current status before treating old results as current.
+Results persist, but running execution does not resume after VM loss. Evidence
+records accumulate on disk; automatic retention/pruning is not implemented.
+Uncertain execution retains its capacity reservation until settlement is known;
+losing the execution epoch requires operator confirmation that the old command
+has stopped. Malformed records block new admission and require repair. Delivery
+retries use a pending index rather than rescanning all retained history.
 
-**BEAM question:** can independently supervised work and message delivery make
-agent waiting useful and understandable without adding another authority for
-session state? **Practical question:** can a test finish and bring the agent
-back with sufficient evidence, without operator-managed fixtures or repeated
-polling? Passing these exercises would justify trying the workflow on real
-coding work; it would not establish comparative speed or cost savings.
+Guide and boundaries: [Supervised focused test jobs](test-jobs.md). Broader
+[context/wakeup research](features-research/harness-ideas-beam-2026-09-06.md) and
+[typed-operation research](features-research/dspy-for-elara-2026-09-06.md) remain
+separate proposals. Evals and benchmarks remain deferred.
 
-This recommendation favors friction observed in the live experiment. Earlier
-[harness research](features-research/harness-ideas-beam-2026-09-06.md) also proposes
-background context preparation and a completion-event adapter. The newer
-[DSPy investigation](features-research/dspy-for-elara-2026-09-06.md) proposes a
-typed evidence-analysis operation. Those remain distinct candidates; neither
-has been implemented or silently substituted into the roadmap queue.
+## 2026-09-07: Real repository repair with test-job continuation — JOB-2
+
+**Question:** Can a real model use retained test evidence and automatic completion
+to diagnose, repair, and verify an existing repository failure?
+
+**Setup:** `gpt-5.5`, low effort, persistent session
+`RA0iisPNya1AkewF5SSkrw`, no plugins or user skills, and the ordinary
+read/write/edit/bash tools plus `test_job`. The host selected and reproduced the
+existing nested-parent thread-integration failure, then gave the model the test
+name and workflow without supplying the diagnosis or patch. This branch builds
+on JOB-1 at `3f8a300`. The run used the public session API, not a live TUI
+acceptance exercise.
+
+**Observed sequence:**
+
+| Job | Outcome | Execution time | Evidence |
+| --- | --- | --- | --- |
+| `job2-before` | Failed, exit 1 | 1,323 ms | `/var/...` and `/private/var/...` compared as strings despite identifying the same directory |
+| `job2-after` | Failed, exit 1 | 975 ms | The model introduced nonexistent `File.realpath!/1`; the test caught it |
+| `job2-after2` | Passed, exit 0 | 899 ms | Model replaced its invalid helper with physical-directory resolution; current source unchanged |
+
+All three jobs delivered retained completion inputs, and status was inspected
+once per completed job. Across the saved session there were 43 public messages,
+18 tool calls (six test-job calls, three reads, five shell calls, four edits),
+one initial prompt, and one explicit continuation prompt. Shell calls searched
+source, inspected function availability, and formatted the patch; tests ran
+through `test_job`, without polling or manual completion injection.
+
+**Assistance and failure:** the provider returned an empty-assistant-response
+error after the first repair's test was started. The experiment driver closed
+the session; the second completion had already been consumed by the time it was
+reopened. Resuming inputs alone did not restart inference. The host reopened the
+session and supplied one continuation prompt, without a diagnosis or code fix.
+The model then corrected its own invalid API choice and finished. This was
+assisted success, not uninterrupted autonomous repair. The first failing run
+also logged a fixture cleanup error after its path assertion failed.
+
+**Functionality and review:** this experiment repairs test portability. The real
+repository-root content integration already worked; production thread behavior
+does not need to change. The original model patch and exact public prompts,
+tool calls, results, and job evidence are retained in the
+[evidence artifact](fixtures/test-job-repository-repair-2026-09-07.json).
+Review found that normalizing both paths weakened the exact invocation-path
+assertion. The host reduced the shipped patch to one line: compare `parent_cwd`
+with Git's repository-root path using the existing helper, while preserving
+`parent_invocation_cwd == nested`. The focused test passes independently on that
+final patch; the model's passing job applies to its earlier, larger patch.
+Current full-suite checks and publication status are recorded in JOB-2's Result
+in [ROADMAP.md](../ROADMAP.md).
+
+**Learning and practical value:** durable execution and completion delivery
+survived a provider failure and session reopen, and test evidence prevented an
+invented API from being mistaken for a successful repair. Delivered evidence
+does not guarantee that the model finishes acting on it: consumed input and
+failed inference are separate states. Drivers should account for a pending or
+already-started continuation when handling a provider error.
+
+The mechanism is useful for work that must outlive a model turn. These tests
+took about a second each, so this trial does not establish a speed or cost
+advantage over ordinary foreground execution. The next practical priority is
+reliable continuation after inference failure, followed by a naturally longer
+test or build task. No dedicated eval or benchmark framework was added.
+
+## 2026-09-07: Provider failure with the driver attached — JOB-3
+
+**Question:** Did JOB-2 expose a missing runtime recovery mechanism, or did its
+driver stop before the existing continuation path could finish?
+
+**Method:** three deterministic checks use real Mix fixtures and a controlled
+provider. Two additional live cases use `gpt-5.5` at low effort, with a wrapper
+that returns exactly one deliberate `bad_response` at a chosen request boundary.
+The other requests reach the real provider. These are injected failures, not
+observations of a natural outage. The driver stays attached. Fixtures wait for
+a release marker outside the fingerprinted source set and count physical runs.
+
+| Boundary | Live observation | Intervention |
+| --- | --- | --- |
+| Failure after starting a job, before completion | Session `VvASbbDp-Py6XNDK-GgR4Q`: later completion automatically starts a successful interpretation turn | No continuation prompt |
+| Failure during completion interpretation | Session `T1rQU69dEEwkSHU3xz_Zpw`: input retains `failed` and its provider error; existing result remains available | Driver sends one explicit continuation prompt |
+
+Each case recorded **one command execution, one completion input, one model
+start call, and one model status call**, with a passing result and unchanged
+source. The first case made four provider attempts, including the injected
+failure (three real requests); the second made five (four real requests). The
+short Mix fixtures reported 354 ms and 5,024 ms respectively. Those times include
+fixture gating and are not performance benchmarks. The
+[public evidence](fixtures/test-job-failure-recovery-2026-09-07.json) includes
+prompts, outcomes, source evidence, intervention counts and invariant checks.
+Both cases also passed before review; the published pair was rerun after adding
+exact failed-receipt checks and successful-fixture cleanup. The earlier run's
+summaries remain in the evidence. Successful fixture directories are removed
+after evidence capture; failed/uncertain fixtures are retained for diagnosis.
+Persisted sessions and job records remain available.
+
+**Deterministic findings:** all 15 job checks pass, including the three new
+cases. They prove automatic continuation from a later completion, failed-input
+and error retention through session reopen, no retry from `resume_inputs`, an
+explicit new prompt using the existing evidence, and preservation of an explicit
+pause. No command is rerun. The first characterization incorrectly expected a
+failed provider turn to leave the entry `consumed`; it exposed the stronger
+existing behavior: the entry becomes `failed`. The test expectation was
+corrected after inspecting the implementation; runtime policy was not changed.
+
+**Functionality retained:** regression coverage, a reusable opt-in experiment
+driver, and a more precise [recovery guide](test-jobs.md). Existing supervision,
+inbox state transitions and explicit continuation were sufficient for these
+cases. No automatic provider-retry policy or new execution mechanism was added.
+JOB-2's result remains assisted; this controlled follow-up explains the boundary
+without reclassifying that earlier run as autonomous success.
+
+To repeat the live cases with the configured Codex login:
+
+```sh
+mix run test/support/test_job_recovery_live.exs /tmp/elara-recovery.json
+```
+
+This command uses real model requests and creates persistent experimental
+sessions. Ordinary `mix test` runs only the offline characterization checks.
+The script injects the fault and supplies the disclosed continuation in the
+second case; the model does not autonomously decide to retry inference.
+
+**Assessment:** useful confirmation of the BEAM supervision and inbox design.
+Execution, evidence delivery, and inference success have separate lifetimes,
+and Elara already exposes the failed-input state needed to act on them. Keep
+explicit continuation for failed interpretation and preserve user pauses.
+These two cases do not establish general resilience to transport outages,
+streaming interruption, auth failures, or repeated provider errors. The next
+experiment should use a naturally longer repository test/build task, with this
+driver-lifetime lesson applied. Current checks and publication belong to JOB-3
+in [ROADMAP.md](../ROADMAP.md); evals and benchmarks remain deferred.
+
+
+### Integration checkpoint: JOB-1–JOB-3 with DIAG-1
+
+On 2026-09-07, the supervised-job stack `64d27af` was integrated with main
+`5c1d545`, retaining captured-check diagnosis and all three job experiments.
+The merge required combining built-in tool registration and documentation; no
+new runtime policy was introduced. All 70 focused integration checks pass, as
+do formatting and warnings-as-errors compilation. The full merged suite passes
+486/493 in 128.0 seconds, with seven previously recorded baseline failures.
+The next authorized experiment uses the existing context-recovery test file.

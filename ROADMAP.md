@@ -1,7 +1,7 @@
 # Elara roadmap
 
-> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (DIAG-1
-> captured check diagnosis complete) · **Owner:** solo development
+> **Canonical roadmap and status source** · **Updated:** 2026-09-07 (DIAG-1 and
+> JOB-1–JOB-3 integration) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -20,6 +20,29 @@ retaining artifact/range validation and byte bounds. Both saved responses pass
 offline revalidation; one fresh direct live diagnosis is accepted, including
 its 17-line failure citation. All 77 focused checks pass. Examples, RLM and
 automatic optimization remain unimplemented.
+
+**JOB-3:** DONE; tests and live driver pushed in `4ec91cb` on
+`codex/test-job-failure-recovery`, stacked on JOB-2. All 15 job checks pass.
+Both live injected-failure cases pass with one physical execution each: a later
+completion wakes automatically, while failed interpretation uses one explicit
+prompt. The existing runtime policy is sufficient for these cases. Review is
+clear; full suite: 470/478 with eight known baseline failures. Included in this integration merge.
+
+**JOB-2:** DONE; repair pushed in `f241b20` on
+`codex/test-job-repository-repair`, stacked on JOB-1. The real model completed
+three supervised jobs, with one explicit continuation prompt after a provider
+error. Host review reduced its patch to one line while preserving the exact
+invocation-path assertion. The focused regression passes; full suite: 468/475,
+with seven known baseline failures remaining. Formatting, compilation and review
+are clear. See the [experiment report](docs/harness-experiments.md). Included in this integration merge.
+
+**JOB-1:** DONE and pushed on `codex/supervised-test-jobs`: implementation
+`1d9117c`, contract and evidence `2fb5915`. All 20 focused checks pass; full suite
+passes 465/475 with the same ten known failures. Final independent review is
+clear. The real model started one delayed test, ended its turn, automatically
+received completion, and inspected status once. See
+[supervised test jobs](docs/test-jobs.md) and the
+[experiment evidence](docs/harness-experiments.md). Included in this integration merge.
 
 **LOOP-1:** DONE; implementation `20a8eda`, merged into `main` in `57f9edc`.
 Later responses and intervening calls permit useful rechecks; consecutive
@@ -88,11 +111,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Finish TEST-1 and publish a fully passing verification run.
-SPLIT-5 remains the unstarted owner checkpoint and
-physical-terminal acceptance remains deferred. The separate background
-test/wakeup candidate in the [harness experiment log](docs/harness-experiments.md)
-remains a proposal.
+**Next action:** Finish TEST-1 and publish verification against the integrated
+JOB-1/JOB-2/JOB-3 and DIAG-1 code. The longer supervised context-test experiment,
+dedicated evals, broader job types, physical-terminal acceptance and the
+SPLIT-5 owner checkpoint remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -276,8 +298,11 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | PLUGIN-2 | DONE     | Agent-authored plugin during a real coding task              | PLUGIN-1         |
 | LOOP-1   | DONE     | Permit useful repeated tool calls with bounded loops          | PLUGIN-2         |
 | DIAG-1   | DONE     | Diagnose a captured failed check with explicit evidence       | LOOP-1           |
-| TEST-1   | IN PROGRESS | Resolve known suite failures and verify full regression coverage | DIAG-1 |
-| SPLIT-5  | BLOCKED     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, DIAG-1    |
+| JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
+| JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
+| JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
+| TEST-1   | IN PROGRESS | Resolve known suite failures and verify full regression coverage | DIAG-1, JOB-3 |
+| SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2777,6 +2802,170 @@ resolve. The original checkout's 15 unrelated files retain their prior hashes.
 Follow-up evidence: [direct rerun](docs/features-research/check-diagnosis-citation-fix-live-run.json).
 The earlier suggestion to add examples was premature; no further comparison
 has started.
+
+
+## JOB-1 — Supervised focused test jobs and completion wakeup
+
+**Scope:** Owner-authorized on 2026-09-06. One local focused Mix target, stable
+job identity, bounded output and runtime, explicit cancellation, source evidence,
+and one logical completion input through the existing inbox. The
+[contract and guide](docs/test-jobs.md) records execution/delivery boundaries.
+Tests remain trusted commands; no automatic replay, daemons, cron, remote jobs,
+new UI framework, or dedicated eval framework.
+
+### Result
+
+**DONE (2026-09-06).** Implementation pushed in `1d9117c`, with execution and
+record foundations in `59a1ae9` and `48f38df`; contract and live evidence pushed
+in `2fb5915` on `codex/supervised-test-jobs`. Included in this integration merge.
+The supervised owner persists intent before launching a linked temporary runner
+and evidence before inbox delivery. A manager/runner crash cannot restart the
+command. Offline sessions are not resurrected. Existing report-input pause and
+wake-budget rules apply. The new `test_job` tool provides start/status/cancel;
+`Exec.cancel/1` preserves the caller's terminal response while requesting process
+group cancellation. A declared Mix source set is fingerprinted before/after and
+on status; it is not an isolated snapshot or proof about external dependencies.
+
+Twelve deterministic job checks pass, including the public real-Mix path, a second
+usable session while waiting, duplicate delivery after adapter restart, paused/
+offline resume, target validation, session limits/ownership, explicit cancellation,
+changed source, handoff lineage, malformed-record rejection, lost execution
+epochs with operator reconciliation, and manager/runner failure without command
+replay. Eight execution integration checks pass, including rejection of a queued
+command after its caller dies. Formatting and compilation with warnings denied
+pass. Full suite: 465/475 passed with the same ten failures as the earlier
+458/468 run: two attachment context-budget cases, two TUI context-budget cases,
+one protocol cold-attach context case, queued-mutation settlement timing, saved
+session listing, two thread path/discovery cases, and HTTP fixture startup.
+The final schema-tightening changes were followed by all 20 focused checks and
+successful validation of the retained live record. Final independent review is
+clear. Rust execution behavior is reused unchanged; no new Rust code.
+
+Review prompted three corrections: retain job reservations until process cleanup
+settles (unknown execution epochs need operator confirmation), index pending
+records instead of rescanning all history on every retry, and validate saved
+records without crash-looping the manager. Further review moved slow inbox
+delivery to a separate task, rejected queued starts from stopped callers, and
+validated lifecycle and terminal-metadata consistency. All have regressions,
+including handoff ownership. Durable intent defines admission; a tool timeout
+near admission requires inspecting the same stable ID, not assuming no execution.
+
+Live session `id7yreQ1ln5OSrXkd_5_OA` used the configured Codex provider. The model
+started `live-completion` for `test/answer_test.exs`, ended its first turn waiting,
+then received one automatic inbox completion and invoked status exactly once.
+The 5-second arithmetic test returned exit 0, one test passed, 5,331 ms execution,
+and unchanged source fingerprints. No polling tool calls, corrective follow-up,
+manual completion delivery, or rerun was needed. This bounded fixture establishes
+live continuation; it is not a long coding trial or comparative productivity
+measurement. The [experiment report](docs/harness-experiments.md) and
+[sanitized transcript](docs/fixtures/test-job-live-2026-09-06.json) retain the
+evidence. All changes are published on the experiment branch.
+
+
+## JOB-2 — Real repository repair with supervised test jobs
+
+**Scope:** Owner authorized continuing the next experiment on 2026-09-07.
+One existing repository failure; real configured Codex provider; ordinary
+read/write/edit/bash tools plus `test_job`; persistent session with no plugins
+or user skills. Reproduce and rerun through separate job IDs and automatic
+completion inputs. No model polling, manual completion injection, dedicated eval
+framework, or broad baseline cleanup. The host agent reviews, independently
+verifies, documents and publishes the resulting patch.
+
+### Result
+
+**DONE (2026-09-07).** Final repair pushed in `f241b20` on
+`codex/test-job-repository-repair`. Real `gpt-5.5` low-effort session
+`RA0iisPNya1AkewF5SSkrw` completed the scoped repair. Baseline
+`mix test test/elara/threads_test.exs:374` failed the `parent_cwd` equality assertion:
+Git returns `/private/var/...` while the test expects `/var/...`; the preceding
+repository-root content assertion passes.
+
+The model's three supervised jobs produced original failure (1,323 ms), an
+invalid `File.realpath!/1` repair failure (975 ms), then a passing physical-path
+comparison repair (899 ms). All three completion inputs were retained; six
+start/status calls used no polling. Public history has 43 messages and 18 tool
+calls. The provider returned an empty response after the first repair's job
+started. The driver closed the session; reopening and resuming inputs alone did
+not restart its already-consumed completion. One explicit continuation prompt
+was necessary; no diagnosis or code repair was supplied. This was assisted
+success. The initial failed run also logged fixture-cleanup trouble.
+
+The [experiment report](docs/harness-experiments.md) and
+[evidence artifact](docs/fixtures/test-job-repository-repair-2026-09-07.json)
+retain the original model patch, public transcript, job evidence, and assistance.
+The [test-job guide](docs/test-jobs.md) now distinguishes accepted/consumed input
+from successful inference and explains explicit continuation without rerunning
+an already-completed test. Review found that the model's physical-path comparison weakened the literal
+invocation-path assertion. The host reduced the final patch to one line using
+`git(cwd, ["rev-parse", "--show-toplevel"])` for the expected repository root,
+preserving `parent_invocation_cwd == nested`. Independent review is clear;
+formatting, compilation with warnings denied, and the focused regression pass.
+Full suite: 468/475 passed. The seven remaining failures are the two attachment
+context-budget cases, two TUI context-budget cases, protocol cold attach, saved
+session listing, and the other thread PTY/session-discovery case. The formerly
+failing provider HTTP fixture and queued-mutation timing tests passed this run;
+this patch did not repair them. No new failure category appeared. Final code,
+evidence, and usage notes are published on the experiment branch. Branch starts at JOB-1's `3f8a300`; that publication preceded this integration merge.
+
+
+## JOB-3 — Provider-failure recovery across completion boundaries
+
+**Scope:** Owner authorized continuing on 2026-09-07. Keep the driver attached;
+separate failure before job completion, failure while consuming its evidence,
+and an explicit user pause. Verify one physical command and one retained input.
+Use deterministic failure injection plus a disclosed live-model wrapper; no
+assumption that automatic retries or a runtime policy change are needed.
+
+### Result
+
+**DONE (2026-09-07).** Tests and opt-in live driver pushed in `4ec91cb` on
+`codex/test-job-failure-recovery`, based on JOB-2 `14f3352`. All 15 job
+checks pass, including the three new characterization cases. A failed provider
+turn moves its active inbox entry from consumed to failed and retains the error.
+Resume/reopen does not retry that failed entry; an explicit owner prompt uses the
+retained evidence without rerunning the command. A failure before completion
+still permits a later automatic report wakeup, and explicit pause is preserved.
+The initial characterization expected consumed instead of failed; its assertion
+was corrected after inspecting existing code. Runtime policy did not change.
+
+Live `gpt-5.5` low-effort cases deliberately injected one bad_response each.
+`VvASbbDp-Py6XNDK-GgR4Q` continued from later completion with zero continuation
+prompts; `T1rQU69dEEwkSHU3xz_Zpw` retained failed-input/error state and completed
+after one driver-authored continuation. Each has one physical command, one
+completion input, and exactly one model start/status pair. Four/five provider
+attempts include the one injected failure; three/four requests reached the real
+provider. Results passed on unchanged source. These are controlled faults, not
+natural outages, and the second case is explicit assisted recovery.
+
+The [experiment report](docs/harness-experiments.md),
+[public evidence](docs/fixtures/test-job-failure-recovery-2026-09-07.json), and
+[recovery guide](docs/test-jobs.md) record the state boundaries and limits.
+The opt-in `test/support/test_job_recovery_live.exs` driver reproduces both live
+cases; ordinary ExUnit runs stay offline. Full suite: 470/478 passed, with the
+seven JOB-2 baseline failures plus the previously known intermittent queued-
+mutation timeout. Formatting and compilation with warnings denied pass. Review
+strengthened unpaused-reopen, retained-message, duplicate-wakeup and exact failed-
+receipt assertions, and added successful-fixture cleanup. All 15 focused checks
+and both live cases passed again afterward; final review is clear. Both initial
+live cases had also passed, and their summaries are retained in the evidence.
+Successful fixture directories were removed after evidence capture; failed or
+uncertain fixtures are retained with diagnostic paths. Persisted session/job
+records remain intentional evidence. No production retry policy changed, and
+that publication preceded this integration merge.
+
+
+### JOB-1–JOB-3 integration with DIAG-1 (2026-09-07)
+
+Merged stack `64d27af` with main `5c1d545`, preserving both tool registrations
+and both experiment histories. The 70 focused job, execution, diagnosis and
+Core checks pass. Formatting and warnings-as-errors compilation pass. The full
+merged suite passes **486/493** in 128.0 seconds. Its seven failures are the
+known two attachment/context cases, two generic TUI cases, cold protocol history,
+saved-session listing and thread PTY/session discovery. Both queued-recovery
+cases and the provider HTTP fixture pass this run; this merge does not repair
+them. All context-recovery checks pass. Local merge review found no additional
+code changes needed beyond preserving both built-in tool registrations.
 
 
 ## TEST-1 — Resolve known test failures

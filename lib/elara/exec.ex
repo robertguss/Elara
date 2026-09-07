@@ -54,6 +54,16 @@ defmodule Elara.Exec do
     GenServer.call(__MODULE__, {:run, argv, opts}, :infinity)
   end
 
+  @doc "Request cancellation of a caller's running command, retaining its terminal reply."
+  def cancel(owner) when is_pid(owner), do: GenServer.call(__MODULE__, {:cancel, owner})
+
+  @doc false
+  def token, do: GenServer.call(__MODULE__, :token)
+
+  @doc "Confirm settlement only within the captured execution epoch; otherwise return unknown."
+  def settlement(owner, token) when is_pid(owner),
+    do: GenServer.call(__MODULE__, {:settlement, owner, token})
+
   @doc false
   @spec status() :: map()
   def status, do: GenServer.call(__MODULE__, :status)
@@ -89,6 +99,39 @@ defmodule Elara.Exec do
      }, state}
   end
 
+  def handle_call({:cancel, owner}, _from, state) do
+    case Enum.find(state.jobs, fn {_id, job} -> match?({^owner, _}, job.from) end) do
+      nil ->
+        {:reply, {:ok, :not_running}, state}
+
+      {id, _job} ->
+        if send_command(state.port, %{"id" => id, "op" => "cancel"}) do
+          {:reply, {:ok, :requested}, state}
+        else
+          {:reply, {:indeterminate, "cancellation submission failed"},
+           replace_stub(state, "cancellation submission failed")}
+        end
+    end
+  end
+
+  def handle_call(:token, _from, state), do: {:reply, execution_token(state), state}
+
+  def handle_call({:settlement, owner, token}, _from, state) do
+    result =
+      cond do
+        token != execution_token(state) ->
+          :unknown
+
+        Process.alive?(owner) or Enum.any?(state.jobs, fn {_, job} -> job.owner == owner end) ->
+          :pending
+
+        true ->
+          :settled
+      end
+
+    {:reply, result, state}
+  end
+
   def handle_call({:run, argv, opts}, _from, %{port: nil} = state) do
     case validate_run(argv, opts) do
       {:ok, _request} ->
@@ -100,6 +143,15 @@ defmodule Elara.Exec do
   end
 
   def handle_call({:run, argv, opts}, from, state) do
+    if Process.alive?(elem(from, 0)) and
+         Keyword.get(opts, :expected_token, execution_token(state)) == execution_token(state) do
+      start_command(argv, opts, from, state)
+    else
+      {:reply, {:error, {:not_started, "caller stopped or execution epoch changed"}}, state}
+    end
+  end
+
+  defp start_command(argv, opts, from, state) do
     case validate_run(argv, opts) do
       {:ok, request} ->
         id = job_id(state.generation)
@@ -108,6 +160,7 @@ defmodule Elara.Exec do
 
         job = %{
           from: from,
+          owner: owner,
           monitor: monitor,
           phase: :submitted,
           chunks: [],
@@ -195,6 +248,7 @@ defmodule Elara.Exec do
 
   defp initial_state(binary, port, os_pid, buffer) do
     %{
+      incarnation: Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false),
       binary: binary,
       port: port,
       os_pid: os_pid,
@@ -204,6 +258,9 @@ defmodule Elara.Exec do
       monitors: %{}
     }
   end
+
+  defp execution_token(state),
+    do: %{"incarnation" => state.incarnation, "generation" => state.generation}
 
   defp validate_run(argv, opts) do
     cwd = Keyword.get_lazy(opts, :cwd, &File.cwd!/0)

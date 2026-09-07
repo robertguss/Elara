@@ -4,6 +4,8 @@ Research date: 2026-09-06. This is a source investigation and experiment proposa
 
 The [arXiv, RLM, and GEPA companion report](arxiv-rlm-gepa-elara-2026-09-06.md) extends this investigation with paper evidence and further BEAM experiments.
 
+The [DSPy source investigation](dspy-for-elara-2026-09-06.md) adds stable operation contracts, learned example artifacts, and experimental implementation search.
+
 Elara's strongest direction is a runtime in which agents, context preparation, verification, and capabilities have explicit lifetimes and observable state. Its current Elixir authority and Rust edges are a good foundation for that experiment. The next useful work should make those runtime properties do something visible for the agent or owner.
 
 None of these mechanisms requires BEAM. The hypothesis is that its process, supervision, messaging, code-loading, and inspection primitives let Elara express their lifecycles with less custom machinery. That is an engineering advantage to investigate, not an assumption that adding processes improves model reasoning or reduces inference cost.

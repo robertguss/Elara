@@ -10,10 +10,12 @@ roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
 
-**JOB-4:** IN PROGRESS; owner authorized a naturally longer repository test job.
-JOB-1/JOB-2/JOB-3 are merged and pushed to `main` in `63d3dab`, alongside DIAG-1.
-The selected workload is the existing `test/elara/context_test.exs`; no artificial
-delay, fault injection or runtime policy change.
+**JOB-4:** DONE; opt-in live driver pushed in `0b58b99` on
+`codex/longer-repository-test-job`. Real `gpt-5.5`/low ran all 15 existing
+context-recovery checks in 11,570 ms: one start, one completion, one status,
+zero polling calls, provider errors or continuation prompts. All five acceptance
+checks pass; source stayed unchanged. JOB-1/JOB-2/JOB-3 are merged and pushed to
+`main` in `63d3dab`, alongside DIAG-1. JOB-4 remains on its experiment branch.
 
 **DIAG-1:** DONE; original implementation `1b24bfe`, merged in `f54350e`.
 The citation-range correction removes the arbitrary 10-line maximum while
@@ -112,10 +114,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Exercise the existing `test/elara/context_test.exs` as a naturally
-longer supervised repository job, with the live driver kept attached across
-provider errors. The JOB-1/JOB-2/JOB-3 integration with DIAG-1 is verified. Dedicated evals, broader job types,
-physical-terminal acceptance and the SPLIT-5 owner checkpoint remain deferred.
+**Next action:** Review JOB-4's recorded result, then select one small real feature
+for an end-to-end coding experiment using supervised tests. No further experiment
+has started. Dedicated evals, broader job types, physical-terminal acceptance
+and the SPLIT-5 owner checkpoint remain deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -302,7 +304,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
-| JOB-4    | IN PROGRESS | Naturally longer repository context-recovery test job    | JOB-3            |
+| JOB-4    | DONE        | Naturally longer repository context-recovery test job    | JOB-3            |
 | SPLIT-5  | BLOCKED  | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, JOB-3     |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
@@ -2980,8 +2982,35 @@ change runtime policy, or add dedicated evals.
 
 ### Result
 
-**IN PROGRESS.** Merge `63d3dab` is pushed to main. The opt-in driver is prepared;
-full merged-suite verification selected this file because its real restart and
-handoff checks passed and include a 6,030 ms fresh-BEAM recovery test. The driver
-will record one durable job and model start/status calls; it does not instrument
-repository tests with a physical execution counter.
+**DONE (2026-09-07).** Driver pushed in `0b58b99` on
+`codex/longer-repository-test-job`, from merged main `63d3dab`. Live session
+`iKlIQVY6UkH283wBlyGuIw` used actual `gpt-5.5` at low effort. It started one
+`repository-context` job for `test/elara/context_test.exs`, ended its turn, then
+received one automatic completion input and inspected status once. All 15 tests
+passed; exit 0, 11,570 ms command duration, 754 output bytes, settled execution
+and released reservation. All 139 fingerprinted source files stayed unchanged.
+
+The run took 23,890 ms end to end with four provider requests and eight public
+messages. The waiting turn ended at 8,715 ms; the completion-driven request began
+at 17,507 ms, leaving an 8,792 ms interval with no provider request starts. There
+were no polling tool calls, injected faults, added delays, provider errors or
+explicit continuation prompts. An expected killed-task log came from the
+existing crash-recovery test; the retained ExUnit result passed.
+
+All five driver acceptance checks pass. The existing repository file exercises
+handoff, pause and continuation ownership, terminal interaction, and fresh BEAM
+recovery at six durable stages. This is a real workload beyond the tiny repair
+and delayed fixture, but still only an 11.57-second local job. The supplied prompt
+and target make it assisted task selection. One start and durable job record are
+observed; no physical execution counter was added to the tests. It does not
+establish multi-minute reliability, coding quality or comparative time/cost.
+
+No harness runtime behavior changed. The new opt-in script records public
+transcripts, provider request timing, command evidence and any explicit recovery
+assistance. Regular tests remain offline. Formatting and both roadmap tests pass;
+the preceding merged tree passed 70 focused checks and 486/493 full-suite checks
+with seven known baseline failures. Local review found no additional runtime
+change necessary. The [experiment report](docs/harness-experiments.md),
+[evidence artifact](docs/fixtures/test-job-repository-context-2026-09-07.json) and
+[test-job guide](docs/test-jobs.md) retain usage and limits. This experiment is
+published on its branch; it has not been merged into main.

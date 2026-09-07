@@ -382,3 +382,60 @@ new runtime policy was introduced. All 70 focused integration checks pass, as
 do formatting and warnings-as-errors compilation. The full merged suite passes
 486/493 in 128.0 seconds, with seven previously recorded baseline failures.
 The next authorized experiment uses the existing context-recovery test file.
+
+
+## 2026-09-07: Naturally longer repository test job — JOB-4
+
+**Question:** Does the supervised wait/completion workflow hold up on existing
+repository tests whose runtime comes from real BEAM recovery work?
+
+**Result:** Actual `gpt-5.5`/low session `iKlIQVY6UkH283wBlyGuIw` started
+`mix test test/elara/context_test.exs` through one `test_job`, ended its turn,
+received one automatic completion and inspected status once. All **15 tests
+passed in 11,570 ms**, exit 0. The job retained all 754 output bytes and released
+its settled reservation. Before/after fingerprints matched across 139 source
+files, and the final status still reported unchanged source.
+
+| Observation | Result |
+| --- | --- |
+| Total live workflow | 23,890 ms |
+| Provider requests | 4 |
+| Model test-job calls | 1 start, 1 status |
+| Completion inputs / public messages | 1 / 8 |
+| Waiting turn ended → completion request began | 8,715 → 17,507 ms; 8,792 ms with no new provider request |
+| Provider errors / continuation prompts / polling calls | 0 / 0 / 0 |
+| Artificial delays / injected faults | None |
+
+The test file exercises persisted handoff, pause and continuation ownership,
+terminal interaction, and recovery in fresh BEAM processes at six durable
+stages. Its crash fixture logs an intentionally killed task; the final ExUnit
+result remains a pass. The file was selected after passing on the merged tree.
+It is longer than JOB-2's roughly one-second repair checks and JOB-1's delayed
+fixture, but it is still an 11.57-second local job within the existing 60-second
+limit. This establishes neither multi-minute reliability nor comparative
+productivity. The host supplied the exact target and workflow; the model did
+not discover the work or write a feature. One start and one durable job record
+are observed; no physical execution counter was added to repository tests.
+
+**Functionality added:** an opt-in reproducible live driver,
+`test/support/test_job_repository_live.exs`. It requires a clean committed
+checkout, records public messages and provider request timings, and stays
+attached across provider errors. If interpretation fails, it can supply one
+explicit continuation using retained evidence and disclose that assistance.
+That fallback was not exercised in this run; JOB-3 retains the controlled
+failure evidence. No harness runtime policy changed and ordinary tests remain
+offline. Persisted session/job records are retained; the temporary empty skill
+home was removed.
+
+**Learning:** BEAM ownership and inbox delivery worked usefully on real restart
+and handoff checks: the model could finish a turn while the command continued,
+then resume with a bounded, source-identified result. The next useful experiment
+is a small real feature from prompt to reviewed patch, using this workflow.
+There is no observed need here for another job type or automatic retry policy.
+Dedicated evals remain deferred.
+
+The driver is published in `0b58b99` on `codex/longer-repository-test-job`, based
+on main merge `63d3dab`. All five live acceptance checks pass; formatting and two
+roadmap tests pass. The merge's broader checks are recorded above. Full prompt,
+public transcript, job output, hashes and timings are in the
+[evidence artifact](fixtures/test-job-repository-context-2026-09-07.json).

@@ -125,3 +125,22 @@ identity isolated in its workspace helper and durable schema in its record helpe
 `Elara.submit_input/2` for delivery. The session reducer, Rust protocol, and
 generic effect-recovery guarantees do not need a replacement. No cron, remote
 jobs, automatic command replay, new UI framework, or dedicated eval framework.
+
+
+## Live repository exercise
+
+JOB-4 ran the existing `test/elara/context_test.exs` through the real configured
+model: 15 tests passed in 11.57 seconds, with one start, one automatic completion
+and one status call. No polling, provider error or continuation prompt occurred.
+This is bounded evidence for real repository work, not multi-minute job coverage.
+See the [experiment report](harness-experiments.md) for assistance and limits.
+
+To repeat from a clean committed Elara checkout with the configured Codex login:
+
+```sh
+mix run test/support/test_job_repository_live.exs /tmp/elara-repository-job.json
+```
+
+This is an explicit live-model run. The driver records public evidence, retains
+the session/job record, and leaves the existing repository tests unchanged.
+Each run creates a new session and deliberately executes the test file again.

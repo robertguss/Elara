@@ -100,6 +100,10 @@ cursor, draft, and selection remain usable. Record results when performed.
 - Fail uncertain mutations closed. Workspace bytes may prove a current
   postcondition, but not causal job completion.
 - Commit and push each completed item before starting its successor.
+- For each experiment, update [the evidence log](docs/harness-experiments.md)
+  and the affected user/API guide alongside its Result. Record the hypothesis,
+  actual outcome, assistance, functionality added, verification, and limits;
+  distinguish proposed experiments from authorized queue items.
 
 Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, and
 `INVALID`, and `DEFERRED` (implementation available; named acceptance postponed).

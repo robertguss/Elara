@@ -601,6 +601,8 @@ exactly-once execution guarantee.
 
 ## More user guides
 
+- [Harness experiments](docs/harness-experiments.md): what we tried, what we
+  learned, and which functionality the experiments added.
 - [Sessions and chat](docs/sessions.md): resume, branch, clone, and inspect why
   an event occurred.
 - [Live plugins](docs/plugins.md): add trusted, stateful local tools and reload

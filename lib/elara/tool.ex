@@ -72,7 +72,8 @@ defmodule Elara.Tool do
       edit_tool(),
       bash_tool(),
       Elara.Skills.tool(),
-      Elara.Threads.tool()
+      Elara.Threads.tool(),
+      Elara.TestJobs.tool()
     ] ++ Elara.Threads.Communication.tools()
   end
 

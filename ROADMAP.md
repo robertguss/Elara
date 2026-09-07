@@ -1,7 +1,7 @@
 # Elara roadmap
 
 > **Canonical roadmap and status source** · **Updated:** 2026-09-06 (PLUGIN-1
-> pushed; SPLIT-5 next) · **Owner:** solo development
+> merged; PLUGIN-2 and LOOP-1 complete) · **Owner:** solo development
 > with AI collaborators
 
 This file is the only current plan and status source for Elara. Completed work
@@ -9,6 +9,22 @@ and retired research remain available in Git history rather than as parallel
 roadmaps or archived planning documents in the working tree.
 
 ## Progress at a glance
+
+**LOOP-1:** DONE and pushed in `20a8eda` on `codex/agent-authored-plugin`.
+Later responses and intervening calls permit useful rechecks; consecutive
+identical calls within one response remain suppressed. All 35 focused checks
+pass, including a real Mix fail → edit → identical rerun and matching replay.
+Independent review is clear. Full suite: 451/461 passed, with the same ten
+failures as the pre-fix run.
+
+**PLUGIN-2:** DONE and pushed at `43b283a` on `codex/agent-authored-plugin`.
+The real model authored
+and used a plugin, fixed the macOS shell-liveness helper, and retained probe state
+across a revision in the same plugin process. All 21 shell tests pass; two turn
+limits and operator/review assistance are recorded in the
+[experiment report](docs/features-research/agent-authored-plugin-experiment.md).
+PLUGIN-1 is merged and pushed to `main` at `eb88160`; 34 focused merged-tree
+checks passed.
 
 **PLUGIN-1:** DONE and pushed on `codex/live-plugin-discovery` at `8728298`.
 Discovery, explicit TUI activation, and state-preserving upgrade
@@ -61,8 +77,10 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** SPLIT-5 owner daily-driver checkpoint. It has not started;
-physical-terminal acceptance requiring the absent owner stays deferred.
+**Next action:** Return to the SPLIT-5 owner checkpoint. The experiment branch
+contains PLUGIN-2 and LOOP-1 and remains unmerged. The next live coding exercise
+can use ordinary identical read/test calls after changes. The daily-driver
+trial has not started and physical-terminal acceptance stays deferred.
 
 **Deferred hands-on exercise:** in both terminals, verify physical Ctrl-J,
 Alt/Shift-Enter, Cmd-V, Alt-Up/Down history, and F2 safe paste. Resize Ghostty
@@ -82,6 +100,10 @@ cursor, draft, and selection remain usable. Record results when performed.
 - Fail uncertain mutations closed. Workspace bytes may prove a current
   postcondition, but not causal job completion.
 - Commit and push each completed item before starting its successor.
+- For each experiment, update [the evidence log](docs/harness-experiments.md)
+  and the affected user/API guide alongside its Result. Record the hypothesis,
+  actual outcome, assistance, functionality added, verification, and limits;
+  distinguish proposed experiments from authorized queue items.
 
 Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, and
 `INVALID`, and `DEFERRED` (implementation available; named acceptance postponed).
@@ -239,7 +261,9 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | CTX-1    | DONE     | Automatic handoff and uninterrupted continuation              | THREAD-2         |
 | TUI-8    | IMPLEMENTED | Mockup-faithful presentation with quiet chrome             | CTX-1            |
 | PLUGIN-1 | DONE     | Discover and evolve a useful plugin in a live session         | Owner selection  |
-| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, PLUGIN-1  |
+| PLUGIN-2 | DONE     | Agent-authored plugin during a real coding task              | PLUGIN-1         |
+| LOOP-1   | DONE     | Permit useful repeated tool calls with bounded loops          | PLUGIN-2         |
+| SPLIT-5  | TODO     | Daily-driver checkpoint and recorded go/no-go                 | TUI-8, LOOP-1    |
 
 Blocked on SPLIT-5's decision, not yet queued: small tool roster with an intent
 argument and versioned tool schemas; Director-style loop ownership inside
@@ -2538,3 +2562,91 @@ A concurrent task switched the shared checkout's branch during verification;
 publication uses the sibling `Elara-live-plugin-discovery` worktree and preserves
 that task's shared files. Review is complete with no remaining actionable
 findings in this change. No merge to `main` is implied by branch publication.
+
+## PLUGIN-2 — Agent-authored plugin during a real coding task
+
+**Scope:** Owner-authorized on 2026-09-06. Use Elara's real configured model to
+reproduce and fix one macOS shell-liveness test failure. Ask Elara to author a
+small helpful plugin, explicitly inspect/activate it between turns, then let the
+same session use it while completing the task. Record prompts, actual tool
+outcomes, retained state, guidance required, and practical usefulness. This is a
+single experiment, not a dedicated eval framework or benchmark.
+
+### Result
+
+**DONE (2026-09-06), assisted experiment complete.** Implementation and evidence
+are pushed in `43b283a` on `codex/agent-authored-plugin`, from merged `main`
+(`eb88160`). The experiment branch has not been merged into `main`. The
+[report](docs/features-research/agent-authored-plugin-experiment.md),
+[exact prompts](docs/features-research/agent-authored-plugin-prompts.md), and
+[archived plugin](docs/features-research/fixtures/shell_liveness.exs) capture the
+actual experiment. The plugin is outside automatic discovery.
+
+Real `gpt-5.5` at `low` effort authored the plugin and test fix using the public
+session API. Repository guidance remained loaded; an empty user-skill home
+avoided the known catalog confound. Explicit inspection/reload discovered version
+1 and upgraded to version 2, generation 2 in the same plugin process. The last
+probe survived across turns and revision. It remains historical evidence after
+the controlled fixture exited, not a fresh liveness assertion.
+
+The macOS helper now falls back from absent `/proc` to `ps`, preserves zombie
+termination, and leaves inconclusive failures unknown. All 21 shell tests pass,
+including the three previously failing lifecycle cases and a new invalid-PID
+regression observed red then green. Plugin compilation and an invalid-PID probe
+also pass. Independent review is clear after corrections to `ps` failure and
+unavailable-procfs classifications. Formatting, compile with warnings denied,
+and diff whitespace checks pass. Final full suite: **447/457 passed**, 10 failed
+in 196.9 seconds. The three prior macOS shell-liveness failures are resolved.
+The remaining failures match previously observed areas: five context-budget/
+handoff cases, queued-mutation recovery, saved-session listing, two thread
+path/session-discovery cases, and the isolated-checkout HTTP fixture startup
+timeout. Their underlying causes remain unresolved; no all-green suite is
+claimed. The final run used the archived plugin outside auto-discovery.
+
+Limits: seven operator prompts, 50 tool results, three repeated-call rejections,
+and two iteration-limit stops. The operator supplied a separately managed shell
+fixture after background-job attempts failed, requested cleanup, provided review
+feedback, and explicitly activated revisions. This was assisted task completion,
+not unattended success or spontaneous plugin invention. No TUI acceptance,
+Linux run, restart persistence, productivity comparison or dedicated eval is
+claimed. Evals remain deferred. The experiment recommends fixing legitimate
+repeated-call rejection next; it does not authorize or queue that implementation.
+No change to core shell execution or persistent background-job support was made.
+
+
+## LOOP-1 — Permit useful repeated tool calls with bounded loops
+
+**Scope:** Owner-authorized on 2026-09-06 after PLUGIN-2 rejected legitimate
+rereads and test reruns. Replace the turn-wide name/argument ban with consecutive
+duplicate suppression within one provider response. An intervening call or a
+new response may observe changed state and can use the same arguments again.
+Keep scoped-instruction deferral retries and the existing iteration budget.
+No tool taxonomy, result cache, progress-scoring policy, or eval framework.
+
+### Result
+
+**DONE (2026-09-06).** Pushed `20a8eda` on `codex/agent-authored-plugin`.
+Two Core regressions reproduced the old rejection: reissuing identical arguments after another tool in the same
+response, and observing changed state in a later response. A public-session
+regression also reproduced the failure using real read/edit tools and the
+project plugin's real Mix invocation. After the fix, all 35 Core/project-plugin
+checks pass. The workflow reads incorrect source, runs a failing test, edits,
+reads corrected source with identical arguments, and reruns the exact test
+successfully within one user turn. Its flight recording replays with `:match`.
+Coverage retains consecutive duplicate rejection, deferred-call retry, and
+iteration-limit termination. Formatting and compilation with warnings denied
+pass. Independent review is clear with no actionable findings. The full suite
+passes **451/461** in 196.7 seconds, compared with **447/457** before this fix:
+all four added tests pass and the same ten tests fail. Remaining failures cover
+five context-budget/handoff cases, queued-mutation recovery, saved-session
+listing, two thread path/session-discovery cases, and the isolated-checkout
+HTTP fixture startup timeout. No all-green suite is claimed. Roadmap checks
+also pass (2 tests). No Rust, provider, dependency, or serialization changes
+were needed. This experiment branch has not been merged into `main`.
+
+The guard intentionally does not infer whether an intervening call changed the
+world or whether an identical later request is worthwhile. The configured model
+iteration budget bounds such loops. Execution receipts, capability checks, and
+uncertain mutation handling remain separate. The scripted provider makes the
+regression deterministic; this is not another live-model experiment or an
+unattended productivity claim. Evals remain deferred.

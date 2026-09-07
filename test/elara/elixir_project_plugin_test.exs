@@ -165,6 +165,88 @@ defmodule Elara.ElixirProjectPluginTest do
              Elara.replay(Elara.recording(session))
   end
 
+  @tag timeout: 60_000
+  test "one turn rereads edited source and reruns the identical real Mix test" do
+    project = Path.join(System.tmp_dir!(), "plugin-repeat-#{System.unique_integer([:positive])}")
+    for subdir <- ["lib", "test"], do: File.mkdir_p!(Path.join(project, subdir))
+
+    File.write!(Path.join(project, "mix.exs"), """
+    defmodule RepeatWorkflow.MixProject do
+      use Mix.Project
+      def project, do: [app: :repeat_workflow, version: "0.1.0"]
+    end
+    """)
+
+    File.write!(
+      Path.join(project, "lib/example.ex"),
+      "defmodule Example, do: def(answer, do: :wrong)\n"
+    )
+
+    File.write!(Path.join(project, "test/test_helper.exs"), "ExUnit.start()\n")
+
+    File.write!(Path.join(project, "test/example_test.exs"), """
+    defmodule ExampleTest do
+      use ExUnit.Case
+      test "answer", do: assert(Example.answer() == :correct)
+    end
+    """)
+
+    read_args = %{"path" => "lib/example.ex"}
+    test_args = %{"target" => "test/example_test.exs:3"}
+    edit_args = %{"path" => "lib/example.ex", "old_text" => ":wrong", "new_text" => ":correct"}
+
+    replies =
+      for {id, name, args} <- [
+            {"read-before", "read", read_args},
+            {"test-before", "elixir_test", test_args},
+            {"fix", "edit", edit_args},
+            {"read-after", "read", read_args},
+            {"test-after", "elixir_test", test_args}
+          ] do
+        call = %Elara.Message.ToolCall{id: id, name: name, args: {:ok, args}}
+        Elara.Message.assistant(nil, [call])
+      end
+
+    {:ok, script} = Agent.start_link(fn -> replies ++ [Elara.Message.assistant("fixed", [])] end)
+
+    {:ok, session} =
+      Elara.start_session(
+        cwd: project,
+        home: project,
+        skill_paths: [],
+        plugins: [@plugin],
+        provider: {Elara.Provider.Scripted, script},
+        persist: false
+      )
+
+    {:ok, pid} = Elara.session_pid(session)
+
+    on_exit(fn ->
+      if Process.alive?(pid), do: GenServer.stop(pid)
+      File.rm_rf!(project)
+    end)
+
+    assert {:ok, "fixed"} =
+             Elara.ask(session, "Read, test, fix, then repeat the same read and test")
+
+    results =
+      for %Elara.Message.ToolResult{call_id: id, outcome: outcome} <- Elara.transcript(session),
+          into: %{},
+          do: {id, outcome}
+
+    assert {:ok, before} = results["read-before"]
+    assert before =~ ":wrong"
+    assert {:error, failed} = results["test-before"]
+    assert failed =~ "Example.answer()"
+    assert {:ok, after_edit} = results["read-after"]
+    assert after_edit =~ ":correct"
+    assert {:ok, passed} = results["test-after"]
+    assert passed =~ "test:test/example_test.exs:3 ok"
+
+    assert {:ok, %Elara.FlightRecorder.Report{status: :match}} =
+             Elara.replay(Elara.recording(session))
+  end
+
   defp invoke(session, script, name, args) do
     id = "call-#{System.unique_integer([:positive])}"
     call = %Elara.Message.ToolCall{id: id, name: name, args: {:ok, args}}

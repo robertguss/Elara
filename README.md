@@ -592,8 +592,17 @@ Each turn allows 12 model iterations by default. Each tool has a 30-second
 timeout. Shell output is capped at 16 KiB in the execution stub, and the session
 keeps the same 16 KiB cap as a second line before output enters model history.
 
+Consecutive calls with identical tool names and arguments in one model response
+are rejected as duplicates. An intervening call or a later model response can
+repeat the same arguments, allowing read → edit → read and test → fix → test
+workflows, as well as fresh observations of external state. The iteration limit
+bounds repeated model requests; this guard is not a tool-result cache or an
+exactly-once execution guarantee.
+
 ## More user guides
 
+- [Harness experiments](docs/harness-experiments.md): what we tried, what we
+  learned, and which functionality the experiments added.
 - [Sessions and chat](docs/sessions.md): resume, branch, clone, and inspect why
   an event occurred.
 - [Live plugins](docs/plugins.md): add trusted, stateful local tools and reload

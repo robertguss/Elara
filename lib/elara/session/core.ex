@@ -449,33 +449,23 @@ defmodule Elara.Session.Core do
     if String.valid?(kept), do: kept, else: utf8_prefix(text, max - 1)
   end
 
-  # Same name+args as a tool call that already has a result in this turn.
+  # Suppress consecutive duplicates within one provider response. A later
+  # response or intervening call may observe changed state; max_iterations
+  # bounds loops across responses without treating arguments as cached results.
   defp repeated_call?(history, %ToolCall{} = call, deferred_calls) do
-    turn =
-      history
-      |> Enum.reverse()
-      |> Enum.take_while(fn
-        %User{} -> false
-        _ -> true
-      end)
-
-    fingerprint = call_fingerprint(call)
-
-    prior_calls =
-      turn
-      |> Enum.flat_map(fn
-        %Assistant{tool_calls: calls} -> calls
-        _ -> []
-      end)
-      |> Enum.reject(&(&1.id in deferred_calls))
-      |> Enum.filter(fn tc ->
-        Enum.any?(turn, fn
-          %ToolResult{call_id: id} -> id == tc.id
+    case Enum.reverse(history) do
+      [%ToolResult{call_id: previous_id} | rest] ->
+        with false <- previous_id in deferred_calls,
+             %Assistant{tool_calls: calls} <- Enum.find(rest, &is_struct(&1, Assistant)),
+             %ToolCall{} = previous <- Enum.find(calls, &(&1.id == previous_id)) do
+          call_fingerprint(previous) == call_fingerprint(call)
+        else
           _ -> false
-        end)
-      end)
+        end
 
-    Enum.any?(prior_calls, fn tc -> call_fingerprint(tc) == fingerprint end)
+      _ ->
+        false
+    end
   end
 
   defp call_fingerprint(%ToolCall{name: name, args: args}), do: {name, args}

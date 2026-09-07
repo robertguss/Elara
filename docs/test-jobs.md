@@ -41,6 +41,14 @@ Other sessions remain usable. Cancelling requests process-group termination
 through the existing Rust stub and retains its terminal response. Cancellation
 races may finish normally; missing terminal evidence is indeterminate.
 
+Cancellation targets the command's assigned OS process group. Descendants that
+create another session/process group (for example an external command spawned
+through a BEAM Port) can escape it. An escaped descendant retaining the output
+pipe can delay terminal evidence and therefore capacity release. A cancellation
+request alone is not proof of settlement; inspect `slot` and `settlement` before
+expecting capacity to be reusable. JOB-6's initial fixture exposed this existing
+boundary; it did not justify releasing a slot while execution remained uncertain.
+
 ## Evidence and delivery
 
 Persist intent before execution, and terminal evidence before delivery. Retain

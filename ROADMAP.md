@@ -125,7 +125,7 @@ with the next concrete action. Close test terminal windows after testing.
 | PROV-2 subscription visibility and controls               | Complete                | Pushed `fb7a6a3`; 365 offline Linux tests, 11 macOS product tests, 82 TUI tests; live tool/summary proof                 |
 | INPUT-1 file references and image attachments             | Complete                | Pushed `57f930c`; 381 offline Linux tests, 12 macOS product tests, 95 TUI tests, 5 native helper tests; live image proof |
 
-**Next action:** Owner selection of the next experiment. JOB-5 is complete;
+**Next action:** JOB-6: verify cancellation and capacity release with concurrent jobs;
 dedicated evals, broader job types, physical-terminal acceptance and SPLIT-5
 remain deferred.
 
@@ -314,6 +314,7 @@ non-ChatGPT providers are preserved, but new feature parity is not required.
 | JOB-1    | DONE        | Supervised focused test jobs and completion wakeup         | LOOP-1           |
 | JOB-2    | DONE        | Real repository repair with supervised test jobs           | JOB-1            |
 | JOB-3    | DONE        | Provider-failure recovery across completion boundaries    | JOB-2            |
+| JOB-6    | IN PROGRESS | Concurrent cancellation and capacity release | JOB-5 |
 | JOB-5    | DONE | Session crash during a supervised job and explicit reopen | JOB-4 |
 | JOB-4    | DONE | Longer repository job, concurrent session and provider failure | TEST-1 |
 | TEST-1   | DONE | Resolve known suite failures and verify full regression coverage | DIAG-1, JOB-3 |
@@ -3101,3 +3102,15 @@ Method, assistance and limits: [experiment log](docs/harness-experiments.md#2026
 Published on `codex/session-crash-job-experiment` and integrated into main with
 this result. Next candidate is concurrent cancellation/capacity release;
 owner selection is required before starting it.
+
+
+## JOB-6 — Concurrent cancellation and capacity release
+
+**Scope:** Owner authorized on 2026-09-07. Fill all four global slots using
+isolated gated Mix fixtures, reject a fifth, cancel one, verify process-group
+settlement and admit the waiting job. Preserve the other jobs and deliver each
+completion once. Host controls execution; real models interpret retained results.
+
+### Result
+
+**IN PROGRESS.** Offline characterization and an opt-in real-provider run.

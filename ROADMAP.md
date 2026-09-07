@@ -2746,7 +2746,8 @@ Guide: [captured check diagnosis](docs/check-diagnosis.md). Evidence and
 assistance: [experiment log](docs/harness-experiments.md#2026-09-07-captured-check-diagnosis--diag-1)
 and [full live records](docs/features-research/check-diagnosis-live-runs.json).
 
-**Citation-range correction (2026-09-07):** removed the arbitrary 10-line
+**Citation-range correction (2026-09-07):** implementation `d5ef3b1` pushed on
+`codex/diagnosis-citation-ranges`. Removed the arbitrary 10-line
 maximum from the direct prompt and host validator. Existing artifact IDs and
 ordered, in-bounds line ranges remain required; capture, text, report and
 512-byte citation-preview bounds remain in place. Both original saved responses

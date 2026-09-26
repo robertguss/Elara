@@ -348,6 +348,16 @@ invariants, including that no process group is orphaned.
 Run with the production restart limit (`max_restarts: 3`), not the test
 suite's raised value, so escalation behaves as in production.
 
+Also cover the transport faults found in LAB-1's review:
+- A worker connection handler dying between unlinking and killing its job,
+  which can leave the job running.
+- A client disconnecting before the worker switches the socket to
+  `active: :once`, which can crash the handler at an `:ok` match
+  (`lib/elara/worker/server.ex:108`).
+- `Protocol.recv_line/2` receiving a sustained stream of fragments, to prove it
+  stops at its deadline. The current timeout test would pass without that
+  check.
+
 **Done when:** at least 1,000 seeded schedules run, and the note records
 violation counts with a minimized reproduction for each, plus fixes or
 findings.

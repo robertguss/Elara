@@ -3,8 +3,15 @@ defmodule Elara.Effect.ExecutorLedger do
 
   alias Exqlite.Sqlite3
 
-  @schema_version 1
+  # Schema 2 adds the terminal `indeterminate` state: the callback returned (or
+  # crashed) but whether its mutation took effect is unknown. Schema 1 rows are
+  # migrated in place and keep the version that admitted them; a row still
+  # accepted at migration may later finish in any terminal state.
+  @schema_version 2
   @result_digest_version 1
+
+  @doc "Terminal ledger states: the callback will never be invoked again."
+  defguard is_terminal_state(state) when state in [:completed, :failed, :indeterminate]
 
   defmodule Record do
     @moduledoc false
@@ -38,8 +45,8 @@ defmodule Elara.Effect.ExecutorLedger do
             job_id: String.t(),
             operation_digest: String.t(),
             executor_id: String.t(),
-            state: :accepted | :completed | :failed,
-            result: {:ok | :error, term()} | nil,
+            state: :accepted | :completed | :failed | :indeterminate,
+            result: {:ok | :error | :indeterminate, term()} | nil,
             result_digest: String.t() | nil,
             admission_count: 1,
             callback_attempt_count: 0 | 1,
@@ -149,10 +156,16 @@ defmodule Elara.Effect.ExecutorLedger do
     end)
   end
 
-  @spec finish(t(), String.t(), String.t(), String.t(), {:ok | :error, term()}) ::
+  @spec finish(
+          t(),
+          String.t(),
+          String.t(),
+          String.t(),
+          {:ok | :error | :indeterminate, term()}
+        ) ::
           {:ok, Record.t()} | {:error, term()}
   def finish(ledger, executor_id, job_id, operation_digest, {kind, _payload} = result)
-      when kind in [:ok, :error] do
+      when kind in [:ok, :error, :indeterminate] do
     transaction(ledger, fn ->
       with {:ok, %Record{} = record} <- require_record(ledger, job_id),
            :ok <- require_digest(record, operation_digest),
@@ -165,13 +178,14 @@ defmodule Elara.Effect.ExecutorLedger do
     end)
   end
 
-  @spec last_proven_fact(Record.t()) :: :accepted | :callback_invoked | :completed | :failed
+  @spec last_proven_fact(Record.t()) ::
+          :accepted | :callback_invoked | :completed | :failed | :indeterminate
   def last_proven_fact(%Record{state: :accepted, callback_attempt_count: 0}), do: :accepted
 
   def last_proven_fact(%Record{state: :accepted, callback_attempt_count: 1}),
     do: :callback_invoked
 
-  def last_proven_fact(%Record{state: state}) when state in [:completed, :failed], do: state
+  def last_proven_fact(%Record{state: state}) when is_terminal_state(state), do: state
 
   defp initialize(db) do
     with :ok <- Sqlite3.execute(db, "PRAGMA journal_mode=WAL"),
@@ -197,16 +211,44 @@ defmodule Elara.Effect.ExecutorLedger do
     end
   end
 
+  defp initialize_schema(db, 1), do: migrate_from_v1(db)
   defp initialize_schema(db, @schema_version), do: Sqlite3.execute(db, schema_sql())
   defp initialize_schema(_db, version), do: {:error, {:unsupported_schema_version, version}}
 
-  defp schema_sql do
+  # SQLite cannot alter a CHECK constraint, so rebuild the table with the schema 2
+  # constraint in one transaction, copying every row and its digests unchanged.
+  defp migrate_from_v1(db) do
+    columns =
+      "job_id, operation_digest, executor_id, state, admission_count, " <>
+        "callback_attempt_count, terminal_count, result, result_digest, " <>
+        "schema_version, result_digest_version"
+
+    with :ok <- Sqlite3.execute(db, "BEGIN IMMEDIATE") do
+      result =
+        with :ok <- Sqlite3.execute(db, schema_sql("executor_jobs_v2")),
+             :ok <-
+               Sqlite3.execute(
+                 db,
+                 "INSERT INTO executor_jobs_v2 (#{columns}) SELECT #{columns} FROM executor_jobs"
+               ),
+             :ok <- Sqlite3.execute(db, "DROP TABLE executor_jobs"),
+             :ok <- Sqlite3.execute(db, "ALTER TABLE executor_jobs_v2 RENAME TO executor_jobs"),
+             :ok <- Sqlite3.execute(db, "PRAGMA user_version=#{@schema_version}") do
+          Sqlite3.execute(db, "COMMIT")
+        end
+
+      if result != :ok, do: Sqlite3.execute(db, "ROLLBACK")
+      result
+    end
+  end
+
+  defp schema_sql(table \\ "executor_jobs") do
     """
-    CREATE TABLE IF NOT EXISTS executor_jobs (
+    CREATE TABLE IF NOT EXISTS #{table} (
       job_id TEXT PRIMARY KEY,
       operation_digest TEXT NOT NULL,
       executor_id TEXT NOT NULL,
-      state TEXT NOT NULL CHECK (state IN ('accepted', 'completed', 'failed')),
+      state TEXT NOT NULL CHECK (state IN ('accepted', 'completed', 'failed', 'indeterminate')),
       admission_count INTEGER NOT NULL CHECK (admission_count = 1),
       callback_attempt_count INTEGER NOT NULL CHECK (callback_attempt_count IN (0, 1)),
       terminal_count INTEGER NOT NULL CHECK (terminal_count IN (0, 1)),
@@ -217,7 +259,7 @@ defmodule Elara.Effect.ExecutorLedger do
       UNIQUE (job_id, operation_digest),
       CHECK (
         (state = 'accepted' AND terminal_count = 0 AND result IS NULL AND result_digest IS NULL) OR
-        (state IN ('completed', 'failed') AND callback_attempt_count = 1 AND
+        (state IN ('completed', 'failed', 'indeterminate') AND callback_attempt_count = 1 AND
           terminal_count = 1 AND result IS NOT NULL AND result_digest IS NOT NULL)
       )
     ) STRICT
@@ -261,7 +303,12 @@ defmodule Elara.Effect.ExecutorLedger do
   end
 
   defp update_terminal(ledger, job_id, {kind, _payload} = result) do
-    state = if kind == :ok, do: "completed", else: "failed"
+    state =
+      case kind do
+        :ok -> "completed"
+        :error -> "failed"
+        :indeterminate -> "indeterminate"
+      end
 
     sql = """
     UPDATE executor_jobs
@@ -319,7 +366,7 @@ defmodule Elara.Effect.ExecutorLedger do
              callback_attempt_count,
              terminal_count
            ),
-         true <- schema_version == @schema_version,
+         true <- schema_version in [1, @schema_version],
          true <- result_digest_version == @result_digest_version do
       {:ok,
        %Record{
@@ -347,11 +394,12 @@ defmodule Elara.Effect.ExecutorLedger do
   defp decode_state("accepted"), do: {:ok, :accepted}
   defp decode_state("completed"), do: {:ok, :completed}
   defp decode_state("failed"), do: {:ok, :failed}
+  defp decode_state("indeterminate"), do: {:ok, :indeterminate}
   defp decode_state(_state), do: {:error, :invalid_executor_record}
 
   defp decode_result(:accepted, nil, nil), do: {:ok, nil}
 
-  defp decode_result(state, result_binary, stored_digest) when state in [:completed, :failed] do
+  defp decode_result(state, result_binary, stored_digest) when is_terminal_state(state) do
     result = decode(result_binary)
 
     if result_digest(result) == stored_digest do
@@ -398,6 +446,7 @@ defmodule Elara.Effect.ExecutorLedger do
 
   defp valid_state_values?(:completed, {:ok, _payload}, 1, 1), do: true
   defp valid_state_values?(:failed, {:error, _payload}, 1, 1), do: true
+  defp valid_state_values?(:indeterminate, {:indeterminate, _payload}, 1, 1), do: true
   defp valid_state_values?(_state, _result, _callback_attempt_count, _terminal_count), do: false
 
   defp require_record(ledger, job_id) do

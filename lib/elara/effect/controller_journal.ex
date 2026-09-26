@@ -3,7 +3,10 @@ defmodule Elara.Effect.ControllerJournal do
 
   use GenServer
 
+  alias Elara.Effect.ExecutorLedger
   alias Elara.Effect.ExecutorLedger.Record
+
+  require ExecutorLedger
   alias Elara.Effect.Job
   alias Exqlite.Sqlite3
 
@@ -503,7 +506,9 @@ defmodule Elara.Effect.ControllerJournal do
 
   defp observation_rank(%Record{state: :accepted, callback_attempt_count: 0}), do: 0
   defp observation_rank(%Record{state: :accepted, callback_attempt_count: 1}), do: 1
-  defp observation_rank(%Record{state: state}) when state in [:completed, :failed], do: 2
+
+  defp observation_rank(%Record{state: state}) when ExecutorLedger.is_terminal_state(state),
+    do: 2
 
   defp transaction(db, fun) do
     with :ok <- Sqlite3.execute(db, "BEGIN IMMEDIATE") do

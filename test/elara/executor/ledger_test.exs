@@ -27,7 +27,7 @@ defmodule Elara.Effect.ExecutorLedgerTest do
 
     assert ledger.configuration == %{
              journal_mode: "wal",
-             schema_version: 1,
+             schema_version: 2,
              synchronous: 2
            }
 
@@ -41,7 +41,7 @@ defmodule Elara.Effect.ExecutorLedgerTest do
     assert accepted.admission_count == 1
     assert accepted.callback_attempt_count == 0
     assert accepted.terminal_count == 0
-    assert accepted.schema_version == 1
+    assert accepted.schema_version == 2
     assert accepted.result_digest_version == 1
 
     assert {:ok, :existing, ^accepted} =
@@ -183,4 +183,131 @@ defmodule Elara.Effect.ExecutorLedgerTest do
   end
 
   defp digest(character), do: String.duplicate(character, 64)
+
+  @v1_schema """
+  CREATE TABLE executor_jobs (
+    job_id TEXT PRIMARY KEY,
+    operation_digest TEXT NOT NULL,
+    executor_id TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('accepted', 'completed', 'failed')),
+    admission_count INTEGER NOT NULL CHECK (admission_count = 1),
+    callback_attempt_count INTEGER NOT NULL CHECK (callback_attempt_count IN (0, 1)),
+    terminal_count INTEGER NOT NULL CHECK (terminal_count IN (0, 1)),
+    result BLOB,
+    result_digest TEXT,
+    schema_version INTEGER NOT NULL,
+    result_digest_version INTEGER NOT NULL,
+    UNIQUE (job_id, operation_digest),
+    CHECK (
+      (state = 'accepted' AND terminal_count = 0 AND result IS NULL AND result_digest IS NULL) OR
+      (state IN ('completed', 'failed') AND callback_attempt_count = 1 AND
+        terminal_count = 1 AND result IS NOT NULL AND result_digest IS NOT NULL)
+    )
+  ) STRICT
+  """
+
+  test "a schema 1 ledger migrates in place, preserving rows and digests", context do
+    alias Exqlite.Sqlite3
+
+    {:ok, db} = Sqlite3.open(context.path)
+    :ok = Sqlite3.execute(db, @v1_schema)
+
+    rows = [
+      {"job-accepted", "a", "accepted", 0, 0, nil},
+      {"job-invoked", "b", "accepted", 1, 0, nil},
+      {"job-done", "c", "completed", 1, 1, {:ok, "done"}},
+      {"job-failed", "d", "failed", 1, 1, {:error, "no"}}
+    ]
+
+    for {job, seed, state, attempts, terminal, result} <- rows do
+      {blob, result_digest} =
+        if result,
+          do: {{:blob, :erlang.term_to_binary(result, [:deterministic])}, v1_digest(result)},
+          else: {nil, nil}
+
+      {:ok, statement} =
+        Sqlite3.prepare(
+          db,
+          "INSERT INTO executor_jobs VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, ?7, ?8, 1, 1)"
+        )
+
+      :ok =
+        Sqlite3.bind(statement, [
+          job,
+          digest(seed),
+          "executor-1",
+          state,
+          attempts,
+          terminal,
+          blob,
+          result_digest
+        ])
+
+      :done = Sqlite3.step(db, statement)
+      :ok = Sqlite3.release(db, statement)
+    end
+
+    :ok = Sqlite3.execute(db, "PRAGMA user_version=1")
+    :ok = Sqlite3.close(db)
+
+    ledger = open_ledger(context.path)
+    assert ledger.configuration.schema_version == 2
+
+    assert {:ok, %Record{state: :completed, result: {:ok, "done"}} = done} =
+             ExecutorLedger.query(ledger, "job-done")
+
+    assert done.schema_version == 1
+    assert done.result_digest == v1_digest({:ok, "done"})
+
+    assert {:ok, %Record{state: :failed, result: {:error, "no"}}} =
+             ExecutorLedger.query(ledger, "job-failed")
+
+    assert {:ok, %Record{state: :accepted, callback_attempt_count: 0}} =
+             ExecutorLedger.query(ledger, "job-accepted")
+
+    # A legacy job in flight at migration can still end uncertain.
+    assert {:ok, %Record{state: :indeterminate, schema_version: 1}} =
+             ExecutorLedger.finish(
+               ledger,
+               "executor-1",
+               "job-invoked",
+               digest("b"),
+               {:indeterminate, "lost"}
+             )
+
+    # New admissions use schema 2; the rebuilt table still enforces its constraints.
+    assert {:ok, :new, %Record{schema_version: 2}} =
+             ExecutorLedger.admit(ledger, "executor-1", "job-new", digest("e"))
+
+    assert {:error, _constraint} =
+             Sqlite3.execute(
+               ledger.db,
+               "UPDATE executor_jobs SET state = 'bogus' WHERE job_id = 'job-new'"
+             )
+
+    :ok = ExecutorLedger.close(ledger)
+
+    reopened = open_ledger(context.path)
+
+    assert {:ok, %Record{state: :indeterminate, result: {:indeterminate, "lost"}}} =
+             ExecutorLedger.query(reopened, "job-invoked")
+
+    {:ok, [[version]]} = pragma(reopened.db, "PRAGMA user_version")
+    assert version == 2
+    :ok = ExecutorLedger.close(reopened)
+  end
+
+  defp v1_digest(result) do
+    {:elara_er1_result, 1, result}
+    |> :erlang.term_to_binary([:deterministic])
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+  end
+
+  defp pragma(db, sql) do
+    {:ok, statement} = Exqlite.Sqlite3.prepare(db, sql)
+    {:row, row} = Exqlite.Sqlite3.step(db, statement)
+    :ok = Exqlite.Sqlite3.release(db, statement)
+    {:ok, [row]}
+  end
 end

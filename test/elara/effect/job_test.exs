@@ -133,6 +133,34 @@ defmodule Elara.Effect.JobTest do
     assert :ok = ControllerJournal.close(migrated)
   end
 
+  test "an indeterminate executor record is a terminal observation", context do
+    intent = job()
+    journal = start_journal(context.journal_path)
+    assert {:ok, ^intent} = ControllerJournal.commit_intent(journal, intent)
+
+    base = %Record{
+      job_id: intent.job_id,
+      operation_digest: intent.operation_digest,
+      executor_id: "executor-1",
+      state: :accepted,
+      admission_count: 1,
+      callback_attempt_count: 1,
+      terminal_count: 0,
+      schema_version: 2,
+      result_digest_version: 1
+    }
+
+    uncertain = %{base | state: :indeterminate, terminal_count: 1, result: {:indeterminate, "x"}}
+    assert {:ok, _} = ControllerJournal.observe(journal, base)
+    assert {:ok, %{executor_record: ^uncertain}} = ControllerJournal.observe(journal, uncertain)
+
+    # A terminal observation is never replaced by another terminal or earlier one.
+    completed = %{uncertain | state: :completed, result: {:ok, "done"}}
+    assert {:error, :stale_observation} = ControllerJournal.observe(journal, completed)
+    assert {:error, :stale_observation} = ControllerJournal.observe(journal, base)
+    assert :ok = ControllerJournal.close(journal)
+  end
+
   test "crash before intent commit leaves no recoverable job", context do
     intent = job()
     parent = self()

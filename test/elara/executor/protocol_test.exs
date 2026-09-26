@@ -252,7 +252,8 @@ defmodule Elara.Effect.TestExecutorProtocolTest do
     assert :ok = TestExecutor.close(reopened)
   end
 
-  test "callback errors and crashes become durable failed evidence", context do
+  test "callback errors are failed; uncertain results and crashes are indeterminate",
+       context do
     executor = start_executor(context.path)
 
     assert {:accepted, _accepted} =
@@ -265,15 +266,38 @@ defmodule Elara.Effect.TestExecutorProtocolTest do
 
     assert failed.result == {:error, "no"}
 
+    uncertain = fn -> {:indeterminate, "killed mid-run"} end
+
+    assert {:accepted, _accepted} =
+             TestExecutor.submit(executor, "job-maybe", digest("c"), uncertain)
+
+    assert :ok = TestExecutor.continue(executor, "job-maybe")
+
+    assert_receive {:elara_effect_executor, "executor-1", "job-maybe",
+                    {:indeterminate, %Record{} = maybe}}
+
+    assert maybe.result == {:indeterminate, "killed mid-run"}
+    assert maybe.terminal_count == 1
+    assert ExecutorLedger.last_proven_fact(maybe) == :indeterminate
+    assert {:indeterminate, ^maybe} = TestExecutor.query(executor, "job-maybe")
+
     assert {:accepted, _accepted} =
              TestExecutor.submit(executor, "job-crash", digest("b"), fn -> raise "boom" end)
 
     assert :ok = TestExecutor.continue(executor, "job-crash")
 
+    # The callback started, so a crash leaves its mutation unknown.
     assert_receive {:elara_effect_executor, "executor-1", "job-crash",
-                    {:failed, %Record{} = crashed}}
+                    {:indeterminate, %Record{} = crashed}}
 
-    assert {:error, "callback crashed: boom"} = crashed.result
+    assert {:indeterminate, "callback crashed: boom; " <> _} = crashed.result
+
+    # A terminal indeterminate job is never invoked again.
+    assert {:error, :already_terminal} =
+             Elara.Effect.Executor.continue(executor, "job-crash", digest("b"), fn ->
+               flunk("a terminal job must not be invoked again")
+             end)
+
     assert :ok = TestExecutor.close(executor)
   end
 

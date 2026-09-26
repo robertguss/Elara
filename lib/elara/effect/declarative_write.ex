@@ -3,7 +3,10 @@ defmodule Elara.Effect.DeclarativeWrite do
 
   alias Elara.Effect.AtomicFile
   alias Elara.Effect.ControllerJournal
+  alias Elara.Effect.ExecutorLedger
   alias Elara.Effect.ExecutorLedger.Record
+
+  require ExecutorLedger
   alias Elara.Effect.Job
   alias Elara.Effect.Sidecar
 
@@ -243,7 +246,7 @@ defmodule Elara.Effect.DeclarativeWrite do
         end
 
       case controller_record do
-        %Record{state: state} = record when state in [:completed, :failed] ->
+        %Record{state: state} = record when ExecutorLedger.is_terminal_state(state) ->
           terminal_from_controller(job, cwd, record)
 
         _record ->
@@ -393,6 +396,9 @@ defmodule Elara.Effect.DeclarativeWrite do
         %Record{state: :failed} ->
           {:failed, :invoked, terminal_safe_action(workspace)}
 
+        %Record{state: :indeterminate} ->
+          {:unproven, :invoked, indeterminate_safe_action(workspace, job, cwd)}
+
         %Record{state: :accepted, callback_attempt_count: 1} ->
           {:unproven, :invoked, indeterminate_safe_action(workspace, job, cwd)}
 
@@ -452,7 +458,20 @@ defmodule Elara.Effect.DeclarativeWrite do
 
   defp terminal_from_controller(job, cwd, %Record{} = record) do
     {:ok, workspace} = observe(job, cwd)
-    causal = if record.state == :completed, do: :completed, else: :failed
+
+    causal =
+      case record.state do
+        :completed -> :completed
+        :failed -> :failed
+        :indeterminate -> :unproven
+      end
+
+    safe_action =
+      case causal do
+        :completed -> :none
+        :failed -> terminal_safe_action(workspace)
+        :unproven -> indeterminate_safe_action(workspace, job, cwd)
+      end
 
     %Result{
       job: job,
@@ -461,7 +480,7 @@ defmodule Elara.Effect.DeclarativeWrite do
       workspace: workspace,
       causal: causal,
       historical: :invoked,
-      safe_action: if(causal == :completed, do: :none, else: terminal_safe_action(workspace)),
+      safe_action: safe_action,
       executor_record: nil,
       controller_record: record
     }
@@ -533,7 +552,7 @@ defmodule Elara.Effect.DeclarativeWrite do
 
   defp unavailable_historical(%Record{callback_attempt_count: 1}), do: :invoked
 
-  defp unavailable_historical(%Record{state: state}) when state in [:completed, :failed],
+  defp unavailable_historical(%Record{state: state}) when ExecutorLedger.is_terminal_state(state),
     do: :invoked
 
   defp unavailable_historical(_record), do: :unknown

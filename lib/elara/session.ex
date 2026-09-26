@@ -6,7 +6,10 @@ defmodule Elara.Session do
   use GenServer
 
   alias Elara.Effect.{ControllerJournal, DeclarativeWrite, Executor, Job, Sidecar}
+  alias Elara.Effect.ExecutorLedger
   alias Elara.Effect.ExecutorLedger.Record
+
+  require ExecutorLedger
   alias Elara.FlightRecorder
   alias Elara.Message
   alias Elara.Message.{Assistant, ToolResult}
@@ -717,7 +720,7 @@ defmodule Elara.Session do
 
     for {%Job{operation_digest: digest}, {state, %Record{operation_digest: digest} = record}} <-
           observations,
-        state in [:completed, :failed] do
+        ExecutorLedger.is_terminal_state(state) do
       ControllerJournal.observe(shell.effect_journal, record)
     end
 
@@ -963,7 +966,7 @@ defmodule Elara.Session do
   defp receipt_effect_terminal?(shell, %Job{} = job) do
     case ControllerJournal.observation(shell.effect_journal, job.job_id) do
       {:ok, %{executor_record: %Record{state: state, operation_digest: digest}}}
-      when state in [:completed, :failed] and digest == job.operation_digest ->
+      when ExecutorLedger.is_terminal_state(state) and digest == job.operation_digest ->
         true
 
       _ ->

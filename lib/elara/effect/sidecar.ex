@@ -6,6 +6,8 @@ defmodule Elara.Effect.Sidecar do
   alias Elara.Effect.Executor
   alias Elara.Effect.ExecutorLedger
   alias Elara.Effect.ExecutorLedger.Record
+
+  require ExecutorLedger
   alias Elara.Effect.Job
 
   defmodule Result do
@@ -54,7 +56,7 @@ defmodule Elara.Effect.Sidecar do
     safely(job, journal, fn ->
       case ControllerJournal.observation(journal, job.job_id) do
         {:ok, %Observation{executor_record: %Record{state: state} = record}}
-        when state in [:completed, :failed] ->
+        when ExecutorLedger.is_terminal_state(state) ->
           result(job, record)
 
         {:ok, _observation} ->
@@ -135,7 +137,7 @@ defmodule Elara.Effect.Sidecar do
          _timeout,
          _fault_hook
        )
-       when state in [:completed, :failed] do
+       when ExecutorLedger.is_terminal_state(state) do
     case ControllerJournal.observe(journal, record) do
       {:ok, _observation} ->
         result(job, record)
@@ -160,7 +162,7 @@ defmodule Elara.Effect.Sidecar do
   defp await_completion(_executor, journal, job, _operation, timeout, fault_hook, monitor) do
     receive do
       {:elara_effect_executor, _executor_id, job_id, {state, %Record{state: state} = record}}
-      when job_id == job.job_id and state in [:completed, :failed] ->
+      when job_id == job.job_id and ExecutorLedger.is_terminal_state(state) ->
         demonitor(monitor)
 
         with {:ok, _observation} <- ControllerJournal.observe(journal, record),
@@ -228,7 +230,7 @@ defmodule Elara.Effect.Sidecar do
   end
 
   defp result(job, %Record{result: {kind, text}} = record)
-       when kind in [:ok, :error] and is_binary(text) do
+       when kind in [:ok, :error, :indeterminate] and is_binary(text) do
     %Result{job: job, status: :terminal, outcome: {kind, text}, executor_record: record}
   end
 
@@ -250,7 +252,7 @@ defmodule Elara.Effect.Sidecar do
 
     missing =
       case record do
-        %Record{state: state} when state in [:completed, :failed] ->
+        %Record{state: state} when ExecutorLedger.is_terminal_state(state) ->
           "controller_observation_or_session_persistence"
 
         _record ->

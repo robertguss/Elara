@@ -12,10 +12,10 @@ defmodule Elara.Effect.Executor do
   alias Elara.Effect.ExecutorLedger.Record
 
   @type t :: GenServer.server()
-  @type operation :: (-> {:ok | :error, term()})
+  @type operation :: (-> {:ok | :error | :indeterminate, term()})
   @type response ::
           :unknown
-          | {:accepted | :completed | :failed, Record.t()}
+          | {:accepted | :completed | :failed | :indeterminate, Record.t()}
           | {:error, term()}
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -189,19 +189,24 @@ defmodule Elara.Effect.Executor.Server do
     end
   end
 
+  @partial "it may have partially changed the workspace"
+
   defp response(%Record{state: state} = record), do: {state, record}
 
+  # The callback has started, so an invalid result or a crash leaves its mutation
+  # unknown: record it as indeterminate rather than as an ordinary failure.
   defp invoke(operation) do
     case operation.() do
-      {kind, _payload} = result when kind in [:ok, :error] ->
+      {kind, _payload} = result when kind in [:ok, :error, :indeterminate] ->
         result
 
       other ->
-        {:error, "invalid callback result: #{inspect(other)}"}
+        {:indeterminate, "invalid callback result: #{inspect(other)}; #{@partial}"}
     end
   rescue
-    error -> {:error, "callback crashed: #{Exception.message(error)}"}
+    error -> {:indeterminate, "callback crashed: #{Exception.message(error)}; #{@partial}"}
   catch
-    kind, reason -> {:error, "callback crashed: #{Exception.format_banner(kind, reason)}"}
+    kind, reason ->
+      {:indeterminate, "callback crashed: #{Exception.format_banner(kind, reason)}; #{@partial}"}
   end
 end

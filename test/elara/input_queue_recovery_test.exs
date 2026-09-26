@@ -23,6 +23,87 @@ defmodule Elara.InputQueueRecoveryTest do
     end
   end
 
+  defmodule UncertainTool do
+    def run(_args, _ctx), do: {:indeterminate, "killed mid-run"}
+  end
+
+  test "an uncertain receipt-backed result stays indeterminate and releases queued input" do
+    root =
+      Path.join(System.tmp_dir!(), "elara-uncertain-#{System.unique_integer([:positive])}")
+
+    cwd = Path.join(root, "workspace")
+    File.mkdir_p!(cwd)
+    on_exit(fn -> File.rm_rf!(root) end)
+
+    executor_path = Path.join(root, "executor.sqlite3")
+    journal_path = Path.join(root, "controller.sqlite3")
+    {:ok, executor} = TestExecutor.start_link(id: "executor-1", path: executor_path)
+    Process.unlink(executor)
+
+    call = %ToolCall{id: "uncertain-call", name: "uncertain", args: {:ok, %{}}}
+    tool = %{mutation_tool() | name: "uncertain", run: {UncertainTool, :run}}
+
+    {:ok, session} =
+      Elara.start_session(
+        provider: script([{:ok, assistant(nil, [call])}, {:ok, assistant("first done")}]),
+        tools: [tool],
+        plugins: [],
+        cwd: cwd,
+        effect_executor: executor,
+        effect_journal_path: journal_path
+      )
+
+    started = System.monotonic_time(:millisecond)
+    assert {:ok, _} = Elara.submit_input(session, attrs("first", "run it"))
+
+    assert_eventually(fn ->
+      match?({:ok, %{state: :consumed}}, Elara.input_status(session, "first"))
+    end)
+
+    assert_eventually(fn -> tool_results(session) != [] end)
+
+    # The durable path keeps the uncertainty rather than converting it to an error,
+    # and returns without waiting for the completion timeout.
+    assert [%ToolResult{outcome: {:indeterminate, "killed mid-run"}}] = tool_results(session)
+    assert System.monotonic_time(:millisecond) - started < 5_000
+
+    job_id = only_job_id(journal_path)
+
+    assert {:indeterminate, %Record{result: {:indeterminate, "killed mid-run"}}} =
+             TestExecutor.query(executor, job_id)
+
+    {:ok, info} = Store.newest(cwd)
+    kill_session(session)
+
+    # After restart the recovery barrier must accept the terminal indeterminate
+    # record; otherwise new input would be held indefinitely.
+    {:ok, resumed_agent} = Agent.start_link(fn -> [{:ok, assistant("after restart")}] end)
+
+    {:ok, resumed} =
+      Elara.start_session(
+        provider: {Elara.Provider.Scripted, resumed_agent},
+        tools: [tool],
+        plugins: [],
+        cwd: cwd,
+        resume: info.path,
+        effect_executor: executor,
+        effect_journal_path: journal_path
+      )
+
+    on_exit(fn ->
+      if match?({:ok, _}, Elara.session_pid(resumed)), do: stop_session(resumed)
+      if Process.alive?(executor), do: TestExecutor.close(executor)
+    end)
+
+    assert {:ok, _} = Elara.submit_input(resumed, attrs("second", "after restart"))
+
+    assert_eventually(fn ->
+      match?({:ok, %{state: :consumed}}, Elara.input_status(resumed, "second"))
+    end)
+
+    assert_eventually(fn -> Agent.get(resumed_agent, & &1) == [] end)
+  end
+
   test "restored queued input waits for an authoritative terminal receipt despite an indeterminate result" do
     root =
       Path.join(System.tmp_dir!(), "elara-input-recovery-#{System.unique_integer([:positive])}")

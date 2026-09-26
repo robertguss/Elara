@@ -58,11 +58,14 @@ cd native/elara-tui  && cargo fmt --check && cargo clippy && cargo test
   intentionally logs `(RuntimeError) boom` from a crash-recovery test; that is
   not a failure.
 - Test isolation happens before the app starts. `config/runtime.exs` (test env
-  only) clears `ELARA_*` and `XAI_API_KEY` and sets per-run `:sessions_root` and
-  `:skills_home` app env, so the exec stub and job managers never see the
-  developer's shell or state. The `mix test` alias sets a launch sentinel that
-  `test/elara/test_environment_test.exs` checks. Tests that need skills pass
-  `home:` or `skill_paths:` explicitly.
+  only) clears `ELARA_*` and `XAI_API_KEY`, points `TMPDIR`, `:sessions_root`
+  and `:skills_home` into one per-run directory, and raises the top-level supervisor's `:max_restarts`
+  (production keeps OTP's 3 in 5 seconds) because crash-recovery tests kill
+  `Elara.TestJobs` and `Elara.Exec` on purpose. `test/elara/test_environment_test.exs`
+  proves the launch clearing in a subprocess. Tests tagged `:requires_app` are
+  excluded under `mix test --no-start`. Tests that need skills pass `home:` or
+  `skill_paths:` explicitly. Reproduce order-dependent failures with
+  `mix test --seed N`.
 - `.cursor/skills/verify-elara/` is a user-path verification harness
   (`bin/launch`, `bin/doctor`, `bin/drive`, `bin/cleanup`) that runs Elara under
   an isolated `HOME` and a disposable git worktree. Use it — not `mix test` — to

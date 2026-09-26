@@ -3,22 +3,36 @@ import Config
 # Mix evaluates this before starting :elara, so the execution stub and the
 # job and thread managers never see the developer's environment or state.
 if config_env() == :test do
-  cleared =
-    for {name, _value} <- System.get_env(),
-        String.starts_with?(name, "ELARA_") or name == "XAI_API_KEY" do
-      System.delete_env(name)
-      name
+  for {name, _value} <- System.get_env(),
+      String.starts_with?(name, "ELARA_") or name == "XAI_API_KEY",
+      do: System.delete_env(name)
+
+  # One directory per run holds TMPDIR and every state root, so a crashed run's
+  # leftovers never collide with a later run's unique_integer names. Mix may
+  # evaluate this file more than once, and TMPDIR changes after the first pass,
+  # so the directory is chosen once per VM with a random suffix (a reused OS pid
+  # never reopens an old run).
+  run_dir =
+    case :persistent_term.get(:elara_test_run_dir, nil) do
+      nil ->
+        name = "elara-test-run-#{System.pid()}-#{:rand.uniform(1_000_000_000)}"
+        dir = Path.join(System.tmp_dir!(), name)
+        :persistent_term.put(:elara_test_run_dir, dir)
+        dir
+
+      dir ->
+        dir
     end
 
-  # Mix may evaluate this file more than once per run; derive paths from the OS
-  # pid so every evaluation agrees. Neither directory needs to exist up front:
-  # the store creates its root, and missing user skill roots are empty.
-  run = System.pid()
-  sessions_root = Path.join(System.tmp_dir!(), "elara-test-sessions-#{run}")
-  skills_home = Path.join(System.tmp_dir!(), "elara-test-home-#{run}")
+  File.mkdir_p!(run_dir)
+  System.put_env("TMPDIR", run_dir)
 
+  # Crash-recovery tests kill Elara.TestJobs and Elara.Exec on purpose; under
+  # OTP's default of 3 restarts in 5 seconds some test orders stop the whole
+  # application (reproduced with seed 734866).
   config :elara,
-    sessions_root: sessions_root,
-    skills_home: skills_home,
-    test_cleared_env: Enum.sort(cleared)
+    max_restarts: 100,
+    test_run_dir: run_dir,
+    sessions_root: Path.join(run_dir, "sessions"),
+    skills_home: Path.join(run_dir, "home")
 end

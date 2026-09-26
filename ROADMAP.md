@@ -58,10 +58,16 @@ scope until a later revision names them.
 **Hypothesis (progress):** within 5 seconds of the affected session being
 reopened (simulated provider), every accepted input and every job slot is in
 either a terminal state or a *recoverable* one:
-- **Inputs:** a terminal input is consumed or failed with a durable receipt. A
-  recoverable one is queued or paused and visible through `input_status`.
+- **Inputs:** a terminal input's turn ended, or it failed with a durable
+  receipt. Recorded consumption alone is not terminal, because it happens
+  before execution finishes (`lib/elara/session.ex:2313`). A recoverable input
+  is queued or paused and visible through `input_status`.
 - **Job slots:** a terminal slot is released. A recoverable one is held for an
   `indeterminate` job and reported as awaiting operator acknowledgement.
+
+Recovery must also advance. Once the session is resumed and any held job is
+acknowledged, every recoverable input reaches a terminal state within the same
+bound, and none stays queued indefinitely.
 
 **Against:** any counterexample. A known one exists: an interrupted or
 timed-out _running_ mutating call is recorded as `{:error, "interrupted"}` or
@@ -79,7 +85,8 @@ measuring):
   streams 50 deltas per second of about 20 bytes each. Each delta carries its
   *intended* emission timestamp.
 - **History and context:** history grows to about 200 KB. The simulated provider
-  advertises a 1,000,000-token context window, so no handoff fires. Handoff
+  is started with `context_limit: 1_000_000` (context accounting ignores provider
+  advertisement, `lib/elara/session/context.ex:12`), so no handoff fires. Handoff
   lineages are a separate, labeled variant.
 - **Persistence:** default persistence is on (store, recorder, journal).
 - **Duration:** a 10-minute run on the owner's laptop, with the hardware
@@ -124,9 +131,11 @@ The bounds are:
 - p95 latency within 2× of the undisturbed baseline.
 - Memory per healthy session within 1.5× of the baseline.
 - VM memory growth caused by the misbehaving session under 256 MB.
-- Cancellation completing within one second. Completion means the stub
-  confirmed the process group terminated; an `indeterminate` report is counted
-  separately, not as completion.
+- Cancellation completing within one second. Completion needs independent
+  evidence that no process in the command's group survives, from a process-table
+  check. The stub's terminal event reports exit status and cancellation cause,
+  not group termination (`native/exec-stub/src/main.rs:565`). An
+  `indeterminate` report is counted separately, not as completion.
 
 **Against:** any shared component (the single exec GenServer and Port,
 registries, unbounded subscriber mailboxes, synchronous fsync) lets one session
@@ -240,10 +249,10 @@ format and warnings-as-errors compile pass; branches are pruned as the owner
 confirms.
 
 **Result (2026-09-26): DONE.** Test-only `config/runtime.exs` clears the
-environment and isolates state before the app starts, and a launch sentinel
-proves it. `--diagnostics` is fixed. The roadmap test checks every row and
-rejects malformed ones (all mutation-checked). 47 merged branches deleted; two
-unmerged remain for the owner.
+environment and puts `TMPDIR` and state under one per-run directory before the
+app starts (subprocess-proven). It also raises supervisor restart intensity,
+fixing a seed-dependent whole-app crash. `--diagnostics` fixed; roadmap test
+hardened. 47 merged branches deleted; two unmerged remain for the owner.
 
 ## LAB-1 — RQ-1: property tests over Core invariants
 
@@ -259,7 +268,8 @@ calls.
 - On every prefix of a trace, each started turn has ended at most once.
 - After a defined terminal drain (every pending provider and tool fact
   answered), each started turn has ended exactly once.
-- Every dispatched call receives exactly one result.
+- On every prefix, each dispatched call has at most one result; after the
+  terminal drain, exactly one.
 - The iteration budget holds.
 - A running mutating call that is interrupted or times out is `indeterminate`;
   calls not yet started may truthfully report `interrupted`.

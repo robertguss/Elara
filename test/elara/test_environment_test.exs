@@ -1,15 +1,32 @@
 defmodule Elara.TestEnvironmentTest do
   use ExUnit.Case, async: true
 
-  # The `mix test` alias sets this sentinel before the application starts, and
-  # config/runtime.exs must remove it before the execution stub inherits the
-  # environment. The test therefore fails on any machine if isolation regresses.
-  @sentinel "ELARA_TEST_LAUNCH_SENTINEL"
+  @root Path.expand("../..", __DIR__)
 
-  test "provider and Elara variables are cleared before the application starts" do
-    assert @sentinel in Application.fetch_env!(:elara, :test_cleared_env)
-    assert System.get_env(@sentinel) == nil
+  # Launch proof in a controlled subprocess: runtime config must clear these
+  # variables before any application code runs, however the suite is started.
+  test "test runtime config clears provider and Elara variables at launch" do
+    script = ~S"""
+    IO.puts("elara=" <> inspect(System.get_env("ELARA_LAUNCH_PROBE")))
+    IO.puts("xai=" <> inspect(System.get_env("XAI_API_KEY")))
+    IO.puts("root=" <> Application.fetch_env!(:elara, :sessions_root))
+    """
 
+    {output, 0} =
+      System.cmd("mix", ["run", "--no-compile", "--no-deps-check", "--no-start", "-e", script],
+        cd: @root,
+        env: [{"MIX_ENV", "test"}, {"ELARA_LAUNCH_PROBE", "1"}, {"XAI_API_KEY", "x"}],
+        stderr_to_stdout: true
+      )
+
+    assert output =~ "elara=nil"
+    assert output =~ "xai=nil"
+    assert [_, root] = Regex.run(~r/root=(.+)/, output)
+    refute String.starts_with?(root, System.user_home!())
+  end
+
+  @tag :requires_app
+  test "commands run through the execution stub see no ELARA_* or XAI_API_KEY" do
     assert {:ok, %Elara.Exec.Result{code: 0, output: output}} =
              Elara.Exec.run(["/usr/bin/env"], cwd: System.tmp_dir!(), timeout_ms: 5_000)
 
@@ -24,7 +41,7 @@ defmodule Elara.TestEnvironmentTest do
     assert leaked == []
   end
 
-  test "state and skill roots are isolated before the application starts" do
+  test "state and skill roots are isolated from the developer's home" do
     home = Application.fetch_env!(:elara, :skills_home)
     sessions = Application.fetch_env!(:elara, :sessions_root)
 

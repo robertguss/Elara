@@ -75,15 +75,8 @@ defmodule Elara.MixProject do
       test_ignore_filters: [
         ~r"test/support/(context_restart|test_job_recovery_live|test_job_repository_live|edit_replace_all_live|two_specialist_read_live|live_session_driver|long_context_job_live|session_crash_job_live|concurrent_test_jobs|concurrent_test_jobs_live|fixtures/elixir_project_v1)\.exs$"
       ],
-      deps: deps(),
-      aliases: aliases()
+      deps: deps()
     ]
-  end
-
-  # The sentinel proves config/runtime.exs clears the environment before the
-  # application starts; see test/elara/test_environment_test.exs.
-  defp aliases do
-    [test: [fn _args -> System.put_env("ELARA_TEST_LAUNCH_SENTINEL", "1") end, "test"]]
   end
 
   # Run "mix help compile.app" to learn about applications.

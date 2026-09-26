@@ -22,6 +22,12 @@ defmodule Elara.Application do
       Elara.TestJobs
     ]
 
-    Supervisor.start_link(children, strategy: :one_for_one, name: Elara.Supervisor)
+    # Production keeps OTP's default intensity. The test config raises it because
+    # crash-recovery tests deliberately kill supervised singletons in sequence.
+    Supervisor.start_link(children,
+      strategy: :one_for_one,
+      name: Elara.Supervisor,
+      max_restarts: Application.get_env(:elara, :max_restarts, 3)
+    )
   end
 end

@@ -181,7 +181,7 @@ quality or productivity. No example strategy, RLM, GEPA or optimizer is
 implemented, and no new comparison has started.
 
 Guide: [captured check diagnosis](check-diagnosis.md). Publication and shared
-verification results: [DIAG-1 in the roadmap](../ROADMAP.md#diag-1--diagnose-a-captured-failed-check).
+verification results: [DIAG-1 in the roadmap](https://github.com/robertguss/Elara/blob/6ac8343/ROADMAP.md#diag-1--diagnose-a-captured-failed-check).
 
 ## 2026-09-06: Supervised test completion and agent wakeup — JOB-1
 
@@ -535,7 +535,7 @@ provider wrapper for fault injection and an explicit 272,000 context limit;
 that does not preserve normal provider visibility or uncertainty accounting.
 Its concurrency/job results remain bounded evidence, not a normal-provider
 context-pressure experiment. JOB-5 uses the configured provider directly. The integration checkpoint in
-[ROADMAP.md](../ROADMAP.md#2026-09-07-integration-checkpoint) owns current results.
+[ROADMAP.md](https://github.com/robertguss/Elara/blob/6ac8343/ROADMAP.md#2026-09-07-integration-checkpoint) owns current results.
 
 
 
@@ -671,7 +671,7 @@ small coding task. The driver follow-up is recorded below as JOB-6. Dedicated ev
 The [public records](fixtures/read-range-feature-live-2026-09-07.json) retain
 prompts, the original model patch/tests, job outputs, recovery details and the
 fresh successful transcript. Provider-private state is omitted. Canonical check
-counts and publication status belong to [JOB-9](../ROADMAP.md#job-9--live-feature-implementation-with-supervised-tests).
+counts and publication status belong to [JOB-9](https://github.com/robertguss/Elara/blob/6ac8343/ROADMAP.md#job-9--live-feature-implementation-with-supervised-tests).
 
 
 **Final verification:** 48 focused tests pass, including local/session behavior
@@ -747,7 +747,7 @@ JOB-9; not yet merged at that branch checkpoint. The temporary empty home is rem
 session/job evidence is retained. The [public artifact](fixtures/live-driver-ownership-2026-09-07.json)
 contains the prompt, per-session public transcript, metadata, job output, gaps
 and check results. Canonical status belongs to
-[JOB-6](../ROADMAP.md#job-6--live-driver-metadata-and-logical-ownership).
+[JOB-6](https://github.com/robertguss/Elara/blob/6ac8343/ROADMAP.md#job-6--live-driver-metadata-and-logical-ownership).
 Dedicated evals remain deferred. The follow-up coding experiment is recorded below as JOB-7, retaining the full
 attempt and explicit assistance to reassess the JOB-9 workflow.
 
@@ -826,7 +826,7 @@ failures remain. Formatting, warnings-as-errors compilation, local review and
 removed; the original coding session and terminal jobs remain as evidence.
 Feature and review checks are pushed in `e9bf355` on `codex/edit-replace-all`,
 stacked on JOB-6 at that branch checkpoint. Canonical checkpoint:
-[JOB-7](../ROADMAP.md#job-7--live-edit-replace_all-feature).
+[JOB-7](https://github.com/robertguss/Elara/blob/6ac8343/ROADMAP.md#job-7--live-edit-replace_all-feature).
 Dedicated evals remain deferred.
 
 
@@ -839,7 +839,7 @@ failures retained in the earlier branch reports. No runtime merge conflict or
 new provider/context policy change was required. The two documentation ID
 collisions are reconciled above; incoming artifacts remain unchanged. Test
 fixture isolation and exact support-script discovery filters were aligned with
-main. See the [integration checkpoint](../ROADMAP.md#2026-09-07-integration-checkpoint)
+main. See the [integration checkpoint](https://github.com/robertguss/Elara/blob/6ac8343/ROADMAP.md#2026-09-07-integration-checkpoint)
 for publication status and verification limits. No new live inference was run.
 
 

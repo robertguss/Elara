@@ -2,8 +2,9 @@
 
 ## Cursor Cloud specific instructions
 
-Elara is a single Mix app (an Elixir coding-agent CLI). Standard commands live
-in `README.md` (the "Develop" section) and `mix.exs`; the notes below only cover
+Elara is a single Mix app (an Elixir coding-agent CLI) that is primarily a BEAM
+harness research lab; daily use is secondary. Standard commands live in
+`README.md` (the "Develop" section) and `mix.exs`; the notes below only cover
 things that are non-obvious in the Cloud environment.
 
 ### Toolchain
@@ -31,10 +32,15 @@ things that are non-obvious in the Cloud environment.
 - `mix test` intentionally logs a `[error] ... (RuntimeError) boom` line from a
   crash-recovery test (`Elara.SessionTest.CrashTool`). This is expected; the run
   still ends with all tests passing. Do not treat that log line as a failure.
-- The real agent (`mix elara.ask` / `mix elara.chat`) needs xAI/Grok
-  credentials: `ELARA_API_KEY` (preferred) or `XAI_API_KEY`, or an interactive
-  `mix elara.login` (tokens land in `~/.elara/auth.json`). Without credentials
-  these commands fail at the network call.
+- The suite is not yet hermetic (fixed in LAB-0): it reads user skills from
+  `~/.agents/skills` and `~/.config/agents/skills`, and a large catalog trips
+  context-budget handoffs in six tests. If those fail, rerun with an empty
+  `HOME` while keeping `MIX_HOME`, `HEX_HOME`, `CARGO_HOME` and `RUSTUP_HOME`.
+- The real agent (`mix elara.ask` / `mix elara.chat` / `mix elara.tui`) needs
+  provider credentials. `ELARA_PROVIDER=openai-codex` after
+  `mix elara.login openai` uses a ChatGPT/Codex subscription; otherwise
+  `ELARA_API_KEY` or `XAI_API_KEY`, or `mix elara.login` for Grok (tokens land
+  in `~/.elara/`). Without credentials these commands fail at the network call.
 - To exercise the full agent loop (session + read/write/edit/bash tools) without
   credentials, drive it with the scripted provider via the public API:
   `Elara.start_session(provider: {Elara.Provider.Scripted, agent_pid}, cwd: dir, persist: false)`,
@@ -49,3 +55,9 @@ things that are non-obvious in the Cloud environment.
 
 - `ROADMAP.md` is the sole current roadmap and status source. Update its queue
   and item Result in the same commit that changes an item's status.
+- Work follows its research questions (RQ-n) and lab queue (LAB-n). Start each
+  experiment from a refutable hypothesis, prefer seeded runs against simulated
+  or scripted providers, and keep real-model runs opt-in and capped.
+- Write one page per experiment in `docs/lab/`; raw results go under
+  `lab/results/`, not `docs/`. Build reusable lab infrastructure rather than
+  single-use drivers.

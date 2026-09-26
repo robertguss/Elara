@@ -57,11 +57,12 @@ cd native/elara-tui  && cargo fmt --check && cargo clippy && cargo test
 - Tests never hit the network — they drive `Elara.Provider.Scripted`. `mix test`
   intentionally logs `(RuntimeError) boom` from a crash-recovery test; that is
   not a failure.
-- `test/test_helper.exs` keeps the suite independent of the developer's setup.
-  It clears `ELARA_*` and `XAI_API_KEY`, points user skill discovery at an empty
-  home through the `:elara, :skills_home` app env, then restarts `:elara` so the
-  exec stub and job managers start clean. Tests that need skills
-  pass `home:` or `skill_paths:` explicitly.
+- Test isolation happens before the app starts. `config/runtime.exs` (test env
+  only) clears `ELARA_*` and `XAI_API_KEY` and sets per-run `:sessions_root` and
+  `:skills_home` app env, so the exec stub and job managers never see the
+  developer's shell or state. The `mix test` alias sets a launch sentinel that
+  `test/elara/test_environment_test.exs` checks. Tests that need skills pass
+  `home:` or `skill_paths:` explicitly.
 - `.cursor/skills/verify-elara/` is a user-path verification harness
   (`bin/launch`, `bin/doctor`, `bin/drive`, `bin/cleanup`) that runs Elara under
   an isolated `HOME` and a disposable git worktree. Use it — not `mix test` — to
@@ -91,7 +92,7 @@ State lives under `~/.elara/`: `sessions/<cwd-key>/` (JSONL transcripts),
 `sessions/_threads/` (delegated children), `sessions/_thread_messages/`
 (transport receipts), `sessions/_effect_executors/` (durable ledgers),
 `auth.json` / `openai-codex-auth.json`. Tests redirect this via the
-`:elara, :sessions_root` app env (see `test/test_helper.exs`).
+`:elara, :sessions_root` app env (see `config/runtime.exs`).
 
 ## Architecture
 

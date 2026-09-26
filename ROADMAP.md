@@ -55,9 +55,13 @@ scope until a later revision names them.
 - Uncertain outcomes are reported as `indeterminate`.
 - Every session file remains openable.
 
-**Hypothesis (progress):** after recovery, every accepted input reaches a
-terminal state or an explicitly recoverable one. Every job slot is released or
-reported as held within a bounded time.
+**Hypothesis (progress):** within 5 seconds of the affected session being
+reopened (simulated provider), every accepted input and every job slot is in
+either a terminal state or a *recoverable* one:
+- **Inputs:** a terminal input is consumed or failed with a durable receipt. A
+  recoverable one is queued or paused and visible through `input_status`.
+- **Job slots:** a terminal slot is released. A recoverable one is held for an
+  `indeterminate` job and reported as awaiting operator acknowledgement.
 
 **Against:** any counterexample. A known one exists: an interrupted or
 timed-out _running_ mutating call is recorded as `{:error, "interrupted"}` or
@@ -67,22 +71,34 @@ timed-out _running_ mutating call is recorded as `{:error, "interrupted"}` or
 
 ### RQ-2 — How far does one VM scale under a fixed workload?
 
-**Reference workload** (initial values; fix them in the LAB-3 note before
+**Reference workload** (initial values; LAB-3 records them in its note before
 measuring):
-- Each session runs 20 turns with 2 tool calls per turn, and history grows
-  to about 200 KB.
-- The simulated provider has a 300 ms time to first token, then streams 50
-  tokens per second.
-- Default persistence is on (store, recorder, journal).
-- The run lasts 10 minutes on the owner's laptop, whose hardware is recorded.
+- **Turns:** 20 per session, each with 2 tool calls. One is `read` of a 4 KB
+  file; the other runs a 200 ms command through the stub.
+- **Provider:** the simulated provider has a 300 ms time to first token, then
+  streams 50 deltas per second of about 20 bytes each. Each delta carries its
+  *intended* emission timestamp.
+- **History and context:** history grows to about 200 KB. The simulated provider
+  advertises a 1,000,000-token context window, so no handoff fires. Handoff
+  lineages are a separate, labeled variant.
+- **Persistence:** default persistence is on (store, recorder, journal).
+- **Duration:** a 10-minute run on the owner's laptop, with the hardware
+  recorded.
 
-**Hypothesis:** at 500 concurrent sessions under that workload, runtime-added
-p95 delta latency stays under 50 ms, and memory stays under 5 MB per session.
-Throughput tracks the simulated provider rate, not the runtime.
+**Measures:**
+- **Latency:** from a delta's intended emission time to its arrival at an
+  attached protocol-v2 client. Measuring from intended rather than actual send
+  time keeps the simulator's own scheduling delay inside the number.
+- **Memory:** `:erlang.memory(:total)` plus the stub's resident set size, minus
+  an idle-VM baseline, divided by sessions.
 
-**Against:** either ceiling exceeded, or throughput flattening before the
-provider rate. The simulated provider's own latency is subtracted, so a slow
-provider cannot make the hypothesis pass trivially.
+**Hypothesis:** at 500 concurrent sessions, p95 latency stays under 50 ms above
+the provider's intended timing, and memory stays under 5 MB per session.
+Throughput tracks the intended delta rate. These are provisional budgets, not
+predictions.
+
+**Against:** either ceiling is exceeded, or throughput flattens before the
+intended rate.
 
 **Suspected costs:**
 - Whole-history JSON encoding on every streamed delta (provider visibility and
@@ -98,13 +114,19 @@ workload).
 ### RQ-3 — Does process isolation protect healthy sessions?
 
 **Hypothesis:** while one session misbehaves, healthy sessions under the RQ-2
-workload keep their p95 delta latency within 2× of the undisturbed baseline.
-Their cancellations complete within one second, and their memory stays
-bounded. The misbehaviours are:
+workload keep their bounds. The misbehaviours are:
 - Flooding its subscribers.
 - A stalled attached client.
 - Crashing repeatedly.
 - A command printing without limit.
+
+The bounds are:
+- p95 latency within 2× of the undisturbed baseline.
+- Memory per healthy session within 1.5× of the baseline.
+- VM memory growth caused by the misbehaving session under 256 MB.
+- Cancellation completing within one second. Completion means the stub
+  confirmed the process group terminated; an `indeterminate` report is counted
+  separately, not as completion.
 
 **Against:** any shared component (the single exec GenServer and Port,
 registries, unbounded subscriber mailboxes, synchronous fsync) lets one session
@@ -136,12 +158,16 @@ list lost.
 
 ### RQ-5 — Can a live session safely change its own runtime? (parked)
 
-**Hypothesis:** a session can adopt a new tool or shell generation mid-session,
-gated by replaying its recorded facts under the new code, without losing or
-duplicating accepted input or in-flight effects.
+**Hypothesis:** a session can adopt a new tool or shell generation mid-session
+without losing or duplicating accepted input or in-flight effects. It passes
+two gates:
+- **Replay gate:** replaying its recorded Core facts. This checks the reducer
+  only; it never runs replacement shells or tools.
+- **Migration gate:** a separate fault-injected migration test that exercises
+  the replacement shell and tools across the swap.
 
-**Against:** a swap that loses or duplicates input or effects, or a behavioral
-divergence the replay gate fails to catch.
+**Against:** a swap that loses or duplicates input or effects, or a divergence
+that both gates miss.
 
 This builds on PLUGIN-1/2 and is not queued until RQ-1 and RQ-4 have results.
 
@@ -152,8 +178,8 @@ This builds on PLUGIN-1/2 and is not queued until RQ-1 and RQ-4 have results.
   what changed and limits.
 - **Raw data stays out of `docs/`.** It goes under `lab/results/`.
 - **Seeded and repeatable.** A seed reproduces the choices: fault schedules,
-  simulated responses and tool plans, and therefore invariant results. Timing
-  numbers are reported with run-to-run variance, not as exact values.
+  simulated responses and tool plans. It does not fix concurrent interleavings,
+  so invariant outcomes and timings are reported across runs, with variance.
 - **Simulated first.** Real-model runs are opt-in, capped, and reported
   separately from simulated results.
 - **Keep coverage when deleting.** Removing code never removes the recovery or
@@ -213,10 +239,10 @@ Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, `INVALID` and
 format and warnings-as-errors compile pass; branches are pruned as the owner
 confirms.
 
-**Result (2026-09-26): DONE.** The helper clears the environment and restarts
-the app before tests run; the suite passes with the real and an empty `HOME`.
-`--diagnostics` is fixed. The roadmap test covers every row and rejects
-malformed ones (both mutation-checked). 47 merged branches deleted; two
+**Result (2026-09-26): DONE.** Test-only `config/runtime.exs` clears the
+environment and isolates state before the app starts, and a launch sentinel
+proves it. `--diagnostics` is fixed. The roadmap test checks every row and
+rejects malformed ones (all mutation-checked). 47 merged branches deleted; two
 unmerged remain for the owner.
 
 ## LAB-1 — RQ-1: property tests over Core invariants
@@ -226,15 +252,20 @@ counterexample (an interrupted or timed-out running mutating call), then
 generate fact sequences: asks, streamed deltas, provider results with tool
 calls, tool results, timeouts, interrupts, stale refs and inbox changes.
 
-**Properties:**
+**Properties:** generators are state-aware and include steering and deferred
+calls.
 - The same facts produce the same state and effects.
 - Stale-ref facts never change history.
-- Every started turn ends exactly once.
+- On every prefix of a trace, each started turn has ended at most once.
+- After a defined terminal drain (every pending provider and tool fact
+  answered), each started turn has ended exactly once.
 - Every dispatched call receives exactly one result.
 - The iteration budget holds.
 - A running mutating call that is interrupted or times out is `indeterminate`;
   calls not yet started may truthfully report `interrupted`.
 - Recorded facts replay to `:match`.
+
+Shell recovery is out of scope; LAB-5 covers it.
 
 **Done when:** properties run in the default suite with a fixed budget, plus a
 longer opt-in run. Each counterexample is either fixed or recorded as a finding
@@ -257,7 +288,7 @@ in `docs/lab/001-…`.
   live drivers in `test/support`, and protocol v1 if nothing else uses it.
 
 **Done when:**
-- A seed reproduces the same choices and invariant results.
+- A seed reproduces the same fault schedule, simulated responses and tool plans.
 - Timing summaries report run-to-run variance.
 - A capped real-model smoke run works.
 - `docs/lab/README.md` documents usage.

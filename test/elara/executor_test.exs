@@ -132,6 +132,47 @@ defmodule Elara.ExecutorTest do
     refute File.exists?(Path.join(context.brain, "made.txt"))
   end
 
+  test "a remote command killed at the output cap is indeterminate and the worker survives",
+       context do
+    token = "worker-secret"
+    worker = start_worker(context.worker, context.workspace_id, token)
+    router = start_router(worker, context.workspace_id, token)
+    File.write!(Path.join(context.worker, "after.txt"), "still serving")
+
+    flood = %ToolCall{id: "flood", name: "bash", args: {:ok, %{"command" => "yes"}}}
+    read_call = %ToolCall{id: "after", name: "read", args: {:ok, %{"path" => "after.txt"}}}
+
+    provider =
+      script([
+        {:ok, asst(nil, [flood])},
+        {:ok, asst(nil, [read_call])},
+        {:ok, asst("done")}
+      ])
+
+    {:ok, session} =
+      Elara.start_session(
+        provider: provider,
+        cwd: context.brain,
+        persist: false,
+        plugins: [],
+        tools: [tool("bash"), tool("read")],
+        router: router,
+        workspace_id: context.workspace_id
+      )
+
+    assert {:ok, "done"} = Elara.ask(session, "flood remotely")
+
+    results = Enum.filter(Elara.transcript(session), &is_struct(&1, ToolResult))
+
+    assert [
+             %ToolResult{call_id: "flood", outcome: {:indeterminate, message}},
+             %ToolResult{call_id: "after", outcome: {:ok, "still serving"}}
+           ] = results
+
+    assert message =~ "killed at the output cap"
+    assert Process.alive?(worker)
+  end
+
   test "range and numbered reads use a distinct worker tool version", context do
     token = "worker-secret"
     worker = start_worker(context.worker, context.workspace_id, token, ["filesystem:read"])

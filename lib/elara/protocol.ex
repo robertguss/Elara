@@ -41,6 +41,29 @@ defmodule Elara.Protocol do
     end
   end
 
+  @doc """
+  Receive one complete line from a passive `packet: :line` socket. Line mode
+  delivers lines longer than the receive buffer in pieces; this reassembles
+  them up to `max_line_bytes/0`, within one overall timeout in milliseconds.
+  """
+  @spec recv_line(:gen_tcp.socket(), non_neg_integer()) ::
+          {:ok, binary()} | {:error, :message_too_large | :timeout | term()}
+  def recv_line(socket, timeout) do
+    deadline = System.monotonic_time(:millisecond) + timeout
+    recv_line(socket, deadline, line_buffer())
+  end
+
+  defp recv_line(socket, deadline, buffer) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    with {:ok, chunk} <- :gen_tcp.recv(socket, 0, remaining) do
+      case push_line(buffer, chunk) do
+        {:more, buffer} -> recv_line(socket, deadline, buffer)
+        result -> result
+      end
+    end
+  end
+
   @spec encode(map()) :: iodata()
   def encode(message) when is_map(message), do: [JSON.encode!(message), "\n"]
 

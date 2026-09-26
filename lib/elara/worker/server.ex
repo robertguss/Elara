@@ -4,6 +4,7 @@ defmodule Elara.Worker.Server do
   use GenServer
 
   alias Elara.Executor.Request
+  alias Elara.Tool
   alias Elara.Tool.Ctx
 
   @protocol_version 2
@@ -85,7 +86,7 @@ defmodule Elara.Worker.Server do
   end
 
   defp handle_connection(socket, config) do
-    case :gen_tcp.recv(socket, 0, 30_000) do
+    case Elara.Protocol.recv_line(socket, 30_000) do
       {:ok, line} ->
         case decode_request(line, config) do
           {:ok, request, cwd, tool} -> run_request(socket, request, cwd, tool)
@@ -98,6 +99,8 @@ defmodule Elara.Worker.Server do
 
     :gen_tcp.close(socket)
   end
+
+  @partial "it may have partially changed the workspace"
 
   defp run_request(socket, request, cwd, tool) do
     parent = self()
@@ -116,7 +119,16 @@ defmodule Elara.Worker.Server do
     after
       max(request.deadline_ms - System.system_time(:millisecond), 0) ->
         Process.exit(job, :kill)
-        :gen_tcp.send(socket, encode_error(:deadline_exceeded))
+
+        # A killed mutating job may already have changed the workspace.
+        if tool.mutating do
+          :gen_tcp.send(
+            socket,
+            encode_result({:indeterminate, "deadline exceeded while running; #{@partial}"})
+          )
+        else
+          :gen_tcp.send(socket, encode_error(:deadline_exceeded))
+        end
     end
   end
 
@@ -230,12 +242,18 @@ defmodule Elara.Worker.Server do
 
     apply(module, function, [request.arguments, ctx])
   rescue
-    error -> {:error, "worker tool crashed: #{Exception.message(error)}"}
+    error -> crashed(tool, Exception.message(error))
   catch
-    kind, reason -> {:error, "worker tool crashed: #{Exception.format_banner(kind, reason)}"}
+    kind, reason -> crashed(tool, Exception.format_banner(kind, reason))
   end
 
-  defp encode_result({kind, text}) when kind in [:ok, :error] do
+  # A mutating tool that crashed mid-run may have changed the workspace partially.
+  defp crashed(%Tool{mutating: true}, reason),
+    do: {:indeterminate, "worker tool crashed while running: #{reason}; #{@partial}"}
+
+  defp crashed(_tool, reason), do: {:error, "worker tool crashed: #{reason}"}
+
+  defp encode_result({kind, text}) when kind in [:ok, :error, :indeterminate] do
     [JSON.encode!(%{"type" => "result", "outcome" => %{Atom.to_string(kind) => text}}), "\n"]
   end
 

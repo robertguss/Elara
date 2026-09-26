@@ -215,6 +215,14 @@ Read-only transport failures may retry another matching healthy worker. Mutating
 tools are never blindly retried after transport loss because the side effect may
 already have happened; Elara reports an `:indeterminate` tool result instead.
 
+A worker also returns `indeterminate` itself when a mutating tool crashes, hits
+its deadline, or has its command killed (timeout, cancellation or output cap)
+while running. Non-mutating tools report those cases as errors. Workers and
+clients reassemble protocol lines up to 16 MiB, so large results round-trip. The
+worker protocol stays at version 2. An older client receives an `indeterminate`
+result as an invalid response, which its router already reports as
+`indeterminate` for mutating tools.
+
 ## Security boundary
 
 Worker capability and workspace checks are enforcement layers, but they are not

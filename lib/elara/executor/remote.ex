@@ -25,7 +25,7 @@ defmodule Elara.Executor.Remote do
                "request" => Request.to_map(request)
              })
            ),
-         {:ok, line} <- :gen_tcp.recv(socket, 0, timeout),
+         {:ok, line} <- Elara.Protocol.recv_line(socket, timeout),
          {:ok, response} <- decode(line) do
       :gen_tcp.close(socket)
       decode_response(response)
@@ -41,6 +41,10 @@ defmodule Elara.Executor.Remote do
   defp decode_response(%{"type" => "result", "outcome" => %{"error" => text}})
        when is_binary(text),
        do: {:error, text}
+
+  defp decode_response(%{"type" => "result", "outcome" => %{"indeterminate" => text}})
+       when is_binary(text),
+       do: {:indeterminate, text}
 
   defp decode_response(%{"type" => "error", "error" => error}) when is_binary(error),
     do: {:executor_error, :rejected, error}

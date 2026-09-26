@@ -52,5 +52,5 @@ Fixes or features the experiment produced, with commits.
 Confounds, unmeasured effects, and the follow-up this suggests.
 ```
 
-The seeded runner (`mix elara.lab`) arrives with LAB-3. Until then, notes give
+The seeded runner (`mix elara.lab`) arrives with LAB-2. Until then, notes give
 the exact `mix test` or `mix run` command instead.

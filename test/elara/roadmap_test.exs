@@ -9,6 +9,10 @@ defmodule Elara.RoadmapTest do
   test "the queue uses allowed statuses and has exactly one executable item" do
     rows = table("Execution queue")
     ids = Enum.map(rows, &hd/1)
+
+    for row <- rows,
+        do: assert(length(row) == 4, "queue row must have 4 cells: #{inspect(row)}")
+
     statuses = Enum.map(rows, &Enum.at(&1, 1))
 
     assert rows != []
@@ -42,6 +46,10 @@ defmodule Elara.RoadmapTest do
     rows = table("History")
 
     assert rows != []
+
+    for row <- rows,
+        do: assert(length(row) == 4, "history row must have 4 cells: #{inspect(row)}")
+
     assert Enum.all?(rows, fn [_id, status | _rest] -> status in @statuses end)
     refute Enum.any?(rows, fn [_id, status | _rest] -> status in @executable end)
   end

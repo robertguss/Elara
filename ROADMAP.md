@@ -25,9 +25,10 @@ split works; its daily-use reversal measurement is retired with SPLIT-5.
 SPLIT-5 (daily-driver go/no-go) is canceled. The JOB experiment series is
 closed.
 
-**2026-09-26 — LAB-0 done.** The suite is hermetic, and all 541 Mix tests pass
-with both the owner's real `HOME` and an empty one. 121 Rust tests pass
-(unchanged since `6ac8343`). The build compiles with warnings denied.
+**2026-09-26 — LAB-0 done, agenda revised.** The suite is hermetic. An
+independent Codex review sharpened the hypotheses, added the isolation
+question (RQ-3), turned offline policy replay into parked infrastructure, and
+reordered the queue so Core properties and measurement come before code removal.
 
 **Next action:** LAB-1.
 
@@ -36,69 +37,113 @@ with both the owner's real `HOME` and an empty one. 121 Rust tests pass
 Each question has a hypothesis that an experiment can refute. A result against a
 hypothesis is a finding, not a failure.
 
-### RQ-1 — Do the invariants hold under arbitrary faults?
+**Attribution rule.** An experiment establishes a property of Elara. Crediting
+that property to the BEAM needs a comparison: a controlled variation inside
+Elara (for example a shared process versus isolated ones), or a documented
+baseline from another runtime. Without one, report it as an Elara property.
 
-**Hypothesis:** Elara's documented invariants hold under randomized fault
-schedules:
+### RQ-1 — Do safety and progress hold under a defined fault model?
 
+**Fault model:** abrupt exit of a session process, a provider task, a tool task,
+the execution stub, a client connection, or the whole VM, at named points in
+the turn lifecycle. Disk corruption, torn writes and full disks are out of
+scope until a later revision names them.
+
+**Hypothesis (safety):** under any schedule of these faults:
 - Accepted input is consumed at most once.
 - No mutation re-executes after its callback started.
 - Uncertain outcomes are reported as `indeterminate`.
 - Every session file remains openable.
 
-**Against:** any counterexample. The pure `Core.step/2` makes property testing
-cheap; the shell needs fault injection.
+**Hypothesis (progress):** after recovery, every accepted input reaches a
+terminal state or an explicitly recoverable one. Every job slot is released or
+reported as held within a bounded time.
 
-**Known suspect:** an interrupted or timed-out _running_ mutating call is
-recorded as `{:error, "interrupted"}` or `{:error, "timed out"}`, not
-`indeterminate` (`lib/elara/session/core.ex:274-289`).
+**Against:** any counterexample. A known one exists: an interrupted or
+timed-out _running_ mutating call is recorded as `{:error, "interrupted"}` or
+`{:error, "timed out"}`, not `indeterminate` (`lib/elara/session/core.ex:274-289`).
 
-**Experiments:** LAB-2, LAB-4.
+**Experiments:** LAB-1 (Core properties), LAB-5 (chaos against the shell).
 
-### RQ-2 — Where does concurrency break?
+### RQ-2 — How far does one VM scale under a fixed workload?
 
-**Hypothesis:** once per-event work proportional to history is removed, one VM
-on a laptop sustains at least 500 concurrent streaming sessions with simulated
-providers, and throughput is bound by provider latency rather than the runtime.
+**Reference workload** (initial values; fix them in the LAB-3 note before
+measuring):
+- Each session runs 20 turns with 2 tool calls per turn, and history grows
+  to about 200 KB.
+- The simulated provider has a 300 ms time to first token, then streams 50
+  tokens per second.
+- Default persistence is on (store, recorder, journal).
+- The run lasts 10 minutes on the owner's laptop, whose hardware is recorded.
+
+**Hypothesis:** at 500 concurrent sessions under that workload, runtime-added
+p95 delta latency stays under 50 ms, and memory stays under 5 MB per session.
+Throughput tracks the simulated provider rate, not the runtime.
+
+**Against:** either ceiling exceeded, or throughput flattening before the
+provider rate. The simulated provider's own latency is subtracted, so a slow
+provider cannot make the hypothesis pass trivially.
 
 **Suspected costs:**
-
 - Whole-history JSON encoding on every streamed delta (provider visibility and
   context budget).
 - A full JSONL rewrite on every append.
 - A session-file scan by `Handoff.lineage` on every provider dispatch.
 - Full-state hashing plus an fsync per recorder transition.
-- One shared execution-stub Port per VM.
+- One `Elara.Exec` GenServer and one stub Port shared by the whole VM.
 
-**Experiments:** LAB-5 (baseline), LAB-6 (fixes, same benchmark).
+**Experiments:** LAB-3 (baseline on unchanged code), LAB-7 (fixes, same
+workload).
 
-### RQ-3 — Do processes make agent lifecycles simpler?
+### RQ-3 — Does process isolation protect healthy sessions?
+
+**Hypothesis:** while one session misbehaves, healthy sessions under the RQ-2
+workload keep their p95 delta latency within 2× of the undisturbed baseline.
+Their cancellations complete within one second, and their memory stays
+bounded. The misbehaviours are:
+- Flooding its subscribers.
+- A stalled attached client.
+- Crashing repeatedly.
+- A command printing without limit.
+
+**Against:** any shared component (the single exec GenServer and Port,
+registries, unbounded subscriber mailboxes, synchronous fsync) lets one session
+push healthy sessions past those bounds.
+
+**Why it matters:** this tests the BEAM's claimed advantage more directly than
+aggregate throughput does.
+
+**Experiments:** LAB-4, LAB-7.
+
+### RQ-4 — Do processes make agent lifecycles simpler?
 
 **Hypothesis:** one general job primitive plus one correlated wake model can
 replace `test_job`, the `thread_wait` special cases and uncorrelated child
-reports. It should use less code than today and pass the RQ-1 fault suite.
+reports. It must preserve this behavior:
+- Durable admission before execution.
+- Single delivery of completions.
+- `indeterminate` on execution loss.
+- Cancellation with bounded reporting.
+- Capacity held across restarts.
 
-**Evidence:** code and special cases removed, chaos results, and one real-model
-run waking on the awaited completion.
+**Measure:** net lines, counting the new infrastructure, and the number of
+special cases in `session.ex`.
 
-**Experiment:** LAB-7.
-
-### RQ-4 — Can recorded sessions evaluate policy changes offline?
-
-**Hypothesis:** recorded Core facts can show where an alternative loop, wake or
-handoff policy would first diverge from a recorded run, cheaply enough to vet
-policy changes before any model spend.
-
-**Limit:** replay stops at the first divergence that needs new model output, and
-the recorder strips attachments and provider state.
+**Against:** a net increase in code or special cases, or any behavior on that
+list lost.
 
 **Experiment:** LAB-8.
 
 ### RQ-5 — Can a live session safely change its own runtime? (parked)
 
-This covers replay-gated replacement of the session shell and agent-authored
-capabilities with bounded lifetimes. It builds on PLUGIN-1/2. It is the
-highest-risk question and is not queued until RQ-1 and RQ-3 have results.
+**Hypothesis:** a session can adopt a new tool or shell generation mid-session,
+gated by replaying its recorded facts under the new code, without losing or
+duplicating accepted input or in-flight effects.
+
+**Against:** a swap that loses or duplicates input or effects, or a behavioral
+divergence the replay gate fails to catch.
+
+This builds on PLUGIN-1/2 and is not queued until RQ-1 and RQ-4 have results.
 
 ## Lab method
 
@@ -106,10 +151,13 @@ highest-risk question and is not queued until RQ-1 and RQ-3 have results.
   hypothesis, method (scenario, provider mode, N, seeds), results with numbers,
   what changed and limits.
 - **Raw data stays out of `docs/`.** It goes under `lab/results/`.
-- **Seeded and repeatable.** Rerunning the documented command reproduces the
-  summary. Prefer many seeded runs to a single anecdote.
+- **Seeded and repeatable.** A seed reproduces the choices: fault schedules,
+  simulated responses and tool plans, and therefore invariant results. Timing
+  numbers are reported with run-to-run variance, not as exact values.
 - **Simulated first.** Real-model runs are opt-in, capped, and reported
   separately from simulated results.
+- **Keep coverage when deleting.** Removing code never removes the recovery or
+  fault coverage it exercised; migrate those tests first.
 - **Short roadmap Results.** An item's Result here is at most five lines;
   details live in its lab note.
 - **Queue discipline.** Keep at most one item `IN PROGRESS`, and exactly one
@@ -128,14 +176,14 @@ Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, `INVALID` and
 | ID    | Status  | Item                                                       | Depends on   |
 | ----- | ------- | ---------------------------------------------------------- | ------------ |
 | LAB-0 | DONE    | Reset: hermetic suite, lab guidance and repository hygiene | Lab pivot    |
-| LAB-1 | TODO    | Retire subsystems nothing in the product uses              | LAB-0        |
-| LAB-2 | BLOCKED | RQ-1: property tests over Core invariants                  | LAB-0        |
-| LAB-3 | BLOCKED | Lab bench: simulated provider, fault points, seeded runner | LAB-1        |
-| LAB-4 | BLOCKED | RQ-1: chaos schedules against the session shell            | LAB-2, LAB-3 |
-| LAB-5 | BLOCKED | RQ-2: concurrency baseline                                 | LAB-3        |
-| LAB-6 | BLOCKED | RQ-2: remove top hot paths, rerun baseline                 | LAB-5        |
-| LAB-7 | BLOCKED | RQ-3: general jobs and one correlated wake model           | LAB-4        |
-| LAB-8 | BLOCKED | RQ-4: offline policy evaluation by replay                  | LAB-3        |
+| LAB-1 | TODO    | RQ-1: property tests over Core invariants                  | LAB-0        |
+| LAB-2 | BLOCKED | Minimal lab bench: simulated provider, fault points, runner | LAB-0        |
+| LAB-3 | BLOCKED | RQ-2: concurrency baseline on unchanged code               | LAB-2        |
+| LAB-4 | BLOCKED | RQ-3: isolation under misbehaving sessions                 | LAB-3        |
+| LAB-5 | BLOCKED | RQ-1: chaos schedules against the session shell            | LAB-1, LAB-2 |
+| LAB-6 | BLOCKED | Selective retirement with coverage preserved               | LAB-5        |
+| LAB-7 | BLOCKED | RQ-2/RQ-3: measured fixes, same workloads rerun            | LAB-4, LAB-6 |
+| LAB-8 | BLOCKED | RQ-4: general jobs and one correlated wake model           | LAB-5        |
 
 ## LAB-0 — Reset: hermetic suite, lab guidance and repository hygiene
 
@@ -165,121 +213,128 @@ Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, `INVALID` and
 format and warnings-as-errors compile pass; branches are pruned as the owner
 confirms.
 
-**Result (2026-09-26): DONE.** 541/541 pass with the real and an empty `HOME`.
-`--diagnostics` keeps the embedded server (red, then green). The roadmap test
-covers the whole queue (mutation-checked). Checklist, split doc and `docs/lab/`
-aligned. 21 merged branches deleted; the owner decides on 2 unmerged branches
-and 29 remote branches.
+**Result (2026-09-26): DONE.** The helper clears the environment and restarts
+the app before tests run; the suite passes with the real and an empty `HOME`.
+`--diagnostics` is fixed. The roadmap test covers every row and rejects
+malformed ones (both mutation-checked). 47 merged branches deleted; two
+unmerged remain for the owner.
 
-## LAB-1 — Retire subsystems nothing in the product uses
+## LAB-1 — RQ-1: property tests over Core invariants
 
-**Scope:**
-
-- Remove the Coordinator. Only tests and the API guide use it, and Threads
-  covers delegation.
-- Remove the test-only effect modules (`LiteralPatch`, `OpaqueShell`,
-  `TestExecutor`) and their tests; Git history keeps them.
-- Move `check_evidence` and `diagnose_check` out of the built-in roster into the
-  project plugin, and stop hardcoding plugin tool names in `session.ex`.
-
-**Done when:**
-
-- The suite is green.
-- The README and API guide no longer describe removed surfaces.
-- The removed line count is recorded.
-
-## LAB-2 — RQ-1: property tests over Core invariants
-
-**Scope:** add StreamData as a test-only dependency. Generate fact sequences:
-asks, streamed deltas, provider results with tool calls, tool results, timeouts,
-interrupts, stale refs and inbox changes.
+**Scope:** add StreamData as a test-only dependency. Start with the known
+counterexample (an interrupted or timed-out running mutating call), then
+generate fact sequences: asks, streamed deltas, provider results with tool
+calls, tool results, timeouts, interrupts, stale refs and inbox changes.
 
 **Properties:**
-
 - The same facts produce the same state and effects.
 - Stale-ref facts never change history.
 - Every started turn ends exactly once.
 - Every dispatched call receives exactly one result.
 - The iteration budget holds.
-- A running mutating call that is interrupted or times out is `indeterminate`.
-  This is expected to fail today; calls not yet started may truthfully report
-  `interrupted`.
+- A running mutating call that is interrupted or times out is `indeterminate`;
+  calls not yet started may truthfully report `interrupted`.
 - Recorded facts replay to `:match`.
 
 **Done when:** properties run in the default suite with a fixed budget, plus a
 longer opt-in run. Each counterexample is either fixed or recorded as a finding
-in a lab note.
+in `docs/lab/001-…`.
 
-## LAB-3 — Lab bench: simulated provider, fault points, seeded runner
+## LAB-2 — Minimal lab bench: simulated provider, fault points, runner
 
-**Scope:**
-
+**Scope:** build only what LAB-3 to LAB-5 need.
 - **`Elara.Provider.Simulated`** is seeded, with configurable time to first
   token, token rate, streamed deltas, scripted or generated tool-call plans, and
   injected errors (429, 5xx, disconnect before or after the first byte).
-- **Named fault points** cover the session shell, provider and tool tasks, the
-  execution stub, client connections and VM restart.
+- **Named fault points** cover the RQ-1 fault model: session process, provider
+  and tool tasks, execution stub, client connection and VM restart.
 - **The runner:**
   `mix elara.lab run SCENARIO --n N --seed S [--provider simulated|real] [--max-requests R]`.
   Each run gets its own temporary home and sessions root, and simulated mode
-  makes no network calls. It writes result lines under `lab/results/` and prints
-  a summary: percentiles, failures and invariant violations.
-- **Migrate the JOB-era scenarios** worth keeping into bench scenarios. Then
-  retire the single-use live drivers in `test/support`, and protocol v1 if
-  nothing else uses it.
+  makes no network calls. It writes result lines under `lab/results/` and
+  prints a summary.
+- **Migrate the JOB-era scenarios** worth keeping, then retire the single-use
+  live drivers in `test/support`, and protocol v1 if nothing else uses it.
 
 **Done when:**
-
-- A reference scenario produces identical summaries for the same seed.
+- A seed reproduces the same choices and invariant results.
+- Timing summaries report run-to-run variance.
 - A capped real-model smoke run works.
 - `docs/lab/README.md` documents usage.
 
-## LAB-4 — RQ-1: chaos schedules against the session shell
+## LAB-3 — RQ-2: concurrency baseline on unchanged code
 
-**Scope:** run randomized fault schedules over multi-turn scenarios with tool
-calls, queued input, child threads, test jobs and handoff. After each run,
-recover from on-disk state and check that:
-
-- Accepted input was consumed at most once.
-- No mutation re-executed after its callback started.
-- Uncertain outcomes are `indeterminate`.
-- Every session file opens.
-- Job capacity is released or explicitly held.
-- No process group is orphaned.
-
-**Done when:** at least 1,000 seeded schedules run, and the note records
-violation counts with a minimized reproduction for each, plus fixes or findings.
-
-## LAB-5 — RQ-2: concurrency baseline
-
-**Scope:** run 10, 50, 200, 500 and 1,000 concurrent sessions (and child
-threads, with the four-slot limit lifted for the experiment) against simulated
-providers.
-
-- **Measure:** delta latency (p50/p95/p99), throughput, memory, mailbox lengths,
-  fsync counts, stub Port queueing and scheduler utilization.
+**Scope:** fix the reference workload's values in the note, then run it at 10,
+50, 200, 500 and 1,000 concurrent sessions, and at child-thread counts with the
+four-slot limit lifted for the experiment.
+- **Measure:** runtime-added delta latency (p50/p95/p99), throughput, memory
+  per session, mailbox lengths, fsync counts, exec GenServer and Port queueing,
+  and scheduler utilization.
 - **Profile:** attribute cost against the RQ-2 suspects.
 
-**Done when:** one command reproduces the curve and a ranked bottleneck list.
+**Done when:** one command reproduces the curve with variance, and the note
+states whether RQ-2 holds on unchanged code and ranks the bottlenecks.
 
-## LAB-6 — RQ-2: remove top hot paths, rerun baseline
+## LAB-4 — RQ-3: isolation under misbehaving sessions
 
-**Scope:** fix the leading LAB-5 bottlenecks, then rerun LAB-5 unchanged and
-publish before/after numbers. Likely fixes:
+**Scope:** under the LAB-3 workload at a fixed session count, add one
+misbehaving session per scenario: subscriber flood, stalled attached client,
+crash loop, or unbounded command output. Measure healthy sessions against the
+undisturbed baseline.
 
-- An append-only store with an explicit fsync policy.
-- Visibility and budget computed at message boundaries rather than per delta.
-- An in-memory lineage index.
-- Cheaper recorder fingerprints.
-- Patch application in place in Rust, without cursor writes.
+**Done when:** each scenario reports healthy p95 latency ratio, cancellation
+time and memory. The note names any shared component that breaks isolation.
 
-**Done when:** RQ-2 is supported or refuted with numbers, and the RQ-1 suites
-still pass.
+## LAB-5 — RQ-1: chaos schedules against the session shell
 
-## LAB-7 — RQ-3: general jobs and one correlated wake model
+**Scope:** run seeded schedules from the RQ-1 fault model over multi-turn
+scenarios with tool calls, queued input, child threads, test jobs and handoff.
+After each run, recover from on-disk state and check the safety and progress
+invariants, including that no process group is orphaned.
+
+**Done when:** at least 1,000 seeded schedules run, and the note records
+violation counts with a minimized reproduction for each, plus fixes or
+findings.
+
+## LAB-6 — Selective retirement with coverage preserved
 
 **Scope:**
+- **Coordinator.** Removing it drops candidate judging and map/reduce
+  (`lib/elara/coordinator/engine.ex:46`), which Threads lacks. The owner
+  decides whether to rebuild those over Threads or drop them deliberately;
+  record the decision here before removal.
+- **Test-only effect modules.** Remove `LiteralPatch` and `OpaqueShell`.
+  `TestExecutor` delegates to the production executor and backs durable
+  input-recovery tests (`test/elara/input_queue_recovery_test.exs:26`): migrate
+  those tests to the production executor, keep them, then remove it.
+- **Check tools.** Move `check_evidence` and `diagnose_check` out of the
+  built-in roster into the project plugin, and stop hardcoding plugin tool
+  names in `session.ex`.
 
+**Done when:**
+- The suite and the LAB-5 chaos suite are green, with no recovery or fault
+  test lost.
+- The README and API guide match the new surface.
+- The removed line count is recorded.
+
+## LAB-7 — RQ-2/RQ-3: measured fixes, same workloads rerun
+
+**Scope:** fix only bottlenecks that LAB-3 or LAB-4 measured. Rerun both
+unchanged and publish before/after numbers. Candidate fixes:
+- An append-only store with an explicit fsync policy.
+- Visibility and budget computed at message boundaries.
+- An in-memory lineage index.
+- Cheaper recorder fingerprints.
+- Execution not serialized through one GenServer.
+- Bounded subscriber mailboxes.
+- Patch application in place in Rust, without cursor writes.
+
+**Done when:** RQ-2 and RQ-3 are supported or refuted with numbers, and the
+RQ-1 suites still pass.
+
+## LAB-8 — RQ-4: general jobs and one correlated wake model
+
+**Scope:**
 - **`Elara.Jobs` with profiles.** Each profile declares an argv builder,
   validator, timeout, output policy and optional fingerprint set. `mix_test`
   becomes one profile, `test_job` remains an alias, and v1 records still load.
@@ -293,21 +348,11 @@ still pass.
   acknowledged from the TUI or server, not only through the Elixir API.
 
 **Done when:**
-
-- The LAB-4 chaos suite passes with jobs included.
-- The note records lines and special cases removed.
+- Every behavior RQ-4 lists is preserved under the LAB-5 chaos suite with jobs
+  included.
+- The note records net lines, counting new infrastructure, and special cases
+  removed.
 - A capped real-model run wakes on its awaited completion.
-
-## LAB-8 — RQ-4: offline policy evaluation by replay
-
-**Scope:** `mix elara.lab replay --policy MODULE` runs over a corpus of flight
-recordings (bench runs plus existing sessions). It reports each recording's
-first divergence (sequence, fact, decision) and aggregates. Compare variants of
-the duplicate-call guard, iteration budget, handoff trigger and wake budget.
-
-**Done when:** at least two policy variants are evaluated over the corpus. The
-note records replay time per recording and the fraction of decisions that could
-be assessed.
 
 ## Baseline facts for experiment design
 
@@ -335,7 +380,9 @@ These facts come from the 2026-09-26 review.
 ## Parked
 
 Not queued; revisit when an experiment needs them:
-
+- Offline policy evaluation by replay. Replay already accepts an alternative
+  reducer, but the handoff trigger and wake budget are decided in the session
+  shell, outside recorded Core facts; move them into Core first.
 - RQ-5 live self-modification.
 - Event sources beyond jobs (file changes, CI, git).
 - Placement over BEAM distribution versus the current TCP workers.

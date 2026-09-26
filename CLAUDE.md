@@ -57,9 +57,10 @@ cd native/elara-tui  && cargo fmt --check && cargo clippy && cargo test
 - Tests never hit the network — they drive `Elara.Provider.Scripted`. `mix test`
   intentionally logs `(RuntimeError) boom` from a crash-recovery test; that is
   not a failure.
-- `test/test_helper.exs` keeps the suite independent of the developer's setup:
-  it clears `ELARA_*` and `XAI_API_KEY`, and points user skill discovery at an
-  empty home through the `:elara, :skills_home` app env. Tests that need skills
+- `test/test_helper.exs` keeps the suite independent of the developer's setup.
+  It clears `ELARA_*` and `XAI_API_KEY`, points user skill discovery at an empty
+  home through the `:elara, :skills_home` app env, then restarts `:elara` so the
+  exec stub and job managers start clean. Tests that need skills
   pass `home:` or `skill_paths:` explicitly.
 - `.cursor/skills/verify-elara/` is a user-path verification harness
   (`bin/launch`, `bin/doctor`, `bin/drive`, `bin/cleanup`) that runs Elara under
@@ -143,7 +144,8 @@ the canonical authority for `thread_send`/`thread_read` — text and supplied
 workspace paths never grant access, and sender identity comes from execution
 context, never tool arguments. The Communication actor never calls a model.
 `Elara.Coordinator` is the older bounded batch orchestration, separate from
-this; LAB-1 retires it.
+this. It also provides candidate judging and map/reduce, which Threads lacks;
+LAB-6 decides whether to rebuild or drop them before removing it.
 
 **Handoff (`lib/elara/session/handoff.ex`, `session/context.ex`).**
 `Context.budget/2` is a conservative pre-request byte estimate (independent of

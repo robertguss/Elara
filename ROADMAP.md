@@ -218,7 +218,7 @@ Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, `INVALID` and
 | ----- | ------- | ---------------------------------------------------------- | ------------ |
 | LAB-0 | DONE    | Reset: hermetic suite, lab guidance and repository hygiene | Lab pivot    |
 | LAB-1 | DONE    | RQ-1: property tests over Core invariants                  | LAB-0        |
-| LAB-2 | TODO    | Minimal lab bench: simulated provider, fault points, runner | LAB-0        |
+| LAB-2 | IN PROGRESS | Minimal lab bench: simulated provider, fault points, runner | LAB-0        |
 | LAB-3 | BLOCKED | RQ-2: concurrency baseline on unchanged code               | LAB-2        |
 | LAB-4 | BLOCKED | RQ-3: isolation under misbehaving sessions                 | LAB-3        |
 | LAB-5 | BLOCKED | RQ-1: chaos schedules against the session shell            | LAB-1, LAB-2 |

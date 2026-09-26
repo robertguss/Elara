@@ -52,5 +52,24 @@ Fixes or features the experiment produced, with commits.
 Confounds, unmeasured effects, and the follow-up this suggests.
 ```
 
-The seeded runner (`mix elara.lab`) arrives with LAB-2. Until then, notes give
-the exact `mix test` or `mix run` command instead.
+## Running experiments
+
+    mix elara.lab run SCENARIO [--n N] [--seed S] [--set KEY=VALUE ...] [--results DIR]
+
+Repetition `r` uses seed `S + r` in its own temporary sessions root and skills
+home, so runs never touch `~/.elara`. Each repetition appends one JSON line to
+`lab/results/SCENARIO/` (gitignored), and a summary prints the spread across
+repetitions. For example:
+
+    mix elara.lab run smoke --n 3 --seed 42 --set sessions=8
+
+A scenario implements `Elara.Lab.run/1` (see `Elara.Lab.Scenarios.Smoke`) and
+is registered in `Elara.Lab`. Scenarios drive sessions through
+`Elara.Provider.Simulated`, which is seeded per session. Its collector
+messages report each choice and each delta's intended emission time.
+
+**What a seed fixes, and what it doesn't.** A seed fixes the choices: the
+simulated responses, tool plans, injected errors, and fault schedules. A
+scenario reports these as a `choices_digest`, and rerunning the same seed
+reproduces that digest. A seed does not fix concurrent interleavings or
+timings, so report those as a spread across repetitions, not as exact values.

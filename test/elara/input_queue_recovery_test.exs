@@ -219,7 +219,10 @@ defmodule Elara.InputQueueRecoveryTest do
     assert {:ok, _} = Elara.submit_input(session, attrs("queued", "after live timeout"))
 
     assert_eventually(fn ->
-      Enum.any?(tool_results(session), &match?(%ToolResult{outcome: {:error, "timed out"}}, &1))
+      Enum.any?(
+        tool_results(session),
+        &match?(%ToolResult{outcome: {:indeterminate, "timed out while running" <> _}}, &1)
+      )
     end)
 
     assert_queued_input_responsive(session)

@@ -83,6 +83,8 @@ defmodule Elara.Tools do
 
   def bash(_args, _ctx), do: {:error, "bash requires command"}
 
+  @partial "it may have partially changed the workspace"
+
   defp bash_result(%Exec.Result{termination: :exited, code: 0, output: output}),
     do: {:ok, output}
 
@@ -93,13 +95,18 @@ defmodule Elara.Tools do
   defp bash_result(%Exec.Result{termination: :exited, signal: signal, output: output}),
     do: {:error, "signal #{signal}\n" <> output}
 
-  defp bash_result(%Exec.Result{termination: :cancelled}), do: {:error, "cancelled"}
-  defp bash_result(%Exec.Result{termination: :timed_out}), do: {:error, "timed out"}
+  # The stub killed these commands mid-run, so any changes they made may be
+  # partial: fail closed. Commands that exited on their own report above.
+  defp bash_result(%Exec.Result{termination: :cancelled}),
+    do: {:indeterminate, "cancelled while running; #{@partial}"}
+
+  defp bash_result(%Exec.Result{termination: :timed_out}),
+    do: {:indeterminate, "timed out while running; #{@partial}"}
 
   defp bash_result(%Exec.Result{termination: :truncated} = result) do
-    {:error,
-     "output truncated: bytes_total=#{result.bytes_total} bytes_sent=#{result.bytes_sent}\n" <>
-       result.output}
+    {:indeterminate,
+     "killed at the output cap (bytes_total=#{result.bytes_total} " <>
+       "bytes_sent=#{result.bytes_sent}); #{@partial}\n" <> result.output}
   end
 
   defp write_edit(full, path, updated) do

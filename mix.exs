@@ -92,7 +92,8 @@ defmodule Elara.MixProject do
     [
       {:exqlite, "~> 0.40.0"},
       {:req, "~> 0.5"},
-      {:yaml_elixir, "~> 2.11"}
+      {:yaml_elixir, "~> 2.11"},
+      {:stream_data, "~> 1.1", only: :test}
     ]
   end
 end

@@ -267,12 +267,20 @@ defmodule Elara.Session.Core do
   end
 
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_crashed, r, reason}) do
-    outcome = {:error, "tool crashed: #{reason}"}
+    outcome =
+      running_outcome(
+        state,
+        call,
+        "tool crashed: #{reason}",
+        "tool crashed while running: #{reason}"
+      )
+
     finish_tool(state, call, rest, it, outcome)
   end
 
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_timeout, r}) do
-    finish_tool(state, call, rest, it, {:error, "timed out"})
+    outcome = running_outcome(state, call, "timed out", "timed out while running")
+    finish_tool(state, call, rest, it, outcome)
   end
 
   def step(%State{phase: {:running_tool, _r, call, rest, _it}} = state, :interrupt) do
@@ -280,8 +288,15 @@ defmodule Elara.Session.Core do
 
     {history, emits} =
       Enum.reduce(Enum.with_index(interrupted), {state.history, []}, fn {c, index}, {hist, evs} ->
-        usage = if index == 0, do: state.tool_usage, else: nil
-        result = Message.tool_result(c, {:error, "interrupted"}, usage)
+        # Only the first call was running; the rest never started.
+        {usage, outcome} =
+          if index == 0,
+            do:
+              {state.tool_usage,
+               running_outcome(state, c, "interrupted", "interrupted while running")},
+            else: {nil, {:error, "interrupted"}}
+
+        result = Message.tool_result(c, outcome, usage)
         {hist ++ [result], evs ++ [{:emit, {:message_appended, result}}]}
       end)
 
@@ -290,6 +305,19 @@ defmodule Elara.Session.Core do
   end
 
   def step(%State{} = state, _fact), do: {state, []}
+
+  # A running mutating call that stops without its own result may have changed the
+  # workspace partially, so it fails closed as indeterminate. A call that never
+  # started, or one that cannot mutate, truthfully reports an error.
+  defp running_outcome(state, %ToolCall{name: name}, error, uncertain) do
+    case Map.get(state.config.tools, name) do
+      %Tool{mutating: true} ->
+        {:indeterminate, uncertain <> "; it may have partially changed the workspace"}
+
+      _ ->
+        {:error, error}
+    end
+  end
 
   defp stop_stream(state, %{public_content: [_ | _]} = streaming, outcome) do
     text =

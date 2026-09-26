@@ -376,7 +376,14 @@ defmodule Elara.ProtocolV2Test do
     {core, view, _seq} = project_transition(core, view, seq, :interrupt)
     assert core.phase == :idle
     assert view == Protocol.snapshot("property-session", "property-incarnation", core)
-    assert Enum.all?(view["tool_calls"], &(&1["status"] in ["succeeded", "failed"]))
+    # The running mutating call fails closed; calls that never started fail.
+    assert Enum.all?(
+             view["tool_calls"],
+             &(&1["status"] in ["succeeded", "failed", "indeterminate"])
+           )
+
+    assert Enum.find(view["tool_calls"], &(&1["id"] == "first"))["status"] == "indeterminate"
+    assert Enum.find(view["tool_calls"], &(&1["id"] == "second"))["status"] == "failed"
   end
 
   test "gap, incarnation change, and invalid patch request only one snapshot while pending" do
@@ -610,7 +617,7 @@ defmodule Elara.ProtocolV2Test do
     assert controller_projection.view == observer_projection.view
     assert controller_projection.head == observer_projection.head
     assert controller_projection.view == Elara.materialized_view(session)
-    assert Enum.any?(controller_projection.view["tool_calls"], &(&1["status"] == "failed"))
+    assert Enum.any?(controller_projection.view["tool_calls"], &(&1["status"] == "indeterminate"))
 
     :gen_tcp.close(controller)
     :gen_tcp.close(observer)

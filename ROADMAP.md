@@ -30,7 +30,11 @@ independent Codex review sharpened the hypotheses, added the isolation
 question (RQ-3), turned offline policy replay into parked infrastructure, and
 reordered the queue so Core properties and measurement come before code removal.
 
-**Next action:** LAB-1.
+**2026-09-26 — LAB-1 done.** Core properties hold. Interrupted, timed-out or
+crashed running mutations, and stub-killed `bash` commands, now fail closed as
+`indeterminate`. See [`docs/lab/001-core-properties.md`](docs/lab/001-core-properties.md).
+
+**Next action:** LAB-2.
 
 ## Research agenda
 
@@ -213,8 +217,8 @@ Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, `INVALID` and
 | ID    | Status  | Item                                                       | Depends on   |
 | ----- | ------- | ---------------------------------------------------------- | ------------ |
 | LAB-0 | DONE    | Reset: hermetic suite, lab guidance and repository hygiene | Lab pivot    |
-| LAB-1 | TODO    | RQ-1: property tests over Core invariants                  | LAB-0        |
-| LAB-2 | BLOCKED | Minimal lab bench: simulated provider, fault points, runner | LAB-0        |
+| LAB-1 | DONE    | RQ-1: property tests over Core invariants                  | LAB-0        |
+| LAB-2 | TODO    | Minimal lab bench: simulated provider, fault points, runner | LAB-0        |
 | LAB-3 | BLOCKED | RQ-2: concurrency baseline on unchanged code               | LAB-2        |
 | LAB-4 | BLOCKED | RQ-3: isolation under misbehaving sessions                 | LAB-3        |
 | LAB-5 | BLOCKED | RQ-1: chaos schedules against the session shell            | LAB-1, LAB-2 |
@@ -282,6 +286,12 @@ Shell recovery is out of scope; LAB-5 covers it.
 **Done when:** properties run in the default suite with a fixed budget, plus a
 longer opt-in run. Each counterexample is either fixed or recorded as a finding
 in `docs/lab/001-…`.
+
+**Result (2026-09-26): DONE.** Nine StreamData properties over generated
+traces; all hold (5,000 cases each in the opt-in run). The known counterexample
+failed as predicted and is fixed in `Core`. The same gap in stub-killed `bash`
+results is fixed too. Plugin tools remain registered as non-mutating, a recorded
+gap. Suite: 554/554. Note: [001](docs/lab/001-core-properties.md).
 
 ## LAB-2 — Minimal lab bench: simulated provider, fault points, runner
 
@@ -405,7 +415,8 @@ These facts come from the 2026-09-26 review.
 
 - **Loop and execution defaults:**
   - 12 model iterations per turn, a 30-second tool timeout and 16 KiB of tool
-    output. The stub kills the process group at the output cap.
+    output. The stub kills the process group at the output cap; since LAB-1 a
+    killed command reports `indeterminate`.
   - Tools run sequentially.
   - Iterations, timeout and output size are configurable per session through the
     Elixir API; the stub's kill-at-cap is not.

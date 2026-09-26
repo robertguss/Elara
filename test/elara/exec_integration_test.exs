@@ -78,7 +78,10 @@ defmodule Elara.ExecIntegrationTest do
 
     assert_receive {:elara, ^session,
                     {:message_appended,
-                     %ToolResult{call_id: "interrupt", outcome: {:error, "interrupted"}}}},
+                     %ToolResult{
+                       call_id: "interrupt",
+                       outcome: {:indeterminate, "interrupted while running" <> _}
+                     }}},
                    @event_timeout
 
     assert_receive {:elara, ^session, {:turn_ended, :interrupted}}, @event_timeout
@@ -150,7 +153,8 @@ defmodule Elara.ExecIntegrationTest do
     assert_eventually(fn -> marker_pids(fixture.marker) != [] end)
     assert {:ok, "continued"} = Task.await(task, @event_timeout)
 
-    assert %ToolResult{outcome: {:error, "timed out"}} =
+    # The session deadline and the stub's own timeout race; both fail closed.
+    assert %ToolResult{outcome: {:indeterminate, "timed out while running" <> _}} =
              Enum.find(Elara.transcript(session), &match?(%ToolResult{call_id: "timeout"}, &1))
 
     assert_eventually(fn -> marker_pids(fixture.marker) == [] end)
@@ -182,8 +186,11 @@ defmodule Elara.ExecIntegrationTest do
     File.touch!(go)
     assert {:ok, "continued"} = Task.await(task, @event_timeout)
 
-    %ToolResult{outcome: {:error, message}} =
+    # Killed at the cap mid-run, so the command fails closed.
+    %ToolResult{outcome: {:indeterminate, message}} =
       Enum.find(Elara.transcript(session), &match?(%ToolResult{call_id: "flood"}, &1))
+
+    assert message =~ "killed at the output cap"
 
     assert [_, total, sent] =
              Regex.run(~r/bytes_total=(\d+) bytes_sent=(\d+)/, message)

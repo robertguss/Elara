@@ -471,7 +471,7 @@ defmodule Elara.TuiTest do
              ])
 
     # Compact tool header: `bash  sleep 10` with the canonical status as its tail.
-    assert output =~ ~r/bash  sleep 10 +failed/
+    assert output =~ ~r/bash  sleep 10 +indeterminate/
     assert output =~ "outcome interrupted"
     assert Elara.status(session).phase == :idle
   end

@@ -587,8 +587,14 @@ call. Saved handoff headers require this build for resume.
   non-overlapping literal occurrence when `replace_all: true`.
 - `bash` runs a shell command with stdout and stderr merged. A supervised Rust
   stub runs each command in its own process group and kills the group on
-  interruption, timeout, or output overflow. Stub loss reports an
-  `indeterminate` outcome rather than success.
+  interruption, timeout, or output overflow. A killed command, or one lost with
+  the stub, reports an `indeterminate` outcome because it may have partially
+  changed the workspace. Commands that exit on their own report success or
+  their exit status.
+
+Any running mutating tool (`bash`, `write`, `edit`) that is interrupted, times
+out or crashes before returning its own result is likewise `indeterminate`.
+Calls that had not started when a turn stopped report an ordinary error.
 
 For example, `{"path":"config.exs","old_text":"old_name","new_text":"new_name","replace_all":true}`
 replaces all exact occurrences in that file. Omitting `replace_all` or passing

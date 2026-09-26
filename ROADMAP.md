@@ -66,8 +66,10 @@ either a terminal state or a *recoverable* one:
   `indeterminate` job and reported as awaiting operator acknowledgement.
 
 Recovery must also advance. Once the session is resumed and any held job is
-acknowledged, every recoverable input reaches a terminal state within the same
-bound, and none stays queued indefinitely.
+acknowledged, every recoverable input reaches a terminal state, and none stays
+queued indefinitely. Inputs run one at a time (`lib/elara/session.ex:2283`), so
+this deadline scales: 5 seconds plus the recovered backlog times its per-input
+simulated work. LAB-5 bounds both the backlog and the simulated work.
 
 **Against:** any counterexample. A known one exists: an interrupted or
 timed-out _running_ mutating call is recorded as `{:error, "interrupted"}` or
@@ -332,6 +334,8 @@ time and memory. The note names any shared component that breaks isolation.
 scenarios with tool calls, queued input, child threads, test jobs and handoff.
 After each run, recover from on-disk state and check the safety and progress
 invariants, including that no process group is orphaned.
+Run with the production restart limit (`max_restarts: 3`), not the test
+suite's raised value, so escalation behaves as in production.
 
 **Done when:** at least 1,000 seeded schedules run, and the note records
 violation counts with a minimized reproduction for each, plus fixes or

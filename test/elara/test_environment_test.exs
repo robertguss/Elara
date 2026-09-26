@@ -27,18 +27,13 @@ defmodule Elara.TestEnvironmentTest do
 
   @tag :requires_app
   test "commands run through the execution stub see no ELARA_* or XAI_API_KEY" do
+    # Print only offending names so a large environment cannot hit the output cap.
+    command = "env | grep -E '^(ELARA_[A-Za-z0-9_]*|XAI_API_KEY)=' | cut -d= -f1; true"
+
     assert {:ok, %Elara.Exec.Result{code: 0, output: output}} =
-             Elara.Exec.run(["/usr/bin/env"], cwd: System.tmp_dir!(), timeout_ms: 5_000)
+             Elara.Exec.run(["/bin/sh", "-c", command], cwd: System.tmp_dir!(), timeout_ms: 5_000)
 
-    leaked =
-      output
-      |> String.split("\n")
-      |> Enum.filter(
-        &(String.starts_with?(&1, "ELARA_") or String.starts_with?(&1, "XAI_API_KEY="))
-      )
-      |> Enum.map(&(&1 |> String.split("=", parts: 2) |> hd()))
-
-    assert leaked == []
+    assert String.split(output, "\n", trim: true) == []
   end
 
   test "state and skill roots are isolated from the developer's home" do

@@ -4,6 +4,27 @@
 > (SPLIT-1 … SPLIT-5); this file holds the decision, evidence, architecture, and
 > reversal signals. Do not track status here.
 
+## 2026-09-26 lab-pivot addendum
+
+Elara is now primarily a BEAM harness research lab, and SPLIT-5 is canceled. The
+split is retained as the working architecture: Elixir remains the single
+authority and Rust remains at the edges across process boundaries, with no NIFs.
+
+The daily-use reversal measurement in §9 is retired. Its 3-of-5 and 30% signals
+were never measured: effort percentages were not recorded for the cohort. Its
+one-month usage signal assumed daily use that the lab direction no longer
+requires. A 2026-09-26 code review found that the Rust TUI has not absorbed
+session policy. At most one or two of the five cohort features are borderline
+(handoff-stage following and input-queue identity). Elixir gateway/protocol
+changes (`lib/elara/server.ex`, `lib/elara/protocol*`) were 0% of non-test
+changed lines in the TUI-2 through TUI-5 implementation commits and 27% in TUI-6
+(`d5085b8`). Rust-side validation code is not counted and lines are not time, so
+this is an observation, not the retired measurement.
+
+Whether the BEAM helps is now asked through the research questions in
+`ROADMAP.md`, not through daily use. A future architecture change needs its own
+scoped item.
+
 ## 2026-09-04 product-contract addendum
 
 The original decision and spike descriptions below are dated architectural
@@ -20,20 +41,20 @@ The current queue and acceptance criteria are exclusively in `ROADMAP.md`.
 
 These choices retain the split: Rust owns editor/view/selection state, clipboard
 interaction, and local appearance preferences; Elixir owns content and settings,
-inbox delivery, thread relationships, workspaces, and handoff transitions.
-New authority facts may require versioned protocol extensions. The old
+inbox delivery, thread relationships, workspaces, and handoff transitions. New
+authority facts may require versioned protocol extensions. The old
 no-direct-file-access TUI scope does not prohibit local presentation preferences
 or clipboard handling; it still prohibits Rust from owning session persistence
 or bypassing authority for workspace mutations.
 
-Section 9's original 3-of-5 and 30% signals keep the declared TUI-2 through TUI-6
-cohort; added work is measured separately and reported alongside it. The
-one-month usefulness signal includes persistent communicating child sessions
-as a concrete use of concurrent session ownership. Its listed benefits are
+Section 9's original 3-of-5 and 30% signals keep the declared TUI-2 through
+TUI-6 cohort; added work is measured separately and reported alongside it. The
+one-month usefulness signal includes persistent communicating child sessions as
+a concrete use of concurrent session ownership. Its listed benefits are
 alternatives, not an obligation to use remote workers or plugins to justify
 BEAM. A keep/reverse result is an evidence-based recommendation; any rewrite
-requires a separately scoped implementation item. Full current measurement
-and entry rules are in SPLIT-5 of the roadmap.
+requires a separately scoped implementation item. Full current measurement and
+entry rules are in SPLIT-5 of the roadmap.
 
 Durable inboxes do not establish exactly-once external effects. Receipt-backed
 write remains the only production receipt scope. Persistent child work and

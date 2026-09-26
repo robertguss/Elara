@@ -26,6 +26,7 @@ defmodule Mix.Tasks.Elara.Tui do
     appearance: :boolean,
     layout: :string,
     theme: :string,
+    diagnostics: :boolean,
     preview_reasoning: :boolean,
     help: :boolean
   ]

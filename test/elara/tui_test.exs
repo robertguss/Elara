@@ -123,6 +123,14 @@ defmodule Elara.TuiTest do
     GenServer.stop(embedded)
     stop_sessions_except(existing_sessions)
 
+    # A flag only the Rust client reads must still start the embedded server.
+    assert :ok = Mix.Tasks.Elara.Tui.run(["new", "--headless", "--diagnostics"])
+    embedded = Process.whereis(Elara.Server)
+    assert is_pid(embedded)
+    assert Elara.Server.port(embedded) == embedded_port
+    GenServer.stop(embedded)
+    stop_sessions_except(existing_sessions)
+
     {:ok, external} = Elara.Server.start_link(port: 0, provider: script([]))
     external_port = Elara.Server.port(external)
 

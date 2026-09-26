@@ -2,11 +2,12 @@
 
 This is an inventory and verification worksheet for functionality that is
 currently shipped. It is not a roadmap or a status source;
-[`ROADMAP.md`](ROADMAP.md) is the sole source for those. In particular, this
-file does not mark SPLIT-5 complete.
+[`ROADMAP.md`](ROADMAP.md) is the sole source for those, and this file does not
+mark any roadmap item complete.
 
-Use this during the SPLIT-5 daily-driver period to distinguish features that
-work in real use from features that only have automated coverage.
+Use this to distinguish features that work through the product path from
+features that only have automated coverage. Lab experiments establish runtime
+properties separately; their notes live in `docs/lab/`.
 
 ## How to use this checklist
 
@@ -639,44 +640,9 @@ child can make provider requests.
 - [ ] I understand exec-stub process-group behavior currently depends on Unix
       primitives and is not a promise of Windows portability.
 
-## 15. SPLIT-5 daily-driver evidence
-
-SPLIT-5 requires two weeks of daily use **or** the next five session/UI
-features, whichever comes first. For each feature, record whether Rust needed to
-duplicate Elixir session policy/transition logic and estimate boundary
-protocol/DTO time as a share of total implementation time.
-
-| Date | Session/UI feature or real task | Worked? | Rust duplicated policy/transition logic? | Total implementation time | Protocol/DTO time | Boundary share | Notes/issue |
-| ---- | ------------------------------- | ------- | ---------------------------------------- | ------------------------- | ----------------- | -------------- | ----------- |
-|      |                                 |         |                                          |                           |                   |                |             |
-|      |                                 |         |                                          |                           |                   |                |             |
-|      |                                 |         |                                          |                           |                   |                |             |
-|      |                                 |         |                                          |                           |                   |                |             |
-|      |                                 |         |                                          |                           |                   |                |             |
-
-BEAM-specific feature usage during the period:
-
-| Feature                | Actually used in real work? | Frequency / task | Useful, neutral, or friction? |
-| ---------------------- | --------------------------- | ---------------- | ----------------------------- |
-| Detached sessions      |                             |                  |                               |
-| Plugin reload          |                             |                  |                               |
-| Remote workers         |                             |                  |                               |
-| Durable write recovery |                             |                  |                               |
-
-Go/no-go calculation (record evidence in `ROADMAP.md` only when making the owner
-decision):
-
-- Features that duplicated policy: ___ / 5.
-- Aggregate protocol/DTO time: ___ / ___ = ___%.
-- Were BEAM-specific features actually used? ___
-- Reverse to Rust-everything if 3 of 5 features duplicated policy, boundary work
-  exceeded 30%, **or** the BEAM-specific features went unused. Otherwise keep
-  the split and choose the next queue from the items currently blocked on
-  SPLIT-5.
-
 ## Issue and usability log
 
-Capture both correctness bugs and daily-driver friction (startup, key handling,
+Capture both correctness bugs and usability friction (startup, key handling,
 rendering, latency, provider behavior, unclear errors, excess token use).
 
 | Date | Feature/check | Environment | Expected | Observed | Reproducible? | Severity / follow-up |

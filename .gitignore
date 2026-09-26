@@ -34,3 +34,6 @@ elara-*.tar
 
 # Amp generates portal manifests for supervised orb services.
 /.amp/portals/*
+
+# Raw lab experiment output; notes in docs/lab/ quote the summaries.
+/lab/results/

@@ -13,7 +13,13 @@ defmodule Elara.Skills do
         }
   def discover(cwd, opts \\ []) do
     cwd = Path.expand(cwd)
-    home = Path.expand(Keyword.get(opts, :home, System.user_home!()))
+
+    home =
+      Path.expand(
+        Keyword.get(opts, :home) || Application.get_env(:elara, :skills_home) ||
+          System.user_home!()
+      )
+
     explicit = Enum.map(Keyword.get(opts, :skill_paths, env_paths()), &Path.expand(&1, cwd))
 
     sources =

@@ -32,10 +32,9 @@ things that are non-obvious in the Cloud environment.
 - `mix test` intentionally logs a `[error] ... (RuntimeError) boom` line from a
   crash-recovery test (`Elara.SessionTest.CrashTool`). This is expected; the run
   still ends with all tests passing. Do not treat that log line as a failure.
-- The suite is not yet hermetic (fixed in LAB-0): it reads user skills from
-  `~/.agents/skills` and `~/.config/agents/skills`, and a large catalog trips
-  context-budget handoffs in six tests. If those fail, rerun with an empty
-  `HOME` while keeping `MIX_HOME`, `HEX_HOME`, `CARGO_HOME` and `RUSTUP_HOME`.
+- The test helper clears `ELARA_*` and `XAI_API_KEY` and points user skill
+  discovery at an empty home, so the developer's shell and skills cannot change
+  results. Tests that need skills pass `home:` or `skill_paths:` explicitly.
 - The real agent (`mix elara.ask` / `mix elara.chat` / `mix elara.tui`) needs
   provider credentials. `ELARA_PROVIDER=openai-codex` after
   `mix elara.login openai` uses a ChatGPT/Codex subscription; otherwise

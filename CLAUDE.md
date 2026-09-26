@@ -17,12 +17,13 @@ Build product features only when an experiment needs them.
 
 `ROADMAP.md` is the **sole** roadmap and status source. Update its queue table
 and the item's Result in the same commit that changes an item's status.
-`test/elara/roadmap_test.exs` currently checks only the PROD/SPLIT history rows
-(IDs, allowed statuses, at most one executable); LAB-0 extends it to the whole
-queue. Experiment notes live in `docs/lab/`, one page each; raw results go under
-`lab/results/`, not `docs/`. `docs/harness-experiments.md` is the pre-pivot
-experiment log. `AGENTS.md` holds environment notes; `MANUAL_TEST_CHECKLIST.md`
-is a manual verification worksheet, not a status source.
+`test/elara/roadmap_test.exs` checks every queue and history row's status,
+exactly one executable item while work remains, a `## LAB-n — …` section per
+queued item, and known dependencies. Experiment notes live in `docs/lab/`, one
+page each; raw results go under `lab/results/`, not `docs/`.
+`docs/harness-experiments.md` is the pre-pivot experiment log. `AGENTS.md` holds
+environment notes; `MANUAL_TEST_CHECKLIST.md` is a manual verification
+worksheet, not a status source.
 
 ## Toolchain
 
@@ -56,11 +57,10 @@ cd native/elara-tui  && cargo fmt --check && cargo clippy && cargo test
 - Tests never hit the network — they drive `Elara.Provider.Scripted`. `mix test`
   intentionally logs `(RuntimeError) boom` from a crash-recovery test; that is
   not a failure.
-- The suite is not yet hermetic (fixed in LAB-0). It reads user skills from
-  `~/.agents/skills` and `~/.config/agents/skills`, and a large catalog trips
-  context-budget handoffs in six tests. If those fail, rerun with an empty
-  `HOME`, keeping `MIX_HOME`, `HEX_HOME`, `CARGO_HOME` and `RUSTUP_HOME` pointed
-  at the real ones.
+- `test/test_helper.exs` keeps the suite independent of the developer's setup:
+  it clears `ELARA_*` and `XAI_API_KEY`, and points user skill discovery at an
+  empty home through the `:elara, :skills_home` app env. Tests that need skills
+  pass `home:` or `skill_paths:` explicitly.
 - `.cursor/skills/verify-elara/` is a user-path verification harness
   (`bin/launch`, `bin/doctor`, `bin/drive`, `bin/cleanup`) that runs Elara under
   an isolated `HOME` and a disposable git worktree. Use it — not `mix test` — to

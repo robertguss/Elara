@@ -25,14 +25,11 @@ split works; its daily-use reversal measurement is retired with SPLIT-5.
 SPLIT-5 (daily-driver go/no-go) is canceled. The JOB experiment series is
 closed.
 
-Baseline at `6ac8343`:
+**2026-09-26 — LAB-0 done.** The suite is hermetic, and all 541 Mix tests pass
+with both the owner's real `HOME` and an empty one. 121 Rust tests pass
+(unchanged since `6ac8343`). The build compiles with warnings denied.
 
-- 539 Mix tests. 533 pass with the owner's real `HOME`; the six failures come
-  from user skills leaking into the suite and pass with an empty `HOME`.
-- 121 Rust tests pass.
-- The build compiles with warnings denied.
-
-**Next action:** LAB-0.
+**Next action:** LAB-1.
 
 ## Research agenda
 
@@ -130,8 +127,8 @@ Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, `INVALID` and
 
 | ID    | Status  | Item                                                       | Depends on   |
 | ----- | ------- | ---------------------------------------------------------- | ------------ |
-| LAB-0 | TODO    | Reset: hermetic suite, lab guidance and repository hygiene | Lab pivot    |
-| LAB-1 | BLOCKED | Retire subsystems nothing in the product uses              | LAB-0        |
+| LAB-0 | DONE    | Reset: hermetic suite, lab guidance and repository hygiene | Lab pivot    |
+| LAB-1 | TODO    | Retire subsystems nothing in the product uses              | LAB-0        |
 | LAB-2 | BLOCKED | RQ-1: property tests over Core invariants                  | LAB-0        |
 | LAB-3 | BLOCKED | Lab bench: simulated provider, fault points, seeded runner | LAB-1        |
 | LAB-4 | BLOCKED | RQ-1: chaos schedules against the session shell            | LAB-2, LAB-3 |
@@ -167,6 +164,12 @@ Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, `INVALID` and
 **Done when:** the full suite passes with both the real and an empty `HOME`;
 format and warnings-as-errors compile pass; branches are pruned as the owner
 confirms.
+
+**Result (2026-09-26): DONE.** 541/541 pass with the real and an empty `HOME`.
+`--diagnostics` keeps the embedded server (red, then green). The roadmap test
+covers the whole queue (mutation-checked). Checklist, split doc and `docs/lab/`
+aligned. 21 merged branches deleted; the owner decides on 2 unmerged branches
+and 29 remote branches.
 
 ## LAB-1 — Retire subsystems nothing in the product uses
 

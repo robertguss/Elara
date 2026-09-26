@@ -225,6 +225,7 @@ Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, `INVALID` and
 | LAB-6 | BLOCKED | Selective retirement with coverage preserved               | LAB-5        |
 | LAB-7 | BLOCKED | RQ-2/RQ-3: measured fixes, same workloads rerun            | LAB-4, LAB-6 |
 | LAB-8 | BLOCKED | RQ-4: general jobs and one correlated wake model           | LAB-5        |
+| LAB-9 | BLOCKED | Scoped operator acknowledgement of uncertain child results | LAB-1        |
 
 ## LAB-0 — Reset: hermetic suite, lab guidance and repository hygiene
 
@@ -287,11 +288,11 @@ Shell recovery is out of scope; LAB-5 covers it.
 longer opt-in run. Each counterexample is either fixed or recorded as a finding
 in `docs/lab/001-…`.
 
-**Result (2026-09-26): DONE.** Nine StreamData properties over generated
-traces; all hold (5,000 cases each in the opt-in run). The known counterexample
-failed as predicted and is fixed in `Core`. The same gap in stub-killed `bash`
-results is fixed too. Plugin tools remain registered as non-mutating, a recorded
-gap. Suite: 554/554. Note: [001](docs/lab/001-core-properties.md).
+**Result (2026-09-26): DONE.** Eleven properties with measured coverage and
+three boundary traces all hold. The known counterexample is fixed in `Core`, and
+review-driven follow-ups carry `indeterminate` through `bash`, remote workers and
+the durable ledger (schema 2). The child-integration block is now LAB-9. Suite
+green. Note: [001](docs/lab/001-core-properties.md).
 
 ## LAB-2 — Minimal lab bench: simulated provider, fault points, runner
 
@@ -408,6 +409,31 @@ RQ-1 suites still pass.
 - The note records net lines, counting new infrastructure, and special cases
   removed.
 - A capped real-model run wakes on its awaited completion.
+
+## LAB-9 — Scoped operator acknowledgement of uncertain child results
+
+**Why:** since LAB-1, routine timeouts and output-cap kills in a delegated child
+record `indeterminate`, which permanently refuses integration
+(`lib/elara/threads.ex:533`). Clearing the block after a later successful turn,
+or ignoring kills inside the worktree, would be unsound: commands are not
+confined to the worktree.
+
+**Scope:**
+- **What the acknowledgement binds to.** It is durable and records the child,
+  the specific uncertain call IDs, and a digest of the reviewed worktree patch.
+  Any new uncertain result or changed bytes invalidates it, and the original
+  `indeterminate` results stay in history.
+- **Where it is checked.** Inside the serialized workspace operation that
+  integration already uses (`lib/elara/threads.ex:282`).
+- **What it overrides.** Only the historical-uncertainty guard. Guards for
+  active execution or pending recovery (`lib/elara/session.ex:342`) and
+  cleanup's integrated-tree checks are unchanged.
+- **Who can call it.** Only the TUI and server, not the model. This is workflow
+  separation, not a security boundary, since `bash` is unrestricted.
+
+**Done when:** an acknowledged child integrates exactly the reviewed patch, and
+tests prove that new uncertainty or changed bytes invalidate the
+acknowledgement.
 
 ## Baseline facts for experiment design
 

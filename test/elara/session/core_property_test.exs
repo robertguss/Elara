@@ -37,9 +37,9 @@ defmodule Elara.Session.CorePropertyTest do
        )},
       {1, constant(:provider_error)},
       {5, tuple({constant(:tool), member_of([:ok, :error, :indeterminate])})},
-      {1, constant(:crash)},
-      {1, constant(:timeout)},
-      {1, constant(:deferred)},
+      {2, constant(:crash)},
+      {2, constant(:timeout)},
+      {2, constant(:deferred)},
       {1, constant(:usage)},
       {2, constant(:interrupt)},
       {2, constant(:steer)},
@@ -276,6 +276,54 @@ defmodule Elara.Session.CorePropertyTest do
     end
   end
 
+  property "no call is dispatched twice or gets two results at any step" do
+    check all(actions <- actions(), max_runs: @runs) do
+      %{core: core, steps: steps} = run(actions)
+      {_core, drained} = drain(core)
+
+      Enum.reduce(steps ++ drained, {MapSet.new(), MapSet.new(), MapSet.new()}, fn step,
+                                                                                   {refs,
+                                                                                    dispatched,
+                                                                                    resulted} ->
+        Enum.reduce(step.effects, {refs, dispatched, resulted}, fn
+          {:run_tool, ref, call, _tool}, {refs, dispatched, resulted} ->
+            refute MapSet.member?(refs, ref), "ref #{ref} dispatched twice"
+            refute MapSet.member?(dispatched, call.id), "call #{call.id} dispatched twice"
+
+            refute MapSet.member?(resulted, call.id),
+                   "call #{call.id} dispatched after its result"
+
+            {MapSet.put(refs, ref), MapSet.put(dispatched, call.id), resulted}
+
+          {:emit, {:message_appended, %ToolResult{call_id: id}}}, {refs, dispatched, resulted} ->
+            refute MapSet.member?(resulted, id), "call #{id} emitted two results"
+            {refs, dispatched, MapSet.put(resulted, id)}
+
+          _effect, acc ->
+            acc
+        end)
+      end)
+    end
+  end
+
+  property "calls rejected without dispatch get an error result" do
+    check all(actions <- actions(), max_runs: @runs) do
+      %{core: core, steps: steps} = run(actions)
+      {drained, drain_steps} = drain(core)
+
+      dispatched =
+        for step <- steps ++ drain_steps,
+            {:run_tool, _ref, call, _tool} <- step.effects,
+            into: MapSet.new(),
+            do: call.id
+
+      for %ToolResult{call_id: id, outcome: outcome} <- drained.history,
+          not MapSet.member?(dispatched, id) do
+        assert {:error, _} = outcome
+      end
+    end
+  end
+
   property "each turn calls the provider at most max_iterations times" do
     check all(actions <- actions(), max_runs: @runs) do
       %{core: core, steps: steps} = run(actions)
@@ -334,5 +382,106 @@ defmodule Elara.Session.CorePropertyTest do
       %{recorder: recorder} = run(actions)
       assert {:ok, %{status: :match}} = FlightRecorder.replay(FlightRecorder.snapshot(recorder))
     end
+  end
+
+  # ── Coverage and boundary traces ────────────────────────────────────────
+
+  defp reached(%{steps: steps}) do
+    Enum.flat_map(steps, fn step ->
+      running = match?(%{phase: {:running_tool, _, _, _, _}}, step.before)
+
+      mutating_running =
+        match?(%{phase: {:running_tool, _, %ToolCall{name: "change"}, _, _}}, step.before)
+
+      [
+        (running and step.fact == :steer) && :steer_during_tool,
+        (running and match?({:tool_deferred, _, _}, step.fact) and not step.stale?) && :deferral,
+        (mutating_running and step.fact == :interrupt) && :interrupt_running_mutation,
+        (mutating_running and match?({t, _} when t == :tool_timeout, step.fact) and
+           not step.stale?) &&
+          :timeout_running_mutation,
+        step.stale? && :stale_fact,
+        Enum.any?(step.effects, &match?({:emit, {:turn_ended, :turn_limit}}, &1)) && :turn_limit,
+        Enum.any?(
+          step.effects,
+          &match?(
+            {:emit, {:message_appended, %ToolResult{outcome: {:error, "repeated tool call"}}}},
+            &1
+          )
+        ) &&
+          :repeated_call_rejected
+      ]
+      |> Enum.filter(& &1)
+    end)
+    |> MapSet.new()
+  end
+
+  test "generated traces reach the states the properties depend on" do
+    counts =
+      actions()
+      |> Enum.take(1_000)
+      |> Enum.map(&reached(run(&1)))
+      |> Enum.flat_map(&MapSet.to_list/1)
+      |> Enum.frequencies()
+
+    if System.get_env("LAB_PROPERTY_COVERAGE"), do: IO.inspect(counts, label: "traces reaching")
+
+    for state <- [
+          :steer_during_tool,
+          :deferral,
+          :interrupt_running_mutation,
+          :timeout_running_mutation,
+          :stale_fact,
+          :turn_limit,
+          :repeated_call_rejected
+        ] do
+      assert Map.get(counts, state, 0) >= 5,
+             "only #{Map.get(counts, state, 0)} traces reach #{state}"
+    end
+  end
+
+  defp results_by_id(core),
+    do: Map.new(for %ToolResult{} = r <- core.history, do: {r.call_id, r.outcome})
+
+  test "boundary: steering during a tool supersedes calls not yet started" do
+    %{core: core, steps: steps} =
+      run([
+        {:ask, "a"},
+        {:reply, [{"change", 0, false}, {"look", 1, false}], :match, ""},
+        :steer,
+        {:tool, :ok}
+      ])
+
+    assert %{"c0" => {:ok, "out"}, "c1" => {:error, "not started: superseded by steering input"}} =
+             results_by_id(core)
+
+    assert {:emit, {:turn_ended, :interrupted}} in emitted(steps)
+    assert core.phase == :idle
+  end
+
+  test "boundary: a deferred call is not executed and the turn continues" do
+    %{core: core} = run([{:ask, "a"}, {:reply, [{"change", 0, false}], :match, ""}, :deferred])
+
+    assert %{"c0" => {:error, "Not executed: " <> _}} = results_by_id(core)
+    assert {:calling_provider, _ref, 2} = core.phase
+  end
+
+  test "boundary: the iteration limit ends the turn" do
+    reply = fn arg -> {:reply, [{"look", arg, false}], :match, ""} end
+
+    %{core: core, steps: steps} =
+      run([
+        {:ask, "a"},
+        reply.(0),
+        {:tool, :ok},
+        reply.(1),
+        {:tool, :ok},
+        reply.(0),
+        {:tool, :ok}
+      ])
+
+    assert {:emit, {:turn_ended, :turn_limit}} in emitted(steps)
+    assert Enum.count(emitted(steps), &match?({:call_provider, _, _}, &1)) == @max_iterations
+    assert core.phase == :idle
   end
 end

@@ -371,6 +371,36 @@ defmodule Elara.ThreadsTest do
     GenServer.stop(server)
   end
 
+  test "an uncertain command in a child blocks integration, so cleanup cannot proceed", %{
+    cwd: cwd
+  } do
+    # `yes` is killed at the output cap, so the child records an indeterminate
+    # result. Integration and cleanup keep refusing it; a later successful turn
+    # does not clear the uncertainty (an operator acknowledgement is a follow-up).
+    flood = %ToolCall{id: "flood", name: "bash", args: {:ok, %{"command" => "yes"}}}
+    {parent, _} = parent(cwd, [answer(nil, [flood]), answer("done")])
+    {:ok, child} = Threads.start_child(parent, "coding", coding: true)
+    id = child["id"]
+    finished(parent, id)
+
+    assert Enum.any?(
+             Elara.transcript(id),
+             &match?(
+               %Elara.Message.ToolResult{call_id: "flood", outcome: {:indeterminate, _}},
+               &1
+             )
+           )
+
+    File.write!(Path.join(child["cwd"], "file.txt"), "child\n")
+    assert {:error, :indeterminate_effects_preserved} = Threads.integrate(parent, id)
+    assert File.read!(Path.join(cwd, "file.txt")) == "base\n"
+
+    # Cleanup requires a prior integration, which the uncertainty blocks, so the
+    # child's worktree is preserved.
+    assert {:error, :unintegrated_work_preserved} = Threads.cleanup(parent, id)
+    assert File.exists?(child["cwd"])
+  end
+
   test "integration from a nested parent applies repository-root changes rather than skipping them",
        %{cwd: cwd} do
     nested = Path.join(cwd, "nested")

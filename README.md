@@ -453,6 +453,11 @@ sessions must be idle with settled effects, and **the entire parent checkout
 must be clean**, including untracked files. Git checks for conflicts and applies
 to the parent index/worktree; this does not commit, push or merge a branch.
 Receipts retain the patch, tree and parent revision. Review and commit normally.
+Integration is refused while the child's history contains any `indeterminate`
+tool result, for example a command killed by a timeout or the output cap. Its
+changes might be partial and could reach outside the worktree. A later
+successful turn does not clear this. The worktree is preserved for manual
+review; an explicit, scoped operator acknowledgement is a planned follow-up.
 `/cleanup-child CHILD_ID` is separate: it requires integration of the exact
 current tree, no ignored files, and a clean child worktree (commit the child's
 integrated changes first). It never uses forced removal. The child branch,

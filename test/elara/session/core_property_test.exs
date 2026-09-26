@@ -279,30 +279,38 @@ defmodule Elara.Session.CorePropertyTest do
   property "no call is dispatched twice or gets two results at any step" do
     check all(actions <- actions(), max_runs: @runs) do
       %{core: core, steps: steps} = run(actions)
-      {_core, drained} = drain(core)
+      {drained_core, drained} = drain(core)
 
-      Enum.reduce(steps ++ drained, {MapSet.new(), MapSet.new(), MapSet.new()}, fn step,
-                                                                                   {refs,
-                                                                                    dispatched,
-                                                                                    resulted} ->
-        Enum.reduce(step.effects, {refs, dispatched, resulted}, fn
-          {:run_tool, ref, call, _tool}, {refs, dispatched, resulted} ->
-            refute MapSet.member?(refs, ref), "ref #{ref} dispatched twice"
-            refute MapSet.member?(dispatched, call.id), "call #{call.id} dispatched twice"
+      {_refs, _dispatched, resulted} =
+        Enum.reduce(steps ++ drained, {MapSet.new(), MapSet.new(), MapSet.new()}, fn step,
+                                                                                     {refs,
+                                                                                      dispatched,
+                                                                                      resulted} ->
+          Enum.reduce(step.effects, {refs, dispatched, resulted}, fn
+            {:run_tool, ref, call, _tool}, {refs, dispatched, resulted} ->
+              refute MapSet.member?(refs, ref), "ref #{ref} dispatched twice"
+              refute MapSet.member?(dispatched, call.id), "call #{call.id} dispatched twice"
 
-            refute MapSet.member?(resulted, call.id),
-                   "call #{call.id} dispatched after its result"
+              refute MapSet.member?(resulted, call.id),
+                     "call #{call.id} dispatched after its result"
 
-            {MapSet.put(refs, ref), MapSet.put(dispatched, call.id), resulted}
+              {MapSet.put(refs, ref), MapSet.put(dispatched, call.id), resulted}
 
-          {:emit, {:message_appended, %ToolResult{call_id: id}}}, {refs, dispatched, resulted} ->
-            refute MapSet.member?(resulted, id), "call #{id} emitted two results"
-            {refs, dispatched, MapSet.put(resulted, id)}
+            {:emit, {:message_appended, %ToolResult{call_id: id}}},
+            {refs, dispatched, resulted} ->
+              refute MapSet.member?(resulted, id), "call #{id} emitted two results"
+              {refs, dispatched, MapSet.put(resulted, id)}
 
-          _effect, acc ->
-            acc
+            _effect, acc ->
+              acc
+          end)
         end)
-      end)
+
+      # Every result in the drained history was emitted exactly once, and vice versa.
+      history_ids =
+        for %ToolResult{call_id: id} <- drained_core.history, into: MapSet.new(), do: id
+
+      assert resulted == history_ids
     end
   end
 
@@ -483,5 +491,20 @@ defmodule Elara.Session.CorePropertyTest do
     assert {:emit, {:turn_ended, :turn_limit}} in emitted(steps)
     assert Enum.count(emitted(steps), &match?({:call_provider, _, _}, &1)) == @max_iterations
     assert core.phase == :idle
+  end
+
+  for {fact, label} <- [interrupt: "interrupted", timeout: "timed out", crash: "tool crashed"] do
+    test "boundary: #{fact} of a running mutating call is indeterminate, of a read is an error" do
+      fact = unquote(fact)
+      label = unquote(label)
+
+      %{core: mutating} = run([{:ask, "a"}, {:reply, [{"change", 0, false}], :match, ""}, fact])
+      assert %{"c0" => {:indeterminate, message}} = results_by_id(mutating)
+      assert message =~ label
+
+      %{core: reading} = run([{:ask, "a"}, {:reply, [{"look", 0, false}], :match, ""}, fact])
+      assert %{"c0" => {:error, message}} = results_by_id(reading)
+      assert message =~ label
+    end
   end
 end

@@ -3,7 +3,10 @@ defmodule Elara.Effect.OpaqueShell do
 
   alias Elara.Effect.AtomicFile
   alias Elara.Effect.ControllerJournal
+  alias Elara.Effect.ExecutorLedger
   alias Elara.Effect.ExecutorLedger.Record
+
+  require ExecutorLedger
   alias Elara.Effect.Job
   alias Elara.Effect.Sidecar
   alias Elara.Exec
@@ -208,7 +211,7 @@ defmodule Elara.Effect.OpaqueShell do
         end
 
       case controller_record do
-        %Record{state: state} = record when state in [:completed, :failed] ->
+        %Record{state: state} = record when ExecutorLedger.is_terminal_state(state) ->
           terminal_from_controller(job, cwd, record, opts)
 
         _record ->
@@ -482,7 +485,13 @@ defmodule Elara.Effect.OpaqueShell do
 
   defp terminal_from_controller(job, cwd, %Record{} = record, opts) do
     {:ok, workspace} = observe(job, cwd)
-    causal = if record.state == :completed, do: :completed, else: :failed
+
+    {causal, safe_action} =
+      case record.state do
+        :completed -> {:completed, :none}
+        :failed -> {:failed, :do_not_retry}
+        :indeterminate -> {:unproven, indeterminate_safe_action(workspace)}
+      end
 
     %Result{
       job: job,
@@ -492,7 +501,7 @@ defmodule Elara.Effect.OpaqueShell do
       process_lifetime: process_lifetime(opts),
       causal: causal,
       historical: :invoked,
-      safe_action: if(causal == :completed, do: :none, else: :do_not_retry),
+      safe_action: safe_action,
       executor_record: nil,
       controller_record: record
     }

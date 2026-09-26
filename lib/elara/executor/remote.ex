@@ -6,6 +6,7 @@ defmodule Elara.Executor.Remote do
   alias Elara.Executor.Request
 
   @protocol_version 2
+  @reply_grace_ms 1_000
 
   @impl true
   def execute(config, %Request{} = request, _tool) do
@@ -25,7 +26,8 @@ defmodule Elara.Executor.Remote do
                "request" => Request.to_map(request)
              })
            ),
-         {:ok, line} <- Elara.Protocol.recv_line(socket, timeout),
+         # The worker enforces the deadline and then replies, so wait slightly longer.
+         {:ok, line} <- Elara.Protocol.recv_line(socket, timeout + @reply_grace_ms),
          {:ok, response} <- decode(line) do
       :gen_tcp.close(socket)
       decode_response(response)

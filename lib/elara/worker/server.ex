@@ -112,13 +112,13 @@ defmodule Elara.Worker.Server do
         :gen_tcp.send(socket, encode_result(outcome))
 
       {:tcp_closed, ^socket} ->
-        Process.exit(job, :kill)
+        stop_job(job)
 
       {:tcp_error, ^socket, _reason} ->
-        Process.exit(job, :kill)
+        stop_job(job)
     after
       max(request.deadline_ms - System.system_time(:millisecond), 0) ->
-        Process.exit(job, :kill)
+        stop_job(job)
 
         # A killed mutating job may already have changed the workspace.
         if tool.mutating do
@@ -130,6 +130,14 @@ defmodule Elara.Worker.Server do
           :gen_tcp.send(socket, encode_error(:deadline_exceeded))
         end
     end
+  end
+
+  # The job is linked so it dies with this handler (and the worker). A deliberate
+  # kill at a deadline or disconnect unlinks first, so it cannot propagate back up
+  # through the handler, acceptor and worker.
+  defp stop_job(job) do
+    Process.unlink(job)
+    Process.exit(job, :kill)
   end
 
   defp decode_request(line, config) do

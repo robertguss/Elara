@@ -118,6 +118,9 @@ attribution rule).
     there, is `indeterminate`.
   - Lines longer than the socket buffer are reassembled; large remote results
     previously failed to decode.
+  - Follow-up: killing a job at the worker deadline or on disconnect no longer
+    kills the whole worker (it unlinks first), and the client waits a
+    one-second grace period for the worker's deadline reply.
 - **Durable effect path (`a32e9ae`):**
   - The executor ledger (schema 2, migrated in place) has a terminal
     `indeterminate` state.
@@ -134,6 +137,13 @@ attribution rule).
   a delegated child's history refuses integration (`lib/elara/threads.ex:533`),
   and routine timeouts and output-cap kills now produce one. This is tested and
   documented. A scoped operator acknowledgement is queued as LAB-9.
+- **Terminal evidence is not proof that a process stopped.** A terminal
+  `indeterminate` record proves the callback returned or crashed, not that a
+  remote or escaped process has stopped. The recovery barrier accepts it
+  (`lib/elara/session.ex:969`); LAB-5 should probe this.
+- **The experimental `LiteralPatch` and `OpaqueShell` modules** were updated for
+  the new state without dedicated tests. They are test-only and scheduled for
+  removal in LAB-6.
 - **Plugin tools are always registered as non-mutating**
   (`lib/elara/plugin/server.ex:264-272`), so an interrupted mutating plugin
   still reports an error. Fixing that needs plugin authority declarations; it is

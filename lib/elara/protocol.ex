@@ -58,8 +58,14 @@ defmodule Elara.Protocol do
 
     with {:ok, chunk} <- :gen_tcp.recv(socket, 0, remaining) do
       case push_line(buffer, chunk) do
-        {:more, buffer} -> recv_line(socket, deadline, buffer)
-        result -> result
+        {:more, buffer} ->
+          # Stop at the deadline even if more fragments are already buffered.
+          if System.monotonic_time(:millisecond) >= deadline,
+            do: {:error, :timeout},
+            else: recv_line(socket, deadline, buffer)
+
+        result ->
+          result
       end
     end
   end

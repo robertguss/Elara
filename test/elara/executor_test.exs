@@ -173,6 +173,78 @@ defmodule Elara.ExecutorTest do
     assert Process.alive?(worker)
   end
 
+  defp worker_request(workspace_id, name, arguments, deadline_in_ms) do
+    tool = tool(name)
+
+    %Request{
+      tool_call_id: "call-#{System.unique_integer([:positive])}",
+      session_id: "session",
+      tool_name: name,
+      tool_version: tool.version,
+      arguments: arguments,
+      workspace_id: workspace_id,
+      deadline_ms: System.system_time(:millisecond) + deadline_in_ms,
+      max_output_bytes: 16_384,
+      cancellation_id: "cancel-#{System.unique_integer([:positive])}",
+      required_capabilities: tool.capabilities,
+      placement: :remote,
+      mutating: tool.mutating
+    }
+  end
+
+  defp assert_worker_serves(worker, workspace_id, token, dir) do
+    File.write!(Path.join(dir, "probe.txt"), "alive")
+    request = worker_request(workspace_id, "read", %{"path" => "probe.txt"}, 5_000)
+    config = %{port: WorkerServer.port(worker), token: token}
+
+    assert Process.alive?(worker)
+    assert {:ok, "alive"} = Remote.execute(config, request, tool("read"))
+  end
+
+  test "a client disconnect during a job leaves the worker serving", context do
+    token = "worker-secret"
+    worker = start_worker(context.worker, context.workspace_id, token)
+    marker = Path.join(context.worker, "started")
+    command = "touch #{marker}; sleep 5"
+    request = worker_request(context.workspace_id, "bash", %{"command" => command}, 10_000)
+
+    {:ok, socket} =
+      :gen_tcp.connect({127, 0, 0, 1}, WorkerServer.port(worker), [
+        :binary,
+        packet: :line,
+        active: false
+      ])
+
+    line = JSON.encode!(%{"version" => 2, "token" => token, "request" => Request.to_map(request)})
+    :ok = :gen_tcp.send(socket, [line, "\n"])
+    wait_until(fn -> File.exists?(marker) end)
+    :ok = :gen_tcp.close(socket)
+    Process.sleep(100)
+
+    assert_worker_serves(worker, context.workspace_id, token, context.worker)
+  end
+
+  test "a mutating job past the worker deadline is indeterminate and the worker survives",
+       context do
+    token = "worker-secret"
+    worker = start_worker(context.worker, context.workspace_id, token)
+    config = %{port: WorkerServer.port(worker), token: token}
+    request = worker_request(context.workspace_id, "bash", %{"command" => "sleep 5"}, 300)
+
+    # The worker deadline and the stub's own timeout race; both fail closed.
+    assert {:indeterminate, _message} = Remote.execute(config, request, tool("bash"))
+    Process.sleep(100)
+    assert_worker_serves(worker, context.workspace_id, token, context.worker)
+  end
+
+  defp wait_until(fun, attempts \\ 200) do
+    cond do
+      fun.() -> :ok
+      attempts == 0 -> flunk("condition not reached")
+      true -> Process.sleep(10) && wait_until(fun, attempts - 1)
+    end
+  end
+
   test "range and numbered reads use a distinct worker tool version", context do
     token = "worker-secret"
     worker = start_worker(context.worker, context.workspace_id, token, ["filesystem:read"])

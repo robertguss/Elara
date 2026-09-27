@@ -152,14 +152,17 @@ defmodule Elara.Provider.SimulatedTest do
     assert_received {:lab_choice, "r", 3, :answer}
   end
 
-  test "rules do not shift the seeded choices of later unmatched requests" do
-    never = [{fn _ -> false end, :answer}]
-    profile = @fast ++ [errors: [rate_limited: 0.5]]
+  test "a matched rule does not shift the seeded choices or text of later requests" do
+    bad = %Provider.Error{kind: :bad_response, message: "scripted"}
+    turn2 = [{&match?(%Message.User{text: "turn 2"}, List.last(&1)), {:error, bad}}]
+    profile = @fast ++ [errors: [rate_limited: 0.4]]
 
-    plain = converse(Simulated.new(seed: 9, id: "k", profile: profile), 6)
-    ruled = converse(Simulated.new(seed: 9, id: "k", profile: profile ++ [rules: never]), 6)
+    {plain, _} = converse(Simulated.new(seed: 9, id: "k", profile: profile), 8)
+    {ruled, _} = converse(Simulated.new(seed: 9, id: "k", profile: profile ++ [rules: turn2]), 8)
 
-    assert plain == ruled
+    assert Enum.at(ruled, 1) == {:error, :bad_response, nil}
+    assert Enum.at(plain, 1) != Enum.at(ruled, 1)
+    assert Enum.drop(plain, 2) == Enum.drop(ruled, 2)
   end
 
   test "a real session completes tool rounds through the simulated provider" do

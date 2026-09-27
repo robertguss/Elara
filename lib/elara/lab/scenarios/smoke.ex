@@ -89,7 +89,7 @@ defmodule Elara.Lab.Scenarios.Smoke do
       turns: turns,
       completed_turns: Enum.count(state.outcomes, &match?({:ok, _}, &1)),
       failed_turns: Enum.count(state.outcomes, &(not match?({:ok, _}, &1))),
-      choices_digest: digest(choices),
+      choices_digest: Elara.Lab.digest(choices),
       latency_ms: state.latency
     }
   end
@@ -210,11 +210,6 @@ defmodule Elara.Lab.Scenarios.Smoke do
       _ -> :ok
     end
   end
-
-  defp digest(term),
-    do:
-      :crypto.hash(:sha256, :erlang.term_to_binary(term, [:deterministic]))
-      |> Base.encode16(case: :lower)
 
   defp int(params, key, default) do
     case Map.fetch(params, key) do

@@ -3,9 +3,11 @@ defmodule Elara.LabScenariosTest do
   use ExUnit.Case, async: false
 
   defp run!(scenario, seed \\ 1) do
+    {:ok, [again]} = Elara.Lab.run(scenario, seed: seed)
     {:ok, [result]} = Elara.Lab.run(scenario, seed: seed)
     refute Map.has_key?(result, :retained_dir), "cleanup unconfirmed: #{result[:retained_dir]}"
     assert Elara.Lab.failed_checks(result) == [], inspect(result.checks, pretty: true)
+    assert is_binary(result.choices_digest) and result.choices_digest == again.choices_digest
     result
   end
 
@@ -25,6 +27,15 @@ defmodule Elara.LabScenariosTest do
   @tag timeout: 90_000
   test "provider_fault: a scripted failure before or during interpretation loses no completion" do
     result = run!("provider_fault")
-    assert map_size(result.checks) == 18
+
+    for stage <- ["before_completion", "during_interpretation"],
+        check <- [
+          "scripted_fault_in_expected_turn",
+          "failure_receipt",
+          "primary_responsive_during_job"
+        ],
+        do: assert(Map.has_key?(result.checks, :"#{stage}.#{check}"))
+
+    assert result.checks.fault_rule_fired_once_each
   end
 end

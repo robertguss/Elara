@@ -7,10 +7,12 @@ defmodule Elara.Lab do
   schedules). It does not fix concurrent interleavings or timings, so those
   are reported across repetitions with their spread.
 
-  A scenario reports invariants as `checks: %{name => boolean}`. It settles its
-  own jobs and sessions before returning; if it cannot confirm that, it returns
-  `cleanup_confirmed: false`, and the runner keeps its directory as evidence and
-  runs no further repetitions. A scenario that raises also keeps its directory.
+  A scenario reports invariants as `checks: %{name => boolean}`; a repetition
+  with a failed check keeps its directory as `evidence_dir`. A scenario settles
+  its own jobs and sessions before returning. If it cannot confirm that
+  (`cleanup_confirmed: false`) or it raises, the runner keeps the directory, runs
+  no further repetitions, and leaves the global sessions root bound to it, so
+  unsettled work keeps resolving its own records. Such a VM should not be reused.
   """
 
   @scenarios %{
@@ -93,40 +95,96 @@ defmodule Elara.Lab do
     Application.put_env(:elara, :skills_home, Path.join(dir, "home"))
     started = System.monotonic_time(:millisecond)
 
-    try do
-      result = module.run(Map.put(context, :dir, dir))
-      elapsed = System.monotonic_time(:millisecond) - started
+    result =
+      try do
+        module.run(Map.put(context, :dir, dir))
+      rescue
+        error ->
+          IO.warn("lab scenario #{name} raised; retained #{dir}; its sessions root stays bound")
+          reraise error, __STACKTRACE__
+      end
 
-      result =
-        result
-        |> Map.update(:latency_ms, nil, &percentiles/1)
-        |> Map.merge(%{
-          scenario: name,
-          seed: context.seed,
-          params: context.params,
-          elapsed_ms: elapsed
-        })
+    result =
+      result
+      |> Map.update(:latency_ms, nil, &percentiles/1)
+      |> Map.merge(%{
+        scenario: name,
+        seed: context.seed,
+        params: context.params,
+        elapsed_ms: System.monotonic_time(:millisecond) - started
+      })
 
-      {cleanup, result} = Map.pop(result, :cleanup_confirmed, true)
+    {cleanup, result} = Map.pop(result, :cleanup_confirmed, true)
 
-      if cleanup == true do
+    cond do
+      # Unsettled work (a job runner, say) still resolves paths through the
+      # global sessions root, so leave it bound to this run's root.
+      cleanup != true ->
+        IO.warn("lab cleanup unconfirmed; retained #{dir}; its sessions root stays bound")
+        Map.put(result, :retained_dir, dir)
+
+      failed_checks(result) != [] ->
+        restore(previous)
+        Map.put(result, :evidence_dir, dir)
+
+      true ->
+        restore(previous)
         File.rm_rf!(dir)
         result
-      else
-        IO.warn("lab cleanup unconfirmed; retained #{dir}; stopping repetitions")
-        Map.put(result, :retained_dir, dir)
-      end
-    rescue
-      error ->
-        IO.warn("lab scenario #{name} raised; retained #{dir}")
-        reraise error, __STACKTRACE__
-    after
-      Enum.each(previous, fn
-        {key, nil} -> Application.delete_env(:elara, key)
-        {key, value} -> Application.put_env(:elara, key, value)
-      end)
     end
   end
+
+  defp restore(previous) do
+    Enum.each(previous, fn
+      {key, nil} -> Application.delete_env(:elara, key)
+      {key, value} -> Application.put_env(:elara, key, value)
+    end)
+  end
+
+  @doc """
+  Start a process that logs simulated choices; pass it as a provider's
+  `collector`. Kept out of the scenario's mailbox so receive loops cannot drop
+  entries.
+  """
+  @spec choice_log() :: pid()
+  def choice_log, do: spawn_link(fn -> log_choices(%{}) end)
+
+  @doc "Stop a choice log and return its choices, per simulated id in request order."
+  @spec choices(pid()) :: %{term() => [term()]}
+  def choices(log) do
+    ref = make_ref()
+    send(log, {:dump, self(), ref})
+
+    receive do
+      {^ref, choices} -> choices
+    after
+      5_000 -> raise "choice log did not answer"
+    end
+  end
+
+  @doc "Stop a choice log and digest its choices."
+  @spec choices_digest(pid()) :: String.t()
+  def choices_digest(log), do: log |> choices() |> digest()
+
+  defp log_choices(choices) do
+    receive do
+      {:lab_choice, id, _request, choice} ->
+        log_choices(Map.update(choices, id, [choice], &[choice | &1]))
+
+      {:dump, from, ref} ->
+        send(from, {ref, Map.new(choices, fn {id, list} -> {id, Enum.reverse(list)} end)})
+
+      _other ->
+        log_choices(choices)
+    end
+  end
+
+  @doc "Deterministic SHA-256 of a term, lowercase hex."
+  @spec digest(term()) :: String.t()
+  def digest(term),
+    do:
+      :crypto.hash(:sha256, :erlang.term_to_binary(term, [:deterministic]))
+      |> Base.encode16(case: :lower)
 
   @doc "Nearest-rank percentiles of a list of numbers (nil when empty)."
   @spec percentiles([number()]) :: map() | nil
@@ -158,6 +216,7 @@ defmodule Elara.Lab do
       choices_digests: Enum.map(results, &Map.get(&1, :choices_digest)),
       failed_checks: results |> Enum.flat_map(&failed_checks/1) |> Enum.frequencies(),
       retained_dirs: for(%{retained_dir: dir} <- results, do: dir),
+      evidence_dirs: for(%{evidence_dir: dir} <- results, do: dir),
       elapsed_ms: spread(Enum.map(results, & &1.elapsed_ms)),
       completed_turns: spread(Enum.map(results, &Map.get(&1, :completed_turns, 0))),
       latency_p50_ms: spread(for %{latency_ms: %{p50: v}} <- results, do: v),

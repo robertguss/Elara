@@ -18,6 +18,7 @@ defmodule Elara.Lab.Scenarios.SessionCrash do
   def run(%{provider: :real}), do: raise("session_crash runs on the simulated provider only")
 
   def run(%{seed: seed, dir: dir}) do
+    log = Elara.Lab.choice_log()
     cwd = Path.join(dir, "workspace")
     Jobs.fixture(cwd)
 
@@ -28,7 +29,8 @@ defmodule Elara.Lab.Scenarios.SessionCrash do
       plugins: [],
       tools: [Elara.TestJobs.tool()],
       max_iterations: 4,
-      provider: Simulated.new(seed: seed, id: "primary", profile: profile(rules()))
+      provider:
+        Simulated.new(seed: seed, id: "primary", profile: profile(rules()), collector: log)
     ]
 
     {:ok, primary} = Elara.start_session(opts)
@@ -37,13 +39,19 @@ defmodule Elara.Lab.Scenarios.SessionCrash do
       Elara.start_session(
         Keyword.merge(opts,
           tools: [],
-          provider: Simulated.new(seed: seed, id: "secondary", profile: profile([]))
+          provider:
+            Simulated.new(seed: seed, id: "secondary", profile: profile([]), collector: log)
         )
       )
 
     try do
       report = exercise(primary, secondary, cwd, opts)
-      Map.put(report, :cleanup_confirmed, cleanup(primary, secondary, cwd))
+      cleanup = cleanup(primary, secondary, cwd)
+
+      Map.merge(report, %{
+        cleanup_confirmed: cleanup,
+        choices_digest: Elara.Lab.choices_digest(log)
+      })
     rescue
       error ->
         cleanup(primary, secondary, cwd)

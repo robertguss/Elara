@@ -21,11 +21,17 @@ defmodule Elara.Lab.Scenarios.ConcurrentJobs do
   def run(%{provider: :real}), do: raise("concurrent_jobs runs on the simulated provider only")
 
   def run(%{seed: seed, dir: dir}) do
-    jobs = for n <- 1..5, do: session(Path.join(dir, "job-#{n}"), seed, n)
+    log = Elara.Lab.choice_log()
+    jobs = for n <- 1..5, do: session(Path.join(dir, "job-#{n}"), seed, n, log)
 
     try do
       report = exercise(jobs)
-      Map.put(report, :cleanup_confirmed, cleanup(jobs))
+      cleanup = cleanup(jobs)
+
+      Map.merge(report, %{
+        cleanup_confirmed: cleanup,
+        choices_digest: Elara.Lab.choices_digest(log)
+      })
     rescue
       error ->
         cleanup(jobs)
@@ -132,7 +138,7 @@ defmodule Elara.Lab.Scenarios.ConcurrentJobs do
     }
   end
 
-  defp session(cwd, seed, n) do
+  defp session(cwd, seed, n, log) do
     Jobs.fixture(cwd)
 
     profile = [
@@ -149,7 +155,7 @@ defmodule Elara.Lab.Scenarios.ConcurrentJobs do
         home: cwd,
         skill_paths: [],
         plugins: [],
-        provider: Simulated.new(seed: seed, id: "job-#{n}", profile: profile),
+        provider: Simulated.new(seed: seed, id: "job-#{n}", profile: profile, collector: log),
         tools: [Elara.TestJobs.tool()],
         pause_inputs: true,
         max_iterations: 3,

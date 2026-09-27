@@ -14,8 +14,11 @@ defmodule Elara.Provider.Simulated do
     * `{:rule, index}`: the first of the profile's `rules` whose predicate
       accepts the request's messages. A rule's response is `{:tool, name, args}`,
       `{:error, %Provider.Error{}}` or `:answer`. Rules script specific requests
-      (a fault after one tool result, a status call on completion); they draw the
-      same random number as an unmatched request, so later choices do not shift.
+      (a fault after one tool result, a status call on completion).
+
+  Each request takes exactly one draw from the choice stream; answer text comes
+  from a separate per-request state seeded by `(seed, id, request)`. So a rule
+  that replaces a request does not shift later choices or text.
 
   Deltas follow an intended schedule: `ttft_ms` after the request starts, then
   one every `1000 / deltas_per_sec` ms. A late delta keeps its intended time, so
@@ -49,7 +52,7 @@ defmodule Elara.Provider.Simulated do
     errors: %{rate_limited: 0.0, server_error: 0.0, disconnect_before: 0.0, disconnect_after: 0.0}
   }
 
-  defstruct [:id, :rand, :profile, :collector, :fault, requests: 0]
+  defstruct [:id, :seed, :rand, :profile, :collector, :fault, requests: 0]
 
   @type t :: %__MODULE__{}
 
@@ -68,6 +71,7 @@ defmodule Elara.Provider.Simulated do
     {__MODULE__,
      %__MODULE__{
        id: id,
+       seed: seed,
        rand: rand,
        profile: profile,
        collector: Keyword.get(opts, :collector),
@@ -192,9 +196,10 @@ defmodule Elara.Provider.Simulated do
 
   defp stream_deltas(config, started, number, count, sink) do
     interval = 1000 / config.profile.deltas_per_sec
+    text_rand = :rand.seed_s(:exsss, {config.seed, :erlang.phash2(config.id), number})
 
-    {parts, rand} =
-      Enum.map_reduce(0..(count - 1)//1, config.rand, fn index, rand ->
+    {parts, _rand} =
+      Enum.map_reduce(0..(count - 1)//1, text_rand, fn index, rand ->
         {part, rand} = delta_text(rand, config.profile.delta_bytes)
         intended = started + config.profile.ttft_ms + round(index * interval)
         sleep_until(intended)
@@ -204,7 +209,7 @@ defmodule Elara.Provider.Simulated do
         {part, rand}
       end)
 
-    {Enum.join(parts), %{config | rand: rand}}
+    {Enum.join(parts), config}
   end
 
   @alphabet ~c"abcdefghijklmnopqrstuvwxyz "

@@ -89,13 +89,19 @@ the simulated provider only.
 
 **Checks and cleanup.** A scenario reports invariants as
 `checks: %{name => boolean}`. The summary counts failed checks, and the task
-exits non-zero when any fails. A scenario settles its own jobs and sessions; if
-it cannot confirm that (`cleanup_confirmed: false`) or it raises, the runner
-keeps that repetition's directory as evidence and runs no more repetitions.
+exits non-zero when any fails. A repetition with a failed check keeps its
+directory (sessions, transcripts, job records) as `evidence_dir`. A scenario
+settles its own jobs and sessions; if it cannot confirm that
+(`cleanup_confirmed: false`) or it raises, the runner keeps the directory as
+`retained_dir`, runs no more repetitions, and leaves the global sessions root
+bound to it so unsettled work still finds its records. Don't reuse that VM.
+The job scenarios log simulated choices through `Elara.Lab.choice_log/0`, so
+they report a `choices_digest` too.
 
 **Scripting and faults.** A simulated profile's `rules` script specific requests
-(`{predicate_on_messages, response}`, first match wins) without shifting the
-seeded choices of other requests. `Elara.Lab.Faults` kills a target at a named
+(`{predicate_on_messages, response}`, first match wins). Every request takes
+one draw from the choice stream and answer text has its own per-request seed,
+so a matched rule does not shift later choices or text. `Elara.Lab.Faults` kills a target at a named
 point (`:provider_started`, `:provider_streaming`, `:tool_running`), or a named
 session from outside with `inject({:session, id})`. Client-connection and
 VM-restart faults arrive with LAB-4 and LAB-5.

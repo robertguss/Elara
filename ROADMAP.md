@@ -34,7 +34,12 @@ reordered the queue so Core properties and measurement come before code removal.
 crashed running mutations, and stub-killed `bash` commands, now fail closed as
 `indeterminate`. See [`docs/lab/001-core-properties.md`](docs/lab/001-core-properties.md).
 
-**Next action:** LAB-2.
+**2026-09-26 — LAB-2 done.** The lab bench runs seeded scenarios with scripted
+faults and fails on broken invariants. JOB-era drivers became three lab
+scenarios, and protocol v1 is retired. See
+[`docs/lab/002-lab-bench.md`](docs/lab/002-lab-bench.md).
+
+**Next action:** LAB-3.
 
 ## Research agenda
 
@@ -218,8 +223,8 @@ Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, `INVALID` and
 | ----- | ------- | ---------------------------------------------------------- | ------------ |
 | LAB-0 | DONE    | Reset: hermetic suite, lab guidance and repository hygiene | Lab pivot    |
 | LAB-1 | DONE    | RQ-1: property tests over Core invariants                  | LAB-0        |
-| LAB-2 | IN PROGRESS | Minimal lab bench: simulated provider, fault points, runner | LAB-0        |
-| LAB-3 | BLOCKED | RQ-2: concurrency baseline on unchanged code               | LAB-2        |
+| LAB-2 | DONE    | Minimal lab bench: simulated provider, fault points, runner | LAB-0        |
+| LAB-3 | TODO    | RQ-2: concurrency baseline on unchanged code               | LAB-2        |
 | LAB-4 | BLOCKED | RQ-3: isolation under misbehaving sessions                 | LAB-3        |
 | LAB-5 | BLOCKED | RQ-1: chaos schedules against the session shell            | LAB-1, LAB-2 |
 | LAB-6 | BLOCKED | Selective retirement with coverage preserved               | LAB-5        |
@@ -317,6 +322,12 @@ green. Note: [001](docs/lab/001-core-properties.md).
 - Timing summaries report run-to-run variance.
 - A capped real-model smoke run works.
 - `docs/lab/README.md` documents usage.
+
+**Result (2026-09-26): DONE.** Four scenarios pass 5 of 5 seeded runs. A seed
+reproduces choices, and elapsed-time spread is reported. The capped real smoke
+run passed (1 turn, 3-request cap). JOB-3/4/5/10 now run as lab scenarios, the
+live drivers and protocol v1 are retired, and review fixed three bench flaws.
+Note: [002](docs/lab/002-lab-bench.md).
 
 ## LAB-3 — RQ-2: concurrency baseline on unchanged code
 

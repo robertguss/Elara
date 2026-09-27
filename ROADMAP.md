@@ -342,8 +342,11 @@ four-slot limit lifted for the experiment.
 **Done when:** one command reproduces the curve with variance, and the note
 states whether RQ-2 holds on unchanged code and ranks the bottlenecks.
 
-**Result: IN PROGRESS.** Workload and acceptance rules pre-registered in note
-[003](docs/lab/003-concurrency-baseline.md); measurements pending.
+**Result: IN PROGRESS.** The sessions curve was measured at `97311a1`, with three
+clean repetitions per N (note [003](docs/lab/003-concurrency-baseline.md)). At
+N = 500 all three RQ-2 bounds fail: p95 is 2.4–3.7 s, peak memory is 10–11 MiB
+per session and the throughput ratio is 0.17–0.19. Throughput leaves the
+intended rate at N = 50. Next: the child-thread variant, then attribution.
 
 ## LAB-4 — RQ-3: isolation under misbehaving sessions
 

@@ -138,7 +138,11 @@ Every repetition's values are reported per point.
 - **Count runs:** seed 42, one per N, the same workload with call-count tracing.
   Their latency and throughput are compared with the untraced seed-42 run, as
   the tracing-overhead check.
-- **Command:** arrives with the sweep step.
+- **Commands:** the timing curve, then the count runs:
+
+      mix elara.lab sweep concurrency --over sessions=10,50,200,500,1000 --n 3 --seed 42
+      mix elara.lab sweep concurrency --over sessions=10,50,200,500,1000 --n 1 --seed 42 --set trace=counts
+
 - **Host:** Apple M3 Max, 14 cores (14 schedulers, 10 dirty IO), 96 GB, macOS
   (Darwin 25.6), OTP 29.1, Elixir 1.20.4. Every result line records its host,
   versions, commit and dirty-tree flag.

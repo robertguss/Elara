@@ -33,6 +33,10 @@ defmodule Elara.Lab do
 
   @callback run(context()) :: map()
 
+  @doc "Optional: `{label, path}` pairs of a result line (string keys) that a sweep summarizes."
+  @callback curve_fields() :: [{String.t(), [String.t()]}]
+  @optional_callbacks curve_fields: 0
+
   @spec scenarios() :: [String.t()]
   def scenarios, do: @scenarios |> Map.keys() |> Enum.sort()
 
@@ -78,6 +82,10 @@ defmodule Elara.Lab do
       for({name, passed} <- Map.get(result, :checks, %{}), passed != true, do: name)
       |> Enum.sort()
 
+  @doc "The module registered under a scenario name."
+  @spec scenario_module(String.t()) :: {:ok, module()} | :error
+  def scenario_module(name), do: Map.fetch(@scenarios, name)
+
   # A module is accepted directly so tests can run scenarios that are not registered.
   defp scenario(module) when is_atom(module), do: {:ok, module}
 
@@ -115,7 +123,8 @@ defmodule Elara.Lab do
         scenario: name,
         seed: context.seed,
         params: context.params,
-        elapsed_ms: System.monotonic_time(:millisecond) - started
+        elapsed_ms: System.monotonic_time(:millisecond) - started,
+        vm: %{os_pid: System.pid(), tmp_dir: System.tmp_dir!(), run_dir: dir}
       })
 
     {cleanup, result} = Map.pop(result, :cleanup_confirmed, true)
@@ -285,5 +294,9 @@ defmodule Elara.Lab do
     ErlangError -> nil
   end
 
-  defp unique, do: System.unique_integer([:positive])
+  # Unique across VMs: fresh VMs repeat unique_integer values, and a retained
+  # directory outlives its VM.
+  @doc false
+  def unique,
+    do: "#{System.pid()}-#{Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)}"
 end

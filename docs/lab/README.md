@@ -74,6 +74,21 @@ scenario reports these as a `choices_digest`, and rerunning the same seed
 reproduces that digest. A seed does not fix concurrent interleavings or
 timings, so report those as a spread across repetitions, not as exact values.
 
+**Sweeps.** A curve runs each value and seed in its own fresh VM:
+
+    mix elara.lab sweep SCENARIO --over KEY=V1,V2,... [--n N] [--seed S] [--set KEY=VALUE ...]
+
+Repetition `r` runs every value at seed `S + r` before the next repetition
+starts, so each value's repetitions spread over the whole sweep. Each child gets
+its own TMPDIR, log and results directory under
+`lab/results/SCENARIO/<stamp>-sweep-KEY-seed<S>/`, next to `repetitions.jsonl`
+(every child's result line, tagged with its value, seed, order, times and exit
+status) and `summary.json` (per-value spreads, per-bound aggregation and the
+saturation value). A bound holds at a value only if every expected repetition
+holds, fails if any repetition establishes a failure, and is otherwise
+undetermined. The sweep runs every child, then fails if any exited non-zero,
+left no valid result, failed a check, was retained or is incomplete.
+
 **Scenarios.**
 
 | Scenario          | What it exercises                                                                    |

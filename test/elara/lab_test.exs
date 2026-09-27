@@ -87,6 +87,14 @@ defmodule Elara.LabTest do
     dirs = for seed <- 2..5, do: receive(do: ({:dir, ^seed, dir} -> dir))
     refute_received {:dir, 6, _}
     [passed, failed, _, unsettled] = dirs
+    pid = System.pid()
+
+    assert Enum.all?(
+             dirs,
+             &(Path.basename(&1) =~ ~r/^elara-lab-checked-\d+-#{pid}-[0-9a-f]{16}$/)
+           )
+
+    assert length(Enum.uniq(dirs)) == 4
     on_exit(fn -> Enum.each(dirs, &File.rm_rf!/1) end)
 
     refute File.exists?(passed)

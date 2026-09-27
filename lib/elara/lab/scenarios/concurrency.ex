@@ -55,6 +55,35 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   ]
 
   @impl true
+  def curve_fields do
+    [
+      {"latency_p50_ms", ["latency_ms", "p50"]},
+      {"latency_p95_ms", ["latency_ms", "p95"]},
+      {"latency_p99_ms", ["latency_ms", "p99"]},
+      {"latency_cohort", ["latency_ms", "cohort"]},
+      {"throughput_ratio", ["throughput", "ratio"]},
+      {"memory_max_per_session", ["memory", "max_per_session"]},
+      {"memory_max_per_session_client_adjusted", ["memory", "max_per_session_client_adjusted"]},
+      {"memory_mean_per_session", ["memory", "mean_per_session"]},
+      {"session_mailbox_max", ["queues", "session", "max"]},
+      {"connection_mailbox_max", ["queues", "connection", "max"]},
+      {"exec_mailbox_max", ["queues", "exec", "max"]},
+      {"stub_port_queue_bytes_max", ["queues", "stub_port_bytes", "max"]},
+      {"bash_excess_p95_ms", ["bash_excess_ms", "p95"]},
+      {"scheduler_normal", ["schedulers", "normal"]},
+      {"scheduler_dirty_cpu", ["schedulers", "dirty_cpu"]},
+      {"scheduler_dirty_io", ["schedulers", "dirty_io"]},
+      {"history_bytes_max", ["history_bytes", "max"]},
+      {"cumulative_sessions", ["cumulative_sessions"]},
+      {"completed_turns", ["completed_turns"]}
+    ] ++
+      for {m, f, a} <- @counted do
+        name = "#{inspect(m)}.#{f}/#{a}"
+        {"#{name} per delta", ["counts", name, "per_delta"]}
+      end
+  end
+
+  @impl true
   def run(%{provider: :real}),
     do: raise(ArgumentError, "the concurrency scenario runs on the simulated provider only")
 

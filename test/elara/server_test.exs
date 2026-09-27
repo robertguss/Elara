@@ -43,19 +43,48 @@ defmodule Elara.ServerTest do
     end
   end
 
-  defp attach(socket, session, mode, cursor, incarnation) do
+  defp attach(socket, session, mode) do
     :ok =
       send_json(socket, %{
-        "version" => Protocol.v1(),
+        "version" => 2,
         "command" => "attach",
         "session_id" => session,
-        "mode" => mode,
-        "cursor" => cursor,
-        "incarnation" => incarnation
+        "mode" => mode
       })
 
     recv_json(socket)
   end
+
+  defp projector(%{"snapshot" => snapshot, "incarnation" => incarnation, "head" => head}),
+    do: Elara.Protocol.Projector.new(snapshot, incarnation, head)
+
+  # Apply patches until the view satisfies `done?`; command replies are skipped.
+  defp ingest_until(socket, projector, done?) do
+    if done?.(projector.view) do
+      projector
+    else
+      case recv_json(socket, 5_000) do
+        %{"type" => "patch", "incarnation" => incarnation, "seq" => seq, "ops" => ops} ->
+          {:applied, projector} =
+            Elara.Protocol.Projector.ingest_patch(projector, incarnation, seq, ops)
+
+          ingest_until(socket, projector, done?)
+
+        %{"type" => type} when type in ["ok", "error"] ->
+          ingest_until(socket, projector, done?)
+      end
+    end
+  end
+
+  # Unnegotiated attachments omit provider_view and inbox; compare the rest.
+  defp core(view), do: Map.take(view, ["messages", "tool_calls", "turn"])
+
+  defp tool_running?(view), do: Enum.any?(view["tool_calls"], &(&1["status"] == "running"))
+
+  defp finished?(view),
+    do:
+      view["turn"]["state"] == "idle" and
+        Enum.any?(view["messages"], &(&1["text"] == "continued"))
 
   test "stable IDs resolve to live sessions while PID compatibility remains" do
     {:ok, session} =
@@ -68,7 +97,7 @@ defmodule Elara.ServerTest do
     assert Elara.transcript(pid) == Elara.transcript(session)
   end
 
-  test "client detaches during a tool, replays exactly once, and observers cannot control" do
+  test "client detaches during a tool; reattachers get the current state and observers cannot control" do
     call = %ToolCall{
       id: "slow-1",
       name: "bash",
@@ -83,85 +112,72 @@ defmodule Elara.ServerTest do
 
     :ok =
       send_json(controller, %{
-        "version" => Protocol.v1(),
+        "version" => 2,
         "command" => "create",
         "mode" => "control",
         "cwd" => File.cwd!()
       })
 
-    %{
-      "type" => "attached",
-      "session_id" => session,
-      "incarnation" => incarnation,
-      "head" => 0
-    } = recv_json(controller)
+    attached = recv_json(controller)
 
-    :ok =
-      send_json(controller, %{
-        "version" => Protocol.v1(),
-        "command" => "ask",
-        "prompt" => "run it"
-      })
+    assert %{"type" => "attached", "version" => 2, "session_id" => session, "head" => 0} =
+             attached
 
-    assert %{"type" => "ok"} = recv_json(controller)
-    assert %{"type" => "event", "seq" => 1} = recv_json(controller)
-    assert %{"type" => "event", "seq" => 2} = recv_json(controller)
-
-    assert %{"type" => "event", "seq" => 3, "event" => %{"kind" => "message_appended"}} =
-             recv_json(controller)
-
-    assert %{"type" => "event", "seq" => 4, "event" => %{"kind" => "tool_started"}} =
-             recv_json(controller)
+    :ok = send_json(controller, %{"version" => 2, "command" => "ask", "prompt" => "run it"})
+    ingest_until(controller, projector(attached), &tool_running?/1)
 
     :ok = :gen_tcp.close(controller)
     {:ok, session_pid} = Elara.session_pid(session)
     assert Process.alive?(session_pid)
 
-    Process.sleep(50)
     observer = connect(port)
+    observed = attach(observer, session, "observe")
+    assert %{"type" => "attached", "mode" => "observe"} = observed
 
-    assert %{"type" => "attached", "mode" => "observe"} =
-             attach(observer, session, "observe", 4, incarnation)
+    :ok = send_json(observer, %{"version" => 2, "command" => "ask", "prompt" => "not allowed"})
+    projection = ingest_until(observer, projector(observed), &finished?/1)
+    assert core(projection.view) == core(Elara.materialized_view(session))
+    refute Enum.any?(projection.view["messages"], &(&1["text"] == "not allowed"))
 
-    :ok =
-      send_json(observer, %{
-        "version" => Protocol.v1(),
-        "command" => "ask",
-        "prompt" => "not allowed"
-      })
-
-    assert %{"type" => "error", "version" => 1, "error" => "not_controller"} =
-             recv_json(observer)
-
-    replayed = Enum.map(5..7, fn seq -> {seq, recv_json(observer, 3_000)} end)
-
-    assert Enum.map(replayed, &elem(&1, 0)) == [5, 6, 7]
-
-    assert Enum.map(replayed, fn {seq, event} -> {seq, event["seq"]} end) ==
-             [{5, 5}, {6, 6}, {7, 7}]
-
-    assert {7, %{"event" => %{"kind" => "turn_ended"}}} = List.last(replayed)
-
+    # A later reattacher sees the finished turn in its snapshot alone.
     second_observer = connect(port)
 
-    assert %{"type" => "attached", "mode" => "observe"} =
-             attach(second_observer, session, "observe", 7, incarnation)
+    assert %{"type" => "attached", "snapshot" => snapshot} =
+             attach(second_observer, session, "observe")
+
+    assert finished?(snapshot)
+    assert core(snapshot) == core(Elara.materialized_view(session))
 
     :ok = :gen_tcp.close(observer)
     :ok = :gen_tcp.close(second_observer)
   end
 
-  test "cursor and controller validation reject ambiguous replay" do
+  test "an observer command is refused as not_controller" do
     {:ok, session} =
       Elara.start_session(provider: script([{:ok, asst("done")}]), tools: [], persist: false)
 
-    assert {:ok, first} = Elara.attach(session, :control)
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+    observer = connect(Elara.Server.port(server))
+    assert %{"type" => "attached"} = attach(observer, session, "observe")
+    :ok = send_json(observer, %{"version" => 2, "command" => "ask", "prompt" => "not allowed"})
+
+    assert %{"type" => "error", "version" => 2, "error" => "not_controller"} =
+             recv_json(observer)
+
+    :gen_tcp.close(observer)
+  end
+
+  test "control is exclusive and observers may attach alongside it" do
+    {:ok, session} =
+      Elara.start_session(provider: script([{:ok, asst("done")}]), tools: [], persist: false)
+
+    assert {:ok, _snapshot} = Elara.attach(session, :control)
 
     assert {:error, :control_taken} =
              Task.async(fn -> Elara.attach(session, :control) end) |> Task.await()
 
-    assert {:error, :invalid_cursor} = Elara.attach(session, :observe, 1, first.incarnation)
-    assert {:error, :stale_incarnation} = Elara.attach(session, :observe, 0, "old")
+    assert {:ok, _snapshot} =
+             Task.async(fn -> Elara.attach(session, :observe) end) |> Task.await()
   end
 
   test "v2 lifecycle names, lists, resumes, and deletes a stable saved session" do

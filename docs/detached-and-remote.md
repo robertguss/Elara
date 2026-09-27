@@ -110,16 +110,14 @@ the task in `mix eval` can hide the nested task's nonzero exit status.
 ### Session protocol
 
 The loopback TCP protocol uses newline-delimited JSON with a 16 MiB maximum
-message size. Every request includes `version`. The server supports these
-session protocol versions:
+message size. Every request includes `version`. The server supports only
+session protocol version 2; v1 (cursor replay of retained events) was retired in
+LAB-2 and is rejected as `unsupported_version`.
 
-- **v1:** The `attached` response contains `session_id`, `incarnation`, `head`,
-  and `mode`. It is followed by retained `event` messages after the requested
-  cursor. Cursors older than the 1,000-event replay window and stale
-  incarnations are rejected. This behavior remains available for existing v1
-  clients.
-- **v2:** The `attached` response adds `snapshot` and never replays the v1 event
-  ring. The snapshot contains session identity, the complete encoded message
+- **v2:** The `attached` response contains `session_id`, `incarnation`, `head`,
+  `mode` and `snapshot`, and never replays events. A client may still send
+  `cursor` and `incarnation`; the server checks the cursor's shape and ignores
+  both. The snapshot contains session identity, the complete encoded message
   history, tool calls with `pending`, `running`, `succeeded`, `failed`, or
   `indeterminate` status and outcome, current turn state, usage (currently
   `null`), and reserved content-delta state. Subsequent `patch` messages carry

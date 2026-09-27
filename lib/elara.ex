@@ -128,21 +128,10 @@ defmodule Elara do
   end
 
   @doc false
-  @spec attach(session_ref(), :control | :observe, non_neg_integer(), String.t() | nil) ::
-          {:ok, map()} | {:error, term()}
-  def attach(session, mode, cursor \\ 0, incarnation \\ nil)
-      when (is_pid(session) or is_binary(session)) and mode in [:control, :observe] and
-             is_integer(cursor) and cursor >= 0 do
-    call(session, {:attach, mode, cursor, incarnation})
-  end
-
-  @doc false
-  @spec attach_v2(session_ref(), :control | :observe, non_neg_integer(), String.t() | nil) ::
-          {:ok, map()} | {:error, term()}
-  def attach_v2(session, mode, cursor \\ 0, incarnation \\ nil)
-      when (is_pid(session) or is_binary(session)) and mode in [:control, :observe] and
-             is_integer(cursor) and cursor >= 0 do
-    call(session, {:attach_v2, mode, cursor, incarnation})
+  @spec attach(session_ref(), :control | :observe) :: {:ok, map()} | {:error, term()}
+  def attach(session, mode)
+      when (is_pid(session) or is_binary(session)) and mode in [:control, :observe] do
+    call(session, {:attach, mode})
   end
 
   @doc false

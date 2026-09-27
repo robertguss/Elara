@@ -231,7 +231,7 @@ defmodule Elara.ProtocolV2Test do
       assert {:ok, "answer"} = Elara.ask(session, "question #{index}")
     end
 
-    assert %{event_head: head, event_retained: 1_000} = Elara.status(session)
+    assert %{event_head: head} = Elara.status(session)
     assert head > 1_000
 
     {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
@@ -440,19 +440,7 @@ defmodule Elara.ProtocolV2Test do
     refute encoded =~ "provider_state"
   end
 
-  test "v1 event encoding remains explicit for streamed deltas and finals" do
-    delta = {:content_delta, "assistant-1", "hel"}
-    assistant = asst("hello")
-    final = {:message_appended, assistant, :streamed}
-
-    for event <- [delta, final] do
-      encoded = Protocol.event(7, event)
-      assert encoded["version"] == 1
-      assert {:ok, ^event} = Protocol.decode_event(encoded["event"])
-    end
-  end
-
-  test "provider events and public assistant metadata round-trip with strict field validation" do
+  test "public assistant metadata round-trips through patches with strict field validation" do
     part = %{
       "kind" => "reasoning_summary",
       "item_id" => "r",
@@ -470,15 +458,15 @@ defmodule Elara.ProtocolV2Test do
         interrupted: true
     }
 
-    for event <- [
-          :provider_view_changed,
-          {:message_appended, assistant},
-          {:message_appended, assistant, :streamed}
-        ] do
-      assert {:ok, ^event} = Protocol.decode_event(Protocol.event(7, event)["event"])
-    end
+    config = %Core.Config{system: "system", tools: %{}}
+    # Core.new follows the unanswered call with a tool result; only the assistant matters here.
+    [%{"role" => "assistant"} = encoded | _] =
+      Protocol.snapshot("s", "i", Core.new(config, [assistant]))["messages"]
 
-    encoded = Protocol.event(7, {:message_appended, assistant})["event"]
+    empty = %{"messages" => [], "tool_calls" => []}
+    append = &[%{"op" => "append_message", "index" => 0, "message" => &1}]
+
+    assert {:ok, %{"messages" => [^encoded]}} = Protocol.apply_patch(empty, append.(encoded))
 
     for {key, invalid} <- [
           {"public_content", [Map.put(part, "encrypted_content", "secret")]},
@@ -491,52 +479,32 @@ defmodule Elara.ProtocolV2Test do
           {"tool_calls",
            [%{"id" => "call", "name" => "echo", "args" => %{"ok" => %{}}, "output_index" => -1}]}
         ] do
-      assert {:error, :invalid_event} =
-               Protocol.decode_event(put_in(encoded, ["message", key], invalid))
+      assert {:error, :invalid_patch} =
+               Protocol.apply_patch(empty, append.(Map.put(encoded, key, invalid)))
     end
 
-    legacy = %{
-      "kind" => "message_appended",
-      "message" => %{"role" => "assistant", "text" => "answer", "tool_calls" => []}
-    }
-
-    assert {:ok, {:message_appended, %{public_content: [], usage: nil, interrupted: false}}} =
-             Protocol.decode_event(legacy)
+    legacy = %{"role" => "assistant", "text" => "answer", "tool_calls" => []}
+    assert {:ok, %{"messages" => [^legacy]}} = Protocol.apply_patch(empty, append.(legacy))
   end
 
-  test "v1 attachment omits provider-only events from live delivery and replay" do
-    tokens = %Elara.Auth.OpenAICodex{
-      access_token: "fake",
-      refresh_token: "fake",
-      account_id: "fake",
-      expires_at: System.system_time(:second) + 3600
-    }
+  test "protocol v1 is rejected without creating or attaching a session" do
+    {:ok, session} = Elara.start_session(provider: script([]), tools: [], persist: false)
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+    before = length(Elara.live_sessions())
 
-    provider = {Elara.Provider.OpenAICodex, Elara.Provider.OpenAICodex.new(tokens)}
-    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
-    {:ok, server} = Elara.Server.start_link(port: 0, provider: provider)
-    live = connect(Elara.Server.port(server))
+    for request <- [
+          %{"version" => 1, "command" => "attach", "session_id" => session, "mode" => "observe"},
+          %{"version" => 1, "command" => "create", "mode" => "control", "cwd" => File.cwd!()}
+        ] do
+      socket = connect(Elara.Server.port(server))
+      send_json(socket, request)
+      assert %{"type" => "error", "error" => "unsupported_version"} = recv_json(socket)
+      :gen_tcp.close(socket)
+    end
 
-    attach = %{
-      "version" => 1,
-      "command" => "attach",
-      "session_id" => session,
-      "mode" => "observe"
-    }
-
-    send_json(live, attach)
-    assert %{"type" => "attached"} = recv_json(live)
-    assert :ok = Elara.set_provider_settings(session, %{"model" => "gpt-5.5", "effort" => "high"})
-    send_json(live, %{"version" => 1, "command" => "inspect"})
-    assert %{"type" => "status"} = recv_json(live)
-    replay = connect(Elara.Server.port(server))
-    send_json(replay, attach)
-    assert %{"type" => "attached"} = recv_json(replay)
-    send_json(replay, %{"version" => 1, "command" => "inspect"})
-    assert %{"type" => "status"} = recv_json(replay)
-    Enum.each([live, replay], &:gen_tcp.close/1)
-    {:ok, pid} = Elara.session_pid(session)
-    GenServer.stop(pid)
+    assert length(Elara.live_sessions()) == before
+    assert Elara.status(session).subscriber_count == 0
+    assert Elara.Protocol.versions() == [2]
   end
 
   test "v2 attach patches deliver each content delta before the superseding final" do

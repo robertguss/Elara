@@ -129,7 +129,7 @@ defmodule Elara.InputQueueTest do
     session = session([{:stream, [{:sleep, 100}], {:ok, assistant("done")}}])
     {:ok, _} = Elara.submit_input(session, attrs("snapshot", "visible"))
     Process.sleep(10)
-    {:ok, attached} = Elara.attach_v2(session, :observe)
+    {:ok, attached} = Elara.attach(session, :observe)
     assert attached.snapshot["inbox"]["entries"] != []
 
     recording = Elara.recording(session)

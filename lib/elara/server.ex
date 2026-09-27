@@ -136,10 +136,10 @@ defmodule Elara.Server do
         end
 
       _request ->
-        with {:ok, version, session, mode, cursor, incarnation} <-
+        with {:ok, version, session, mode} <-
                prepare_attachment(request, provider),
              {:ok, session_pid} <- Elara.session_pid(session),
-             {:ok, attachment} <- attach(version, session_pid, mode, cursor, incarnation) do
+             {:ok, attachment} <- Elara.attach(session_pid, mode) do
           Process.monitor(session_pid)
 
           send_json(
@@ -167,12 +167,6 @@ defmodule Elara.Server do
             )
           )
 
-          if version == 1 do
-            Enum.each(attachment.replay, fn {seq, event} ->
-              send_v1_event(socket, seq, event)
-            end)
-          end
-
           :ok = :inet.setopts(socket, active: :once)
           connection_loop(socket, session, version, Protocol.line_buffer(), provider, lifetime)
         else
@@ -192,7 +186,7 @@ defmodule Elara.Server do
          {:ok, cwd} <- decode_cwd(Map.get(request, "cwd", File.cwd!())),
          {:ok, provider} <- resolve_provider(provider),
          {:ok, session} <- Elara.start_session(provider: provider, cwd: cwd) do
-      {:ok, version, session, mode, 0, nil}
+      {:ok, version, session, mode}
     end
   end
 
@@ -201,33 +195,17 @@ defmodule Elara.Server do
          provider
        )
        when is_binary(session) do
+    # Clients may still send a cursor and incarnation; v2 validates the cursor's
+    # shape and answers with a fresh snapshot rather than a replay.
     with {:ok, mode} <- decode_mode(Map.get(request, "mode", "control")),
-         {:ok, cursor} <- decode_cursor(Map.get(request, "cursor", 0)),
+         {:ok, _cursor} <- decode_cursor(Map.get(request, "cursor", 0)),
          {:ok, cwd} <- decode_optional_cwd(Map.get(request, "cwd")),
          {:ok, session} <- ensure_live_session(session, cwd, provider) do
-      {:ok, version, session, mode, cursor, Map.get(request, "incarnation")}
+      {:ok, version, session, mode}
     end
   end
 
   defp prepare_attachment(_request, _provider), do: {:error, :invalid_command}
-
-  defp attach(1, session, mode, cursor, incarnation),
-    do: Elara.attach(session, mode, cursor, incarnation)
-
-  defp attach(2, session, mode, cursor, incarnation),
-    do: Elara.attach_v2(session, mode, cursor, incarnation)
-
-  defp attached_message(1, mode, attachment, lifetime) do
-    %{
-      "type" => "attached",
-      "version" => 1,
-      "session_id" => attachment.id,
-      "incarnation" => attachment.incarnation,
-      "head" => attachment.head,
-      "mode" => Atom.to_string(mode),
-      "lifetime" => Atom.to_string(lifetime)
-    }
-  end
 
   defp attached_message(2, mode, attachment, lifetime) do
     %{
@@ -323,12 +301,6 @@ defmodule Elara.Server do
       {:DOWN, _ref, :process, _pid, _reason} ->
         :ok
 
-      {:elara_event, ^session, incarnation, seq, event} ->
-        case send_v1_event(socket, seq, event, incarnation) do
-          :ok -> connection_loop(socket, session, version, line_buffer, provider, lifetime)
-          {:error, _} -> :ok
-        end
-
       {:elara_patch, ^session, incarnation, seq, ops} ->
         ops =
           if Process.get(:provider_visibility),
@@ -354,16 +326,6 @@ defmodule Elara.Server do
           {:error, _} -> :ok
         end
     end
-  end
-
-  defp send_v1_event(socket, seq, event, incarnation \\ nil)
-  defp send_v1_event(_socket, _seq, :provider_view_changed, _incarnation), do: :ok
-  defp send_v1_event(_socket, _seq, :inbox_changed, _incarnation), do: :ok
-
-  defp send_v1_event(socket, seq, event, incarnation) do
-    message = Protocol.event(seq, event)
-    message = if incarnation, do: Map.put(message, "incarnation", incarnation), else: message
-    send_json(socket, message)
   end
 
   defp negotiated_snapshot(snapshot) do
@@ -1035,7 +997,6 @@ defmodule Elara.Server do
       "task_count" => status.task_count,
       "subscriber_count" => status.subscriber_count,
       "event_head" => status.event_head,
-      "event_retained" => status.event_retained,
       "recording_path" => status.recording_path,
       "recorded_transitions" => status.recorded_transitions,
       "worker_health" =>

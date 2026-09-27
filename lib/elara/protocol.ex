@@ -6,7 +6,7 @@ defmodule Elara.Protocol do
   alias Elara.Session.Core
 
   @version 2
-  @versions [1, 2]
+  @versions [2]
   @max_line_bytes 16 * 1_024 * 1_024
 
   @spec version() :: pos_integer()
@@ -14,9 +14,6 @@ defmodule Elara.Protocol do
 
   @spec versions() :: [pos_integer()]
   def versions, do: @versions
-
-  @spec v1() :: 1
-  def v1, do: 1
 
   @spec max_line_bytes() :: pos_integer()
   def max_line_bytes, do: @max_line_bytes
@@ -80,11 +77,6 @@ defmodule Elara.Protocol do
       {:ok, _} -> {:error, :invalid_message}
       {:error, reason} -> {:error, reason}
     end
-  end
-
-  @spec event(non_neg_integer(), Elara.Event.t()) :: map()
-  def event(seq, event) do
-    %{"type" => "event", "version" => 1, "seq" => seq, "event" => encode_event(event)}
   end
 
   @spec snapshot(String.t(), String.t(), Core.State.t()) :: map()
@@ -158,76 +150,6 @@ defmodule Elara.Protocol do
   end
 
   def apply_patch(_view, _ops), do: {:error, :invalid_patch}
-
-  @spec decode_event(map()) :: {:ok, Elara.Event.t()} | {:error, :invalid_event}
-  def decode_event(%{"kind" => "provider_view_changed"}), do: {:ok, :provider_view_changed}
-
-  def decode_event(%{"kind" => "turn_started", "prompt" => prompt}) when is_binary(prompt),
-    do: {:ok, {:turn_started, prompt}}
-
-  def decode_event(%{"kind" => "tool_started", "call" => call}) do
-    with {:ok, call} <- decode_call(call), do: {:ok, {:tool_started, call}}
-  end
-
-  def decode_event(%{
-        "kind" => "message_appended",
-        "message" => message,
-        "streamed" => true
-      }) do
-    with {:ok, %Assistant{} = message} <- decode_message(message) do
-      {:ok, {:message_appended, message, :streamed}}
-    else
-      _error -> {:error, :invalid_event}
-    end
-  end
-
-  def decode_event(%{"kind" => "message_appended", "message" => message}) do
-    with {:ok, message} <- decode_message(message), do: {:ok, {:message_appended, message}}
-  end
-
-  def decode_event(%{
-        "kind" => "content_delta",
-        "message_id" => id,
-        "text" => text
-      })
-      when is_binary(id) and is_binary(text),
-      do: {:ok, {:content_delta, id, text}}
-
-  def decode_event(%{"kind" => "turn_ended", "outcome" => outcome, "streamed" => true}) do
-    with {:ok, outcome} <- decode_turn_outcome(outcome) do
-      {:ok, {:turn_ended, outcome, :streamed}}
-    end
-  end
-
-  def decode_event(%{"kind" => "turn_ended", "outcome" => outcome}) do
-    with {:ok, outcome} <- decode_turn_outcome(outcome), do: {:ok, {:turn_ended, outcome}}
-  end
-
-  def decode_event(_event), do: {:error, :invalid_event}
-
-  defp encode_event(:provider_view_changed), do: %{"kind" => "provider_view_changed"}
-
-  defp encode_event({:turn_started, prompt}), do: %{"kind" => "turn_started", "prompt" => prompt}
-
-  defp encode_event({:tool_started, call}),
-    do: %{"kind" => "tool_started", "call" => encode_call(call)}
-
-  defp encode_event({:message_appended, message}),
-    do: %{"kind" => "message_appended", "message" => encode_message(message)}
-
-  defp encode_event({:message_appended, %Assistant{} = message, :streamed}) do
-    %{"kind" => "message_appended", "message" => encode_message(message), "streamed" => true}
-  end
-
-  defp encode_event({:content_delta, id, text}),
-    do: %{"kind" => "content_delta", "message_id" => id, "text" => text}
-
-  defp encode_event({:turn_ended, outcome, :streamed}) do
-    %{"kind" => "turn_ended", "outcome" => encode_turn_outcome(outcome), "streamed" => true}
-  end
-
-  defp encode_event({:turn_ended, outcome}),
-    do: %{"kind" => "turn_ended", "outcome" => encode_turn_outcome(outcome)}
 
   defp reconcile_messages(offset, messages, supersedes) do
     messages
@@ -653,25 +575,6 @@ defmodule Elara.Protocol do
       "error" => %{"kind" => Atom.to_string(error.kind), "message" => error.message}
     }
   end
-
-  defp decode_turn_outcome(%{"kind" => "completed", "text" => text}) when is_binary(text),
-    do: {:ok, {:completed, text}}
-
-  defp decode_turn_outcome(%{"kind" => "turn_limit"}), do: {:ok, :turn_limit}
-  defp decode_turn_outcome(%{"kind" => "interrupted"}), do: {:ok, :interrupted}
-
-  defp decode_turn_outcome(%{
-         "kind" => "provider_error",
-         "error" => %{"kind" => kind, "message" => message}
-       })
-       when is_binary(kind) and is_binary(message) do
-    {:ok,
-     {:provider_error, %Provider.Error{kind: String.to_existing_atom(kind), message: message}}}
-  rescue
-    ArgumentError -> {:error, :invalid_event}
-  end
-
-  defp decode_turn_outcome(_outcome), do: {:error, :invalid_event}
 
   defp map_ok(items, fun) do
     Enum.reduce_while(items, {:ok, []}, fn item, {:ok, acc} ->

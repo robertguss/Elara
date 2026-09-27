@@ -78,9 +78,6 @@ defmodule Elara.Session do
       attachments: %{},
       controller: nil,
       next_event_seq: 1,
-      event_log: :queue.new(),
-      event_log_size: 0,
-      event_log_limit: 1_000,
       effect_journal: nil,
       pending_reply: nil,
       tasks: %{},
@@ -259,7 +256,6 @@ defmodule Elara.Session do
       task_count: map_size(shell.tasks),
       subscriber_count: map_size(shell.subscribers) + map_size(shell.attachments),
       event_head: shell.next_event_seq - 1,
-      event_retained: shell.event_log_size,
       recording_path: FlightRecorder.path(shell.recorder),
       recorded_transitions: shell.recorder.sequence,
       instructions: shell.instructions,
@@ -544,40 +540,12 @@ defmodule Elara.Session do
     {:reply, :ok, %{shell | subscribers: Map.put(shell.subscribers, pid, ref)}}
   end
 
-  def handle_call({:attach, mode, cursor, incarnation}, {pid, _}, shell)
-      when mode in [:control, :observe] and is_integer(cursor) and cursor >= 0 do
-    with :ok <- validate_incarnation(incarnation, shell),
-         :ok <- validate_cursor(cursor, shell),
-         :ok <- grant_control(mode, pid, shell) do
-      ref = Process.monitor(pid)
-      replay = Enum.filter(:queue.to_list(shell.event_log), fn {seq, _} -> seq > cursor end)
-      attachment = %{monitor: ref, mode: mode, protocol: 1}
-
-      shell = %{
-        shell
-        | attachments: Map.put(shell.attachments, pid, attachment),
-          controller: if(mode == :control, do: pid, else: shell.controller)
-      }
-
-      reply = %{
-        id: shell.id,
-        incarnation: shell.incarnation,
-        head: shell.next_event_seq - 1,
-        replay: replay
-      }
-
-      {:reply, {:ok, reply}, shell}
-    else
-      {:error, reason} -> {:reply, {:error, reason}, shell}
-    end
-  end
-
-  def handle_call({:attach_v2, mode, _cursor, _incarnation}, {pid, _}, shell)
+  def handle_call({:attach, mode}, {pid, _}, shell)
       when mode in [:control, :observe] do
     case grant_control(mode, pid, shell) do
       :ok ->
         ref = Process.monitor(pid)
-        attachment = %{monitor: ref, mode: mode, protocol: 2}
+        attachment = %{monitor: ref, mode: mode}
 
         shell = %{
           shell
@@ -1713,15 +1681,10 @@ defmodule Elara.Session do
 
   defp emit(event, effect_id, shell, patch_context) do
     seq = shell.next_event_seq
-    event_log = :queue.in({seq, event}, shell.event_log)
-    event_log_size = shell.event_log_size + 1
-    {event_log, event_log_size} = trim_event_log(event_log, event_log_size, shell.event_log_limit)
 
     shell = %{
       shell
       | next_event_seq: seq + 1,
-        event_log: event_log,
-        event_log_size: event_log_size,
         recorder: FlightRecorder.link_event(shell.recorder, seq, effect_id)
     }
 
@@ -1737,15 +1700,8 @@ defmodule Elara.Session do
          do: patch_ops ++ [%{"op" => "set_inbox", "inbox" => inbox_view(shell)}],
          else: patch_ops
 
-    Enum.each(shell.attachments, fn
-      {pid, %{protocol: 2}} ->
-        send(pid, {:elara_patch, shell.id, shell.incarnation, seq, patch_ops})
-
-      {_pid, %{protocol: 1}} when event == :inbox_changed ->
-        :ok
-
-      {pid, _attachment} ->
-        send(pid, {:elara_event, shell.id, shell.incarnation, seq, event})
+    Enum.each(shell.attachments, fn {pid, _attachment} ->
+      send(pid, {:elara_patch, shell.id, shell.incarnation, seq, patch_ops})
     end)
 
     shell =
@@ -2084,22 +2040,6 @@ defmodule Elara.Session do
     else
       false -> {:reply, {:error, :provider_controls_unavailable}, shell}
       {:error, reason} -> {:reply, {:error, reason}, shell}
-    end
-  end
-
-  defp validate_incarnation(nil, _shell), do: :ok
-  defp validate_incarnation(incarnation, %{incarnation: incarnation}), do: :ok
-  defp validate_incarnation(_incarnation, _shell), do: {:error, :stale_incarnation}
-
-  defp validate_cursor(cursor, shell) when cursor > shell.next_event_seq - 1,
-    do: {:error, :invalid_cursor}
-
-  defp validate_cursor(0, _shell), do: :ok
-
-  defp validate_cursor(cursor, shell) do
-    case :queue.peek(shell.event_log) do
-      {:value, {first, _}} when cursor < first - 1 -> {:error, :cursor_expired}
-      _ -> :ok
     end
   end
 
@@ -2523,13 +2463,6 @@ defmodule Elara.Session do
     do: :ok
 
   defp grant_control(:control, _pid, _shell), do: {:error, :control_taken}
-
-  defp trim_event_log(queue, size, limit) when size > limit do
-    {{:value, _}, queue} = :queue.out(queue)
-    trim_event_log(queue, size - 1, limit)
-  end
-
-  defp trim_event_log(queue, size, _limit), do: {queue, size}
 
   defp current_effect(:idle), do: nil
   defp current_effect({:calling_provider, ref, _}), do: %{kind: :provider, ref: ref}

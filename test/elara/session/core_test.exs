@@ -83,15 +83,8 @@ defmodule Elara.Session.CoreTest do
                |> Elara.Session.Store.encode_message()
                |> Elara.Session.Store.decode_message()
 
-      event = Elara.Protocol.event(1, {:message_appended, result})["event"]
-      assert {:ok, {:message_appended, ^result}} = Elara.Protocol.decode_event(event)
       snapshot = Elara.Protocol.snapshot("session", "incarnation", finished)
       assert Enum.find(snapshot["messages"], &(&1["role"] == "tool"))["usage"] == usage
-
-      legacy = update_in(event, ["message"], &Map.delete(&1, "usage"))
-      assert {:ok, {:message_appended, %{usage: nil}}} = Elara.Protocol.decode_event(legacy)
-      invalid = put_in(event, ["message", "usage"], %{"private_reasoning" => "secret"})
-      assert {:error, :invalid_event} = Elara.Protocol.decode_event(invalid)
     end
   end
 

@@ -632,7 +632,7 @@ child can make provider requests.
 - [ ] I verified that new session cwd controls relative tools, shell cwd, plugin
       discovery, session scope, and the optional exact `cwd/AGENTS.md`.
 - [ ] I observed or accepted the defaults: 12 model iterations, 30-second tool
-      timeout, 16 KiB retained tool output, 1,000 retained v1 events, and 16 MiB
+      timeout, 16 KiB retained tool output, and 16 MiB
       maximum socket protocol message.
 - [ ] I understand `usage` is currently `nil`, snapshots over 16 MiB fail
       closed, and the Rust binaries are built from source rather than

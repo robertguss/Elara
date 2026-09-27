@@ -57,6 +57,8 @@ defmodule Elara.Lab.ConcurrencyTest do
                memory_max_per_session memory_max_per_session_client_adjusted
                memory_mean_per_session session_mailbox_max session_mailbox_p99
                connection_mailbox_max connection_mailbox_p99 exec_mailbox_max exec_mailbox_p99
+               threads_mailbox_max threads_mailbox_p99 transport_mailbox_max
+               transport_mailbox_p99
                stub_port_queue_bytes_max stub_port_queue_bytes_p99 bash_excess_p50_ms
                bash_excess_p95_ms bash_excess_p99_ms scheduler_normal scheduler_dirty_cpu
                scheduler_dirty_io history_bytes_max cumulative_sessions session_files
@@ -112,6 +114,10 @@ defmodule Elara.Lab.ConcurrencyTest do
     assert %{session: %{max: _}, connection: %{max: _}, exec: %{max: _}} = result.queues
     # Governing queue statistics come from the window's samples only.
     assert result.queues.exec.observations == result.memory.eligible_samples
+
+    for class <- [:threads, :transport],
+        do: assert(result.queues[class].observations == result.memory.eligible_samples)
+
     assert Map.has_key?(result.queues.other_phases_max, :baseline)
     assert Enum.all?(Map.values(result.schedulers), &(&1 >= 0 and &1 <= 1))
     assert result.counts == nil

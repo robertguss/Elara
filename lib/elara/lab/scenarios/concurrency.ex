@@ -75,6 +75,10 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       {"connection_mailbox_p99", ["queues", "connection", "p99"]},
       {"exec_mailbox_max", ["queues", "exec", "max"]},
       {"exec_mailbox_p99", ["queues", "exec", "p99"]},
+      {"threads_mailbox_max", ["queues", "threads", "max"]},
+      {"threads_mailbox_p99", ["queues", "threads", "p99"]},
+      {"transport_mailbox_max", ["queues", "transport", "max"]},
+      {"transport_mailbox_p99", ["queues", "transport", "p99"]},
       {"stub_port_queue_bytes_max", ["queues", "stub_port_bytes", "max"]},
       {"stub_port_queue_bytes_p99", ["queues", "stub_port_bytes", "p99"]},
       {"bash_excess_p50_ms", ["bash_excess_ms", "p50"]},
@@ -898,7 +902,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     window = Map.get(sampled.mailboxes, :window, %{})
 
     mailboxes =
-      Map.new([:session, :connection, :exec], fn class ->
+      Map.new([:session, :connection, :exec, :threads, :transport], fn class ->
         {class, stats(Map.get(window, class, %{counts: %{}, unavailable: 0}))}
       end)
 

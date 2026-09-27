@@ -139,6 +139,10 @@ defmodule Elara.Lab.Sampler do
       |> record(phase, :session, session_lengths)
       |> record(phase, :connection, connections && Enum.map(connections, &queue_length/1))
       |> record(phase, :exec, [queue_length(Process.whereis(Elara.Exec))])
+      |> record(phase, :threads, [queue_length(Process.whereis(Elara.Threads))])
+      |> record(phase, :transport, [
+        queue_length(Process.whereis(Elara.Threads.Communication))
+      ])
       |> guard(:memory, total > state.guard_memory_bytes, t, total)
       |> guard(
         :mailbox,

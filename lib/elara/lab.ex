@@ -13,6 +13,8 @@ defmodule Elara.Lab do
   (`cleanup_confirmed: false`) or it raises, the runner keeps the directory, runs
   no further repetitions, and leaves the global sessions root bound to it, so
   unsettled work keeps resolving its own records. Such a VM should not be reused.
+  A scenario can `hold/2` a shared actor across that switch; the runner resumes
+  it only once the root and the directory are final.
   """
 
   @scenarios %{
@@ -55,16 +57,22 @@ defmodule Elara.Lab do
 
       seed = Keyword.fetch!(opts, :seed)
       params = Keyword.get(opts, :params, %{})
+      before_release = Keyword.get(opts, :before_release, fn _dir -> :ok end)
 
       results =
         Enum.reduce_while(0..(Keyword.get(opts, :n, 1) - 1)//1, [], fn rep, acc ->
           result =
-            run_once(module, name, %{
-              seed: seed + rep,
-              params: params,
-              provider: Keyword.get(opts, :provider, :simulated),
-              max_requests: Keyword.get(opts, :max_requests)
-            })
+            run_once(
+              module,
+              name,
+              %{
+                seed: seed + rep,
+                params: params,
+                provider: Keyword.get(opts, :provider, :simulated),
+                max_requests: Keyword.get(opts, :max_requests)
+              },
+              before_release
+            )
 
           if Map.has_key?(result, :retained_dir),
             do: {:halt, [result | acc]},
@@ -96,8 +104,23 @@ defmodule Elara.Lab do
     end
   end
 
-  defp run_once(module, name, context) do
+  # Held actors are released only once the root and the directory are final, on
+  # every path; `before_release` is a test seam at exactly that point.
+  defp run_once(module, name, context, before_release) do
     dir = Path.join(System.tmp_dir!(), "elara-lab-#{name}-#{context.seed}-#{unique()}")
+
+    try do
+      try do
+        settle_once(module, name, context, dir)
+      after
+        before_release.(dir)
+      end
+    after
+      release_held()
+    end
+  end
+
+  defp settle_once(module, name, context, dir) do
     File.mkdir_p!(dir)
     previous = Map.new([:sessions_root, :skills_home], &{&1, Application.get_env(:elara, &1)})
     Application.put_env(:elara, :sessions_root, Path.join(dir, "sessions"))
@@ -144,6 +167,42 @@ defmodule Elara.Lab do
         restore(previous)
         File.rm_rf!(dir)
         result
+    end
+  end
+
+  @held {__MODULE__, :held}
+
+  @doc """
+  Suspend `target` (a pid or registered name) at a callback boundary until the
+  current repetition's root and directory are final; the runner then resumes
+  it. The pid is recorded before suspension, so a suspend that times out and
+  takes effect later is still resumed.
+  """
+  @spec hold(pid() | atom(), timeout()) :: :ok | {:error, term()}
+  def hold(target, timeout) do
+    case if(is_pid(target), do: target, else: Process.whereis(target)) do
+      nil ->
+        {:error, :noproc}
+
+      pid ->
+        Process.put(@held, [pid | Process.get(@held, [])])
+
+        try do
+          :sys.suspend(pid, timeout)
+        catch
+          :exit, reason -> {:error, reason}
+        end
+    end
+  end
+
+  # In hold order; a failed resume never skips the rest.
+  defp release_held do
+    for pid <- Enum.reverse(Process.delete(@held) || []) do
+      try do
+        :sys.resume(pid, 5_000)
+      catch
+        :exit, _reason -> :ok
+      end
     end
   end
 

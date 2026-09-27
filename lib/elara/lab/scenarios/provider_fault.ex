@@ -58,7 +58,9 @@ defmodule Elara.Lab.Scenarios.ProviderFault do
       choices_digest: Elara.Lab.digest(choices),
       completed_turns: cases |> Map.values() |> Enum.map(& &1.completed_turns) |> Enum.sum(),
       cleanup_confirmed: Enum.all?(Map.values(cases), & &1.cleanup_confirmed),
-      interpreted_ms: Map.new(cases, fn {stage, result} -> {stage, result.interpreted_ms} end)
+      interpreted_ms: Map.new(cases, fn {stage, result} -> {stage, result.interpreted_ms} end),
+      primary_status_ms:
+        Map.new(cases, fn {stage, result} -> {stage, result.primary_status_ms} end)
     }
   end
 

@@ -2,12 +2,17 @@ defmodule Elara.LabScenariosTest do
   # Not async: scenarios share the TestJobs slots and swap the sessions root.
   use ExUnit.Case, async: false
 
+  # Two runs of one seed; each must pass and clean up before the next starts.
   defp run!(scenario, seed \\ 1) do
-    {:ok, [again]} = Elara.Lab.run(scenario, seed: seed)
+    [first, second] = for _ <- 1..2, do: passing_run!(scenario, seed)
+    assert is_binary(first.choices_digest) and first.choices_digest == second.choices_digest
+    second
+  end
+
+  defp passing_run!(scenario, seed) do
     {:ok, [result]} = Elara.Lab.run(scenario, seed: seed)
     refute Map.has_key?(result, :retained_dir), "cleanup unconfirmed: #{result[:retained_dir]}"
     assert Elara.Lab.failed_checks(result) == [], inspect(result.checks, pretty: true)
-    assert is_binary(result.choices_digest) and result.choices_digest == again.choices_digest
     result
   end
 

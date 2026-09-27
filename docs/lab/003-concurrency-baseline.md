@@ -637,8 +637,8 @@ This covers the sessions curve only.
   processes at 25–44% each, `cargo` and a load average of 19.9 at 18:41. The overlap
   establishes a confound, not its effect.
 - **Unclean children repetitions.** Nine of twelve were retained. Their run
-  directories, 25 GB in all, stay under the children sweep's `tmp/` until the
-  owner archives or releases them.
+  directories, about 24.5 GiB in all, stay under the children sweep's `tmp/`
+  until the owner archives or releases them.
 - **The K = 256 children repetitions are incomplete** (watchdog), so their
   throughput is undetermined. Their latency and memory failures come from each
   bound's own evidence.

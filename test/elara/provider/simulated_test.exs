@@ -165,6 +165,104 @@ defmodule Elara.Provider.SimulatedTest do
     assert Enum.drop(plain, 2) == Enum.drop(ruled, 2)
   end
 
+  describe "stamped deltas and the request ledger" do
+    defp ledger, do: :ets.new(:ledger, [:ordered_set, :public])
+
+    test "stamped deltas name their request and index and keep their byte size" do
+      profile = [ttft_ms: 1, deltas_per_sec: 1000, delta_bytes: 20, answer_deltas: 3]
+      profile = profile ++ [stamp_deltas: true]
+      {_m, config} = Simulated.new(seed: 1, id: "st", profile: profile)
+      parent = self()
+
+      sink = fn part ->
+        send(parent, {:part, part})
+        :ok
+      end
+
+      assert {:ok, %Assistant{text: text}, config} =
+               Simulated.stream(config, request([Message.user("a")]), sink)
+
+      assert {:ok, _, _} = Simulated.stream(config, request([Message.user("b")]), sink)
+
+      parts = for _ <- 1..6, do: receive(do: ({:part, part} -> part))
+
+      assert parts ==
+               Enum.map(
+                 ["1:0", "1:1", "1:2", "2:0", "2:1", "2:2"],
+                 &String.pad_trailing(&1, 20, ".")
+               )
+
+      assert text == Enum.join(Enum.take(parts, 3))
+    end
+
+    test "a stamp that cannot fit its delta is refused when the provider is built" do
+      profile = [delta_bytes: 12, answer_deltas: 250, stamp_deltas: true]
+
+      assert_raise ArgumentError, ~r/stamp/, fn ->
+        Simulated.new(seed: 1, id: "x", profile: profile)
+      end
+
+      profile = Keyword.put(profile, :delta_bytes, 13)
+      assert {Simulated, _} = Simulated.new(seed: 1, id: "x", profile: profile)
+    end
+
+    test "the ledger row precedes the first delta and completes after the last" do
+      table = ledger()
+      parent = self()
+      profile = [ttft_ms: 1, deltas_per_sec: 1000, delta_bytes: 20, answer_deltas: 3]
+      {_m, config} = Simulated.new(seed: 1, id: "l", profile: profile, ledger: table)
+
+      sink = fn _part ->
+        send(parent, {:row_at_delta, :ets.lookup(table, {"l", 1})})
+        :ok
+      end
+
+      started = System.monotonic_time(:millisecond)
+      assert {:ok, _, _} = Simulated.stream(config, request([Message.user("a")]), sink)
+
+      rows = for _ <- 1..3, do: receive(do: ({:row_at_delta, [row]} -> row))
+      assert Enum.map(rows, &elem(&1, 3)) == [1, 2, 3]
+      assert Enum.all?(rows, &(elem(&1, 4) == :started))
+      assert [{{"l", 1}, at, :answer, 3, :completed}] = :ets.lookup(table, {"l", 1})
+      assert (at - started) in 0..5
+    end
+
+    test "the ledger row is written before the start fault hook and stays started when killed" do
+      table = ledger()
+      parent = self()
+
+      hook = fn :provider_started, key ->
+        send(parent, {:row_at_hook, :ets.lookup(table, {"k", 1})})
+        if key == "k:1", do: Process.sleep(:infinity)
+      end
+
+      profile = [ttft_ms: 1, deltas_per_sec: 1000, answer_deltas: 3]
+      {_m, config} = Simulated.new(seed: 1, id: "k", profile: profile, ledger: table, fault: hook)
+
+      task = Task.async(fn -> Simulated.stream(config, request([Message.user("a")]), & &1) end)
+      assert_receive {:row_at_hook, [{{"k", 1}, _at, :answer, 0, :started}]}
+      Task.shutdown(task, :brutal_kill)
+
+      assert [{{"k", 1}, _at, :answer, 0, :started}] = :ets.lookup(table, {"k", 1})
+    end
+
+    test "tool-call requests complete their row; no options leave text and digests unchanged" do
+      table = ledger()
+      plan = [{"read", %{"path" => "a"}}]
+      profile = @fast ++ [tool_plan: plan, tool_rounds: 1]
+      {_m, config} = Simulated.new(seed: 7, id: "t", profile: profile, ledger: table)
+
+      assert {:ok, %Assistant{tool_calls: [_]}, _} =
+               Simulated.stream(config, request([Message.user("a")]), fn _ -> :ok end)
+
+      assert [{{"t", 1}, _, {:tool, "read"}, 0, :completed}] = :ets.lookup(table, {"t", 1})
+
+      plain = converse(Simulated.new(seed: 7, id: "s1", profile: @fast), 2)
+      ledgered = converse(Simulated.new(seed: 7, id: "s1", profile: @fast, ledger: ledger()), 2)
+      assert plain == ledgered
+    end
+  end
+
   test "a real session completes tool rounds through the simulated provider" do
     dir = Path.join(System.tmp_dir!(), "sim-session-#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)

@@ -73,7 +73,7 @@ defmodule Elara.LabTest do
   test "unknown scenarios are rejected with the known list" do
     assert {:error,
             {:unknown_scenario, "nope",
-             ["concurrent_jobs", "provider_fault", "session_crash", "smoke"]}} =
+             ["concurrency", "concurrent_jobs", "provider_fault", "session_crash", "smoke"]}} =
              Elara.Lab.run("nope", seed: 1)
   end
 
@@ -109,6 +109,29 @@ defmodule Elara.LabTest do
         do: send(log, {:lab_choice, id, n, c})
 
     assert Elara.Lab.choices_digest(log) == Elara.Lab.digest(%{"a" => [:x, :z], "b" => [:y]})
+  end
+
+  defmodule Precomputed do
+    @behaviour Elara.Lab
+    @impl true
+    def run(%{seed: seed}),
+      do: %{latency_ms: %{count: 3, p50: seed, p95: :infinity, p99: :infinity, max: :infinity}}
+  end
+
+  test "a scenario's precomputed latency map passes through; spreads skip infinity" do
+    {:ok, results} = Elara.Lab.run(Precomputed, seed: 4, n: 2)
+    assert [%{latency_ms: %{p50: 4, p95: :infinity}}, %{latency_ms: %{p50: 5}}] = results
+
+    summary = Elara.Lab.summarize(results)
+    assert summary.latency_p50_ms == %{min: 4, mean: 4.5, max: 5}
+    assert summary.latency_p95_ms == %{min: nil, mean: nil, max: nil, infinite: 2}
+  end
+
+  test "host metadata names the machine, runtime and commit" do
+    host = Elara.Lab.host()
+    assert host.logical_cpus > 0 and host.schedulers > 0
+    assert is_binary(host.otp) and is_binary(host.elixir)
+    assert Map.has_key?(host, :dirty) and (is_binary(host.commit) or is_nil(host.commit))
   end
 
   test "percentiles use nearest rank" do

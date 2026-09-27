@@ -49,8 +49,9 @@ token) + 200 ms (bash) + 249 × 20 ms (stream) = 6.08 s. That is
 
 - **Latency** (runtime-added): a delta's arrival at its client (monotonic ms,
   when the client process receives the line with its `append_content_delta` op)
-  minus its intended emission time. The client is also its simulator's
-  collector, so both clocks are the VM's. Reported as p50, p95 and p99 from
+  minus its intended emission time. The simulator stamps each delta with its
+  request and index and records each request's start in a ledger, so both
+  times are the VM's monotonic clock. Reported as p50, p95 and p99 from
   merged per-client histograms with 1 ms buckets through 10 s; overflow is
   counted, never clipped.
 - **Throughput:** client arrivals during [60 s, 600 s) ÷ (540 s × N ×
@@ -82,11 +83,13 @@ token) + 200 ms (bash) + 249 × 20 ms (stream) = 6.08 s. That is
 
 Deltas are accounted as expected → emitted → received:
 
-- **Expected:** the simulator reports each request's start time. An answer
+- **Expected:** the ledger records each request's start time. An answer
   request expects deltas at `start + 300 + round(i × 20)` ms for i in 0..249,
   from the fixed profile and independent of emission. The **latency cohort** is
   the expected deltas whose intended time lies in [60 s, 600 s).
-- **Emitted:** the simulator's delta notifications.
+- **Emitted:** the ledger's per-request emitted count and completion state. A
+  completed answer with other than 250 deltas is non-compliant; an interrupted
+  one is censored.
 - **Received:** client arrivals.
 
 A repetition's checks fail the run and keep its evidence directory:

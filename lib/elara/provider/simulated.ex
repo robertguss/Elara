@@ -32,6 +32,15 @@ defmodule Elara.Provider.Simulated do
   An optional `fault` hook (see `Elara.Lab.Faults`) is called at
   `:provider_started` and, after the first delta, `:provider_streaming`, with
   the key `"id:request"`. Tool-plan arguments equal to `"$key"` receive that key.
+
+  Two opt-in options serve delivery accounting without collector messages. With
+  `stamp_deltas: true` in the profile, each delta's text is `"request:index"`
+  padded with `.` to `delta_bytes`, in place of seeded letters. With a `ledger`
+  (a public ETS table), each request inserts
+  `{{id, request}, started_ms, choice, emitted, state}` before its start fault
+  hook, counts each delta before handing it to the sink, and sets `state` from
+  `:started` to `:completed` once its response is built. A killed task leaves
+  `:started`. The ledger records what was generated, not what was delivered.
   """
 
   @behaviour Elara.Provider
@@ -49,10 +58,11 @@ defmodule Elara.Provider.Simulated do
     tool_rounds: 2,
     tool_plan: [],
     rules: [],
+    stamp_deltas: false,
     errors: %{rate_limited: 0.0, server_error: 0.0, disconnect_before: 0.0, disconnect_after: 0.0}
   }
 
-  defstruct [:id, :seed, :rand, :profile, :collector, :fault, requests: 0]
+  defstruct [:id, :seed, :rand, :profile, :collector, :fault, :ledger, requests: 0]
 
   @type t :: %__MODULE__{}
 
@@ -67,6 +77,7 @@ defmodule Elara.Provider.Simulated do
     profile = Map.merge(@defaults, Map.new(Keyword.get(opts, :profile, [])))
     profile = %{profile | errors: Map.merge(@defaults.errors, Map.new(profile.errors))}
     rand = :rand.seed_s(:exsss, {seed, :erlang.phash2(id), 0x9E3779B9})
+    if profile.stamp_deltas, do: check_stamp_fits!(profile)
 
     {__MODULE__,
      %__MODULE__{
@@ -75,8 +86,21 @@ defmodule Elara.Provider.Simulated do
        rand: rand,
        profile: profile,
        collector: Keyword.get(opts, :collector),
-       fault: Keyword.get(opts, :fault)
+       fault: Keyword.get(opts, :fault),
+       ledger: Keyword.get(opts, :ledger)
      }}
+  end
+
+  # A stamp is at most a 9-digit request, ":" and the widest index.
+  defp check_stamp_fits!(profile) do
+    needed = 10 + String.length(Integer.to_string(max(profile.answer_deltas - 1, 0)))
+
+    if profile.delta_bytes < needed,
+      do:
+        raise(
+          ArgumentError,
+          "stamp needs delta_bytes >= #{needed}, got #{profile.delta_bytes}"
+        )
   end
 
   @impl true
@@ -89,15 +113,20 @@ defmodule Elara.Provider.Simulated do
     {choice, rand} = choose(config, request.messages)
     config = %{config | rand: rand, requests: number}
     notify(config, {:lab_choice, config.id, number, choice})
+    ledger_insert(config, number, started, choice)
     fault(config, :provider_started, number)
 
-    case response(config, choice) do
-      {:error, %Error{} = error} -> {:error, error, config}
-      {:error, kind} -> error(config, kind, started, number, sink)
-      {:tool, name, args} -> tool_call(config, name, args, started, number)
-      {:tool, _name} -> tool_call(config, request.messages, started, number)
-      :answer -> answer(config, started, number, sink)
-    end
+    result =
+      case response(config, choice) do
+        {:error, %Error{} = error} -> {:error, error, config}
+        {:error, kind} -> error(config, kind, started, number, sink)
+        {:tool, name, args} -> tool_call(config, name, args, started, number)
+        {:tool, _name} -> tool_call(config, request.messages, started, number)
+        :answer -> answer(config, started, number, sink)
+      end
+
+    ledger_complete(config, number)
+    result
   end
 
   # ── Choices ─────────────────────────────────────────────────────────────
@@ -200,10 +229,11 @@ defmodule Elara.Provider.Simulated do
 
     {parts, _rand} =
       Enum.map_reduce(0..(count - 1)//1, text_rand, fn index, rand ->
-        {part, rand} = delta_text(rand, config.profile.delta_bytes)
+        {part, rand} = delta_text(config, number, index, rand)
         intended = started + config.profile.ttft_ms + round(index * interval)
         sleep_until(intended)
         notify(config, {:lab_delta, config.id, number, index, intended})
+        ledger_emit(config, number)
         :ok = sink.(part)
         if index == 0, do: fault(config, :provider_streaming, number)
         {part, rand}
@@ -213,6 +243,11 @@ defmodule Elara.Provider.Simulated do
   end
 
   @alphabet ~c"abcdefghijklmnopqrstuvwxyz "
+
+  defp delta_text(%__MODULE__{profile: %{stamp_deltas: true} = profile}, number, index, rand),
+    do: {String.pad_trailing("#{number}:#{index}", profile.delta_bytes, "."), rand}
+
+  defp delta_text(config, _number, _index, rand), do: delta_text(rand, config.profile.delta_bytes)
 
   defp delta_text(rand, bytes) do
     {chars, rand} =
@@ -237,6 +272,21 @@ defmodule Elara.Provider.Simulated do
 
   defp fault(%__MODULE__{fault: hook} = config, point, number),
     do: hook.(point, key(config, number))
+
+  defp ledger_insert(%__MODULE__{ledger: nil}, _number, _started, _choice), do: :ok
+
+  defp ledger_insert(%__MODULE__{ledger: ledger, id: id}, number, started, choice),
+    do: true = :ets.insert(ledger, {{id, number}, started, choice, 0, :started})
+
+  defp ledger_emit(%__MODULE__{ledger: nil}, _number), do: :ok
+
+  defp ledger_emit(%__MODULE__{ledger: ledger, id: id}, number),
+    do: :ets.update_counter(ledger, {id, number}, {4, 1})
+
+  defp ledger_complete(%__MODULE__{ledger: nil}, _number), do: :ok
+
+  defp ledger_complete(%__MODULE__{ledger: ledger, id: id}, number),
+    do: true = :ets.update_element(ledger, {id, number}, {5, :completed})
 
   defp notify(%__MODULE__{collector: nil}, _message), do: :ok
   defp notify(%__MODULE__{collector: pid}, message), do: send(pid, message)

@@ -82,10 +82,23 @@ timings, so report those as a spread across repetitions, not as exact values.
 | `concurrent_jobs` | Four test-job slots, rejection, cancellation and refill, one completion each (JOB-10) |
 | `session_crash`   | An idle owner killed while its job runs; offline completion, delivery on reopen (JOB-5) |
 | `provider_fault`  | One scripted `bad_response` before or during interpretation; a second session keeps progressing (JOB-3/4) |
+| `concurrency`     | RQ-2 reference workload: closed-loop users cycling sessions, each observed by a protocol-v2 client ([003](003-concurrency-baseline.md)) |
 
 The job scenarios use `Elara.Lab.Jobs`, a fixture whose test blocks until the
 scenario releases it, so a fault lands while a job provably runs. They run on
 the simulated provider only.
+
+`concurrency` defaults to note 003's pre-registered values (10 users, 600 s of
+load); `--set` overrides any of them, for example
+`--set sessions=500 --set trace=counts`. Its simulator stamps each delta with
+its request and index and writes a request ledger, so a client joins arrivals
+to intended times exactly. Each result line carries latency, throughput,
+memory, queue, scheduler and (with `trace=counts`) call-count measurements,
+the host, and `bounds`: whether each RQ-2 bound holds, fails or is
+undetermined for that repetition. It refuses to start while `Elara.Exec` runs
+a job. Its cleanup is confirmed only when every user, session, task and client
+it started has ended, no execution job is pending, and the stub's epoch is
+unchanged; until its provider tasks end, it keeps their ledger.
 
 **Checks and cleanup.** A scenario reports invariants as
 `checks: %{name => boolean}`. The summary counts failed checks, and the task

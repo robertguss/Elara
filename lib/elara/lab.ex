@@ -17,6 +17,7 @@ defmodule Elara.Lab do
 
   @scenarios %{
     "smoke" => Elara.Lab.Scenarios.Smoke,
+    "concurrency" => Elara.Lab.Scenarios.Concurrency,
     "concurrent_jobs" => Elara.Lab.Scenarios.ConcurrentJobs,
     "session_crash" => Elara.Lab.Scenarios.SessionCrash,
     "provider_fault" => Elara.Lab.Scenarios.ProviderFault
@@ -106,7 +107,10 @@ defmodule Elara.Lab do
 
     result =
       result
-      |> Map.update(:latency_ms, nil, &percentiles/1)
+      |> Map.update(:latency_ms, nil, fn
+        samples when is_list(samples) -> percentiles(samples)
+        precomputed -> precomputed
+      end)
       |> Map.merge(%{
         scenario: name,
         seed: context.seed,
@@ -227,12 +231,59 @@ defmodule Elara.Lab do
 
   defp spread([]), do: nil
 
-  defp spread(values),
+  # Non-numeric values (an unbounded percentile is :infinity) are counted, not averaged.
+  defp spread(values) do
+    case Enum.split_with(values, &is_number/1) do
+      {numbers, []} ->
+        numeric(numbers)
+
+      {numbers, others} ->
+        Map.put(numeric(numbers), :infinite, Enum.count(others, &(&1 == :infinity)))
+    end
+  end
+
+  defp numeric([]), do: %{min: nil, mean: nil, max: nil}
+
+  defp numeric(values),
     do: %{
       min: Enum.min(values),
       mean: Float.round(Enum.sum(values) / length(values), 1),
       max: Enum.max(values)
     }
+
+  @doc "Host, runtime and build metadata recorded with each result."
+  @spec host() :: map()
+  def host do
+    %{
+      cpu: command("sysctl", ["-n", "machdep.cpu.brand_string"]),
+      memory_bytes:
+        with(
+          bytes when is_binary(bytes) <- command("sysctl", ["-n", "hw.memsize"]),
+          {n, ""} <- Integer.parse(bytes),
+          do: n,
+          else: (_ -> nil)
+        ),
+      logical_cpus: :erlang.system_info(:logical_processors),
+      os: command("uname", ["-sr"]),
+      otp: to_string(:erlang.system_info(:otp_release)),
+      erts: to_string(:erlang.system_info(:version)),
+      elixir: System.version(),
+      schedulers: :erlang.system_info(:schedulers_online),
+      dirty_cpu_schedulers: :erlang.system_info(:dirty_cpu_schedulers),
+      dirty_io_schedulers: :erlang.system_info(:dirty_io_schedulers),
+      commit: command("git", ["rev-parse", "HEAD"]),
+      dirty: command("git", ["status", "--porcelain"]) not in [nil, ""]
+    }
+  end
+
+  defp command(cmd, args) do
+    case System.cmd(cmd, args, stderr_to_stdout: true) do
+      {out, 0} -> String.trim(out)
+      _ -> nil
+    end
+  rescue
+    ErlangError -> nil
+  end
 
   defp unique, do: System.unique_integer([:positive])
 end

@@ -789,7 +789,10 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         ])
         |> Map.put(:missing_summaries, missing_summaries),
       history_bytes: transcripts.history_bytes,
-      transcripts: Map.drop(transcripts.reconciled, [:sessions_persisted, :answers_persisted]),
+      transcripts:
+        transcripts.reconciled
+        |> Map.drop([:sessions_persisted, :answers_persisted])
+        |> Map.put(:tool_failures, transcripts.tool_failures),
       settlement: Map.delete(settlement, :cleanup_confirmed),
       bounds: bounds,
       checks: checks,
@@ -947,13 +950,12 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   end
 
   # Off the timing path. Every persisted session is opened and reconciled with
-  # what users reported; tool results count only if persisted by the cutoff
-  # (entry wall-clock timestamps mapped to monotonic time by the VM's offset).
+  # what users reported; every persisted tool failure counts, since wall-clock
+  # entry timestamps cannot place it relative to the monotonic cutoff.
   defp transcripts(run, censored) do
     p = run.p
     root = Path.join(run.dir, "sessions")
     all = Path.wildcard(Path.join(root, "**/*"))
-    offset = System.time_offset(:millisecond)
     expected = p.answer_deltas * p.delta_bytes
 
     files =
@@ -972,8 +974,8 @@ defmodule Elara.Lab.Scenarios.Concurrency do
               for %Assistant{text: text, tool_calls: []} <- history, is_binary(text), do: text
 
             tools =
-              for %{message: %ToolResult{outcome: outcome}, timestamp: at} <- store.entries,
-                  do: {at - offset, match?({:ok, _}, outcome)}
+              for %{message: %ToolResult{outcome: outcome}} <- store.entries,
+                  do: match?({:ok, _}, outcome)
 
             %{
               id: store.id,
@@ -1003,7 +1005,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       unopenable: length(stats) - length(opened),
       frozen: Enum.sum(Enum.map(opened, & &1.frozen)),
       wrong_answer_sizes: Enum.sum(Enum.map(opened, & &1.wrong)),
-      tool_failures: Evidence.tool_failures(Enum.flat_map(opened, & &1.tools), run.cutoff),
+      tool_failures: Evidence.tool_failures(Enum.flat_map(opened, & &1.tools)),
       reconciled:
         Evidence.reconcile(
           Enum.map(run.sessions, &elem(&1, 1)),

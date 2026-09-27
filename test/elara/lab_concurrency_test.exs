@@ -74,6 +74,7 @@ defmodule Elara.Lab.ConcurrencyTest do
     assert result.counts == nil
     assert %{count: _} = result.bash_excess_ms
     assert result.history_bytes.max > 0
+    assert result.transcripts.tool_failures == 0
     assert result.bounds.latency in ["holds", "fails"]
     assert result.host.logical_cpus > 0
   end

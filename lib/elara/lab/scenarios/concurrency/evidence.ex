@@ -47,8 +47,12 @@ defmodule Elara.Lab.Scenarios.Concurrency.Evidence do
     }
   end
 
-  @doc "Failed tool results (`{monotonic_ms, ok?}`) persisted at or before `cutoff` (all when nil)."
-  @spec tool_failures([{integer(), boolean()}], integer() | nil) :: non_neg_integer()
-  def tool_failures(results, cutoff),
-    do: Enum.count(results, fn {at, ok} -> not ok and (cutoff == nil or at <= cutoff) end)
+  @doc """
+  Failed persisted tool results (`ok?` flags), in a stopped run too. Entry
+  timestamps are wall-clock under a warping time offset, so they cannot place a
+  result relative to the monotonic cutoff; counting every failure errs toward
+  noncompliance.
+  """
+  @spec tool_failures([boolean()]) :: non_neg_integer()
+  def tool_failures(results), do: Enum.count(results, &(not &1))
 end

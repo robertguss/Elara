@@ -57,10 +57,10 @@ defmodule Elara.Lab.Scenarios.Concurrency.EvidenceTest do
     refute Evidence.reconcile(["a"], turns, [], false).answers_persisted
   end
 
-  test "tool failures count only results persisted at or before the cutoff" do
-    results = [{100, true}, {200, false}, {300, false}]
-    assert Evidence.tool_failures(results, nil) == 2
-    assert Evidence.tool_failures(results, 200) == 1
-    assert Evidence.tool_failures(results, 199) == 0
+  test "every persisted tool failure counts, whenever it was persisted" do
+    assert Evidence.tool_failures([false, true, false, true, false]) == 3
+    assert Evidence.tool_failures([false]) == 1
+    assert Evidence.tool_failures([true, true]) == 0
+    assert Evidence.tool_failures([]) == 0
   end
 end

@@ -95,7 +95,9 @@ Deltas are accounted as expected → emitted → received:
 A repetition's checks fail the run and keep its evidence directory:
 
 - Every client's attach was acknowledged before its session's first turn.
-- Every turn returned `{:ok, _}` and every tool call succeeded.
+- Every turn returned `{:ok, _}` and every persisted tool result succeeded, in a
+  stopped run too: entry timestamps are wall-clock and cannot place a result
+  relative to the cutoff.
 - Every completed answer had exactly 250 received deltas, and its persisted
   message is exactly 5,000 bytes (checked from the transcript after the run).
 - Per session, expected = emitted = received once drained.

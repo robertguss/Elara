@@ -11,7 +11,7 @@
   variant)
 - **Status:** the sessions curve has been measured: the timing and count sweeps
   ran on 2026-09-27. The child-thread variant ran the same day. Attribution is
-  still to be pre-registered and run.
+  registered (2026-09-27); its profile runs have not been made.
 
 ## Reference workload
 
@@ -151,14 +151,148 @@ Every repetition's values are reported per point.
   (Darwin 25.6), OTP 29.1, Elixir 1.20.4. Every result line records its host,
   versions, commit and dirty-tree flag.
 
-**Still to pre-register,** in its own step before its measurement:
+### Attribution
 
-- **Attribution** runs at the lowest N that breaks a bound (500 if none does).
-  It profiles one full 600 s run over [480 s, 600 s) with `tprof` call_time,
-  scoped explicitly to the existing sessions, their tasks, server connections
-  and `Elara.Exec`. CPU cost and waiting evidence (dirty IO, fsync counts,
-  queues, latency) are reported separately. Unit cost × call rate figures are
-  labeled estimates, at the history and directory sizes observed in the run.
+Registered 2026-09-27, before any profile run or profile plumbing. It replaces
+the earlier "still to pre-register" outline, whose selection rule it keeps.
+
+- **Question:** which costs account for the sessions curve's failures on
+  unchanged code. It ranks and tests no hypothesis. Rankings are Elara
+  properties under this workload on this host.
+- **Runs:**
+  - **Registered:** N = 10, the lowest N that breaks a bound (memory fails at
+    every N), by the earlier rule unchanged.
+  - **Supplementary,** by the owner's decision and labelled so wherever it
+    appears: N = 500, where all three bounds fail.
+  - Both: seed 42, `topology=sessions`, every registered workload value
+    unchanged, one full 600 s run each in a fresh VM. `MIX_ENV` unset (dev,
+    debug stub), `caffeinate -ims`, AC power. The owner is asked about host
+    conditions before running.
+  - **Command:**
+
+        mix elara.lab sweep concurrency --over sessions=10,500 --n 1 --seed 42 --set trace=profile
+
+  - Profile runs carry no verdict. Their latency, throughput and memory appear
+    only as a traced/untraced comparison with the seed-42 timing repetition at
+    the same N, with Table D's caveat: one pair does not isolate overhead.
+  - A profile run must pass the existing checks and be complete; otherwise it is
+    reported, not ranked. Any rerun needs the owner and is reported beside the
+    original.
+- **Measure: own scheduled elapsed time.** `tprof`'s `call_time` measure (or
+  the `:trace` session calls it wraps), per function and per pid. It is the
+  time a process spent in a function's own code while scheduled, including time
+  blocked in dirty or native code, so it is **not CPU time**. Entries for
+  dirty or native code (NIFs, dirty BIFs, file and port operations) are flagged
+  in every table as possibly including blocking time. Their shares are not CPU
+  percentages, and their agreement with dirty-IO utilization is not
+  independent corroboration.
+- **Classes.** Each traced pid gets one class, assigned once, in this order:
+  - **Ranked:** `exec` (`Elara.Exec`); `session` (started by
+    `Elara.SessionSup`); `connection` (started by `Elara.TaskSup`, with a
+    spawned function that originates in `Elara.Server`); `task` (every other
+    process started by `Elara.TaskSup`).
+  - **Descriptive, traced but not ranked:** `client` (the lab's clients),
+    `threads` (`Elara.Threads`), `transport` (`Elara.Threads.Communication`),
+    and `other` (any other traced process, one row with its pid count).
+  - **Unclassified:** a traced pid with no class record, or whose records
+    disagree. Metadata that cannot be decoded stays unknown, never guessed.
+  - **Unmeasured:** every process not traced (the sampler, the runner, the
+    supervisors themselves, loggers and the rest), named as unmeasured, not as
+    zero.
+  - The class record survives the process's exit. "Existing sessions, their
+    tasks, server connections and `Elara.Exec`" is read as those classes'
+    processes at activation plus those started during the window, since
+    per-request tasks are short-lived. This clarifies the earlier outline; the
+    N-selection rule is unchanged.
+- **Activation,** in this order, starting at a1:
+  1. A separate classification session observes spawns by `Elara.SessionSup`
+     and `Elara.TaskSup`, with monotonic event timestamps. A classifier records
+     each new pid's class at spawn, decoding the task's original closure.
+  2. The profile session sets `call_time` patterns on all functions, including
+     modules loaded later.
+  3. It enables call tracing for all future processes. n is recorded when a
+     readback of that setting confirms `call`.
+  4. A census of the seven named classes' current members, classified from the
+     supervisors' children (`:proc_lib.translate_initial_call/1` for
+     `Elara.TaskSup` children), enables call tracing on each by pid. Census and
+     spawn records merge by pid without duplicates.
+  5. Every live census pid in a ranked class must then report the call flag. a2
+     is recorded when this returns.
+- **Birth coverage.** A pid born before n and alive at the census is covered by
+  step 5. One born before n that died before the census is counted and
+  reported as "born before confirmed enable, died before census: coverage not
+  guaranteed", and keeps any counters collected for it. Births at or after n
+  are covered by the future-process setting. It is read back again immediately
+  before the freeze; a changed or missing setting invalidates the profile. Flag
+  checks on each spawn's receipt are descriptive counts only (flag present,
+  absent, or pid dead on inspection).
+- **Freeze.** f1 is recorded when the freeze begins, in the scenario's load-end
+  handling (t = 600 s). It pauses every `call_time` counter (a pause, not a
+  clear), and f2 is recorded when that returns. Then comes the memory census,
+  then a trace-delivery barrier on both sessions, after which the classifier
+  confirms it has processed every delivered spawn event, then collection. The drain proceeds as usual.
+- **Window.** The counters may include work anywhere in the capture envelope
+  [a1, f2]; the fully enabled interior is [a2, f1]. Both are reported, as are
+  all four timestamps (VM monotonic, relative to t = 0).
+  - **Valid:** a1 − 480 s, a2 − a1, f1 − 600 s and f2 − f1 are each at most
+    5 s.
+  - **Qualified** (ranked, with the lateness stated in every table): each of
+    those four is at most 30 s, and the interior overlaps [480 s, 600 s) by at
+    least 108 s.
+  - **Invalid** (reported, not ranked): any of the four over 30 s, an overlap
+    under 108 s, a failed coverage check (step 5, either readback of the
+    future-process setting, or unclassified own time over 1% of all traced own
+    time), or failed run checks or an incomplete run.
+  - Shares are the registered quantity. Per-second figures are labelled
+    approximate: they are normalized by the interior's length, with the
+    envelope's length beside it.
+- **Reported per N:** per ranked class, the top functions by own time, with
+  calls, total µs, share of the class and share of all ranked time, and a
+  roll-up by module. Each descriptive class and `other` gets one row with its
+  pid count. Also: unclassified own time, the birth-coverage counts, the
+  timestamps and the profile's validity.
+- **Waiting evidence,** reported separately and never summed with own time:
+  - dirty-IO and dirty-CPU scheduler utilization;
+  - `:file.sync/1` calls per second, from Table C's count runs (not re-traced:
+    call-count and call-time tracing are not combined here);
+  - mailbox max and p99 for sessions, connections and `Elara.Exec`;
+  - bash excess latency and delta latency.
+
+  These come from the registered timing and count runs at the same N, plus the
+  profile run's own samples, labelled as traced.
+- **Memory: holders, not allocation.** Two censuses per profile run: before
+  activation (t = 480 s) and after the freeze. Each records its start and end
+  timestamps and:
+  - `:erlang.memory/0` by category;
+  - the sum of `process_info(pid, :memory)` per class over live pids;
+  - off-heap binaries from `process_info(pid, :binary)` over every measured live
+    pid, by address. A binary goes to its class if exactly one class references
+    it, and otherwise to a "shared across classes" bucket, which also lists the
+    class pairs it spans by bytes. The buckets sum to the unique bytes that
+    measured processes reference;
+  - `:erlang.memory(:binary)`, read separately. Its difference from that sum is
+    reported as the "unreconciled binary-memory difference". Its sign is kept
+    and it is attributed to nothing, since the readings are not simultaneous and
+    `:erlang.memory/0` is not gathered atomically;
+  - ETS memory per table, with its owner's class.
+
+  The censuses describe what holds memory at those two times. They do not
+  explain the window's peak or where memory was allocated. The difference in
+  `system` between them is labelled as including profiler storage.
+- **Ranking rule.** Within each N, rank ranked-class functions and modules by
+  their share of ranked own time. The note names the top five per N, and says
+  where each RQ-2 suspect (`Store.save/1`, `Context.budget/2`,
+  `Handoff.lineage/1`, `FlightRecorder.complete_transition/4`, `Exec.run/2`,
+  `:file.sync/1`) and its callees appear.
+  - A low own-time rank for a wrapper does not exonerate its callees. A suspect
+    is mapped to a hotspot only where the call path is shown.
+  - A latency or throughput bottleneck is claimed only where the own-time rank
+    and the waiting evidence point the same way. Otherwise the note says "not
+    attributed".
+  - Unit cost × call rate figures are labelled estimates, at the history size
+    and sessions-root file count observed in the run.
+- **Not registered:** the children topology (deferred by the owner), any other
+  N, lock counting, and allocation profiling (`call_memory`).
 
 ### Child-thread variant
 

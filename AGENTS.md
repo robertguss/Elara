@@ -1,5 +1,13 @@
 # AGENTS.md
 
+## Review workflow
+
+When running inside Herdr beside another coding agent, the builder (left pane)
+loads the `driver` skill and the reviewer (right pane) loads the `oracle` skill.
+Every step gets an oracle plan review and diff review before it is committed.
+Each session covers one agreed chunk of work and ends with a reviewed
+`HANDOFF.md` at the repository root, from which both agents restart fresh.
+
 ## Cursor Cloud specific instructions
 
 Elara is a single Mix app (an Elixir coding-agent CLI) that is primarily a BEAM

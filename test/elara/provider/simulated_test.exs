@@ -119,6 +119,49 @@ defmodule Elara.Provider.SimulatedTest do
     assert (hd(intended) - started) in 45..60
   end
 
+  test "rules script a response for a matching request and fall through otherwise" do
+    bad = %Provider.Error{kind: :bad_response, message: "scripted"}
+
+    rules = [
+      {&match?([%Message.User{text: "start"}], &1), {:tool, "job", %{"action" => "start"}}},
+      {fn messages -> match?(%ToolResult{name: "job"}, List.last(messages)) end, {:error, bad}}
+    ]
+
+    {_m, config} = Simulated.new(seed: 1, id: "r", profile: @fast ++ [rules: rules])
+    config = %{config | collector: self()}
+
+    assert {:ok, %Assistant{tool_calls: [%ToolCall{name: "job", args: {:ok, args}} = call]},
+            config} =
+             Simulated.stream(config, request([Message.user("start")]), fn _ -> :ok end)
+
+    assert args == %{"action" => "start"}
+    assert_received {:lab_choice, "r", 1, {:rule, 0}}
+
+    history = [Message.user("start"), elem(Message.assistant(nil, [call]), 1)]
+    history = history ++ [Message.tool_result(call, {:ok, "running"})]
+
+    assert {:error, ^bad, config} =
+             Simulated.stream(config, request(history), fn _ -> :ok end)
+
+    assert_received {:lab_choice, "r", 2, {:rule, 1}}
+
+    assert {:ok, %Assistant{text: text}, _} =
+             Simulated.stream(config, request([Message.user("other")]), fn _ -> :ok end)
+
+    assert byte_size(text) == 12
+    assert_received {:lab_choice, "r", 3, :answer}
+  end
+
+  test "rules do not shift the seeded choices of later unmatched requests" do
+    never = [{fn _ -> false end, :answer}]
+    profile = @fast ++ [errors: [rate_limited: 0.5]]
+
+    plain = converse(Simulated.new(seed: 9, id: "k", profile: profile), 6)
+    ruled = converse(Simulated.new(seed: 9, id: "k", profile: profile ++ [rules: never]), 6)
+
+    assert plain == ruled
+  end
+
   test "a real session completes tool rounds through the simulated provider" do
     dir = Path.join(System.tmp_dir!(), "sim-session-#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)

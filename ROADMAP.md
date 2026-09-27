@@ -360,6 +360,13 @@ Also cover the transport faults found in LAB-1's review:
   stops at its deadline. The current timeout test would pass without that
   check.
 
+The chaos observer must follow handoff successors, including one that finishes
+before it attaches, and treat paused inputs and stale terminal events as
+outcomes, not completions. The retired `live_session_driver.exs` covered this
+(in git history before LAB-2 slice E); the smoke collector does not. Read an
+input's receipt only after it settles: the session broadcasts `turn_ended`
+before recording a failed receipt.
+
 **Done when:** at least 1,000 seeded schedules run, and the note records
 violation counts with a minimized reproduction for each, plus fixes or
 findings.

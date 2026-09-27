@@ -1,6 +1,16 @@
 defmodule Elara.LabTest do
   use ExUnit.Case, async: false
 
+  defmodule Checked do
+    @behaviour Elara.Lab
+    @impl true
+    def run(%{seed: seed, dir: dir}) do
+      File.write!(Path.join(dir, "evidence"), "kept")
+      send(Process.whereis(:lab_test), {:dir, seed, dir})
+      %{checks: %{even_seed: rem(seed, 2) == 0, always: true}, cleanup_confirmed: seed != 3}
+    end
+  end
+
   @params %{"sessions" => "2", "turns" => "3", "rate_limited_pct" => "20", "ttft_ms" => "5"}
 
   test "a seed reproduces the scenario's choices and a different seed changes them" do
@@ -52,7 +62,29 @@ defmodule Elara.LabTest do
   end
 
   test "unknown scenarios are rejected with the known list" do
-    assert {:error, {:unknown_scenario, "nope", ["smoke"]}} = Elara.Lab.run("nope", seed: 1)
+    assert {:error,
+            {:unknown_scenario, "nope",
+             ["concurrent_jobs", "provider_fault", "session_crash", "smoke"]}} =
+             Elara.Lab.run("nope", seed: 1)
+  end
+
+  test "failed checks are reported and uncertain cleanup keeps the directory and stops" do
+    Process.register(self(), :lab_test)
+    {:ok, results} = Elara.Lab.run(Checked, seed: 2, n: 3)
+
+    assert Enum.map(results, & &1.seed) == [2, 3]
+    assert Enum.map(results, &Elara.Lab.failed_checks/1) == [[], [:even_seed]]
+    assert_received {:dir, 2, cleaned}
+    assert_received {:dir, 3, kept}
+    refute_received {:dir, 4, _}
+    refute File.exists?(cleaned)
+    on_exit(fn -> File.rm_rf!(kept) end)
+    assert File.read!(Path.join(kept, "evidence")) == "kept"
+    assert List.last(results).retained_dir == kept
+
+    summary = Elara.Lab.summarize(results)
+    assert summary.failed_checks == %{even_seed: 1}
+    assert summary.retained_dirs == [kept]
   end
 
   test "percentiles use nearest rank" do

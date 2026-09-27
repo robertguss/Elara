@@ -11,6 +11,11 @@ defmodule Elara.Provider.Simulated do
     * `{:tool, name}`: a tool call from the cycled `tool_plan`, until
       `tool_rounds` calls follow the latest user message.
     * `:answer`: `answer_deltas` streamed deltas of `delta_bytes` each.
+    * `{:rule, index}`: the first of the profile's `rules` whose predicate
+      accepts the request's messages. A rule's response is `{:tool, name, args}`,
+      `{:error, %Provider.Error{}}` or `:answer`. Rules script specific requests
+      (a fault after one tool result, a status call on completion); they draw the
+      same random number as an unmatched request, so later choices do not shift.
 
   Deltas follow an intended schedule: `ttft_ms` after the request starts, then
   one every `1000 / deltas_per_sec` ms. A late delta keeps its intended time, so
@@ -40,6 +45,7 @@ defmodule Elara.Provider.Simulated do
     answer_deltas: 20,
     tool_rounds: 2,
     tool_plan: [],
+    rules: [],
     errors: %{rate_limited: 0.0, server_error: 0.0, disconnect_before: 0.0, disconnect_after: 0.0}
   }
 
@@ -81,8 +87,10 @@ defmodule Elara.Provider.Simulated do
     notify(config, {:lab_choice, config.id, number, choice})
     fault(config, :provider_started, number)
 
-    case choice do
+    case response(config, choice) do
+      {:error, %Error{} = error} -> {:error, error, config}
       {:error, kind} -> error(config, kind, started, number, sink)
+      {:tool, name, args} -> tool_call(config, name, args, started, number)
       {:tool, _name} -> tool_call(config, request.messages, started, number)
       :answer -> answer(config, started, number, sink)
     end
@@ -92,6 +100,14 @@ defmodule Elara.Provider.Simulated do
 
   defp choose(config, messages) do
     {roll, rand} = :rand.uniform_s(config.rand)
+
+    case Enum.find_index(config.profile.rules, fn {matches?, _} -> matches?.(messages) end) do
+      nil -> {seeded_choice(config, messages, roll), rand}
+      index -> {{:rule, index}, rand}
+    end
+  end
+
+  defp seeded_choice(config, messages, roll) do
     errors = config.profile.errors
 
     thresholds = [
@@ -108,15 +124,18 @@ defmodule Elara.Provider.Simulated do
 
         if plan != [] and rounds < config.profile.tool_rounds do
           {name, _args} = Enum.at(plan, rem(rounds, length(plan)))
-          {{:tool, name}, rand}
+          {:tool, name}
         else
-          {:answer, rand}
+          :answer
         end
 
       kind ->
-        {{:error, kind}, rand}
+        {:error, kind}
     end
   end
+
+  defp response(config, {:rule, index}), do: config.profile.rules |> Enum.at(index) |> elem(1)
+  defp response(_config, choice), do: choice
 
   defp injected_error([], _roll, _acc), do: nil
 
@@ -134,10 +153,14 @@ defmodule Elara.Provider.Simulated do
   # ── Responses ───────────────────────────────────────────────────────────
 
   defp tool_call(config, messages, started, number) do
-    sleep_until(started + config.profile.ttft_ms)
     rounds = tool_rounds_since_user(messages)
     plan = config.profile.tool_plan
     {name, args} = Enum.at(plan, rem(rounds, length(plan)))
+    tool_call(config, name, args, started, number)
+  end
+
+  defp tool_call(config, name, args, started, number) do
+    sleep_until(started + config.profile.ttft_ms)
     args = Map.new(args, fn {k, v} -> {k, if(v == "$key", do: key(config, number), else: v)} end)
     call = %ToolCall{id: "sim-#{config.id}-#{number}", name: name, args: {:ok, args}}
     {:ok, assistant} = Message.assistant(nil, [call])

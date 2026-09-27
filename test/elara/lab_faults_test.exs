@@ -39,6 +39,16 @@ defmodule Elara.LabFaultsTest do
     assert_receive {:DOWN, ^ref, :process, ^pid, :killed}
   end
 
+  test "a named session fault kills that session from outside it", %{dir: dir} do
+    {id, pid} = start(dir, %{}, @fast)
+    assert {:ok, _} = Elara.ask(id, "go")
+    ref = Process.monitor(pid)
+
+    assert :ok = Faults.inject({:session, id})
+    assert_receive {:DOWN, ^ref, :process, ^pid, :killed}
+    assert :ok = Faults.inject({:session, id})
+  end
+
   test "a task fault mid-stream fails the turn and the session survives", %{dir: dir} do
     {id, pid} = start(dir, %{{"s1:1", :provider_streaming} => :task}, @fast)
 

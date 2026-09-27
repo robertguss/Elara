@@ -12,6 +12,12 @@ linked report. Update the relevant user/API guide when behavior changes.
 Separate an experiment's evidence from later fixes it inspired. Dedicated
 evals and benchmarks remain deferred.
 
+**Archive notice (LAB-2).** This log predates the lab pivot. The live drivers
+it names under `test/support/*_live.exs` and `live_session_driver.exs` were
+retired in LAB-2 slice E; run them from commit `d8aef3e` or earlier. JOB-3/4,
+JOB-5 and JOB-10 continue as the seeded lab scenarios `provider_fault`,
+`session_crash` and `concurrent_jobs`.
+
 ## 2026-09-06: Live plugin discovery and revision — PLUGIN-1
 
 **Question:** Can a running agent session acquire and evolve a useful tool

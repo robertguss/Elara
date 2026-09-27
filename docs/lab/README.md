@@ -73,3 +73,37 @@ simulated responses, tool plans, injected errors, and fault schedules. A
 scenario reports these as a `choices_digest`, and rerunning the same seed
 reproduces that digest. A seed does not fix concurrent interleavings or
 timings, so report those as a spread across repetitions, not as exact values.
+
+**Scenarios.**
+
+| Scenario          | What it exercises                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| `smoke`           | Concurrent sessions with tool rounds and injected errors; delta latency              |
+| `concurrent_jobs` | Four test-job slots, rejection, cancellation and refill, one completion each (JOB-10) |
+| `session_crash`   | An idle owner killed while its job runs; offline completion, delivery on reopen (JOB-5) |
+| `provider_fault`  | One scripted `bad_response` before or during interpretation; a second session keeps progressing (JOB-3/4) |
+
+The job scenarios use `Elara.Lab.Jobs`, a fixture whose test blocks until the
+scenario releases it, so a fault lands while a job provably runs. They run on
+the simulated provider only.
+
+**Checks and cleanup.** A scenario reports invariants as
+`checks: %{name => boolean}`. The summary counts failed checks, and the task
+exits non-zero when any fails. A scenario settles its own jobs and sessions; if
+it cannot confirm that (`cleanup_confirmed: false`) or it raises, the runner
+keeps that repetition's directory as evidence and runs no more repetitions.
+
+**Scripting and faults.** A simulated profile's `rules` script specific requests
+(`{predicate_on_messages, response}`, first match wins) without shifting the
+seeded choices of other requests. `Elara.Lab.Faults` kills a target at a named
+point (`:provider_started`, `:provider_streaming`, `:tool_running`), or a named
+session from outside with `inject({:session, id})`. Client-connection and
+VM-restart faults arrive with LAB-4 and LAB-5.
+
+**Real mode.** `--provider real --max-requests R` runs a scenario against the
+configured provider (`ELARA_PROVIDER`, else the saved login) and spends real
+quota. The cap is static: sessions × turns × per-turn iterations ≤ R. Only
+`smoke` supports it; latency percentiles and choice digests are null there,
+since they come from the simulator.
+
+    ELARA_PROVIDER=openai-codex mix elara.lab run smoke --provider real --max-requests 3

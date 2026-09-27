@@ -12,7 +12,8 @@ defmodule Mix.Tasks.Elara.Lab do
   skills home, so it never touches `~/.elara` state (a real provider still reads
   its saved credentials). `--provider real` uses the configured provider and
   spends real quota; it requires `--max-requests`. Result lines are appended under
-  `lab/results/SCENARIO/` (gitignored) and a summary is printed. Scenarios:
+  `lab/results/SCENARIO/` (gitignored) and a summary is printed. The task fails
+  when any check fails or a repetition's cleanup is unconfirmed. Scenarios:
   #{Enum.join(Elara.Lab.scenarios(), ", ")}.
   """
 
@@ -70,8 +71,16 @@ defmodule Mix.Tasks.Elara.Lab do
       case Elara.Lab.run(scenario, lab_opts) do
         {:ok, results} ->
           path = Elara.Lab.write_results(Keyword.get(opts, :results, "lab/results"), results)
-          Mix.shell().info(JSON.encode!(Elara.Lab.summarize(results)))
+          summary = Elara.Lab.summarize(results)
+          Mix.shell().info(JSON.encode!(summary))
           Mix.shell().info("results: #{path}")
+
+          if summary.failed_checks != %{} or summary.retained_dirs != [],
+            do:
+              Mix.raise(
+                "lab run failed: checks #{inspect(summary.failed_checks)}, " <>
+                  "retained #{inspect(summary.retained_dirs)}"
+              )
 
         {:error, {:unknown_scenario, name, known}} ->
           Mix.raise("unknown scenario #{inspect(name)}; known: #{Enum.join(known, ", ")}")

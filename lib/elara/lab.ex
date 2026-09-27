@@ -6,9 +6,19 @@ defmodule Elara.Lab do
   A seed fixes a scenario's choices (simulated responses, tool plans, fault
   schedules). It does not fix concurrent interleavings or timings, so those
   are reported across repetitions with their spread.
+
+  A scenario reports invariants as `checks: %{name => boolean}`. It settles its
+  own jobs and sessions before returning; if it cannot confirm that, it returns
+  `cleanup_confirmed: false`, and the runner keeps its directory as evidence and
+  runs no further repetitions. A scenario that raises also keeps its directory.
   """
 
-  @scenarios %{"smoke" => Elara.Lab.Scenarios.Smoke}
+  @scenarios %{
+    "smoke" => Elara.Lab.Scenarios.Smoke,
+    "concurrent_jobs" => Elara.Lab.Scenarios.ConcurrentJobs,
+    "session_crash" => Elara.Lab.Scenarios.SessionCrash,
+    "provider_fault" => Elara.Lab.Scenarios.ProviderFault
+  }
 
   @type context :: %{
           seed: integer(),
@@ -28,25 +38,45 @@ defmodule Elara.Lab do
   result map per repetition. Raw `latency_ms` samples are replaced by their
   percentiles.
   """
-  @spec run(String.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  @spec run(String.t() | module(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def run(name, opts) do
     with {:ok, module} <- scenario(name) do
+      name =
+        if is_atom(name),
+          do: name |> Module.split() |> List.last() |> Macro.underscore(),
+          else: name
+
       seed = Keyword.fetch!(opts, :seed)
       params = Keyword.get(opts, :params, %{})
 
       results =
-        for rep <- 0..(Keyword.get(opts, :n, 1) - 1)//1 do
-          run_once(module, name, %{
-            seed: seed + rep,
-            params: params,
-            provider: Keyword.get(opts, :provider, :simulated),
-            max_requests: Keyword.get(opts, :max_requests)
-          })
-        end
+        Enum.reduce_while(0..(Keyword.get(opts, :n, 1) - 1)//1, [], fn rep, acc ->
+          result =
+            run_once(module, name, %{
+              seed: seed + rep,
+              params: params,
+              provider: Keyword.get(opts, :provider, :simulated),
+              max_requests: Keyword.get(opts, :max_requests)
+            })
 
-      {:ok, results}
+          if Map.has_key?(result, :retained_dir),
+            do: {:halt, [result | acc]},
+            else: {:cont, [result | acc]}
+        end)
+
+      {:ok, Enum.reverse(results)}
     end
   end
+
+  @doc "Names of the checks a result reports as failed."
+  @spec failed_checks(map()) :: [atom() | String.t()]
+  def failed_checks(result),
+    do:
+      for({name, passed} <- Map.get(result, :checks, %{}), passed != true, do: name)
+      |> Enum.sort()
+
+  # A module is accepted directly so tests can run scenarios that are not registered.
+  defp scenario(module) when is_atom(module), do: {:ok, module}
 
   defp scenario(name) do
     case Map.fetch(@scenarios, name) do
@@ -67,21 +97,34 @@ defmodule Elara.Lab do
       result = module.run(Map.put(context, :dir, dir))
       elapsed = System.monotonic_time(:millisecond) - started
 
-      result
-      |> Map.update(:latency_ms, nil, &percentiles/1)
-      |> Map.merge(%{
-        scenario: name,
-        seed: context.seed,
-        params: context.params,
-        elapsed_ms: elapsed
-      })
+      result =
+        result
+        |> Map.update(:latency_ms, nil, &percentiles/1)
+        |> Map.merge(%{
+          scenario: name,
+          seed: context.seed,
+          params: context.params,
+          elapsed_ms: elapsed
+        })
+
+      {cleanup, result} = Map.pop(result, :cleanup_confirmed, true)
+
+      if cleanup == true do
+        File.rm_rf!(dir)
+        result
+      else
+        IO.warn("lab cleanup unconfirmed; retained #{dir}; stopping repetitions")
+        Map.put(result, :retained_dir, dir)
+      end
+    rescue
+      error ->
+        IO.warn("lab scenario #{name} raised; retained #{dir}")
+        reraise error, __STACKTRACE__
     after
       Enum.each(previous, fn
         {key, nil} -> Application.delete_env(:elara, key)
         {key, value} -> Application.put_env(:elara, key, value)
       end)
-
-      File.rm_rf!(dir)
     end
   end
 
@@ -113,6 +156,8 @@ defmodule Elara.Lab do
       repetitions: length(results),
       seeds: Enum.map(results, & &1.seed),
       choices_digests: Enum.map(results, &Map.get(&1, :choices_digest)),
+      failed_checks: results |> Enum.flat_map(&failed_checks/1) |> Enum.frequencies(),
+      retained_dirs: for(%{retained_dir: dir} <- results, do: dir),
       elapsed_ms: spread(Enum.map(results, & &1.elapsed_ms)),
       completed_turns: spread(Enum.map(results, &Map.get(&1, :completed_turns, 0))),
       latency_p50_ms: spread(for %{latency_ms: %{p50: v}} <- results, do: v),

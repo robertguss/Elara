@@ -8,6 +8,8 @@ defmodule Elara.Lab.Faults do
   entry for `{key, point}` names a target to fail abruptly:
 
     * `:session`: kill the owning session process.
+    * `{:session, id}`: kill the session registered as `id`, from any process
+      (for a crash while the owner is idle, which no fault point reaches).
     * `:task`: kill the calling provider or tool task.
     * `:exec_stub`: SIGKILL the Rust execution stub's OS process.
 
@@ -20,7 +22,7 @@ defmodule Elara.Lab.Faults do
   """
 
   @type point :: :provider_started | :provider_streaming | :tool_running
-  @type target :: :session | :task | :exec_stub
+  @type target :: :session | {:session, String.t()} | :task | :exec_stub
   @type schedule :: %{{term(), point()} => target()}
 
   @doc """
@@ -44,12 +46,21 @@ defmodule Elara.Lab.Faults do
     end
   end
 
-  @doc "Fail the target abruptly from the calling (task) process."
+  @doc "Fail the target abruptly; `:session` and `:task` act on the calling task."
   @spec inject(target()) :: :ok
   def inject(:session) do
     case owning_session() do
       nil -> :ok
       pid -> Process.exit(pid, :kill)
+    end
+
+    :ok
+  end
+
+  def inject({:session, id}) do
+    case Elara.session_pid(id) do
+      {:ok, pid} -> Process.exit(pid, :kill)
+      _ -> :ok
     end
 
     :ok

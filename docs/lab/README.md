@@ -104,7 +104,7 @@ their difference where both are numbers; otherwise it names why not.
 | `concurrent_jobs` | Four test-job slots, rejection, cancellation and refill, one completion each (JOB-10) |
 | `session_crash`   | An idle owner killed while its job runs; offline completion, delivery on reopen (JOB-5) |
 | `provider_fault`  | One scripted `bad_response` before or during interpretation; a second session keeps progressing (JOB-3/4) |
-| `concurrency`     | RQ-2 reference workload: closed-loop users cycling sessions, each observed by a protocol-v2 client ([003](003-concurrency-baseline.md)) |
+| `concurrency`     | RQ-2 reference workload: closed-loop users cycling sessions, each observed by a protocol-v2 client; `topology=children` makes them delegated children of one paused parent ([003](003-concurrency-baseline.md)) |
 
 The job scenarios use `Elara.Lab.Jobs`, a fixture whose test blocks until the
 scenario releases it, so a fault lands while a job provably runs. They run on
@@ -122,6 +122,15 @@ a job. Its cleanup is confirmed only when every user, session, task and client
 it started has ended, no execution job is pending, and the stub's epoch is
 unchanged; until its provider tasks end, it keeps their ledger.
 
+With `--set topology=children`, each user's session is a coding child of one
+paused parent (`thread_limit` is lifted to `sessions` for the run), and its
+assignment is turn 1. Results then carry `children` (start attempts, censored
+starts and start times), `reports` (completion reports staged, accepted,
+delivered and pending) and `parent` (inbox entries and file size). Its cleanup
+also requires `Elara.Threads` and the report transport to be quiescent, every
+staged report settled, no child left running, and both actors held until the
+runner's root and directory are final.
+
 **Checks and cleanup.** A scenario reports invariants as
 `checks: %{name => boolean}`. The summary counts failed checks, and the task
 exits non-zero when any fails. A repetition with a failed check keeps its
@@ -130,6 +139,9 @@ settles its own jobs and sessions; if it cannot confirm that
 (`cleanup_confirmed: false`) or it raises, the runner keeps the directory as
 `retained_dir`, runs no more repetitions, and leaves the global sessions root
 bound to it so unsettled work still finds its records. Don't reuse that VM.
+A scenario can `Elara.Lab.hold/2` a shared actor, which the runner resumes only
+once the root and directory are final; `Elara.Lab.with_held/3` gives test
+teardown the same protection.
 The job scenarios log simulated choices through `Elara.Lab.choice_log/0`, so
 they report a `choices_digest` too.
 

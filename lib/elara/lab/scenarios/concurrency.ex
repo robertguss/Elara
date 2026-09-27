@@ -1,15 +1,16 @@
 defmodule Elara.Lab.Scenarios.Concurrency do
   @moduledoc """
   RQ-2 reference workload (note 003) and its per-repetition bound verdicts, on
-  the simulated provider. Establishes runtime properties of one VM, not
-  user-visible behavior; judging across repetitions is not its job.
+  the simulated provider, as top-level sessions or as delegated children of one
+  paused parent. Establishes runtime properties of one VM, not user-visible
+  behavior; judging across repetitions is not its job.
   """
 
   @behaviour Elara.Lab
 
   alias Elara.Lab.{CallCounts, Client, Histogram, Sampler, Verdict}
   alias Elara.Lab.Scenarios.Concurrency.Evidence
-  alias Elara.Message.{Assistant, ToolResult}
+  alias Elara.Message.{Assistant, ToolResult, User}
   alias Elara.Provider.Simulated
   alias Elara.Session.{Handoff, Store}
 
@@ -38,12 +39,13 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     "client_close_ms" => 30_000,
     # Test-only faults: stream a different answer length than the accounting
     # expects, stall each session's first answer after its ledger row, keep
-    # clients from reading until their session has stopped, or bind the
-    # embedded server to a given port.
+    # clients from reading until their session has stopped, bind the embedded
+    # server to a given port, or delay a child's resume past its attach.
     "simulated_answer_deltas" => nil,
     "stall_first_answer_ms" => 0,
     "client_hold" => 0,
-    "server_port" => 0
+    "server_port" => 0,
+    "resume_delay_ms" => 0
   }
   @counted [
     {:file, :sync, 1},
@@ -75,6 +77,21 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       {"connection_mailbox_p99", ["queues", "connection", "p99"]},
       {"exec_mailbox_max", ["queues", "exec", "max"]},
       {"exec_mailbox_p99", ["queues", "exec", "p99"]},
+      {"child_attempts", ["children", "attempts"]},
+      {"child_starts_ok", ["children", "returned_ok"]},
+      {"child_starts_error", ["children", "returned_error"]},
+      {"child_starts_censored", ["children", "censored"]},
+      {"child_start_p50_ms", ["children", "start_ms", "p50"]},
+      {"child_start_p95_ms", ["children", "start_ms", "p95"]},
+      {"child_start_max_ms", ["children", "start_ms", "max"]},
+      {"child_records", ["children", "records"]},
+      {"worktrees", ["children", "worktrees"]},
+      {"reports_staged", ["reports", "staged"]},
+      {"reports_accepted", ["reports", "accepted"]},
+      {"reports_delivered", ["reports", "delivered"]},
+      {"reports_pending", ["reports", "pending"]},
+      {"parent_inbox_entries", ["parent", "inbox_entries"]},
+      {"parent_file_bytes", ["parent", "file_bytes"]},
       {"threads_mailbox_max", ["queues", "threads", "max"]},
       {"threads_mailbox_p99", ["queues", "threads", "p99"]},
       {"transport_mailbox_max", ["queues", "transport", "max"]},
@@ -109,8 +126,9 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   def run(%{provider: :real}),
     do: raise(ArgumentError, "the concurrency scenario runs on the simulated provider only")
 
-  def run(%{seed: seed, dir: dir, params: params}) do
+  def run(%{seed: seed, dir: dir, params: params} = context) do
     p = params(params)
+    hook = Map.get(context, :hook, fn _point -> :ok end)
 
     if Elara.Exec.status().jobs != 0,
       do: raise(ArgumentError, "the concurrency scenario needs an idle Elara.Exec")
@@ -119,11 +137,14 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     File.mkdir_p!(workspace)
     fixture = String.duplicate("lab fixture\n", div(p.read_bytes, 12) + 1)
     File.write!(Path.join(workspace, "fixture.txt"), binary_part(fixture, 0, p.read_bytes))
+    if p.topology == "children", do: commit_workspace!(workspace)
 
     snapshot = %{
       sessions: children(Elara.SessionSup),
       tasks: children(Elara.TaskSup),
-      exec: Elara.Exec.token()
+      exec: Elara.Exec.token(),
+      threads: Process.whereis(Elara.Threads),
+      transport: Process.whereis(Elara.Threads.Communication)
     }
 
     # Every global resource is released on every exit path, setup failures included.
@@ -144,8 +165,18 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         :ets.delete(clients)
       end)
 
+      watchers = :ets.new(:lab_watchers, [:set, :public])
+
+      defer(fn ->
+        for {pid} <- :ets.tab2list(watchers), do: Process.exit(pid, :kill)
+        :ets.delete(watchers)
+      end)
+
+      if p.topology == "children", do: lift_thread_limit(p.sessions)
+
       {:ok, server} = Elara.Server.start(port: p.server_port)
       defer(fn -> if Process.alive?(server), do: GenServer.stop(server) end)
+      hook.(:setup)
 
       execute(%{
         p: p,
@@ -156,7 +187,9 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         trace: trace,
         ledger: ledger,
         clients: clients,
-        server: server
+        watchers: watchers,
+        server: server,
+        hook: hook
       })
     after
       run_deferred()
@@ -164,6 +197,40 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   end
 
   defp defer(fun), do: Process.put(@deferred, [fun | Process.get(@deferred, [])])
+
+  # Children run at `thread_limit` K, so admission never binds; restored on exit.
+  defp lift_thread_limit(k) do
+    previous = Application.fetch_env(:elara, :thread_limit)
+    Application.put_env(:elara, :thread_limit, k)
+
+    defer(fn ->
+      case previous do
+        {:ok, value} -> Application.put_env(:elara, :thread_limit, value)
+        :error -> Application.delete_env(:elara, :thread_limit)
+      end
+    end)
+  end
+
+  # Coding children branch worktrees from the workspace's committed HEAD.
+  defp commit_workspace!(workspace) do
+    for args <- [
+          ["init", "-q"],
+          ["add", "fixture.txt"],
+          [
+            "-c",
+            "user.name=Elara Lab",
+            "-c",
+            "user.email=lab@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "fixture"
+          ]
+        ] do
+      {_out, 0} = System.cmd("git", args, cd: workspace, stderr_to_stdout: true)
+    end
+  end
 
   defp run_deferred do
     Enum.each(Process.delete(@deferred) || [], fn fun ->
@@ -215,7 +282,12 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     unless trace in ["none", "counts"],
       do: raise(ArgumentError, "trace must be none or counts, got #{inspect(trace)}")
 
-    Map.put(ints, :trace, trace)
+    topology = Map.get(params, "topology", "sessions")
+
+    unless topology in ["sessions", "children"],
+      do: raise(ArgumentError, "topology must be sessions or children, got #{inspect(topology)}")
+
+    ints |> Map.put(:trace, trace) |> Map.put(:topology, topology)
   end
 
   # ── Load ────────────────────────────────────────────────────────────────
@@ -256,6 +328,8 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         tools: Enum.filter(Elara.Tool.builtins(), &(&1.name in ["read", "bash"]))
       })
 
+    run = Map.put(run, :parent, if(p.topology == "children", do: start_parent(run)))
+
     users =
       for {offset, index} <- Enum.with_index(run.offsets, 1), into: %{} do
         {pid, ref} = spawn_monitor(fn -> user(run, index, offset) end)
@@ -280,9 +354,26 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         attaches: [],
         turns: [],
         summaries: %{},
-        user_failures: []
+        user_failures: [],
+        attempts: %{}
       })
     )
+  end
+
+  # Started after the idle baseline, so its memory is measured. Paused and never
+  # resumed: it receives its children's reports but runs no turn.
+  defp start_parent(run) do
+    {:ok, id} =
+      Elara.start_session(
+        provider: provider(run, "parent"),
+        cwd: run.workspace,
+        plugins: [],
+        tools: run.tools,
+        context_limit: 1_000_000,
+        pause_inputs: true
+      )
+
+    id
   end
 
   defp offsets(seed, p) do
@@ -341,6 +432,12 @@ defmodule Elara.Lab.Scenarios.Concurrency do
 
   defp record(run, {:client_summary, pid, sim_id, summary}),
     do: {:ok, put_in(run.summaries[pid], {sim_id, summary})}
+
+  defp record(run, {:child_attempt, attempt, begun}),
+    do: {:ok, put_in(run.attempts[attempt], %{begun: begun})}
+
+  defp record(run, {:child_start, attempt, ms, result}),
+    do: {:ok, update_in(run.attempts[attempt], &Map.merge(&1 || %{}, %{ms: ms, result: result}))}
 
   defp record(run, {:DOWN, ref, :process, _pid, _reason}) when is_map_key(run.users, ref),
     do: :user_down
@@ -426,23 +523,51 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     cycle(run, index, 1)
   end
 
+  defp cycle(%{p: %{topology: "children"}} = run, index, number) do
+    if System.monotonic_time(:millisecond) < run.load_end do
+      sim_id = "u#{index}c#{number}"
+      client = request_client(run, sim_id)
+      provider = provider(run, sim_id)
+      attempt = {index, number}
+      begun = System.monotonic_time(:millisecond)
+      send(run.coordinator, {:child_attempt, attempt, begun})
+
+      started =
+        Elara.Threads.start_child(run.parent, "assignment",
+          coding: true,
+          pause_inputs: true,
+          provider: provider
+        )
+
+      ms = System.monotonic_time(:millisecond) - begun
+
+      case started do
+        {:ok, %{"id" => id}} ->
+          send(run.coordinator, {:child_start, attempt, ms, :ok})
+          send(run.coordinator, {:session, sim_id, id})
+          attach = Client.attach(client, id, 10_000)
+          send(run.coordinator, {:attached, id, attach})
+          if attach == :ok and first_turn(run, id) == :ran, do: turns(run, id, 2)
+          stop_session(id)
+          Client.finish(client)
+          cycle(run, index, number + 1)
+
+        {:error, reason} ->
+          send(run.coordinator, {:child_start, attempt, ms, {:error, reason}})
+          Client.finish(client)
+          exit({:child_start, reason})
+      end
+    end
+  end
+
   defp cycle(run, index, number) do
     if System.monotonic_time(:millisecond) < run.load_end do
       sim_id = "u#{index}c#{number}"
       client = request_client(run, sim_id)
 
-      provider =
-        Simulated.new(
-          seed: run.seed,
-          id: sim_id,
-          profile: profile(run.p),
-          ledger: run.ledger,
-          fault: stall_hook(run.p.stall_first_answer_ms)
-        )
-
       {:ok, id} =
         Elara.start_session(
-          provider: provider,
+          provider: provider(run, sim_id),
           cwd: run.workspace,
           plugins: [],
           tools: run.tools,
@@ -453,19 +578,111 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       attach = Client.attach(client, id, 10_000)
       send(run.coordinator, {:attached, id, attach})
       if attach == :ok, do: turns(run, id, 1)
-
-      with {:ok, pid} <- Elara.session_pid(id) do
-        try do
-          GenServer.stop(pid)
-        catch
-          :exit, _ -> :ok
-        end
-      end
-
+      stop_session(id)
       Client.finish(client)
       cycle(run, index, number + 1)
     end
   end
+
+  defp provider(run, sim_id) do
+    Simulated.new(
+      seed: run.seed,
+      id: sim_id,
+      profile: profile(run.p),
+      ledger: run.ledger,
+      fault: stall_hook(run.p.stall_first_answer_ms)
+    )
+  end
+
+  defp stop_session(id) do
+    with {:ok, pid} <- Elara.session_pid(id) do
+      try do
+        GenServer.stop(pid)
+      catch
+        :exit, _ -> :ok
+      end
+    end
+  end
+
+  # Turn 1 is the child's assignment, resumed only before the load ends. A
+  # watcher linked to this user reports the turn's end, so the user never
+  # receives the child's event stream.
+  defp first_turn(run, id) do
+    user = self()
+    ref = make_ref()
+    watcher = spawn_link(fn -> watch(user, ref, id) end)
+    :ets.insert(run.watchers, {watcher})
+    monitor = Process.monitor(watcher)
+
+    outcome =
+      receive do
+        {^ref, :watching} ->
+          if run.p.resume_delay_ms > 0, do: Process.sleep(run.p.resume_delay_ms)
+
+          if System.monotonic_time(:millisecond) < run.load_end do
+            Elara.resume_inputs(id)
+            receive(do: ({^ref, ended} -> ended))
+          else
+            send(watcher, :cancel)
+            :skipped
+          end
+
+        {^ref, {:child_down, _reason} = down} ->
+          down
+      end
+
+    receive(do: ({:DOWN, ^monitor, :process, _, _} -> :ok))
+
+    if outcome == :skipped do
+      :skipped
+    else
+      # The session broadcasts turn_ended before it settles the assignment; one
+      # round trip orders the next ask after that settlement.
+      settle_input(id)
+      result = turn_result(outcome)
+      now = System.monotonic_time(:millisecond)
+      Client.advance(run.shared, now)
+      send(run.coordinator, {:turn, id, now, result})
+      if match?({:error, {:child_down, _}}, result), do: :down, else: :ran
+    end
+  end
+
+  defp watch(user, ref, id) do
+    with {:ok, pid} <- Elara.session_pid(id),
+         monitor = Process.monitor(pid),
+         :ok <- subscribe(pid) do
+      send(user, {ref, :watching})
+      watch(user, ref, id, monitor)
+    else
+      error -> send(user, {ref, {:child_down, error}})
+    end
+  end
+
+  defp watch(user, ref, id, monitor) do
+    receive do
+      {:elara, ^id, {:turn_ended, outcome}} -> send(user, {ref, {:turn_ended, outcome}})
+      {:elara, ^id, {:turn_ended, outcome, _}} -> send(user, {ref, {:turn_ended, outcome}})
+      {:DOWN, ^monitor, :process, _, reason} -> send(user, {ref, {:child_down, reason}})
+      :cancel -> :ok
+      {:elara, ^id, _event} -> watch(user, ref, id, monitor)
+    end
+  end
+
+  defp subscribe(pid) do
+    Elara.subscribe(pid)
+  catch
+    :exit, reason -> {:error, reason}
+  end
+
+  defp settle_input(id) do
+    Elara.input_status(id, "assignment")
+  catch
+    :exit, _ -> :ok
+  end
+
+  defp turn_result({:turn_ended, {:completed, text}}), do: {:ok, text}
+  defp turn_result({:turn_ended, outcome}), do: {:error, outcome}
+  defp turn_result({:child_down, reason}), do: {:error, {:child_down, reason}}
 
   defp turns(run, id, turn) do
     if turn <= run.p.turns and System.monotonic_time(:millisecond) < run.load_end do
@@ -558,12 +775,23 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     Enum.each(users, fn {_ref, pid} -> Process.exit(pid, :kill) end)
     {run, left_users} = await_users(run, Map.keys(users), 5_000)
 
+    # Watchers die with their users. A killed user's accepted start still runs in
+    # Threads, so Threads settles before sessions stop.
+    left_watchers =
+      await_exit(
+        for({pid} <- :ets.tab2list(run.watchers), do: pid),
+        System.monotonic_time(:millisecond) + run.p.shutdown_ms
+      )
+
+    threads_settled = run.parent == nil or quiesce(run, Elara.Threads)
+
     deadline = System.monotonic_time(:millisecond) + run.p.shutdown_ms
     sessions = children(Elara.SessionSup) -- run.snapshot.sessions
     {left_sessions, killed} = stop_sessions(sessions, deadline)
     left_tasks = await_exit(children(Elara.TaskSup) -- run.snapshot.tasks, deadline)
     jobs = await_exec_idle(deadline)
     ledger_final = left_sessions == [] and left_tasks == []
+    actors = settle_actors(run, threads_settled)
 
     run = collect_clients(run, ledger_final)
     left_clients = Map.values(run.client_refs)
@@ -571,23 +799,125 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     samples = Sampler.stop(run.sampler)
     GenServer.stop(run.server)
 
-    settlement = %{
-      ledger_final: ledger_final,
-      killed_sessions: killed,
-      leftover_users: left_users,
-      leftover_sessions: length(left_sessions),
-      leftover_tasks: length(left_tasks),
-      leftover_clients: length(left_clients),
-      exec_jobs_pending: jobs,
-      exec_epoch_changed: Elara.Exec.token() != run.snapshot.exec
-    }
+    settlement =
+      Map.merge(actors.facts, %{
+        ledger_final: ledger_final,
+        killed_sessions: killed,
+        leftover_users: left_users,
+        leftover_sessions: length(left_sessions),
+        leftover_tasks: length(left_tasks),
+        leftover_clients: length(left_clients),
+        leftover_watchers: length(left_watchers),
+        exec_jobs_pending: jobs,
+        exec_epoch_changed: Elara.Exec.token() != run.snapshot.exec
+      })
 
     result(
       run,
       samples,
-      Map.put(settlement, :cleanup_confirmed, Evidence.cleanup_confirmed?(settlement))
+      Map.put(settlement, :cleanup_confirmed, Evidence.cleanup_confirmed?(settlement)),
+      actors
     )
   end
+
+  @settled_actors %{
+    threads_quiescent: true,
+    transport_quiescent: true,
+    reports_settled: true,
+    children_stopped: true,
+    actors_held: true,
+    actors_unchanged: true
+  }
+
+  defp settle_actors(%{parent: nil}, _threads_settled),
+    do: %{facts: @settled_actors, reports: nil, records: []}
+
+  # Children: after every producer is down, Threads and the report transport
+  # must drain, no staged report may be left for a later tick to write, and both
+  # stay held until the runner's root and directory are final.
+  defp settle_actors(run, threads_settled) do
+    threads = quiesce(run, Elara.Threads)
+    transport = quiesce(run, Elara.Threads.Communication)
+    reports = report_files(run.dir)
+
+    held =
+      Enum.map(
+        [Elara.Threads, Elara.Threads.Communication],
+        &Elara.Lab.hold(&1, run.p.shutdown_ms)
+      )
+
+    records = for r <- Elara.Threads.all_records(), r["parent_id"] == run.parent, do: r["id"]
+
+    facts = %{
+      threads_quiescent: threads_settled and threads,
+      transport_quiescent: transport,
+      reports_settled: reports.settled,
+      children_stopped: not Enum.any?(records, &match?({:ok, _}, Elara.session_pid(&1))),
+      actors_held: Enum.all?(held, &(&1 == :ok)),
+      actors_unchanged:
+        Process.whereis(Elara.Threads) == run.snapshot.threads and
+          Process.whereis(Elara.Threads.Communication) == run.snapshot.transport
+    }
+
+    %{facts: facts, reports: Map.delete(reports, :settled), records: records}
+  end
+
+  # Quiescent: an empty queue after a synchronous round trip, twice in a row,
+  # within `shutdown_ms`. The hook hears this wait's first unsuccessful poll.
+  defp quiesce(run, name) do
+    label = if name == Elara.Threads, do: :threads, else: :transport
+    deadline = System.monotonic_time(:millisecond) + run.p.shutdown_ms
+    quiesce(run, Process.whereis(name), label, deadline, false, 0)
+  end
+
+  defp quiesce(_run, nil, _label, _deadline, _told, _streak), do: false
+  defp quiesce(_run, _pid, _label, _deadline, _told, 2), do: true
+
+  defp quiesce(run, pid, label, deadline, told, streak) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    empty? =
+      remaining > 0 and round_trip(pid, remaining) and
+        Process.info(pid, :message_queue_len) == {:message_queue_len, 0}
+
+    cond do
+      empty? ->
+        quiesce(run, pid, label, deadline, told, streak + 1)
+
+      remaining <= 0 ->
+        false
+
+      true ->
+        unless told, do: run.hook.({:waiting, label})
+        Process.sleep(10)
+        quiesce(run, pid, label, deadline, true, 0)
+    end
+  end
+
+  defp round_trip(pid, timeout) do
+    :sys.get_state(pid, timeout)
+    true
+  catch
+    :exit, _ -> false
+  end
+
+  defp report_files(dir) do
+    root = Path.join([dir, "sessions", "_thread_messages"])
+
+    completions =
+      for path <- Path.wildcard(Path.join([root, "completions", "*.json"])),
+          {:ok, completion} <- [read_json(path)],
+          do: Map.put(completion, "key", Path.basename(path, ".json"))
+
+    messages =
+      for path <- Path.wildcard(Path.join(root, "*.json")),
+          {:ok, message} <- [read_json(path)],
+          do: message
+
+    Evidence.reports(completions, messages)
+  end
+
+  defp read_json(path), do: with({:ok, bytes} <- File.read(path), do: JSON.decode(bytes))
 
   defp await_users(run, refs, timeout) do
     deadline = System.monotonic_time(:millisecond) + timeout
@@ -686,7 +1016,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
 
   # ── Result ──────────────────────────────────────────────────────────────
 
-  defp result(run, sampled, settlement) do
+  defp result(run, sampled, settlement, actors) do
     p = run.p
     n = p.sessions
     summaries = Map.values(run.summaries)
@@ -694,7 +1024,8 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     missing_summaries = :ets.info(run.clients, :size) - length(summaries)
     reached_end? = run.cutoff == nil or run.cutoff >= run.load_end
     censored = run.cutoff != nil
-    transcripts = transcripts(run, censored)
+    transcripts = transcripts(run, censored, actors.records)
+    children = children_result(run, actors)
 
     latency_snapshot = Histogram.snapshot(run.shared.latency)
     latency = Histogram.percentiles(latency_snapshot, totals.unreceived_in_cohort)
@@ -735,14 +1066,21 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       sessions_persisted: transcripts.reconciled.sessions_persisted,
       answers_persisted: transcripts.reconciled.answers_persisted,
       guard_not_tripped: not guard?(run.stop),
-      drain_completed: run.stop not in [:watchdog, :drain_timeout]
+      drain_completed: run.stop not in [:watchdog, :drain_timeout],
+      children_started: children == nil or children.returned_error == 0,
+      assignments_first: transcripts.assignments_first,
+      parent_idle:
+        run.parent == nil or
+          (transcripts.parent_idle and
+             :ets.match_object(run.ledger, {{"parent", :_}, :_, :_, :_, :_}) == [])
     }
 
     compliant =
       checks.attach_before_first_turn and checks.turns_ok and checks.tools_ok and
         checks.no_handoff and checks.sessions_openable and checks.users_ok and
         checks.sessions_persisted and checks.answers_persisted and
-        totals.non_compliant_answers == 0 and transcripts.wrong_answer_sizes == 0
+        totals.non_compliant_answers == 0 and transcripts.wrong_answer_sizes == 0 and
+        checks.children_started and checks.assignments_first and checks.parent_idle
 
     complete =
       run.stop == nil and checks.accounting_reconciled and checks.clients_closed and
@@ -811,6 +1149,9 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         ])
         |> Map.put(:missing_summaries, missing_summaries),
       history_bytes: transcripts.history_bytes,
+      children: children,
+      reports: actors.reports,
+      parent: transcripts.parent,
       transcripts:
         transcripts.reconciled
         |> Map.drop([:sessions_persisted, :answers_persisted])
@@ -825,6 +1166,29 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   end
 
   defp guard?(stop), do: stop in [:guard_memory, :guard_mailbox, :guard_lag]
+
+  # A start whose return was never reported is censored: outcome and duration
+  # unknown, never invented. Durations cover returned starts begun before load end.
+  defp children_result(%{parent: nil}, _actors), do: nil
+
+  defp children_result(run, actors) do
+    attempts = Map.values(run.attempts)
+    returned = for %{result: result} <- attempts, do: result
+
+    %{
+      attempts: length(attempts),
+      returned_ok: Enum.count(returned, &(&1 == :ok)),
+      returned_error: Enum.count(returned, &(&1 != :ok)),
+      censored: length(attempts) - length(returned),
+      start_ms:
+        Elara.Lab.percentiles(
+          for %{ms: ms, begun: begun} <- attempts, begun < run.load_end, do: ms
+        ),
+      records: length(actors.records),
+      worktrees:
+        length(Path.wildcard(Path.join([run.dir, "sessions", "_threads", "workspaces", "*"])))
+    }
+  end
 
   defp r_ideal(p) do
     interval = 1000 / p.deltas_per_sec
@@ -974,17 +1338,13 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   # Off the timing path. Every persisted session is opened and reconciled with
   # what users reported; every persisted tool failure counts, since wall-clock
   # entry timestamps cannot place it relative to the monotonic cutoff.
-  defp transcripts(run, censored) do
+  defp transcripts(run, censored, child_ids) do
     p = run.p
     root = Path.join(run.dir, "sessions")
     all = Path.wildcard(Path.join(root, "**/*"))
     expected = p.answer_deltas * p.delta_bytes
 
-    files =
-      Enum.filter(all, fn path ->
-        Path.extname(path) == ".jsonl" and
-          not String.starts_with?(Path.relative_to(path, root), "_")
-      end)
+    files = session_files(root)
 
     stats =
       Enum.map(files, fn path ->
@@ -999,13 +1359,21 @@ defmodule Elara.Lab.Scenarios.Concurrency do
               for %{message: %ToolResult{outcome: outcome}} <- store.entries,
                   do: match?({:ok, _}, outcome)
 
+            assignment = Enum.find(store.inbox, &(&1.id == "assignment"))
+
             %{
               id: store.id,
               answers: length(answers),
               frozen: if(Handoff.frozen?(store), do: 1, else: 0),
               wrong: Enum.count(answers, &(byte_size(&1) != expected)),
               tools: tools,
-              bytes: byte_size(JSON.encode!(Enum.map(history, &Store.encode_message/1)))
+              bytes: byte_size(JSON.encode!(Enum.map(history, &Store.encode_message/1))),
+              first_user:
+                store |> Store.user_entries() |> List.first() |> then(&(&1 && &1.message)),
+              assignment: assignment && assignment.state,
+              assistant: Enum.any?(history, &match?(%Assistant{}, &1)),
+              inbox: length(store.inbox),
+              file_bytes: File.stat!(path).size
             }
 
           {:error, _reason} ->
@@ -1021,6 +1389,9 @@ defmodule Elara.Lab.Scenarios.Concurrency do
           run.cutoff == nil or at <= run.cutoff,
           do: {id, match?({:ok, _}, result)}
 
+    by_id = Map.new(opened, &{&1.id, &1})
+    parent = run.parent && by_id[run.parent]
+
     %{
       files: length(files),
       all_files: Enum.count(all, &File.regular?/1),
@@ -1030,11 +1401,16 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       tool_failures: Evidence.tool_failures(Enum.flat_map(opened, & &1.tools)),
       reconciled:
         Evidence.reconcile(
-          Enum.map(run.sessions, &elem(&1, 1)),
+          Enum.map(run.sessions, &elem(&1, 1)) ++ List.wrap(run.parent),
           turns,
           Enum.map(opened, &Map.take(&1, [:id, :answers])),
           censored
         ),
+      assignments_first: Enum.all?(child_ids, &assignment_first?(by_id[&1])),
+      parent_idle: parent != nil and not parent.assistant,
+      parent:
+        parent &&
+          %{id: run.parent, inbox_entries: parent.inbox, file_bytes: parent.file_bytes},
       history_bytes:
         if(bytes == [],
           do: nil,
@@ -1042,6 +1418,23 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         )
     }
   end
+
+  @doc false
+  # Session files sit at `root/<cwd key>/<id>.jsonl`. A key can begin with "_" or
+  # "." (a child's worktree basename is a random token), so internal directories
+  # are not excluded by prefix; none of them holds a .jsonl at that depth.
+  def session_files(root),
+    do: Path.wildcard(Path.join([root, "*", "*.jsonl"]), match_dot: true)
+
+  # A child that ran a turn began with its assignment; one that ran none still
+  # holds it pending and unconsumed.
+  defp assignment_first?(nil), do: false
+
+  defp assignment_first?(%{first_user: nil, assignment: state}),
+    do: state in [:accepted, :queued]
+
+  defp assignment_first?(%{first_user: %User{text: text, agent_source: source}}),
+    do: text == "assignment" and match?(%{"message_id" => "assignment"}, source)
 
   defp children(Elara.TaskSup), do: Task.Supervisor.children(Elara.TaskSup)
 

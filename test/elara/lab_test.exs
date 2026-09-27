@@ -290,6 +290,53 @@ defmodule Elara.LabTest do
     assert GenServer.call(blocker, :ping) == :pong
   end
 
+  test "with_held runs its function only while every target is confirmed suspended" do
+    first = start_blocker(:first)
+    second = start_blocker(:second)
+    test = self()
+
+    assert {:ok, :done} =
+             Elara.Lab.with_held([first, second], 1_000, fn ->
+               send(test, {:states, sys_state(first), sys_state(second)})
+               :done
+             end)
+
+    assert_received {:states, :suspended, :suspended}
+    assert sys_state(first) == :running and sys_state(second) == :running
+  end
+
+  test "with_held skips its function when a suspend times out, and still releases" do
+    blocker = start_blocker(:blocker)
+    test = self()
+    spawn(fn -> GenServer.call(blocker, {:block, test}, :infinity) end)
+    assert_receive {:blocked, ^blocker}
+    dir = Path.join(System.tmp_dir!(), "lab-held-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    on_exit(fn -> File.rm_rf!(dir) end)
+
+    assert {:error, {:not_held, [_]}} =
+             Elara.Lab.with_held([blocker], 100, fn ->
+               File.rm_rf!(dir)
+               send(test, :ran)
+             end)
+
+    refute_received :ran
+    assert File.dir?(dir)
+    send(blocker, :unblock)
+    # The late suspend and the release are processed in order, before this status call.
+    assert sys_state(blocker) == :running
+    assert GenServer.call(blocker, :ping) == :pong
+  end
+
+  test "with_held reports a missing name and still releases the other target" do
+    blocker = start_blocker(:blocker)
+
+    assert {:error, {:not_held, [_]}} =
+             Elara.Lab.with_held([:no_such_lab_process, blocker], 1_000, fn -> flunk("ran") end)
+
+    assert sys_state(blocker) == :running
+  end
+
   test "a choice log digests choices per id in request order" do
     log = Elara.Lab.choice_log()
 

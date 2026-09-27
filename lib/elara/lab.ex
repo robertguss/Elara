@@ -30,7 +30,8 @@ defmodule Elara.Lab do
           dir: String.t(),
           params: %{String.t() => String.t()},
           provider: :simulated | :real,
-          max_requests: pos_integer() | nil
+          max_requests: pos_integer() | nil,
+          hook: (term() -> term())
         }
 
   @callback run(context()) :: map()
@@ -69,7 +70,8 @@ defmodule Elara.Lab do
                 seed: seed + rep,
                 params: params,
                 provider: Keyword.get(opts, :provider, :simulated),
-                max_requests: Keyword.get(opts, :max_requests)
+                max_requests: Keyword.get(opts, :max_requests),
+                hook: Keyword.get(opts, :hook, fn _point -> :ok end)
               },
               before_release
             )
@@ -195,9 +197,46 @@ defmodule Elara.Lab do
     end
   end
 
-  # In hold order; a failed resume never skips the rest.
-  defp release_held do
-    for pid <- Enum.reverse(Process.delete(@held) || []) do
+  defp release_held, do: resume_all(Enum.reverse(Process.delete(@held) || []))
+
+  @doc """
+  Run `fun` only while every target is confirmed suspended at a callback
+  boundary, then resume each target. Tracked apart from `hold/2`. If a target is
+  missing or its suspend fails, `fun` is not called; every pid it tried to
+  suspend is still resumed.
+  """
+  @spec with_held([pid() | atom()], timeout(), (-> result)) ::
+          {:ok, result} | {:error, {:not_held, [term()]}}
+        when result: term()
+  def with_held(targets, timeout, fun) do
+    {pids, failures} =
+      Enum.reduce(targets, {[], []}, fn target, {pids, failures} ->
+        case if(is_pid(target), do: target, else: Process.whereis(target)) do
+          nil ->
+            {pids, [{target, :noproc} | failures]}
+
+          pid ->
+            try do
+              :sys.suspend(pid, timeout)
+              {[pid | pids], failures}
+            catch
+              :exit, reason -> {[pid | pids], [{target, reason} | failures]}
+            end
+        end
+      end)
+
+    try do
+      if failures == [],
+        do: {:ok, fun.()},
+        else: {:error, {:not_held, Enum.reverse(failures)}}
+    after
+      resume_all(Enum.reverse(pids))
+    end
+  end
+
+  # In order; a failed resume never skips the rest.
+  defp resume_all(pids) do
+    for pid <- pids do
       try do
         :sys.resume(pid, 5_000)
       catch

@@ -9,7 +9,14 @@ defmodule Elara.Lab.Scenarios.Concurrency.EvidenceTest do
     leftover_tasks: 0,
     leftover_clients: 0,
     exec_jobs_pending: 0,
-    exec_epoch_changed: false
+    exec_epoch_changed: false,
+    leftover_watchers: 0,
+    threads_quiescent: true,
+    transport_quiescent: true,
+    reports_settled: true,
+    children_stopped: true,
+    actors_held: true,
+    actors_unchanged: true
   }
 
   test "cleanup is confirmed only when nothing survives and execution settled in one epoch" do
@@ -21,10 +28,44 @@ defmodule Elara.Lab.Scenarios.Concurrency.EvidenceTest do
           leftover_tasks: 1,
           leftover_clients: 1,
           exec_jobs_pending: 1,
-          exec_epoch_changed: true
+          exec_epoch_changed: true,
+          leftover_watchers: 1,
+          threads_quiescent: false,
+          transport_quiescent: false,
+          reports_settled: false,
+          children_stopped: false,
+          actors_held: false,
+          actors_unchanged: false
         ] do
       refute Evidence.cleanup_confirmed?(Map.put(@settled, key, value)), "#{key}"
     end
+  end
+
+  defp completion(key, recipient), do: %{"key" => key, "recipient" => recipient}
+
+  defp message(key, recipient, delivery, kind \\ "report"),
+    do: %{"key" => key, "recipient" => recipient, "delivery" => delivery, "kind" => kind}
+
+  test "reports count staging, acceptance and delivery; a completion with its message is settled" do
+    completions = [completion("a", "p"), completion("b", "p")]
+
+    messages = [
+      message("a", "p", "accepted"),
+      message("b", "p", "pending"),
+      message("x", "p", "accepted", "agent")
+    ]
+
+    assert Evidence.reports(completions, messages) ==
+             %{staged: 2, accepted: 2, delivered: 1, pending: 1, settled: true}
+  end
+
+  test "a completion without its message is settled only when its recipient has 64 pending" do
+    pending = for n <- 1..64, do: message("m#{n}", "p", "pending", "agent")
+    staged = [completion("new", "p")]
+
+    assert Evidence.reports(staged, pending).settled
+    refute Evidence.reports(staged, tl(pending)).settled
+    refute Evidence.reports(staged, Enum.map(pending, &%{&1 | "recipient" => "q"})).settled
   end
 
   defp persisted(id, answers), do: %{id: id, answers: answers}

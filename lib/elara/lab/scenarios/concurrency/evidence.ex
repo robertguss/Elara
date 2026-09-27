@@ -4,12 +4,47 @@ defmodule Elara.Lab.Scenarios.Concurrency.Evidence do
   sessions and settlement facts. It judges records, not causes.
   """
 
-  @doc "Confirmed only when nothing the run started survives and execution settled in its epoch."
+  @doc """
+  Confirmed only when nothing the run started survives, execution settled in its
+  epoch, and (children topology) Threads and the report transport are quiescent,
+  settled and held, unchanged since the run began.
+  """
   @spec cleanup_confirmed?(map()) :: boolean()
   def cleanup_confirmed?(facts) do
     facts.leftover_users == 0 and facts.leftover_sessions == 0 and facts.leftover_tasks == 0 and
       facts.leftover_clients == 0 and facts.exec_jobs_pending == 0 and
-      not facts.exec_epoch_changed
+      not facts.exec_epoch_changed and facts.leftover_watchers == 0 and
+      facts.threads_quiescent and facts.transport_quiescent and facts.reports_settled and
+      facts.children_stopped and facts.actors_held and facts.actors_unchanged
+  end
+
+  @doc """
+  Completion reports from the transport's files: `completions` (each with its
+  file `key` and `recipient`) and decoded `messages`. A staged completion is
+  settled once its message exists, or once its recipient has 64 pending
+  messages, where the transport stops accepting without writing. It counts
+  files, not causes.
+  """
+  @spec reports([map()], [map()]) :: map()
+  def reports(completions, messages) do
+    keys = MapSet.new(messages, & &1["key"])
+
+    pending =
+      Enum.frequencies(for %{"delivery" => "pending", "recipient" => r} <- messages, do: r)
+
+    reports = Enum.filter(messages, &(&1["kind"] == "report"))
+
+    %{
+      staged: length(completions),
+      accepted: length(reports),
+      delivered: Enum.count(reports, &(&1["delivery"] == "accepted")),
+      pending: Enum.count(reports, &(&1["delivery"] == "pending")),
+      settled:
+        Enum.all?(
+          completions,
+          &(MapSet.member?(keys, &1["key"]) or Map.get(pending, &1["recipient"], 0) >= 64)
+        )
+    }
   end
 
   @doc """

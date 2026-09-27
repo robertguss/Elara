@@ -26,21 +26,89 @@ defmodule Elara.Lab.ConcurrencyTest do
     "client_close_ms" => "3000"
   }
 
-  # A run whose cleanup is unconfirmed leaves its sessions root bound.
+  # One teardown for every run in this module. A run whose cleanup is unconfirmed
+  # leaves its sessions root bound, and a resumed transport keeps ticking there, so
+  # permissions, directories and the root change only once the test's own tasks
+  # and execution jobs have ended, and only while Threads and the transport are
+  # confirmed suspended.
   setup do
-    previous = Map.new([:sessions_root, :skills_home], &{&1, Application.get_env(:elara, &1)})
+    previous =
+      Map.new(
+        [:sessions_root, :skills_home, :thread_limit],
+        &{&1, Application.fetch_env(:elara, &1)}
+      )
 
-    on_exit(fn ->
-      Enum.each(previous, fn {key, value} -> Application.put_env(:elara, key, value) end)
-    end)
+    tasks = Task.Supervisor.children(Elara.TaskSup)
+    {:ok, dirs} = Agent.start(fn -> [] end)
+    Process.put(:lab_dirs, dirs)
+    on_exit(fn -> teardown(dirs, previous, tasks) end)
   end
 
-  defp run(overrides, seed \\ 42) do
-    {:ok, [result]} = Elara.Lab.run(Concurrency, seed: seed, params: Map.merge(@tiny, overrides))
+  defp teardown(dirs, previous, tasks) do
+    unless writers_settled?(tasks, 300),
+      do:
+        raise(
+          "lab teardown: run tasks or jobs still alive; directories and root left as they are"
+        )
 
-    on_exit(fn ->
-      for key <- [:evidence_dir, :retained_dir], dir = result[key], do: File.rm_rf!(dir)
-    end)
+    held =
+      Elara.Lab.with_held([Elara.Threads, Elara.Threads.Communication], 5_000, fn ->
+        for dir <- Agent.get(dirs, & &1) do
+          try do
+            writable(dir)
+            File.rm_rf!(dir)
+          rescue
+            error -> IO.warn("lab teardown could not remove #{dir}: #{inspect(error)}")
+          end
+        end
+
+        Enum.each(previous, fn
+          {key, {:ok, value}} -> Application.put_env(:elara, key, value)
+          {key, :error} -> Application.delete_env(:elara, key)
+        end)
+      end)
+
+    with {:error, reason} <- held,
+         do:
+           raise(
+             "lab teardown not held (#{inspect(reason)}); directories and root left as they are"
+           )
+  after
+    try do
+      Agent.stop(dirs)
+    catch
+      :exit, _ -> :ok
+    end
+  end
+
+  # Up to 15 s for tasks started during the test, and any execution job, to end.
+  defp writers_settled?(tasks, tries) do
+    cond do
+      Task.Supervisor.children(Elara.TaskSup) -- tasks == [] and Elara.Exec.status().jobs == 0 ->
+        true
+
+      tries == 0 ->
+        false
+
+      true ->
+        Process.sleep(50)
+        writers_settled?(tasks, tries - 1)
+    end
+  end
+
+  defp writable(dir) do
+    for path <- [dir | Path.wildcard(Path.join(dir, "**"), match_dot: true)],
+        File.dir?(path),
+        do: File.chmod(path, 0o755)
+  end
+
+  defp run(overrides, seed \\ 42, opts \\ []) do
+    {:ok, [result]} =
+      Elara.Lab.run(Concurrency, [seed: seed, params: Map.merge(@tiny, overrides)] ++ opts)
+
+    for key <- [:evidence_dir, :retained_dir],
+        dir = result[key],
+        do: Agent.update(Process.get(:lab_dirs), &[dir | &1])
 
     result
   end
@@ -86,6 +154,8 @@ defmodule Elara.Lab.ConcurrencyTest do
   defp count_field?({_label, ["counts" | _]}), do: true
   defp count_field?(_field), do: false
 
+  defp children_field?({_label, [root | _]}), do: root in ["children", "reports", "parent"]
+
   test "curve fields name every registered measurement" do
     labels = Enum.map(Concurrency.curve_fields(), &elem(&1, 0))
     assert @required -- labels == []
@@ -127,10 +197,14 @@ defmodule Elara.Lab.ConcurrencyTest do
     assert result.bounds.latency in ["holds", "fails"]
     assert result.host.logical_cpus > 0
 
-    # Every non-count curve path is present; counts are an intentional null in timing runs.
+    # Every other curve path is present; counts are an intentional null in timing
+    # runs, and the children fields in the sessions topology.
     {counted, measured} = Enum.split_with(Concurrency.curve_fields(), &count_field?/1)
+    {children, measured} = Enum.split_with(measured, &children_field?/1)
     assert missing_paths(result, measured) == []
     assert counted != [] and result.counts == nil
+    assert children != [] and result.children == nil and result.reports == nil
+    assert result.parent == nil
   end
 
   test "a count run reports each suspect's calls and restores tracing and scheduler timing" do
@@ -302,6 +376,168 @@ defmodule Elara.Lab.ConcurrencyTest do
     assert result.settlement.exec_epoch_changed
     assert Map.has_key?(result, :retained_dir)
     wait_for_exec_idle()
+  end
+
+  @children %{"topology" => "children", "sessions" => "2"}
+
+  # Hooks run in the runner, whose receive loops drop unknown messages, so they
+  # record what they did in an Agent instead of messaging the test.
+  defp released do
+    {:ok, flag} = Agent.start_link(fn -> false end)
+    flag
+  end
+
+  test "a tiny children run lifts the thread limit, passes every check and settles its actors" do
+    limit = Application.fetch_env(:elara, :thread_limit)
+    result = run(%{"topology" => "children", "sessions" => "6"})
+
+    assert failed(result) == []
+    refute Map.has_key?(result, :retained_dir)
+    assert result.complete and result.compliant
+    assert Application.fetch_env(:elara, :thread_limit) == limit
+
+    %{expected: expected, emitted: emitted, received: received} = result.accounting
+    assert expected > 0 and expected == emitted and emitted == received
+
+    children = result.children
+    assert result.cumulative_sessions >= 6
+    assert children.attempts == result.cumulative_sessions
+    assert children.returned_ok == children.attempts and children.censored == 0
+    assert children.records == children.attempts and children.worktrees == children.attempts
+    assert children.start_ms.count == children.attempts
+    assert result.session_files == result.cumulative_sessions + 1
+
+    assert result.reports.staged > 0 and result.reports.accepted == result.reports.staged
+    assert result.parent.inbox_entries == result.reports.delivered
+    assert result.settlement.leftover_watchers == 0
+
+    assert missing_paths(result, Enum.filter(Concurrency.curve_fields(), &children_field?/1)) ==
+             []
+  end
+
+  test "a child whose client attaches after the load ends is stopped with its assignment pending" do
+    result = run(Map.merge(@children, %{"resume_delay_ms" => "2000", "watchdog_ms" => "5000"}))
+
+    assert failed(result) == []
+    refute Map.has_key?(result, :retained_dir)
+    assert result.completed_turns == 0
+    assert result.accounting.expected == 0
+    assert result.children.records == 2 and result.cumulative_sessions == 2
+    assert result.settlement.leftover_watchers == 0
+  end
+
+  test "starts accepted before the users die are created, then stopped by settlement" do
+    threads = Process.whereis(Elara.Threads)
+    :ok = :sys.suspend(threads)
+    flag = released()
+
+    hook = fn
+      {:waiting, :threads} ->
+        :sys.resume(threads)
+        Agent.update(flag, fn _ -> true end)
+
+      _point ->
+        :ok
+    end
+
+    result = run(Map.put(@children, "watchdog_ms", "500"), 42, hook: hook)
+
+    assert Agent.get(flag, & &1)
+    assert result.incomplete == :watchdog
+    assert %{attempts: 2, censored: 2, returned_ok: 0, records: 2} = result.children
+    assert result.settlement.children_stopped and result.settlement.leftover_sessions == 0
+    refute Map.has_key?(result, :retained_dir)
+  end
+
+  test "settlement waits for the transport to accept every staged report" do
+    transport = Process.whereis(Elara.Threads.Communication)
+    :ok = :sys.suspend(transport)
+    flag = released()
+
+    hook = fn
+      {:waiting, :transport} ->
+        :sys.resume(transport)
+        Agent.update(flag, fn _ -> true end)
+
+      _point ->
+        :ok
+    end
+
+    result = run(@children, 42, hook: hook)
+
+    assert Agent.get(flag, & &1)
+    assert failed(result) == []
+    assert result.reports.staged > 0 and result.reports.accepted == result.reports.staged
+    assert result.settlement.reports_settled
+    refute Map.has_key?(result, :retained_dir)
+  end
+
+  test "reports the transport cannot accept keep the run retained" do
+    hook = fn
+      :setup ->
+        root = Application.fetch_env!(:elara, :sessions_root)
+        File.mkdir_p!(Path.join([root, "_thread_messages", "completions"]))
+        File.chmod!(Path.join(root, "_thread_messages"), 0o555)
+
+      _point ->
+        :ok
+    end
+
+    result = run(@children, 42, hook: hook)
+
+    assert result.reports.staged > 0 and result.reports.accepted == 0
+    refute result.settlement.reports_settled
+    assert Map.has_key?(result, :retained_dir)
+  end
+
+  # The stalled provider tasks outlive the run; the teardown waits for them before
+  # it moves the root, whether or not these assertions pass.
+  test "watchers die with their users when a run stops inside turn 1" do
+    result =
+      run(Map.merge(@children, %{"stall_first_answer_ms" => "10000", "watchdog_ms" => "2000"}))
+
+    assert result.incomplete == :watchdog
+    assert result.settlement.leftover_watchers == 0
+    assert result.settlement.leftover_tasks >= 1
+    assert Map.has_key?(result, :retained_dir)
+  end
+
+  # A cwd key is the cwd's basename plus a hash, and a child's worktree basename is
+  # a random token, so a session directory can begin with "_" like the internal ones.
+  test "session files are the root's depth-two .jsonl files, whatever their key begins with" do
+    root = Path.join(System.tmp_dir!(), "lab-session-files-#{System.unique_integer([:positive])}")
+    on_exit(fn -> File.rm_rf!(root) end)
+
+    for path <- [
+          "_Tok3n-0a1b2c3d/child.jsonl",
+          "workspace-4e5f6a7b/top.jsonl",
+          ".dot-8c9d0e1f/hidden.jsonl",
+          "_threads/r.json",
+          "_threads/workspaces/_Tok3n/deep.jsonl",
+          "_thread_messages/m.json",
+          "workspace-4e5f6a7b/notes.txt"
+        ] do
+      File.mkdir_p!(Path.dirname(Path.join(root, path)))
+      File.write!(Path.join(root, path), "")
+    end
+
+    assert root
+           |> Concurrency.session_files()
+           |> Enum.map(&Path.relative_to(&1, root))
+           |> Enum.sort() ==
+             [
+               ".dot-8c9d0e1f/hidden.jsonl",
+               "_Tok3n-0a1b2c3d/child.jsonl",
+               "workspace-4e5f6a7b/top.jsonl"
+             ]
+  end
+
+  test "an unknown topology is refused" do
+    ExUnit.CaptureIO.capture_io(:stderr, fn ->
+      assert_raise ArgumentError, ~r/topology/, fn ->
+        Elara.Lab.run(Concurrency, seed: 1, params: Map.put(@tiny, "topology", "mesh"))
+      end
+    end)
   end
 
   test "the scenario refuses the real provider" do

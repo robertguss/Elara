@@ -9,8 +9,8 @@
 - **Queue item:** LAB-3 · **Date:** 2026-09-26 · **Base:** `c807be3` ·
   **Measurement commit:** `97311a1`
 - **Status:** the sessions curve has been measured: the timing and count sweeps
-  ran on 2026-09-27. The child-thread variant and attribution are still to be
-  pre-registered and run.
+  ran on 2026-09-27. The child-thread variant is pre-registered and not yet run.
+  Attribution is still to be pre-registered and run.
 
 ## Reference workload
 
@@ -150,24 +150,123 @@ Every repetition's values are reported per point.
   (Darwin 25.6), OTP 29.1, Elixir 1.20.4. Every result line records its host,
   versions, commit and dirty-tree flag.
 
-**Still to pre-register,** each in its own step before its measurement:
+**Still to pre-register,** in its own step before its measurement:
 
-- **The child-thread variant** (K = 4, 16, 64, 256 children of one parent) needs
-  plumbing first:
-  - Children don't inherit the `context_limit` override (`Elara.child_config/1`
-    and the Threads start options omit it).
-  - Each child needs its own provider identity and collector.
-  - Creation launches the assignment before a client can attach, so attach and
-    start need coordinating. This also decides whether the assignment is turn 1.
-  - Children need to cycle like top-level sessions.
-  - A `thread_limit` knob (default 4) must cover admission, slot acquisition and
-    the reported limit.
 - **Attribution** runs at the lowest N that breaks a bound (500 if none does).
   It profiles one full 600 s run over [480 s, 600 s) with `tprof` call_time,
   scoped explicitly to the existing sessions, their tasks, server connections
   and `Elara.Exec`. CPU cost and waiting evidence (dirty IO, fsync counts,
   queues, latency) are reported separately. Unit cost × call rate figures are
   labeled estimates, at the history and directory sizes observed in the run.
+
+### Child-thread variant
+
+Registered 2026-09-27, before its plumbing was built or measured.
+
+- **Question:** does running the reference workload as delegated children of one
+  parent, rather than as top-level sessions, change the per-point bound verdicts
+  or the curve?
+- **Hypothesis:** the child path adds no bound failure.
+  - At each K, a bound (latency, memory or throughput, judged per point by the
+    verdict rules above, incomplete repetitions included) is **testable** if it
+    holds in the matched control at N = K.
+  - **Against:** a testable bound that fails for children at that K.
+  - Support is claimed at a K only for testable bounds that also hold for
+    children. A bound undetermined for children stays undetermined; the absence
+    of a counterexample is not support. The results say which bounds were
+    testable at each K.
+  - Differences in latency p50/p95/p99, the throughput ratio and peak memory are
+    descriptive, from `compare`. No threshold is registered.
+- **Topology:**
+  - **One parent:** a top-level session started at `t = 0`, after the idle
+    baseline and before any user starts. It has the simulated provider (id
+    `parent`), `context_limit: 1_000_000`, `read` and `bash`, `plugins: []` and
+    `pause_inputs: true`. It is never resumed, has no client and runs no turn.
+  - **K simulated users** at the seeded offsets above, each owning one child at
+    a time. A child is created with
+    `Elara.Threads.start_child(parent, "assignment", coding: true, pause_inputs: true, provider: P)`,
+    where P is that user's own simulated provider with id `u{i}c{n}`. Choices
+    therefore match the control's sessions one to one.
+  - **Coding children,** since only they get `bash`. Each gets a git worktree of
+    the workspace repository, which has the 4,096-byte fixture committed.
+    Worktrees stay until the repetition's cleanup.
+  - **Children inherit** the parent's `context_limit`, so, as for top-level
+    sessions, no handoff fires; the existing no-handoff check covers them.
+- **The measured child path** includes:
+  - worktree creation;
+  - the `Elara.Threads` GenServer: admission, records and lifecycle writes;
+  - slot acquisition;
+  - completion reports: staging in the child, then acceptance and delivery by
+    `Elara.Threads.Communication` into the paused parent's inbox, with its
+    persistence and backlog.
+
+  Delivery refusals are measured backlog, not failed checks. At large K the
+  parent's inbox may reach its 16 MiB durable limit, and pending messages their
+  cap of 64.
+- **Turns:**
+  - The assignment is turn 1. It stays pending and unconsumed in the paused
+    child's inbox until the child is resumed.
+  - The user waits for its client's attach acknowledgement and subscribes to the
+    child. If the load has not ended, it resumes the child's inputs; otherwise it
+    stops the still-paused child without a turn.
+  - Turn 1's outcome comes from the child's `turn_ended` event. Turns 2–20 use
+    `Elara.ask/2`, under the deadline rule above.
+  - Every turn is the reference turn.
+  - After turn 20 the child is stopped as a top-level session is, and the user
+    starts a fresh child, until the load ends.
+- **Limit lifted:** `thread_limit` is K for the run and restored afterwards. A
+  rejected start or a `resource_limit` turn fails the checks.
+- **Checks:** all of the checks above, plus:
+  - every `start_child` succeeded;
+  - each child that ran a turn has its assignment as its first persisted user
+    message;
+  - a child that ran no turn still holds its assignment pending and unconsumed;
+  - the parent ran no turn and made no provider request.
+
+  In transcript reconciliation, the parent counts as a reported session with
+  zero turns.
+- **Settlement:** cleanup is confirmed only when the existing facts hold and:
+  - `Elara.Threads` and the transport are quiescent after every user and session
+    is down;
+  - no thread record of the parent has a live session;
+  - every staged completion has an accepted message, or its recipient has 64
+    pending messages, so no later delivery tick can write;
+  - both actors are held at a callback boundary (`:sys.suspend`) before the
+    runner restores the root or removes the directory. They are resumed only
+    once both are final, so no callback straddles the switch;
+  - both actors' pids are unchanged.
+
+  Otherwise the directory and the root binding are retained.
+- **Values and runs:**
+  - K = 4, 16, 64, 256, the values this note listed before the sessions curve
+    was measured.
+  - Three repetitions, seeds 42–44, one fresh VM per (K, seed), seed-major,
+    timing untraced.
+  - **Matched control:** `topology=sessions` at N = 4, 16, 64, 256, at the same
+    commit and seeds.
+  - The children sweep runs first, then the control. That order is a host and
+    time confound.
+  - Build and host as for the sessions curve: `MIX_ENV` unset, `caffeinate -ims`,
+    AC power.
+  - **Commands:**
+
+        mix elara.lab sweep concurrency --over sessions=4,16,64,256 --n 3 --seed 42 --set topology=children
+        mix elara.lab sweep concurrency --over sessions=4,16,64,256 --n 3 --seed 42 --set topology=sessions
+        mix elara.lab report CHILDREN_DIR
+        mix elara.lab report CONTROL_DIR
+        mix elara.lab compare CONTROL_DIR CHILDREN_DIR --fields latency_p50_ms,latency_p95_ms,latency_p99_ms,throughput_ratio,memory_max_per_session
+
+- **Metrics:** every metric above, with N = K. Memory per session divides by K,
+  and the paused parent, its inbox included, is in the total. Descriptive
+  additions:
+  - child start time: every `start_child` call begun before load end, from call
+    to return in monotonic ms (count, p50, p95, max);
+  - `Elara.Threads` and transport mailboxes: max and p99 in the window;
+  - reports staged, accepted, delivered and pending at the end;
+  - the parent's inbox entries and durable bytes at the end;
+  - cumulative worktrees.
+- **Not registered:** count runs for the variant, and any statement about
+  N = 500.
 
 ## Results
 

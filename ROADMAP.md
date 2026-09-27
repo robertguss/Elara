@@ -219,18 +219,18 @@ Statuses are `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`, `CANCELED`, `INVALID` and
 
 ## Execution queue
 
-| ID    | Status  | Item                                                       | Depends on   |
-| ----- | ------- | ---------------------------------------------------------- | ------------ |
-| LAB-0 | DONE    | Reset: hermetic suite, lab guidance and repository hygiene | Lab pivot    |
-| LAB-1 | DONE    | RQ-1: property tests over Core invariants                  | LAB-0        |
-| LAB-2 | DONE    | Minimal lab bench: simulated provider, fault points, runner | LAB-0        |
-| LAB-3 | TODO    | RQ-2: concurrency baseline on unchanged code               | LAB-2        |
-| LAB-4 | BLOCKED | RQ-3: isolation under misbehaving sessions                 | LAB-3        |
-| LAB-5 | BLOCKED | RQ-1: chaos schedules against the session shell            | LAB-1, LAB-2 |
-| LAB-6 | BLOCKED | Selective retirement with coverage preserved               | LAB-5        |
-| LAB-7 | BLOCKED | RQ-2/RQ-3: measured fixes, same workloads rerun            | LAB-4, LAB-6 |
-| LAB-8 | BLOCKED | RQ-4: general jobs and one correlated wake model           | LAB-5        |
-| LAB-9 | BLOCKED | Scoped operator acknowledgement of uncertain child results | LAB-1        |
+| ID    | Status      | Item                                                        | Depends on   |
+| ----- | ----------- | ----------------------------------------------------------- | ------------ |
+| LAB-0 | DONE        | Reset: hermetic suite, lab guidance and repository hygiene  | Lab pivot    |
+| LAB-1 | DONE        | RQ-1: property tests over Core invariants                   | LAB-0        |
+| LAB-2 | DONE        | Minimal lab bench: simulated provider, fault points, runner | LAB-0        |
+| LAB-3 | IN PROGRESS | RQ-2: concurrency baseline on unchanged code                | LAB-2        |
+| LAB-4 | BLOCKED     | RQ-3: isolation under misbehaving sessions                  | LAB-3        |
+| LAB-5 | BLOCKED     | RQ-1: chaos schedules against the session shell             | LAB-1, LAB-2 |
+| LAB-6 | BLOCKED     | Selective retirement with coverage preserved                | LAB-5        |
+| LAB-7 | BLOCKED     | RQ-2/RQ-3: measured fixes, same workloads rerun             | LAB-4, LAB-6 |
+| LAB-8 | BLOCKED     | RQ-4: general jobs and one correlated wake model            | LAB-5        |
+| LAB-9 | BLOCKED     | Scoped operator acknowledgement of uncertain child results  | LAB-1        |
 
 ## LAB-0 — Reset: hermetic suite, lab guidance and repository hygiene
 
@@ -341,6 +341,9 @@ four-slot limit lifted for the experiment.
 
 **Done when:** one command reproduces the curve with variance, and the note
 states whether RQ-2 holds on unchanged code and ranks the bottlenecks.
+
+**Result: IN PROGRESS.** Workload and acceptance rules pre-registered in note
+[003](docs/lab/003-concurrency-baseline.md); measurements pending.
 
 ## LAB-4 — RQ-3: isolation under misbehaving sessions
 

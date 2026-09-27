@@ -17,6 +17,13 @@ defmodule Elara.Provider.Simulated do
   scheduler delay stays measurable. With a `collector` pid, the provider sends
   `{:lab_choice, id, request, choice}` and
   `{:lab_delta, id, request, index, intended_ms}` (monotonic milliseconds).
+
+  A request whose provider task dies never returns its config, so the session
+  retries with the same request number and random state, and repeats the choice.
+
+  An optional `fault` hook (see `Elara.Lab.Faults`) is called at
+  `:provider_started` and, after the first delta, `:provider_streaming`, with
+  the key `"id:request"`. Tool-plan arguments equal to `"$key"` receive that key.
   """
 
   @behaviour Elara.Provider
@@ -36,7 +43,7 @@ defmodule Elara.Provider.Simulated do
     errors: %{rate_limited: 0.0, server_error: 0.0, disconnect_before: 0.0, disconnect_after: 0.0}
   }
 
-  defstruct [:id, :rand, :profile, :collector, requests: 0]
+  defstruct [:id, :rand, :profile, :collector, :fault, requests: 0]
 
   @type t :: %__MODULE__{}
 
@@ -53,7 +60,13 @@ defmodule Elara.Provider.Simulated do
     rand = :rand.seed_s(:exsss, {seed, :erlang.phash2(id), 0x9E3779B9})
 
     {__MODULE__,
-     %__MODULE__{id: id, rand: rand, profile: profile, collector: Keyword.get(opts, :collector)}}
+     %__MODULE__{
+       id: id,
+       rand: rand,
+       profile: profile,
+       collector: Keyword.get(opts, :collector),
+       fault: Keyword.get(opts, :fault)
+     }}
   end
 
   @impl true
@@ -66,6 +79,7 @@ defmodule Elara.Provider.Simulated do
     {choice, rand} = choose(config, request.messages)
     config = %{config | rand: rand, requests: number}
     notify(config, {:lab_choice, config.id, number, choice})
+    fault(config, :provider_started, number)
 
     case choice do
       {:error, kind} -> error(config, kind, started, number, sink)
@@ -124,6 +138,7 @@ defmodule Elara.Provider.Simulated do
     rounds = tool_rounds_since_user(messages)
     plan = config.profile.tool_plan
     {name, args} = Enum.at(plan, rem(rounds, length(plan)))
+    args = Map.new(args, fn {k, v} -> {k, if(v == "$key", do: key(config, number), else: v)} end)
     call = %ToolCall{id: "sim-#{config.id}-#{number}", name: name, args: {:ok, args}}
     {:ok, assistant} = Message.assistant(nil, [call])
     {:ok, assistant, config}
@@ -162,6 +177,7 @@ defmodule Elara.Provider.Simulated do
         sleep_until(intended)
         notify(config, {:lab_delta, config.id, number, index, intended})
         :ok = sink.(part)
+        if index == 0, do: fault(config, :provider_streaming, number)
         {part, rand}
       end)
 
@@ -185,6 +201,14 @@ defmodule Elara.Provider.Simulated do
     if remaining > 0, do: Process.sleep(remaining)
     :ok
   end
+
+  # Fault points use the key "id:request", which a "$key" tool argument also receives.
+  defp key(config, number), do: "#{config.id}:#{number}"
+
+  defp fault(%__MODULE__{fault: nil}, _point, _number), do: :ok
+
+  defp fault(%__MODULE__{fault: hook} = config, point, number),
+    do: hook.(point, key(config, number))
 
   defp notify(%__MODULE__{collector: nil}, _message), do: :ok
   defp notify(%__MODULE__{collector: pid}, message), do: send(pid, message)

@@ -301,7 +301,9 @@ green. Note: [001](docs/lab/001-core-properties.md).
   token, token rate, streamed deltas, scripted or generated tool-call plans, and
   injected errors (429, 5xx, disconnect before or after the first byte).
 - **Named fault points** cover the RQ-1 fault model: session process, provider
-  and tool tasks, execution stub, client connection and VM restart.
+  and tool tasks, execution stub, client connection and VM restart. Client
+  connection and VM restart need an attached protocol client or a separate
+  VM, so they are built with LAB-4 and LAB-5, which first use them.
 - **The runner:**
   `mix elara.lab run SCENARIO --n N --seed S [--provider simulated|real] [--max-requests R]`.
   Each run gets its own temporary home and sessions root, and simulated mode

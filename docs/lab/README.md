@@ -89,6 +89,13 @@ holds, fails if any repetition establishes a failure, and is otherwise
 undetermined. The sweep runs every child, then fails if any exited non-zero,
 left no valid result, failed a check, was retained or is incomplete.
 
+**Reports.** `mix elara.lab report DIR` writes `report.tsv` (one row per
+repetition: status, bounds and every curve field) and `points.tsv` (one row per
+value; cleanliness is counted separately from the bounds) into a sweep
+directory. `mix elara.lab compare BASE_DIR OTHER_DIR [--seed S] [--fields ...]`
+pairs two sweeps by value and seed and writes both statuses, both values, and
+their difference where both are numbers; otherwise it names why not.
+
 **Scenarios.**
 
 | Scenario          | What it exercises                                                                    |

@@ -1,6 +1,8 @@
 defmodule Mix.Tasks.Elara.Lab do
   use Mix.Task
 
+  alias Elara.Lab.Report
+
   @shortdoc "Run a seeded lab scenario"
   @moduledoc """
   Run a seeded lab scenario and record its results.
@@ -25,6 +27,15 @@ defmodule Mix.Tasks.Elara.Lab do
   under `lab/results/SCENARIO/<stamp>-sweep-KEY-seed<S>/`. It runs every child,
   then fails if any exited non-zero, left no valid result, failed a check, was
   retained or is incomplete. A bound that fails is a measurement, not a failure.
+
+      mix elara.lab report DIR
+      mix elara.lab compare BASE_DIR OTHER_DIR [--seed S] [--fields L1,L2,...]
+
+  `report` writes `report.tsv` (one row per repetition: status, bounds and the
+  scenario's curve fields) and `points.tsv` (one row per value) into a sweep
+  directory. `compare` pairs two sweeps of the same scenario and key by value
+  and seed and writes `compare-<BASE_DIR name>.tsv` into OTHER_DIR: both
+  statuses, both values, and `other - base` only where both are numbers.
   """
 
   @switches [
@@ -182,12 +193,94 @@ defmodule Mix.Tasks.Elara.Lab do
         )
   end
 
+  def run(["report", dir]) do
+    Mix.Task.run("compile")
+    sweep = read_sweep(dir)
+    values = Enum.map(sweep.summary["points"], & &1["value"])
+
+    write(sweep.dir, "report.tsv", Report.repetition_rows(sweep.repetitions, sweep.fields))
+
+    write(
+      sweep.dir,
+      "points.tsv",
+      Report.point_rows(sweep.repetitions, values, sweep.summary["repetitions"])
+    )
+  end
+
+  def run(["compare", base_dir, other_dir | argv]) do
+    {opts, rest, invalid} = OptionParser.parse(argv, strict: [seed: :integer, fields: :string])
+
+    if rest != [] or invalid != [],
+      do: Mix.raise("unexpected arguments: #{inspect(rest ++ Enum.map(invalid, &elem(&1, 0)))}")
+
+    Mix.Task.run("compile")
+    base = read_sweep(base_dir)
+    other = read_sweep(other_dir)
+
+    if base.scenario != other.scenario,
+      do: Mix.raise("cannot compare scenario #{base.scenario} with #{other.scenario}")
+
+    if base.summary["key"] != other.summary["key"],
+      do: Mix.raise("cannot compare key #{base.summary["key"]} with #{other.summary["key"]}")
+
+    fields =
+      case opts[:fields] do
+        nil ->
+          base.fields
+
+        labels ->
+          labels = String.split(labels, ",")
+          known = Map.new(base.fields)
+          unknown = Enum.reject(labels, &Map.has_key?(known, &1))
+          if unknown != [], do: Mix.raise("unknown fields: #{Enum.join(unknown, ", ")}")
+          Enum.map(labels, &{&1, known[&1]})
+      end
+
+    rows = Report.compare(base.repetitions, other.repetitions, fields, seed: opts[:seed])
+    write(other.dir, "compare-#{Path.basename(base.dir)}.tsv", rows)
+  end
+
   def run(_argv),
     do:
       Mix.raise(
         "usage: mix elara.lab run SCENARIO [--n N] [--seed S] [--set KEY=VALUE] | " <>
-          "mix elara.lab sweep SCENARIO --over KEY=V1,V2 [--n N] [--seed S] [--set KEY=VALUE]"
+          "mix elara.lab sweep SCENARIO --over KEY=V1,V2 [--n N] [--seed S] [--set KEY=VALUE] | " <>
+          "mix elara.lab report DIR | " <>
+          "mix elara.lab compare BASE_DIR OTHER_DIR [--seed S] [--fields L1,L2]"
       )
+
+  # A sweep directory is <root>/<scenario>/<stamp>-sweep-...; the scenario names its fields.
+  defp read_sweep(dir) do
+    dir = Path.expand(dir)
+    scenario = dir |> Path.dirname() |> Path.basename()
+
+    unless scenario in Elara.Lab.scenarios(),
+      do: Mix.raise("unknown scenario #{inspect(scenario)} for sweep directory #{dir}")
+
+    read = fn name ->
+      path = Path.join(dir, name)
+
+      case File.read(path) do
+        {:ok, text} -> text
+        {:error, reason} -> Mix.raise("cannot read #{path}: #{:file.format_error(reason)}")
+      end
+    end
+
+    %{
+      dir: dir,
+      scenario: scenario,
+      fields: Elara.Lab.Sweep.fields(scenario),
+      summary: JSON.decode!(read.("summary.json")),
+      repetitions:
+        read.("repetitions.jsonl") |> String.split("\n", trim: true) |> Enum.map(&JSON.decode!/1)
+    }
+  end
+
+  defp write(dir, name, rows) do
+    path = Path.join(dir, name)
+    File.write!(path, Report.tsv(rows))
+    Mix.shell().info("wrote #{path}")
+  end
 
   defp pair(pair) do
     case String.split(pair, "=", parts: 2) do

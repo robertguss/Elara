@@ -165,7 +165,9 @@ defmodule Elara.Lab.Sweep do
     status
   end
 
-  defp fields(scenario) do
+  @doc "The scenario's curve fields (`{label, path}`), or a generic set when it defines none."
+  @spec fields(String.t()) :: [{String.t(), [String.t()]}]
+  def fields(scenario) do
     case Elara.Lab.scenario_module(scenario) do
       {:ok, module} ->
         Code.ensure_loaded(module)

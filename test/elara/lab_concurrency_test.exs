@@ -47,6 +47,49 @@ defmodule Elara.Lab.ConcurrencyTest do
 
   defp failed(result), do: Elara.Lab.failed_checks(result)
 
+  @counted ~w(:file.sync/1 Elara.Session.Store.save/1 Elara.Session.Context.budget/2
+              Elara.Session.Handoff.lineage/1 Elara.FlightRecorder.complete_transition/4
+              Elara.Exec.run/2)
+
+  # Every registered measurement a sweep reports per repetition.
+  @required ~w(latency_p50_ms latency_p95_ms latency_p99_ms latency_cohort latency_overflow
+               latency_unreceived latency_proven_failures throughput_ratio arrivals_in_window
+               memory_max_per_session memory_max_per_session_client_adjusted
+               memory_mean_per_session session_mailbox_max session_mailbox_p99
+               connection_mailbox_max connection_mailbox_p99 exec_mailbox_max exec_mailbox_p99
+               stub_port_queue_bytes_max stub_port_queue_bytes_p99 bash_excess_p50_ms
+               bash_excess_p95_ms bash_excess_p99_ms scheduler_normal scheduler_dirty_cpu
+               scheduler_dirty_io history_bytes_max cumulative_sessions session_files
+               sessions_root_files completed_turns expected_unemitted emitted_unreceived
+               stopped_at_ms window_ms tool_failures) ++
+              Enum.flat_map(@counted, &["#{&1} per second", "#{&1} per delta"])
+
+  # Each curve path, walked with key presence at every step: absent is not nil.
+  defp missing_paths(result, fields) do
+    decoded = result |> JSON.encode!() |> JSON.decode!()
+    for {label, path} <- fields, fetch_path(decoded, path) == :error, do: label
+  end
+
+  defp fetch_path(value, []), do: {:ok, value}
+
+  defp fetch_path(%{} = map, [key | rest]) do
+    case Map.fetch(map, key) do
+      {:ok, value} -> fetch_path(value, rest)
+      :error -> :error
+    end
+  end
+
+  defp fetch_path(_value, _path), do: :error
+
+  defp count_field?({_label, ["counts" | _]}), do: true
+  defp count_field?(_field), do: false
+
+  test "curve fields name every registered measurement" do
+    labels = Enum.map(Concurrency.curve_fields(), &elem(&1, 0))
+    assert @required -- labels == []
+    assert Enum.uniq(labels) == labels
+  end
+
   test "a tiny complete run passes every check and measures every part" do
     result = run(%{})
 
@@ -77,6 +120,11 @@ defmodule Elara.Lab.ConcurrencyTest do
     assert result.transcripts.tool_failures == 0
     assert result.bounds.latency in ["holds", "fails"]
     assert result.host.logical_cpus > 0
+
+    # Every non-count curve path is present; counts are an intentional null in timing runs.
+    {counted, measured} = Enum.split_with(Concurrency.curve_fields(), &count_field?/1)
+    assert missing_paths(result, measured) == []
+    assert counted != [] and result.counts == nil
   end
 
   test "a count run reports each suspect's calls and restores tracing and scheduler timing" do
@@ -98,6 +146,7 @@ defmodule Elara.Lab.ConcurrencyTest do
       assert n > 0, name
     end
 
+    assert missing_paths(result, Enum.filter(Concurrency.curve_fields(), &count_field?/1)) == []
     refute Enum.any?(:trace.session_info(:all), &match?({:elara_lab_counts, _}, &1))
     assert :erlang.statistics(:scheduler_wall_time) == :undefined
   end

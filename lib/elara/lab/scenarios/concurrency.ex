@@ -7,7 +7,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
 
   @behaviour Elara.Lab
 
-  alias Elara.Lab.{Client, Histogram, Sampler, Verdict}
+  alias Elara.Lab.{CallCounts, Client, Histogram, Sampler, Verdict}
   alias Elara.Lab.Scenarios.Concurrency.Evidence
   alias Elara.Message.{Assistant, ToolResult}
   alias Elara.Provider.Simulated
@@ -61,25 +61,43 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       {"latency_p95_ms", ["latency_ms", "p95"]},
       {"latency_p99_ms", ["latency_ms", "p99"]},
       {"latency_cohort", ["latency_ms", "cohort"]},
+      {"latency_overflow", ["latency_ms", "overflow"]},
+      {"latency_unreceived", ["latency_ms", "unreceived"]},
+      {"latency_proven_failures", ["latency_ms", "proven_failures"]},
       {"throughput_ratio", ["throughput", "ratio"]},
+      {"arrivals_in_window", ["throughput", "arrivals_in_window"]},
       {"memory_max_per_session", ["memory", "max_per_session"]},
       {"memory_max_per_session_client_adjusted", ["memory", "max_per_session_client_adjusted"]},
       {"memory_mean_per_session", ["memory", "mean_per_session"]},
       {"session_mailbox_max", ["queues", "session", "max"]},
+      {"session_mailbox_p99", ["queues", "session", "p99"]},
       {"connection_mailbox_max", ["queues", "connection", "max"]},
+      {"connection_mailbox_p99", ["queues", "connection", "p99"]},
       {"exec_mailbox_max", ["queues", "exec", "max"]},
+      {"exec_mailbox_p99", ["queues", "exec", "p99"]},
       {"stub_port_queue_bytes_max", ["queues", "stub_port_bytes", "max"]},
+      {"stub_port_queue_bytes_p99", ["queues", "stub_port_bytes", "p99"]},
+      {"bash_excess_p50_ms", ["bash_excess_ms", "p50"]},
       {"bash_excess_p95_ms", ["bash_excess_ms", "p95"]},
+      {"bash_excess_p99_ms", ["bash_excess_ms", "p99"]},
       {"scheduler_normal", ["schedulers", "normal"]},
       {"scheduler_dirty_cpu", ["schedulers", "dirty_cpu"]},
       {"scheduler_dirty_io", ["schedulers", "dirty_io"]},
       {"history_bytes_max", ["history_bytes", "max"]},
       {"cumulative_sessions", ["cumulative_sessions"]},
-      {"completed_turns", ["completed_turns"]}
+      {"session_files", ["session_files"]},
+      {"sessions_root_files", ["sessions_root_files"]},
+      {"completed_turns", ["completed_turns"]},
+      {"expected_unemitted", ["accounting", "expected_unemitted"]},
+      {"emitted_unreceived", ["accounting", "emitted_unreceived"]},
+      {"stopped_at_ms", ["stopped_at_ms"]},
+      {"window_ms", ["window_ms"]},
+      {"tool_failures", ["transcripts", "tool_failures"]}
     ] ++
-      for {m, f, a} <- @counted do
-        name = "#{inspect(m)}.#{f}/#{a}"
-        {"#{name} per delta", ["counts", name, "per_delta"]}
+      for {m, f, a} <- @counted,
+          name = "#{inspect(m)}.#{f}/#{a}",
+          {suffix, key} <- [{"per second", "per_s"}, {"per delta", "per_delta"}] do
+        {"#{name} #{suffix}", ["counts", name, key]}
       end
   end
 
@@ -369,7 +387,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
 
   defp open_window(%{window_to: nil} = run) do
     if run.trace,
-      do: Enum.each(@counted, &:trace.function(run.trace, &1, true, [:call_count]))
+      do: Enum.each(@counted, &CallCounts.install!(run.trace, &1))
 
     put_in(run.swt[:start], :erlang.statistics(:scheduler_wall_time_all))
   end

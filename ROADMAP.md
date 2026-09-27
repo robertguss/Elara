@@ -323,11 +323,11 @@ green. Note: [001](docs/lab/001-core-properties.md).
 - A capped real-model smoke run works.
 - `docs/lab/README.md` documents usage.
 
-**Result (2026-09-26): DONE.** Four scenarios pass 5 of 5 seeded runs. A seed
-reproduces choices, and elapsed-time spread is reported. The capped real smoke
-run passed (1 turn, 3-request cap). JOB-3/4/5/10 now run as lab scenarios, the
-live drivers and protocol v1 are retired, and review fixed three bench flaws.
-Note: [002](docs/lab/002-lab-bench.md).
+**Result (2026-09-26): DONE.** Three job scenarios pass every check in 5 of 5
+seeded runs; smoke (no checks) completes 5 of 5. A seed reproduces choices and
+elapsed-time spread is reported. The capped real smoke run passed. JOB-3/4/5/10
+are lab scenarios; live drivers and protocol v1 are retired; review fixed three
+bench flaws. Note: [002](docs/lab/002-lab-bench.md).
 
 ## LAB-3 — RQ-2: concurrency baseline on unchanged code
 

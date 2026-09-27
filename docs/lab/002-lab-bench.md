@@ -34,7 +34,7 @@ The capped real-model smoke run used the saved OpenAI Codex login:
 
 | Scenario          | Checks failed | Distinct digests | Elapsed ms (min/mean/max) | Notes                                 |
 | ----------------- | ------------- | ---------------- | ------------------------- | ------------------------------------- |
-| `smoke`           | 0             | 5 of 5           | 964 / 992.6 / 1015        | delta latency p95 2–3 ms, p99 3–4 ms  |
+| `smoke`           | n/a (none)    | 5 of 5           | 964 / 992.6 / 1015        | 48 turns done, 12 failed by injected errors; delta p95 2–3 ms |
 | `concurrent_jobs` | 0             | 1                | 1283 / 1643.8 / 1998      | 5 of 5 sessions complete in every run |
 | `session_crash`   | 0             | 1                | 489 / 495.4 / 518         | 3 turns per run                       |
 | `provider_fault`  | 0             | 1                | 1193 / 1209.6 / 1219      | 5 turns per run, both fault cases     |

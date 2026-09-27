@@ -251,6 +251,8 @@ defmodule Elara.ThreadsTest do
       end
 
     assert {:error, :child_concurrency_limit_4} = Threads.start_child(parent, "fifth")
+    assert Threads.list(parent).limit == 4
+    assert Threads.tool().description =~ "4 running children maximum."
 
     assert {:error, {:provider_error, %Elara.Provider.Error{kind: :resource_limit}}} =
              Elara.ask(idle_child["id"], "resumed turn also needs a slot")
@@ -261,6 +263,173 @@ defmodule Elara.ThreadsTest do
     assert length(ids) == 6
     Enum.each(children, &finished(parent, &1["id"]))
     assert Enum.all?(children, &File.exists?(&1["session_path"]))
+  end
+
+  defp with_thread_limit(limit) do
+    previous = Application.fetch_env(:elara, :thread_limit)
+    Application.put_env(:elara, :thread_limit, limit)
+
+    on_exit(fn ->
+      case previous do
+        {:ok, value} -> Application.put_env(:elara, :thread_limit, value)
+        :error -> Application.delete_env(:elara, :thread_limit)
+      end
+    end)
+  end
+
+  # Each request waits for the test's answer, so a turn holds its slot for exactly
+  # as long as the test decides.
+  defmodule GatedProvider do
+    def chat(test, _request) do
+      send(test, {:provider_request, self()})
+
+      receive do
+        {:answer, text} ->
+          {:ok, message} = Elara.Message.assistant(text, [])
+          {:ok, message, test}
+      end
+    end
+  end
+
+  defp next_request do
+    assert_receive {:provider_request, task}, 5_000
+    task
+  end
+
+  test "a configured thread limit governs admission, slot acquisition and the reported limit",
+       %{cwd: cwd} do
+    with_thread_limit(1)
+
+    {:ok, parent} =
+      Elara.start_session(cwd: cwd, provider: {GatedProvider, self()}, pause_inputs: true)
+
+    {:ok, idle_child} = Threads.start_child(parent, "already completed child")
+    send(next_request(), {:answer, "idle"})
+    finished(parent, idle_child["id"])
+
+    # The busy child's request proves it acquired the only slot before dispatch.
+    {:ok, _busy} = Threads.start_child(parent, "holds the only slot")
+    busy = next_request()
+
+    assert {:error, {:child_concurrency_limit, 1}} = Threads.start_child(parent, "second")
+    assert Threads.list(parent).limit == 1
+    assert Threads.tool().description =~ "1 running children maximum."
+
+    assert {:error,
+            {:provider_error, %Elara.Provider.Error{kind: :resource_limit, message: message}}} =
+             Elara.ask(idle_child["id"], "a resumed turn needs a slot")
+
+    assert message =~ "Child concurrency limit 1 reached"
+
+    Application.put_env(:elara, :thread_limit, 2)
+    assert {:ok, _} = Threads.start_child(parent, "admitted at two")
+    send(next_request(), {:answer, "at two"})
+    send(busy, {:answer, "released"})
+  end
+
+  test "an invalid thread limit raises instead of admitting" do
+    with_thread_limit(0)
+
+    for invalid <- [0, -1, "4", 1.5, nil] do
+      Application.put_env(:elara, :thread_limit, invalid)
+      assert_raise ArgumentError, fn -> Threads.limit() end
+    end
+  end
+
+  defp context_limit(id), do: Elara.snapshot(id).snapshot["inbox"]["context"]["limit"]
+
+  test "children inherit the parent's context limit, and keep it on resume", %{cwd: cwd} do
+    {parent, provider} = parent(cwd, [answer("child done")], context_limit: 1_000_000)
+    {:ok, child} = Threads.start_child(parent, "inherit the limit", coding: true)
+    id = child["id"]
+    finished(parent, id)
+    assert context_limit(id) == 1_000_000
+
+    stop(id)
+    assert {:ok, ^id} = Threads.resume(id, provider: provider)
+    assert context_limit(id) == 1_000_000
+  end
+
+  test "a paused child holds its assignment unconsumed until its inputs resume", %{cwd: cwd} do
+    {parent, {_, agent}} = parent(cwd, [answer("assignment answered")])
+
+    {:ok, child} =
+      Threads.start_child(parent, "held assignment", coding: true, pause_inputs: true)
+
+    id = child["id"]
+    # Give a wrongly unpaused child time to run its assignment.
+    Process.sleep(200)
+    assert Elara.transcript(id) == []
+    assert Elara.snapshot(id).snapshot["inbox"]["paused"]
+    assert {:ok, %{state: state}} = Elara.input_status(id, "assignment")
+    assert state in [:accepted, :queued]
+    assert length(Agent.get(agent, & &1)) == 1
+
+    :ok = Elara.resume_inputs(id)
+    finished(parent, id)
+
+    assert [
+             %Message.User{text: "held assignment"},
+             %Message.Assistant{text: "assignment answered"}
+           ] = Elara.transcript(id)
+  end
+
+  test "a provider override answers the child; another module is refused before any workspace",
+       %{cwd: cwd, root: root} do
+    {parent, {_, parent_agent}} = parent(cwd, [answer("parent reply")])
+    own = script([answer("override reply")])
+
+    {:ok, child} = Threads.start_child(parent, "use my provider", coding: true, provider: own)
+    finished(parent, child["id"])
+    assert List.last(Elara.transcript(child["id"])).text == "override reply"
+    assert length(Agent.get(parent_agent, & &1)) == 1
+
+    records = Path.wildcard(Path.join(root, "sessions/_threads/*.json"))
+    workspaces = Path.wildcard(Path.join(root, "sessions/_threads/workspaces/*"))
+    other = Elara.Provider.Simulated.new(seed: 1, id: "other")
+
+    assert {:error, :provider_mismatch} =
+             Threads.start_child(parent, "wrong module", coding: true, provider: other)
+
+    assert Path.wildcard(Path.join(root, "sessions/_threads/*.json")) == records
+    assert Path.wildcard(Path.join(root, "sessions/_threads/workspaces/*")) == workspaces
+  end
+
+  # Expired Codex-sourced tokens fail before any refresh or request, and the
+  # closed loopback port is a second guard, so this never reaches the network.
+  defp offline_codex(model, effort) do
+    tokens = %Elara.Auth.OpenAICodex{
+      access_token: "fake-access",
+      account_id: "fake-account",
+      expires_at: System.system_time(:second) - 3_600,
+      source: :codex
+    }
+
+    {Elara.Provider.OpenAICodex,
+     Elara.Provider.OpenAICodex.new(tokens,
+       model: model,
+       effort: effort,
+       base_url: "http://127.0.0.1:1/backend-api"
+     )}
+  end
+
+  test "a provider override keeps the parent's visibility settings", %{cwd: cwd} do
+    {:ok, parent} =
+      Elara.start_session(
+        cwd: cwd,
+        provider: offline_codex("parent-model", "high"),
+        pause_inputs: true
+      )
+
+    {:ok, child} =
+      Threads.start_child(parent, "keep settings",
+        coding: true,
+        pause_inputs: true,
+        provider: offline_codex("override-model", "low")
+      )
+
+    assert child["model"] == "parent-model"
+    assert child["settings"] == %{"model" => "parent-model", "effort" => "high"}
   end
 
   test "model-callable start uses actual owning identity and does not block parent's turn", %{

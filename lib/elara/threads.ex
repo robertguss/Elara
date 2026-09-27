@@ -3,9 +3,16 @@ defmodule Elara.Threads do
   use GenServer
   alias Elara.Session.Store
 
-  @limit 4
+  @default_limit 4
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
+  @doc """
+  Start a child of `parent`. Options: `coding` (a worktree), `history` (the
+  parent's transcript), `pause_inputs` (the assignment stays pending until
+  `Elara.resume_inputs/1`) and `provider` (replaces the parent's provider; same
+  module only, with the parent's visibility settings). The model-facing tool
+  passes only `coding` and `history`.
+  """
   def start_child(parent, assignment, opts \\ []),
     do: GenServer.call(__MODULE__, {:start, parent, assignment, opts}, :infinity)
 
@@ -109,11 +116,22 @@ defmodule Elara.Threads do
     end
   end
 
+  @doc "Running children allowed per VM: `:elara, :thread_limit`, default 4."
+  def limit do
+    case Application.get_env(:elara, :thread_limit, @default_limit) do
+      limit when is_integer(limit) and limit > 0 ->
+        limit
+
+      other ->
+        raise ArgumentError, "thread_limit must be a positive integer, got #{inspect(other)}"
+    end
+  end
+
   @doc false
   def acquire_slot(id) do
     not Enum.any?(Elara.Session.Handoff.lineage(id), &managed?/1) or
       Registry.keys(Elara.ThreadSlots, self()) != [] or
-      Enum.any?(1..@limit, fn slot ->
+      Enum.any?(1..limit(), fn slot ->
         match?({:ok, _}, Registry.register(Elara.ThreadSlots, slot, id))
       end)
   end
@@ -153,7 +171,7 @@ defmodule Elara.Threads do
     %Elara.Tool{
       name: "start_child",
       description:
-        "Start independent persistent child work. Four running children maximum. Coding uses a durable clean-HEAD worktree; research shares cwd with read-only tools. Selected assignment/context only by default. No automatic integration or cleanup. Embedded VM exit interrupts children.",
+        "Start independent persistent child work. #{limit()} running children maximum. Coding uses a durable clean-HEAD worktree; research shares cwd with read-only tools. Selected assignment/context only by default. No automatic integration or cleanup. Embedded VM exit interrupts children.",
       parameters: %{
         "type" => "object",
         "properties" => %{
@@ -189,7 +207,7 @@ defmodule Elara.Threads do
   def handle_call({:list, parent}, _from, state) do
     {:reply,
      %{
-       limit: @limit,
+       limit: limit(),
        children:
          Enum.filter(records(), &(&1["parent_id"] in Elara.Session.Handoff.lineage(parent)))
          |> Enum.map(&view/1)
@@ -206,8 +224,9 @@ defmodule Elara.Threads do
            :ok <- if(depth(parent) < 3, do: :ok, else: {:error, :thread_depth_limit_3}),
            %{} = config <- Elara.child_config(parent),
            true <-
-             config.allowed_capabilities == :all or "delegate" in config.allowed_capabilities do
-        create(parent, assignment, config, opts)
+             config.allowed_capabilities == :all or "delegate" in config.allowed_capabilities,
+           {:ok, provider} <- child_provider(config.provider, Keyword.get(opts, :provider)) do
+        create(parent, assignment, %{config | provider: provider}, opts)
       else
         false -> {:error, :invalid_assignment_or_delegation_restricted}
         error -> error
@@ -340,6 +359,18 @@ defmodule Elara.Threads do
     {:noreply, state}
   end
 
+  defp child_provider(inherited, nil), do: {:ok, inherited}
+
+  defp child_provider({module, _} = inherited, {module, _} = override),
+    do:
+      {:ok,
+       Elara.Provider.Visibility.configure(
+         override,
+         Elara.Provider.Visibility.settings(inherited)
+       )}
+
+  defp child_provider(_inherited, _override), do: {:error, :provider_mismatch}
+
   defp create(parent, assignment, config, opts) do
     token = Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
     coding = Keyword.get(opts, :coding, false)
@@ -377,10 +408,12 @@ defmodule Elara.Threads do
             allowed_capabilities: caps,
             max_iterations: config.max_iterations,
             max_tool_output_bytes: config.max_tool_output_bytes,
-            tool_timeout_ms: config.tool_timeout_ms
+            tool_timeout_ms: config.tool_timeout_ms,
+            context_limit: config.context_limit
           ]
 
       history = if Keyword.get(opts, :history, false), do: Elara.transcript(parent), else: []
+      paused = Keyword.get(opts, :pause_inputs, false)
       store = Store.new(cwd, String.slice(assignment, 0, 80))
 
       with {:ok, store} <-
@@ -417,14 +450,16 @@ defmodule Elara.Threads do
                Elara.start_session(
                  options ++ [provider: config.provider, seed_history: history, resume: store.path]
                ),
-             :ok <- launch(record) do
+             :ok <- launch(record, paused) do
           {:ok, view(Map.put(record, "state", "running"))}
         end
       end
     end
   end
 
-  defp launch(record) do
+  # A managed child always starts paused (`canonical_options/2`); launch resumes it
+  # unless the caller holds the assignment pending with `pause_inputs: true`.
+  defp launch(record, paused) do
     user = %Elara.Message.User{
       text: record["assignment"],
       agent_source: %{
@@ -442,7 +477,7 @@ defmodule Elara.Threads do
              kind: :agent,
              user: user
            }),
-         do: Elara.resume_inputs(record["id"])
+         do: if(paused, do: :ok, else: Elara.resume_inputs(record["id"]))
   end
 
   defp restore(r, opts) do
@@ -516,9 +551,13 @@ defmodule Elara.Threads do
   defp intersect(caps, limits), do: Enum.filter(caps, &(&1 in limits))
 
   defp capacity do
-    if Registry.count(Elara.ThreadSlots) < @limit,
-      do: :ok,
-      else: {:error, :child_concurrency_limit_4}
+    limit = limit()
+
+    cond do
+      Registry.count(Elara.ThreadSlots) < limit -> :ok
+      limit == @default_limit -> {:error, :child_concurrency_limit_4}
+      true -> {:error, {:child_concurrency_limit, limit}}
+    end
   end
 
   defp depth(id) do

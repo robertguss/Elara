@@ -431,7 +431,8 @@ defmodule Elara.Session do
       tool_timeout_ms: shell.tool_timeout_ms,
       router: shell.router,
       workspace_id: shell.workspace_id,
-      allowed_capabilities: shell.allowed_capabilities
+      allowed_capabilities: shell.allowed_capabilities,
+      context_limit: shell.context_limit
     }
 
     {:reply, config, shell}
@@ -1457,7 +1458,8 @@ defmodule Elara.Session do
          {:error,
           %Elara.Provider.Error{
             kind: :resource_limit,
-            message: "Child concurrency limit 4 reached; retry explicitly when a slot is free"
+            message:
+              "Child concurrency limit #{Elara.Threads.limit()} reached; retry explicitly when a slot is free"
           }}},
         shell
       )

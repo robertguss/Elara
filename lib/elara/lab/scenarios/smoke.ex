@@ -15,6 +15,8 @@ defmodule Elara.Lab.Scenarios.Smoke do
   alias Elara.Provider.Simulated
 
   @impl true
+  def run(%{provider: :real} = context), do: run_real(context)
+
   def run(%{seed: seed, dir: dir, params: params}) do
     sessions = int(params, "sessions", 4)
     turns = int(params, "turns", 3)
@@ -89,6 +91,63 @@ defmodule Elara.Lab.Scenarios.Smoke do
       failed_turns: Enum.count(state.outcomes, &(not match?({:ok, _}, &1))),
       choices_digest: digest(choices),
       latency_ms: state.latency
+    }
+  end
+
+  # Real mode: the configured provider, unwrapped (a wrapper would hide its module
+  # and lose model settings). The request cap is static: each turn makes at most
+  # max_iterations provider requests, so sessions * turns * max_iterations <= cap.
+  defp run_real(%{dir: dir, params: params, max_requests: cap}) do
+    sessions = int(params, "sessions", 1)
+    turns = int(params, "turns", 1)
+
+    max_iterations =
+      if is_integer(cap),
+        do: div(cap, sessions * turns),
+        else: raise("real mode requires --max-requests")
+
+    if max_iterations < 1,
+      do: raise("--max-requests #{cap} is below one request per turn (#{sessions * turns} turns)")
+
+    {:ok, provider} = Elara.Config.resolve()
+    workspace = Path.join(dir, "workspace")
+    File.mkdir_p!(workspace)
+    File.write!(Path.join(workspace, "fixture.txt"), "elara lab fixture\n")
+    tools = Enum.filter(Elara.Tool.builtins(), &(&1.name in ["read", "bash"]))
+    prompt = "Use the read tool on fixture.txt, then reply with only its first word."
+
+    tasks =
+      for _ <- 1..sessions do
+        {:ok, id} =
+          Elara.start_session(
+            provider: provider,
+            cwd: workspace,
+            plugins: [],
+            tools: tools,
+            max_iterations: min(max_iterations, 12)
+          )
+
+        Task.async(fn ->
+          started = System.monotonic_time(:millisecond)
+          outcomes = for _ <- 1..turns, do: Elara.ask(id, prompt)
+          stop(id)
+          {outcomes, System.monotonic_time(:millisecond) - started}
+        end)
+      end
+
+    results = Task.await_many(tasks, :timer.minutes(5))
+    outcomes = Enum.flat_map(results, &elem(&1, 0))
+
+    %{
+      sessions: sessions,
+      turns: turns,
+      provider: :real,
+      request_cap: cap,
+      max_iterations: min(max_iterations, 12),
+      completed_turns: Enum.count(outcomes, &match?({:ok, _}, &1)),
+      failed_turns: Enum.count(outcomes, &(not match?({:ok, _}, &1))),
+      answers: for({:ok, text} <- outcomes, do: String.slice(text, 0, 80)),
+      session_ms: Enum.map(results, &elem(&1, 1))
     }
   end
 

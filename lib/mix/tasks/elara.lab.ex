@@ -6,14 +6,24 @@ defmodule Mix.Tasks.Elara.Lab do
   Run a seeded lab scenario and record its results.
 
       mix elara.lab run SCENARIO [--n N] [--seed S] [--set KEY=VALUE ...] [--results DIR]
+                                 [--provider simulated|real --max-requests R]
 
   Each repetition uses seed `S + rep` and its own temporary sessions root and
-  skills home, so it never touches `~/.elara`. Result lines are appended under
+  skills home, so it never touches `~/.elara` state (a real provider still reads
+  its saved credentials). `--provider real` uses the configured provider and
+  spends real quota; it requires `--max-requests`. Result lines are appended under
   `lab/results/SCENARIO/` (gitignored) and a summary is printed. Scenarios:
   #{Enum.join(Elara.Lab.scenarios(), ", ")}.
   """
 
-  @switches [n: :integer, seed: :integer, set: :keep, results: :string]
+  @switches [
+    n: :integer,
+    seed: :integer,
+    set: :keep,
+    results: :string,
+    provider: :string,
+    max_requests: :integer
+  ]
 
   @impl true
   def run(["run", scenario | argv]) do
@@ -38,7 +48,23 @@ defmodule Mix.Tasks.Elara.Lab do
         end
       end)
 
-    lab_opts = [seed: Keyword.get(opts, :seed, 1), n: Keyword.get(opts, :n, 1), params: params]
+    provider =
+      case Keyword.get(opts, :provider, "simulated") do
+        "simulated" -> :simulated
+        "real" -> :real
+        other -> Mix.raise("--provider must be simulated or real, got #{inspect(other)}")
+      end
+
+    if provider == :real and not is_integer(opts[:max_requests]),
+      do: Mix.raise("--provider real requires --max-requests R")
+
+    lab_opts = [
+      seed: Keyword.get(opts, :seed, 1),
+      n: Keyword.get(opts, :n, 1),
+      params: params,
+      provider: provider,
+      max_requests: opts[:max_requests]
+    ]
 
     try do
       case Elara.Lab.run(scenario, lab_opts) do

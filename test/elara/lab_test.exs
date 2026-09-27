@@ -39,6 +39,18 @@ defmodule Elara.LabTest do
              Enum.map(lines, &JSON.decode!/1)
   end
 
+  test "real mode refuses a request cap below one request per turn, before any network use" do
+    params = %{"sessions" => "2", "turns" => "2"}
+
+    assert_raise RuntimeError, ~r/below one request per turn/, fn ->
+      Elara.Lab.run("smoke", seed: 1, provider: :real, max_requests: 3, params: params)
+    end
+
+    assert_raise RuntimeError, ~r/requires --max-requests/, fn ->
+      Elara.Lab.run("smoke", seed: 1, provider: :real, params: params)
+    end
+  end
+
   test "unknown scenarios are rejected with the known list" do
     assert {:error, {:unknown_scenario, "nope", ["smoke"]}} = Elara.Lab.run("nope", seed: 1)
   end

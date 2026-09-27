@@ -7,10 +7,11 @@
   session, and throughput tracks the intended delta rate. These are provisional
   budgets, not predictions.
 - **Queue item:** LAB-3 · **Date:** 2026-09-26 · **Base:** `c807be3` ·
-  **Measurement commit:** `97311a1`
+  **Measurement commits:** `97311a1` (sessions curve), `97d2166` (child-thread
+  variant)
 - **Status:** the sessions curve has been measured: the timing and count sweeps
-  ran on 2026-09-27. The child-thread variant is pre-registered and not yet run.
-  Attribution is still to be pre-registered and run.
+  ran on 2026-09-27. The child-thread variant ran the same day. Attribution is
+  still to be pre-registered and run.
 
 ## Reference workload
 
@@ -380,6 +381,142 @@ and `lab/results/concurrency/20260927T125116839454Z-sweep-sessions-seed42`
 under `caffeinate -ims` with `MIX_ENV` unset (dev). Host samples are in
 `lab/results/concurrency/lab3-host.log`.
 
+### Child-thread variant
+
+Measured 2026-09-27 at `97d2166`, as registered. Children sweep 18:21–20:37 UTC,
+then the control 20:37–22:40 UTC, both with `MIX_ENV` unset (dev, debug stub),
+under `caffeinate -ims`, on AC power. All 24 slots have a result line, and each
+records `97d2166` with a clean tree.
+
+- **Control:** all 12 repetitions are clean.
+- **Children:** 3 of 12 are clean (K = 4).
+  - The other nine were retained, because cleanup was unconfirmed: transport
+    quiescence was not confirmed within the settlement deadline, and in seven of
+    them neither was the actor hold.
+  - Every one of the nine passed its measurement checks except the three at
+    K = 256. Their drain did not complete, so the watchdog stopped them: they
+    are incomplete, and their throughput is undetermined.
+
+**Table E:** children, one row per repetition (units and columns as in Table A;
+"retained" marks unconfirmed cleanup).
+
+| K | Seed | p50 | p95 | p99 | Cohort | Ratio | Mem max | Mem adj | Turns | L/M/T | Status |
+| --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | :-: | :-- |
+| 4 | 42 | 3 | 6 | 10 | 87,472 | 0.985 | 27.88 | 27.77 | 381 | h/f/h | clean |
+| 4 | 43 | 3 | 6 | 11 | 87,543 | 0.986 | 24.99 | 24.93 | 380 | h/f/h | clean |
+| 4 | 44 | 3 | 8 | 12 | 87,152 | 0.981 | 33.61 | 33.54 | 384 | h/f/h | clean |
+| 16 | 42 | 3 | 15 | 77 | 331,595 | 0.933 | 24.66 | 24.57 | 1,447 | h/f/f | retained |
+| 16 | 43 | 2 | 6 | 18 | 344,805 | 0.971 | 28.18 | 28.08 | 1,491 | h/f/h | retained |
+| 16 | 44 | 2 | 5 | 7 | 348,585 | 0.981 | 23.35 | 23.28 | 1,522 | h/f/h | retained |
+| 64 | 42 | 2 | 7 | 20 | 1,075,379 | 0.757 | 20.84 | 20.75 | 4,811 | h/f/f | retained |
+| 64 | 43 | 3 | 17 | 202 | 1,089,642 | 0.767 | 19.84 | 19.77 | 4,845 | h/f/f | retained |
+| 64 | 44 | 3 | 336 | 1,232 | 994,115 | 0.700 | 20.68 | 20.61 | 4,491 | f/f/f | retained |
+| 256 | 42 | 5 | 1,866 | 3,199 | 1,181,544 | 0.208 | 11.62 | 11.57 | 5,494 | f/f/u | retained; watchdog |
+| 256 | 43 | 6 | 1,716 | 2,829 | 1,190,396 | 0.209 | 11.41 | 11.36 | 5,401 | f/f/u | retained; watchdog |
+| 256 | 44 | 7 | 2,028 | 3,685 | 1,153,634 | 0.203 | 11.84 | 11.78 | 5,394 | f/f/u | retained; watchdog |
+
+**Table F:** the matched control, one row per repetition.
+
+| K | Seed | p50 | p95 | p99 | Cohort | Ratio | Mem max | Mem adj | Turns | L/M/T | Status |
+| --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | :-: | :-- |
+| 4 | 42 | 3 | 7 | 11 | 87,672 | 0.987 | 21.99 | 21.88 | 382 | h/f/h | clean |
+| 4 | 43 | 3 | 6 | 9 | 87,980 | 0.991 | 25.02 | 24.92 | 382 | h/f/h | clean |
+| 4 | 44 | 3 | 7 | 11 | 87,745 | 0.988 | 25.21 | 25.15 | 386 | h/f/h | clean |
+| 16 | 42 | 2 | 5 | 7 | 351,998 | 0.991 | 18.72 | 18.65 | 1,531 | h/f/h | clean |
+| 16 | 43 | 2 | 6 | 9 | 351,847 | 0.990 | 18.75 | 18.67 | 1,523 | h/f/h | clean |
+| 16 | 44 | 2 | 5 | 6 | 351,756 | 0.990 | 20.06 | 19.97 | 1,536 | h/f/h | clean |
+| 64 | 42 | 4 | 447 | 1,804 | 1,281,204 | 0.902 | 22.29 | 22.22 | 5,634 | f/f/f | clean |
+| 64 | 43 | 2 | 13 | 343 | 1,357,535 | 0.955 | 23.07 | 23.00 | 5,904 | h/f/h | clean |
+| 64 | 44 | 2 | 6 | 19 | 1,394,771 | 0.982 | 18.36 | 18.29 | 6,083 | h/f/h | clean |
+| 256 | 42 | 638 | 2,690 | 3,777 | 1,620,686 | 0.285 | 18.12 | 18.04 | 7,435 | f/f/f | clean |
+| 256 | 43 | 693 | 2,910 | 3,670 | 1,960,357 | 0.344 | 16.18 | 16.12 | 8,780 | f/f/f | clean |
+| 256 | 44 | 669 | 4,301 | 5,621 | 2,073,203 | 0.365 | 17.51 | 17.45 | 9,423 | f/f/f | clean |
+
+**Hypothesis per K.** Aggregate verdicts, L/M/T, over three repetitions (from
+`summary.json`, incomplete repetitions included). A bound is testable where it
+holds in the control.
+
+| K | Control | Children | Testable | Children on the testable bounds |
+| --: | :-: | :-: | :-- | :-- |
+| 4 | h/f/h | h/f/h | latency, throughput | both hold |
+| 16 | h/f/h | h/f/f | latency, throughput | latency holds; **throughput fails** |
+| 64 | f/f/f | f/f/f | none | — |
+| 256 | f/f/f | f/f/u | none | — |
+
+- **Refuted at K = 16 on throughput.**
+  - The control held in all three repetitions (0.990–0.991). Children seed 42
+    fell to 0.933, in a complete, compliant repetition; seeds 43 and 44 held
+    (0.971 and 0.981).
+  - That repetition overlapped heavy external load (see Limits). The owner
+    declined a supplementary rerun.
+- **Lowest K below 0.95:** 16 for children, 64 for the control (seed 42,
+  0.902). These are also the saturation values.
+- **Memory** fails in both sweeps at every K, so it is testable nowhere.
+
+**Table G:** paired differences, children minus control, for seeds 42 / 43 / 44
+(from `compare`; ratios rounded here, exact in the comparison file).
+
+| K | Δ p95 (ms) | Δ ratio | Δ peak memory (MiB) |
+| --: | :-: | :-: | :-: |
+| 4 | −1 / 0 / +1 | −0.002 / −0.005 / −0.007 | +5.89 / −0.03 / +8.40 |
+| 16 | +10 / 0 / 0 | −0.057 / −0.020 / −0.009 | +5.94 / +9.43 / +3.30 |
+| 64 | −440 / +4 / +330 | −0.145 / −0.189 / −0.282 | −1.44 / −3.22 / +2.32 |
+| 256 | −824 / −1,194 / −2,273 | −0.077 / −0.135 / −0.162 | −6.50 / −4.77 / −5.67 |
+
+**Table H:** the child path, min–max over the three children repetitions.
+
+- **Start times** cover returned starts; in these runs, each timing count
+  equals the returned-ok count. A censored start's caller was killed at the
+  watchdog stop, so its outcome and duration are unknown.
+- **Reports** are counted from the transport's files at settlement. Delivered
+  means accepted into the paused parent's inbox.
+- **Mailboxes** are sampled in the window.
+
+| Measure | 4 | 16 | 64 | 256 |
+| --- | --: | --: | --: | --: |
+| Start attempts | 20 | 80 | 256–257 | 493–503 |
+| Returned ok / error | 20 / 0 | 80 / 0 | 256–257 / 0 | 420–429 / 0 |
+| Censored starts | 0 | 0 | 0 | 72–76 |
+| Start p50 (ms) | 79–81 | 111–134 | 2,045–3,399 | 240,704–254,441 |
+| Start p95 (ms) | 98–104 | 151–483 | 8,247–15,007 | 336,234–348,120 |
+| Start max (ms) | 99–113 | 196–1,499 | 10,998–29,424 | 376,714–398,218 |
+| Reports staged | 380–384 | 1,447–1,522 | 4,491–4,845 | 5,394–5,494 |
+| Reports accepted | 380–384 | 1,381–1,522 | 408–559 | 111–192 |
+| Reports delivered | 379–383 | 1,317–1,520 | 344–495 | 47–128 |
+| Reports pending | 1 | 2–64 | 64 | 64 |
+| Parent inbox entries | 379–383 | 1,317–1,520 | 344–495 | 47–128 |
+| Parent file (KB) | 1,042–1,053 | 3,619–4,177 | 946–1,361 | 129–352 |
+| Threads mailbox max / p99 | 0–1 / 0 | 1–14 / 0–7 | 176–380 / 154–295 | 7,637–7,811 / 7,598–7,727 |
+| Transport mailbox max / p99 | 1 / 0 | 197–320 / 183–307 | 4,237–4,599 / 4,187–4,550 | 5,242–5,360 / 5,216–5,336 |
+| Worktrees | 20 | 80 | 256–257 | 493–503 |
+
+**Operational shakedown (unregistered, before measurement).**
+
+- **Run:** one children repetition at K = 256 with a 120 s load, at
+  `97d2166`, into scratch.
+- **Outcome:** a complete, compliant measurement with unconfirmed cleanup:
+  transport quiescence and the actor hold were not confirmed within the
+  settlement deadlines.
+- **Decisions:** that outcome was known before registered measurement. Code,
+  checks, deadlines and this registration were kept unchanged (oracle ruling),
+  and the owner chose to run unchanged and without quieting the host.
+- **Status:** its numbers are not measurement data and are not compared. Its
+  record is in `lab/results/concurrency/lab3-variant-prelaunch.log` and
+  `lab3-variant-shakedown/`.
+
+**Reproduce.** Run the registered commands above, then `report` on each
+directory and the registered `compare`.
+
+- Children:
+  `lab/results/concurrency/20260927T182123304442Z-sweep-sessions-seed42`,
+  which also holds the comparison.
+- Control:
+  `lab/results/concurrency/20260927T203712247101Z-sweep-sessions-seed42`.
+- Each directory's `report.tsv` has every registered field per repetition. The
+  start-time counts (`children.start_ms.count`) are in `repetitions.jsonl`.
+- Run times: `lab3-variant-runs.log`. Sweep output: `lab3-children-sweep.out`
+  and `lab3-control-sweep.out`. Host samples: `lab3-variant-host.log`.
+
 ## Interpretation
 
 This covers the sessions curve only.
@@ -422,6 +559,39 @@ This covers the sessions curve only.
   or anything about the BEAM as such. There is no comparison, so these are
   Elara properties under the attribution rule.
 
+### Child-thread variant
+
+- **The child path adds a bound failure: the hypothesis is refuted at K = 16,
+  on throughput.** It rests on one of three repetitions, and that repetition
+  overlapped heavy external load. The rule counts it all the same: a failed
+  bound is a measurement.
+- **The direction does not depend on that repetition.** In all 12 pairs,
+  children's throughput ratio is below the control's: by 0.002–0.007 at K = 4,
+  0.009–0.057 at 16, 0.145–0.282 at 64, and 0.077–0.162 at 256. The sweeps ran
+  one after the other, so pairs share a seed but not host conditions.
+- **The child path's shared actors fall behind as K grows** (Table H):
+  - child starts take about 80 ms at K = 4, 2–3.4 s (p50) at 64, and about
+    4 minutes at 256, where Threads' mailbox reaches 7,600–7,800;
+  - the transport's mailbox reaches 4,200–5,400 from K = 64, and it accepts
+    only 2–12% of the staged reports.
+
+  This is consistent with serialized creation and report handling limiting
+  children's progress. It is not attributed.
+- **At K = 256, children are not 256 concurrent streams.** 72–76 starts were
+  censored and the median start took about 4 minutes. The window's samples
+  averaged 108–112 live children, against 189–224 sessions in the control.
+  Lower latency and memory than the control at that K (Tables E and G) are
+  consistent with lower effective concurrency, and do not establish a faster
+  path.
+- **Settlement was unconfirmed from K = 16 upward.** The report transport's
+  backlog outlived every settlement deadline. Its mechanism is suspected (once
+  64 reports are pending, acceptance is retried), not attributed.
+- **What this does not show:** which cost dominates (worktree creation,
+  Threads serialization, report staging and delivery, lineage scans), or
+  anything about the BEAM as such. The control is a variation inside Elara, so
+  the claim is about Elara's delegation path against its top-level sessions at
+  the same K.
+
 ## Limits
 
 - **Shared schedulers.** The clients run in the VM and share its schedulers. The
@@ -449,3 +619,31 @@ This covers the sessions curve only.
   every bound by wide margins. The samples can miss shorter bursts.
 - **Dev build.** The runs used `MIX_ENV=dev`, the default, with the native
   stub's debug build.
+
+### Child-thread variant
+
+- **Sequential sweeps.** The children ran first and the control second, so
+  host conditions differed between pairs.
+- **Host not quiet.** The owner chose this. Five-minute samples
+  (`lab3-variant-host.log`) show external activity, including:
+  - `node` up to 113%;
+  - XProtect up to 104%;
+  - `swift-frontend` 97%;
+  - a Chrome renderer up to 82%;
+  - `mds_stores` up to 69%.
+
+  The refuting repetition (children K = 16, seed 42, 18:31:40–18:43:02 UTC)
+  overlapped CodexBar at 97% and XProtect at 37% at 18:36, then six `rustc`
+  processes at 25–44% each, `cargo` and a load average of 19.9 at 18:41. The overlap
+  establishes a confound, not its effect.
+- **Unclean children repetitions.** Nine of twelve were retained. Their run
+  directories, 25 GB in all, stay under the children sweep's `tmp/` until the
+  owner archives or releases them.
+- **The K = 256 children repetitions are incomplete** (watchdog), so their
+  throughput is undetermined. Their latency and memory failures come from each
+  bound's own evidence.
+- **Apparatus asymmetry.** During turn 1 only, each child has one extra
+  subscriber, the watcher.
+- **Censored starts** have no duration, so the K = 256 start times cover
+  420–429 of 493–503 attempts.
+- **As for the sessions curve:** a dev build, in-VM clients, and one laptop.

@@ -16,6 +16,7 @@ defmodule Elara.Lab.Profile do
   @limit_ms 5_000
   @outer_ms 30_000
   @barrier_ms 30_000
+  @stop_ms 5_000
   # Every call that discards code (and with it, its counters) in the window.
   @code_changes [
     {:erlang, :delete_module, 1},
@@ -38,7 +39,8 @@ defmodule Elara.Lab.Profile do
   (called with the point and both sessions at `:classification_started`,
   `:patterns_set`, `:future_enabled` and `:census_done`), `:hold` (the
   classifier holds events until `release/1`), `:deliver` (replaces
-  `:trace.delivered/2`) and `:barrier_ms` (each acknowledgement's deadline).
+  `:trace.delivered/2`), `:barrier_ms` (each acknowledgement's deadline) and
+  `:stop_ms` (how long disposal waits for the classifier before killing it).
   On any failure it disposes what it created and re-raises.
   """
   @spec activate(keyword()) :: map()
@@ -67,6 +69,7 @@ defmodule Elara.Lab.Profile do
       connections: connections,
       deliver: deliver,
       barrier_ms: Keyword.get(opts, :barrier_ms, @barrier_ms),
+      stop_ms: Keyword.get(opts, :stop_ms, @stop_ms),
       classifier: classifier,
       class_session: class_session,
       profile_session: profile_session,
@@ -207,6 +210,30 @@ defmodule Elara.Lab.Profile do
     })
   end
 
+  @doc """
+  A frozen profile's four timestamps and n, relative to t0 (ms), with the
+  registered interval and the envelope's and interior's lengths.
+  """
+  @spec window(map()) :: map()
+  def window(handle) do
+    {from, to} = handle.window
+
+    [a1, n, a2, f1, f2] =
+      Enum.map([handle.a1, handle.n, handle.a2, handle.f1, handle.f2], &(&1 - handle.t0))
+
+    %{
+      a1: a1,
+      n: n,
+      a2: a2,
+      f1: f1,
+      f2: f2,
+      from: from,
+      to: to,
+      envelope_ms: f2 - a1,
+      interior_ms: f1 - a2
+    }
+  end
+
   @doc "Whether `pid` is traced in the profile session now: proven membership."
   @spec traced?(map(), pid()) :: boolean()
   def traced?(handle, pid), do: flag?(safe_info(handle.profile_session, pid), :call)
@@ -274,10 +301,13 @@ defmodule Elara.Lab.Profile do
     end
   end
 
-  @doc "Destroy both trace sessions and stop the classifier. Idempotent."
+  @doc """
+  Destroy both trace sessions and stop the classifier, killing it if it does not
+  stop within the bound. Idempotent.
+  """
   @spec dispose(map()) :: :ok
   def dispose(handle) do
-    if Process.alive?(handle.classifier), do: call(handle.classifier, :stop)
+    stop_classifier(handle.classifier, handle.stop_ms)
 
     for session <- [handle.class_session, handle.profile_session] do
       try do
@@ -521,9 +551,25 @@ defmodule Elara.Lab.Profile do
     end)
   end
 
-  defp call(pid, message) do
+  defp stop_classifier(pid, stop_ms) do
     ref = Process.monitor(pid)
-    send(pid, if(message == :complete, do: {:complete, self(), ref}, else: {:stop, self(), ref}))
+    send(pid, {:stop, self(), ref})
+
+    receive do
+      {^ref, :ok} -> Process.demonitor(ref, [:flush])
+      {:DOWN, ^ref, :process, _pid, _reason} -> :ok
+    after
+      stop_ms ->
+        Process.exit(pid, :kill)
+        receive do: ({:DOWN, ^ref, :process, _pid, _reason} -> :ok)
+        # A reply sent just before the kill.
+        receive do: ({^ref, :ok} -> :ok), after: (0 -> :ok)
+    end
+  end
+
+  defp call(pid, :complete) do
+    ref = Process.monitor(pid)
+    send(pid, {:complete, self(), ref})
 
     receive do
       {^ref, reply} ->
@@ -650,29 +696,15 @@ defmodule Elara.Lab.Profile do
     total = classes |> Map.values() |> Enum.map(& &1.own_us) |> Enum.sum()
     unclassified = get_in(classes, [:unclassified, :own_us]) || 0
     share = if total > 0, do: unclassified / total, else: 0.0
-    {from, to} = handle.window
-
-    window = %{
-      a1: handle.a1 - handle.t0,
-      n: handle.n - handle.t0,
-      a2: handle.a2 - handle.t0,
-      f1: handle.f1 - handle.t0,
-      f2: handle.f2 - handle.t0
-    }
+    window = window(handle)
 
     %{
-      window:
-        Map.merge(window, %{
-          from: from,
-          to: to,
-          envelope_ms: window.f2 - window.a1,
-          interior_ms: window.f1 - window.a2
-        }),
+      window: window,
       validity:
         validity(%{
           window: window,
-          from: from,
-          to: to,
+          from: window.from,
+          to: window.to,
           failures: handle.failures,
           unclassified_share: share
         }),

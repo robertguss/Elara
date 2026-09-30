@@ -546,6 +546,176 @@ defmodule Elara.Lab.ConcurrencyTest do
     end
   end
 
+  describe "profile runs" do
+    @profiled %{"trace" => "profile", "profile_window_ms" => "1000"}
+
+    defp profile_sessions do
+      for {name, _id} <- :trace.session_info(:all),
+          String.starts_with?(Atom.to_string(name), "elara_lab_profile"),
+          do: name
+    end
+
+    defp classifiers do
+      for pid <- Process.list(),
+          {:current_function, {Elara.Lab.Profile, :classify, 1}} <- [
+            Process.info(pid, :current_function)
+          ],
+          do: pid
+    end
+
+    test "a profile run collects its window's profile and both censuses, and carries no verdict" do
+      result = run(@profiled)
+      profile = result.profile
+
+      assert failed(result) == []
+      assert result.bounds == %{}
+      assert result.counts == nil
+      assert profile.validity.status in [:valid, :qualified], inspect(profile.validity)
+
+      for class <- [:session, :task, :connection, :exec, :client],
+          do: assert(Map.has_key?(profile.classes, class), inspect(class))
+
+      assert Enum.any?(profile.functions, &(&1.module == Elara.Session))
+
+      w = profile.window
+      assert w.from == 500 and w.to == 1_500
+      assert w.a1 >= 500 and w.a1 <= w.n and w.n <= w.a2 and w.a2 <= w.f1
+      assert w.f1 >= 1_500 and w.f1 <= w.f2
+      assert profile.memory.before_activation.ended_ms <= profile.memory.after_freeze.started_ms
+      assert is_integer(profile.collection_ms)
+      assert is_binary(JSON.encode!(result))
+      assert profile_sessions() == [] and classifiers() == []
+    end
+
+    test "every client of the run is a client, exited ones included" do
+      # The window spans the run, so every client is censused or born traced.
+      result = run(Map.put(@profiled, "profile_window_ms", "1500"))
+
+      assert failed(result) == []
+      assert result.cumulative_sessions > 2
+      assert result.profile.classes.client.pids == result.cumulative_sessions
+    end
+
+    test "a stop before the profile window leaves the profile not activated" do
+      result =
+        run(Map.merge(@profiled, %{"guard_memory_mb" => "1", "profile_window_ms" => "500"}))
+
+      assert result.incomplete == :guard_memory
+      assert result.profile.validity.status == :invalid
+      assert :not_activated in result.profile.validity.reasons
+      assert profile_sessions() == [] and classifiers() == []
+    end
+
+    test "a stop inside the profile window still freezes, censuses and collects" do
+      result =
+        run(%{
+          "trace" => "profile",
+          "profile_window_ms" => "10000",
+          "ttft_ms" => "50",
+          "guard_lag_ms" => "200",
+          "stall_first_answer_ms" => "2000",
+          "duration_ms" => "10000"
+        })
+
+      profile = result.profile
+      assert result.incomplete == :guard_lag
+      assert profile.window.f1 < 10_000
+      assert is_map(profile.classes) and profile.memory.after_freeze != nil
+      assert profile.validity.status == :invalid
+      assert :run_incomplete in profile.validity.reasons
+      assert profile_sessions() == [] and classifiers() == []
+    end
+
+    test "a profile run that fails its checks is invalid" do
+      result = run(Map.put(@profiled, "simulated_answer_deltas", "4"))
+
+      assert failed(result) != []
+      assert result.profile.validity.status == :invalid
+      assert :run_checks_failed in result.profile.validity.reasons
+    end
+
+    test "a collector that raises is a collection failure, and the profile is disposed" do
+      hook = fn
+        :profile_collect -> raise "boom in collector"
+        _point -> :ok
+      end
+
+      result = run(@profiled, 42, hook: hook)
+
+      assert :collection_failed in result.profile.validity.reasons
+      assert result.profile.collection_failure =~ "boom in collector"
+      assert profile_sessions() == [] and classifiers() == []
+    end
+
+    test "a collection past its deadline is cancelled and reported as a timeout" do
+      {:ok, seen} = Agent.start_link(fn -> nil end)
+
+      hook = fn
+        :profile_collect ->
+          collector = self()
+          Agent.update(seen, fn _ -> collector end)
+          Process.sleep(5_000)
+
+        _point ->
+          :ok
+      end
+
+      result = run(Map.put(@profiled, "profile_collect_ms", "100"), 42, hook: hook)
+
+      assert :collection_timeout in result.profile.validity.reasons
+      refute Process.alive?(Agent.get(seen, & &1))
+      assert profile_sessions() == [] and classifiers() == []
+    end
+
+    test "an exception after activation cancels the collector and disposes the profile" do
+      {:ok, seen} = Agent.start_link(fn -> nil end)
+      dirs = Process.get(:lab_dirs)
+
+      hook = fn
+        :profile_collect ->
+          collector = self()
+          Agent.update(seen, fn _ -> collector end)
+          receive do: (:never -> :ok)
+
+        :profile_await ->
+          root = Application.get_env(:elara, :sessions_root)
+          Agent.update(dirs, &[Path.dirname(root) | &1])
+          raise "boom at await"
+
+        _point ->
+          :ok
+      end
+
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        assert_raise RuntimeError, ~r/boom at await/, fn ->
+          Elara.Lab.run(Concurrency, seed: 42, params: Map.merge(@tiny, @profiled), hook: hook)
+        end
+      end)
+
+      refute Process.alive?(Agent.get(seen, & &1))
+      assert profile_sessions() == [] and classifiers() == []
+    end
+
+    test "profile knobs are validated for profile runs only" do
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        for {params, message} <- [
+              {%{"profile_window_ms" => "0"}, ~r/profile_window_ms/},
+              {%{"profile_window_ms" => "1501"}, ~r/profile_window_ms/},
+              {%{"profile_collect_ms" => "0"}, ~r/profile_collect_ms/},
+              {%{"topology" => "children"}, ~r/topology=sessions only/},
+              {%{"trace" => "bogus"}, ~r/trace must be/}
+            ] do
+          assert_raise ArgumentError, message, fn ->
+            Elara.Lab.run(Concurrency,
+              seed: 1,
+              params: @tiny |> Map.merge(@profiled) |> Map.merge(params)
+            )
+          end
+        end
+      end)
+    end
+  end
+
   defp wait_for(done?, tries \\ 100) do
     cond do
       done?.() -> :ok

@@ -131,6 +131,28 @@ also requires `Elara.Threads` and the report transport to be quiescent, every
 staged report settled, no child left running, and both actors held until the
 runner's root and directory are final.
 
+With `--set trace=profile` (topology `sessions` only), a run profiles the last
+`profile_window_ms` of its load (120 s by default, so [480 s, 600 s) at the
+registered duration) as note 003's attribution registers:
+- **At the window's start:** a memory census of the named classes, then
+  `Elara.Lab.Profile` activation.
+- **At load end:** the freeze, a second census of what the profile traces, then
+  collection in a collector beside the drain. Collection is due within
+  `profile_collect_ms` (300 s) of its start.
+
+The result's `profile` holds:
+- the window's timestamps, its validity, its coverage;
+- own time per class and per function;
+- both memory censuses.
+
+The profile is invalid, reported but not ranked, when:
+- its window rules fail;
+- collection is late or failed;
+- any run check fails;
+- the run is incomplete.
+
+A profile run carries no verdict: its `bounds` is empty.
+
 **Checks and cleanup.** A scenario reports invariants as
 `checks: %{name => boolean}`. The summary counts failed checks, and the task
 exits non-zero when any fails. A repetition with a failed check keeps its

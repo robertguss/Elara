@@ -599,6 +599,15 @@ defmodule Elara.Lab.ProfileTest do
       assert gone?(handle)
     end
 
+    test "an unresponsive classifier is killed within the stop bound, and disposal completes" do
+      handle = activate(stop_ms: 100)
+      :erlang.suspend_process(handle.classifier)
+      {elapsed_us, :ok} = :timer.tc(fn -> Profile.dispose(handle) end)
+
+      assert elapsed_us < 2_000_000
+      assert gone?(handle)
+    end
+
     test "a failure between activation and collection is disposed" do
       handle = activate()
       assert Profile.dispose(handle) == :ok

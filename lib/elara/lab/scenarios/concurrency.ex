@@ -8,8 +8,8 @@ defmodule Elara.Lab.Scenarios.Concurrency do
 
   @behaviour Elara.Lab
 
-  alias Elara.Lab.{CallCounts, Client, Histogram, Sampler, Verdict}
-  alias Elara.Lab.Scenarios.Concurrency.Evidence
+  alias Elara.Lab.{CallCounts, Client, Histogram, Profile, Sampler, Verdict}
+  alias Elara.Lab.Scenarios.Concurrency.{Evidence, Profiling}
   alias Elara.Message.{Assistant, ToolResult, User}
   alias Elara.Provider.Simulated
   alias Elara.Session.{Handoff, Store}
@@ -37,6 +37,11 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     "guard_lag_ms" => 60_000,
     "shutdown_ms" => 30_000,
     "client_close_ms" => 30_000,
+    # trace=profile only: the profile window is the load's last profile_window_ms
+    # ([480 s, 600 s) at the registered duration), and collection is due within
+    # profile_collect_ms of its start.
+    "profile_window_ms" => 120_000,
+    "profile_collect_ms" => 300_000,
     # Test-only faults: stream a different answer length than the accounting
     # expects, stall each session's first answer after its ledger row, keep
     # clients from reading until their session has stopped, bind the embedded
@@ -279,13 +284,24 @@ defmodule Elara.Lab.Scenarios.Concurrency do
 
     trace = Map.get(params, "trace", "none")
 
-    unless trace in ["none", "counts"],
-      do: raise(ArgumentError, "trace must be none or counts, got #{inspect(trace)}")
+    unless trace in ["none", "counts", "profile"],
+      do: raise(ArgumentError, "trace must be none, counts or profile, got #{inspect(trace)}")
 
     topology = Map.get(params, "topology", "sessions")
 
     unless topology in ["sessions", "children"],
       do: raise(ArgumentError, "topology must be sessions or children, got #{inspect(topology)}")
+
+    if trace == "profile" do
+      unless topology == "sessions",
+        do: raise(ArgumentError, "trace=profile is registered for topology=sessions only")
+
+      unless ints.profile_window_ms > 0 and ints.profile_window_ms <= ints.duration_ms,
+        do: raise(ArgumentError, "profile_window_ms must be in 1..duration_ms")
+
+      unless ints.profile_collect_ms > 0,
+        do: raise(ArgumentError, "profile_collect_ms must be positive")
+    end
 
     ints |> Map.put(:trace, trace) |> Map.put(:topology, topology)
   end
@@ -319,6 +335,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       Map.merge(run, %{
         coordinator: self(),
         port: port,
+        listen: listen,
         sampler: sampler,
         t0: t0,
         window_from: t0 + p.window_start_ms,
@@ -339,6 +356,9 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     Process.send_after(self(), :window_start, max(run.window_from - t0, 0))
     Process.send_after(self(), :load_end, p.duration_ms)
 
+    if p.trace == "profile",
+      do: Process.send_after(self(), :profile_start, p.duration_ms - p.profile_window_ms)
+
     coordinate(
       Map.merge(run, %{
         users: users,
@@ -350,6 +370,8 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         counts: nil,
         window_to: nil,
         drain_deadline: nil,
+        profiling: nil,
+        profile_outcome: nil,
         sessions: [],
         attaches: [],
         turns: [],
@@ -395,8 +417,11 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       :window_start ->
         coordinate(open_window(run))
 
+      :profile_start ->
+        coordinate(start_profile(run))
+
       :load_end ->
-        run = close_window(run, run.load_end)
+        run = run |> freeze_profile() |> close_window(run.load_end) |> collect_profile()
         send(self(), :tick)
         coordinate(%{run | phase: :drain, drain_deadline: run.load_end + run.p.drain_ms})
 
@@ -515,6 +540,46 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   end
 
   defp close_window(run, _at), do: run
+
+  # ── Profile ─────────────────────────────────────────────────────────────
+
+  # Memory census, then activation, at the profile window's start.
+  defp start_profile(run) do
+    clients = run.clients
+    to = run.p.duration_ms
+
+    state =
+      Profiling.start(
+        t0: run.t0,
+        window: {to - run.p.profile_window_ms, to},
+        clients: fn -> for {pid, _sim} <- :ets.tab2list(clients), do: pid end,
+        connections: fn -> Sampler.connections(run.listen, run.port) || [] end
+      )
+
+    defer(fn -> Profile.dispose(state.handle) end)
+    run.hook.(:profile_activated)
+    %{run | profiling: state}
+  end
+
+  defp freeze_profile(%{profiling: nil} = run), do: run
+  defp freeze_profile(run), do: %{run | profiling: Profiling.freeze(run.profiling)}
+
+  # The second census, then collection beside the drain. Its join runs before
+  # the profile's disposal and every other deferred release.
+  defp collect_profile(%{profiling: %{collector: nil} = state} = run) do
+    state = Profiling.collect(state, run.p.profile_collect_ms, run.hook)
+    defer(fn -> Profiling.join(state) end)
+    %{run | profiling: state}
+  end
+
+  defp collect_profile(run), do: run
+
+  defp await_profile(%{profiling: nil} = run), do: run
+
+  defp await_profile(run) do
+    run.hook.(:profile_await)
+    %{run | profile_outcome: Profiling.await(run.profiling)}
+  end
 
   # ── Users ───────────────────────────────────────────────────────────────
 
@@ -770,7 +835,13 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   # ── Settlement ──────────────────────────────────────────────────────────
 
   defp finalize(run) do
-    run = close_window(run, run.cutoff || run.load_end)
+    # A stop inside the profile window still freezes, censuses and collects.
+    run =
+      run
+      |> freeze_profile()
+      |> close_window(run.cutoff || run.load_end)
+      |> collect_profile()
+
     users = run.users
     Enum.each(users, fn {_ref, pid} -> Process.exit(pid, :kill) end)
     {run, left_users} = await_users(run, Map.keys(users), 5_000)
@@ -798,6 +869,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     Enum.each(left_clients, &Process.exit(&1, :kill))
     samples = Sampler.stop(run.sampler)
     GenServer.stop(run.server)
+    run = await_profile(run)
 
     settlement =
       Map.merge(actors.facts, %{
@@ -1086,25 +1158,29 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       run.stop == nil and checks.accounting_reconciled and checks.clients_closed and
         settlement.ledger_final and totals.interrupted == 0
 
+    # A profile run carries no verdict (note 003).
     bounds =
-      Verdict.bounds(%{
-        compliant: compliant,
-        complete: complete,
-        latency: %{
-          p95: latency && latency.p95,
-          cohort: cohort,
-          cohort_known: cohort_known,
-          proven_failures: proven
-        },
-        memory: %{
-          samples: Enum.map(memory.samples, &Map.take(&1, [:t, :per_session])),
-          from: run.window_from,
-          to: min(run.load_end, run.cutoff || run.load_end),
-          sample_ms: p.sample_ms,
-          baseline: memory.baseline_ok
-        },
-        throughput: %{ratio: ratio}
-      })
+      if p.trace == "profile",
+        do: %{},
+        else:
+          Verdict.bounds(%{
+            compliant: compliant,
+            complete: complete,
+            latency: %{
+              p95: latency && latency.p95,
+              cohort: cohort,
+              cohort_known: cohort_known,
+              proven_failures: proven
+            },
+            memory: %{
+              samples: Enum.map(memory.samples, &Map.take(&1, [:t, :per_session])),
+              from: run.window_from,
+              to: min(run.load_end, run.cutoff || run.load_end),
+              sample_ms: p.sample_ms,
+              baseline: memory.baseline_ok
+            },
+            throughput: %{ratio: ratio}
+          })
 
     %{
       sessions: n,
@@ -1132,6 +1208,15 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       bash_excess_ms: Histogram.percentiles(Histogram.snapshot(run.shared.bash)),
       schedulers: schedulers(run.swt),
       counts: counts(run.counts, run.window_to && run.window_to - run.window_from, arrivals),
+      profile:
+        if(p.trace == "profile",
+          do:
+            Profiling.report(run.profiling, run.profile_outcome, %{
+              checks: checks,
+              complete: complete,
+              incomplete: run.stop
+            })
+        ),
       accounting:
         totals
         |> Map.take([

@@ -35,7 +35,7 @@ defmodule Elara.Lab.Report do
 
   @doc """
   A header and one row per repetition: value, seed, status, each bound's verdict
-  (`undetermined` where absent), then each field (`error` for an error
+  (`undetermined` where absent, `no_verdict` for a profile run), then each field (`error` for an error
   repetition, nil where the result has no value).
   """
   @spec repetition_rows([map()], [{String.t(), [String.t()]}]) :: [list()]
@@ -47,7 +47,7 @@ defmodule Elara.Lab.Report do
     rows =
       for repetition <- repetitions do
         [repetition["sweep"]["value"], repetition["sweep"]["seed"], status(repetition)] ++
-          Enum.map(@bounds, &Map.get(repetition["bounds"] || %{}, &1, "undetermined")) ++
+          Enum.map(@bounds, &bound(repetition, &1)) ++
           Enum.map(fields, fn {_label, path} -> cell(repetition, path) end)
       end
 
@@ -57,8 +57,8 @@ defmodule Elara.Lab.Report do
   @doc """
   A header and one row per value: expected, present, clean and error
   repetitions, and each bound as `Sweep.aggregate_bounds/2` gives it
-  (`undetermined` where no repetition names it). Cleanliness does not enter
-  the bounds.
+  (`undetermined` where no repetition names it, `no_verdict` where every present
+  repetition is a profile run). Cleanliness does not enter the bounds.
   """
   @spec point_rows([map()], [String.t()], pos_integer()) :: [list()]
   def point_rows(repetitions, values, n) do
@@ -77,7 +77,9 @@ defmodule Elara.Lab.Report do
           Enum.count(reps, &Sweep.ok?/1),
           length(reps) - length(present)
         ] ++
-          Enum.map(@bounds, &Map.get(bounds, &1, "undetermined"))
+          if present != [] and Enum.all?(present, &profile?/1),
+            do: Enum.map(@bounds, fn _ -> "no_verdict" end),
+            else: Enum.map(@bounds, &Map.get(bounds, &1, "undetermined"))
       end
 
     [~w(value expected present clean errors) ++ @bounds | rows]
@@ -115,6 +117,16 @@ defmodule Elara.Lab.Report do
       end
 
     [~w(value seed base_status other_status field base other difference reason) | rows]
+  end
+
+  @doc "Whether a repetition is a profile run, which carries no verdict."
+  @spec profile?(map()) :: boolean()
+  def profile?(repetition), do: repetition["profile"] != nil
+
+  defp bound(repetition, name) do
+    if profile?(repetition),
+      do: "no_verdict",
+      else: Map.get(repetition["bounds"] || %{}, name, "undetermined")
   end
 
   @doc "Tab-separated text, one line per row. Nil is `null`; tabs and newlines in text become spaces."

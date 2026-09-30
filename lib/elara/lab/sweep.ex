@@ -233,9 +233,12 @@ defmodule Elara.Lab.Sweep do
       "repetitions" => n,
       "points" => points,
       "saturation_value" => saturation(repetitions),
+      # A profile run carries no verdict, so no threshold judgment either.
       "ratio_below_threshold_values" =>
         repetitions
-        |> Enum.filter(&below_floor?(field(&1, ["throughput", "ratio"])))
+        |> Enum.filter(
+          &(&1["profile"] == nil and below_floor?(field(&1, ["throughput", "ratio"])))
+        )
         |> Enum.map(& &1["sweep"]["value"])
         |> Enum.uniq()
     }

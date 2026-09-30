@@ -151,7 +151,29 @@ The profile is invalid, reported but not ranked, when:
 - any run check fails;
 - the run is incomplete.
 
-A profile run carries no verdict: its `bounds` is empty.
+A profile run carries no verdict: its `bounds` is empty, and `report` shows
+`no_verdict`.
+
+On a profile sweep, `report` also writes five tables:
+- `profile-windows.tsv`: timestamps, overlap, own-time totals, coverage and
+  collection;
+- `profile-classes.tsv`: per class, its kind, pids, calls, own time and shares;
+- `profile-functions.tsv` and `profile-modules.tsv`: ranked classes' own time
+  with ranks, shares, and an approximate rate over the interior (the envelope
+  beside it). Native entries, and modules that include any (`native_us`), may
+  include blocking time;
+- `profile-memory.tsv`: both censuses, per class and per ETS table, plus
+  binaries and VM memory categories.
+
+Every row starts with its profile's validity, reasons and four latenesses. An
+unranked profile keeps its rows with null ranks.
+
+For the waiting evidence and the traced/untraced pair, compare the registered
+timing sweep with the profile sweep. The profile side is traced:
+
+    mix elara.lab compare TIMING_DIR PROFILE_DIR --seed 42 --fields latency_p50_ms,latency_p95_ms,latency_p99_ms,throughput_ratio,memory_max_per_session,memory_mean_per_session,session_mailbox_max,session_mailbox_p99,connection_mailbox_max,connection_mailbox_p99,exec_mailbox_max,exec_mailbox_p99,scheduler_normal,scheduler_dirty_cpu,scheduler_dirty_io,bash_excess_p50_ms,bash_excess_p95_ms,bash_excess_p99_ms
+
+`:file.sync/1` calls per second come from the count sweep's `report.tsv`.
 
 **Checks and cleanup.** A scenario reports invariants as
 `checks: %{name => boolean}`. The summary counts failed checks, and the task

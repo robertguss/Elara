@@ -217,6 +217,7 @@ defmodule Elara.Lab.Scenarios.Concurrency.ProfilingTest do
       assert profile.validity.status in [:valid, :qualified]
       assert profile.classes.client.pids == 1
       assert profile.clients_started == 1
+      assert profile.t0_ms == state.handle.t0
       assert profile.memory.before_activation.classes.exec.pids == 1
       assert profile.memory.after_freeze.started_ms >= profile.memory.before_activation.ended_ms
       assert profile.collection_ms >= 0

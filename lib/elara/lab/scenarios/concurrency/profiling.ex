@@ -181,6 +181,7 @@ defmodule Elara.Lab.Scenarios.Concurrency.Profiling do
     base = %{
       memory: %{before_activation: state.before, after_freeze: nil},
       clients_started: length(state.handle.clients.()),
+      t0_ms: state.handle.t0,
       collection_ms: outcome.collection_ms,
       collection_failure: outcome.reason
     }

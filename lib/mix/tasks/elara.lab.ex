@@ -1,7 +1,7 @@
 defmodule Mix.Tasks.Elara.Lab do
   use Mix.Task
 
-  alias Elara.Lab.Report
+  alias Elara.Lab.{ProfileReport, Report}
 
   @shortdoc "Run a seeded lab scenario"
   @moduledoc """
@@ -33,7 +33,9 @@ defmodule Mix.Tasks.Elara.Lab do
 
   `report` writes `report.tsv` (one row per repetition: status, bounds and the
   scenario's curve fields) and `points.tsv` (one row per value) into a sweep
-  directory. `compare` pairs two sweeps of the same scenario and key by value
+  directory; a profile run's bounds read `no_verdict`. When any repetition carries
+  a profile, it also writes `profile-windows.tsv`, `profile-classes.tsv`,
+  `profile-functions.tsv`, `profile-modules.tsv` and `profile-memory.tsv`. `compare` pairs two sweeps of the same scenario and key by value
   and seed and writes `compare-<BASE_DIR name>.tsv` into OTHER_DIR: both
   statuses, both values, and `other - base` only where both are numbers.
   """
@@ -205,6 +207,13 @@ defmodule Mix.Tasks.Elara.Lab do
       "points.tsv",
       Report.point_rows(sweep.repetitions, values, sweep.summary["repetitions"])
     )
+
+    if Enum.any?(sweep.repetitions, &Report.profile?/1),
+      do:
+        for(
+          {name, rows} <- ProfileReport.tables(sweep.repetitions),
+          do: write(sweep.dir, name, rows)
+        )
   end
 
   def run(["compare", base_dir, other_dir | argv]) do

@@ -115,6 +115,45 @@ defmodule Elara.Lab.ReportTest do
     end
   end
 
+  describe "profile runs" do
+    # A profile run records no verdict: empty bounds and a profile.
+    defp profiled(value, seed),
+      do:
+        rep(value, seed, %{"bounds" => %{}, "profile" => %{"validity" => %{"status" => "valid"}}})
+
+    test "repetition and point rows say no_verdict for profile runs, not undetermined" do
+      reps = [profiled("10", 42), rep("50", 42)]
+      [_header, p, plain] = Report.repetition_rows(reps, @fields)
+
+      assert Enum.slice(p, 3, 3) == ~w(no_verdict no_verdict no_verdict)
+      assert Enum.slice(plain, 3, 3) == ~w(holds fails holds)
+
+      [_header, p10, p50] = Report.point_rows(reps, ["10", "50"], 1)
+      assert Enum.slice(p10, 5, 3) == ~w(no_verdict no_verdict no_verdict)
+      assert Enum.slice(p50, 5, 3) == ~w(holds fails holds)
+    end
+
+    test "a value mixing profile and verdict-bearing runs aggregates only as the sweep does" do
+      [_header, row] = Report.point_rows([profiled("10", 42), rep("10", 43)], ["10"], 2)
+      assert Enum.slice(row, 5, 3) == ~w(undetermined fails undetermined)
+    end
+
+    test "profile runs never enter ratio_below_threshold_values" do
+      low = %{"throughput" => %{"ratio" => 0.2}}
+
+      summary =
+        Sweep.summarize(
+          [Map.merge(profiled("10", 42), low), Map.merge(rep("50", 42), low)],
+          "sessions",
+          ["10", "50"],
+          1,
+          @fields
+        )
+
+      assert summary["ratio_below_threshold_values"] == ["50"]
+    end
+  end
+
   describe "compare" do
     defp compare(base, other, opts \\ []) do
       [header | rows] = Report.compare(base, other, @fields, opts)
@@ -391,6 +430,53 @@ defmodule Elara.Lab.ReportTest do
       end
 
       refute File.exists?(Path.join(other, "compare-1-sweep-sessions-seed42.tsv"))
+    end
+
+    test "report also writes the five profile tables when a repetition carries a profile" do
+      profile = %{
+        "validity" => %{"status" => "valid", "reasons" => []},
+        "window" => %{
+          "a1" => 480_100,
+          "n" => 480_200,
+          "a2" => 480_300,
+          "f1" => 600_100,
+          "f2" => 600_200,
+          "from" => 480_000,
+          "to" => 600_000,
+          "envelope_ms" => 120_100,
+          "interior_ms" => 119_800
+        },
+        "classes" => %{"session" => %{"pids" => 1, "calls" => 2, "own_us" => 5}},
+        "functions" => [
+          %{
+            "class" => "session",
+            "module" => "Elixir.Elara.Session",
+            "function" => "f",
+            "arity" => 0,
+            "calls" => 2,
+            "us" => 5,
+            "native" => false
+          }
+        ],
+        "total_us" => 5
+      }
+
+      reps = [rep("10", 42, %{"bounds" => %{}, "profile" => profile})]
+      dir = sweep_dir(tmp(), "concurrency", "1-sweep-sessions-seed42", reps)
+      lab(["report", dir])
+
+      for name <- Elara.Lab.ProfileReport.tables(reps) |> Enum.map(&elem(&1, 0)) do
+        assert [_header | _rows] = lines(Path.join(dir, name)), name
+      end
+
+      [_header, row] = lines(Path.join(dir, "profile-functions.tsv"))
+      assert row =~ "Elara.Session.f/0"
+    end
+
+    test "report writes no profile tables for a sweep without profiles" do
+      dir = sweep_dir(tmp(), "concurrency", "1-sweep-sessions-seed42", [rep("10", 42)])
+      lab(["report", dir])
+      assert Path.wildcard(Path.join(dir, "profile-*.tsv")) == []
     end
 
     test "report refuses a directory that is not a known scenario's sweep" do

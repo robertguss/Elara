@@ -106,6 +106,7 @@ their difference where both are numbers; otherwise it names why not.
 | `session_crash`   | An idle owner killed while its job runs; offline completion, delivery on reopen (JOB-5) |
 | `provider_fault`  | One scripted `bad_response` before or during interpretation; a second session keeps progressing (JOB-3/4) |
 | `concurrency`     | RQ-2 reference workload: closed-loop users cycling sessions, each observed by a protocol-v2 client; `topology=children` makes them delegated children of one paused parent ([003](003-concurrency-baseline.md)) |
+| `session_recovery` | LAB-5 bounded pilot: one faulted input and two queued inputs, provider-task or direct-marker death ([005](005-shell-chaos.md)) |
 
 The job scenarios use `Elara.Lab.Jobs`, a fixture whose test blocks until the
 scenario releases it, so a fault lands while a job provably runs. They run on

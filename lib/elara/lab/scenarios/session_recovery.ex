@@ -68,7 +68,7 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
         _ -> missing_coordinator_evidence()
       end
 
-    cleanup = cleanup(coordinator, cwd, log)
+    cleanup = cleanup(coordinator, cwd, log, match?({:ok, _witness}, result))
 
     case result do
       {:ok, witness} ->
@@ -89,7 +89,7 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
            Deadline.call(coordinator, :start, deadline, fn ->
              Elara.start_session(session_opts(cwd, provider))
            end),
-         :ok <- Coordinator.track(coordinator, :session, session),
+         :ok <- Coordinator.transfer_session(coordinator, :start, session),
          {:ok, pid} <- Elara.session_pid(session),
          :ok <- maybe_observe_session_target(coordinator, target, pid),
          {:ok, accepted_a} <- submit(session, "A", coordinator, deadline),
@@ -165,7 +165,7 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
                session_opts(cwd, provider) ++ [resume: path, pause_inputs: true]
              )
            end),
-         :ok <- Coordinator.track(coordinator, :session, reopened),
+         :ok <- Coordinator.transfer_session(coordinator, :reopen, reopened),
          {:ok, status} <-
            Deadline.call(coordinator, :status, reopen_at + @recovery_bound_ms, fn ->
              Elara.status(reopened)
@@ -295,14 +295,16 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
     ]
   end
 
-  defp cleanup(coordinator, cwd, log) do
+  @doc false
+  def cleanup(coordinator, cwd, log, workload_settled) do
     {state, coordinator_read} =
       case Coordinator.snapshot(coordinator, 1_000) do
         state when is_map(state) -> {state, true}
         _ -> {missing_coordinator_state(), false}
       end
 
-    sessions = state.sessions ++ Enum.map(Elara.list_sessions(cwd), & &1.id)
+    {discovered_sessions, discovery_confirmed} = discover_sessions(coordinator, cwd)
+    sessions = state.sessions ++ discovered_sessions
 
     session_results =
       sessions
@@ -342,14 +344,25 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
     %{
       confirmed:
         Enum.all?(session_results) and helpers_settled and collector_settled and
-          coordinator_read and coordinator_settled and unresolved == [],
+          workload_settled and discovery_confirmed and coordinator_read and coordinator_settled and
+          unresolved == [],
       sessions: session_results,
+      discovery_confirmed: discovery_confirmed,
       helpers_settled: helpers_settled,
       collector_settled: collector_settled,
       coordinator_settled: coordinator_settled,
       unresolved: unresolved,
       choices: choices
     }
+  end
+
+  defp discover_sessions(coordinator, cwd) do
+    case Deadline.call(coordinator, :discovery, Jobs.now() + 100, fn ->
+           Elara.list_sessions(cwd)
+         end) do
+      {:ok, sessions} when is_list(sessions) -> {Enum.map(sessions, & &1.id), true}
+      _ -> {[], false}
+    end
   end
 
   defp collect_choices(coordinator, log) do
@@ -537,6 +550,15 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Coordinator do
   def snapshot(pid, timeout \\ 1_000), do: bounded_call(pid, :snapshot, timeout)
   def evidence(pid, timeout \\ 1_000), do: bounded_call(pid, :evidence, timeout)
   def track(pid, kind, resource), do: bounded_call(pid, {:track, kind, resource}, 1_000)
+
+  def transfer_session(pid, operation, session),
+    do: bounded_call(pid, {:transfer_session, operation, session}, 1_000)
+
+  def launched(pid, operation, timeout) when operation in [:start, :reopen],
+    do: bounded_call(pid, {:unresolved, operation}, timeout)
+
+  def launched(_pid, _operation, _timeout), do: :ok
+
   def record_hook_return(pid), do: bounded_call(pid, :hook_returned, 1_000)
   def observe_target(pid, target), do: bounded_call(pid, {:observe_target, target}, 1_000)
 
@@ -667,8 +689,17 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Coordinator do
      }}
   end
 
-  def handle_call({:track, :session, session}, _from, state),
-    do: {:reply, :ok, %{state | sessions: [session | state.sessions]}}
+  def handle_call({:transfer_session, operation, session}, _from, state) do
+    {:reply, :ok,
+     %{
+       state
+       | sessions: [session | state.sessions],
+         unresolved: List.delete(state.unresolved, operation)
+     }}
+  end
+
+  def handle_call({:unresolved, operation}, _from, state),
+    do: {:reply, :ok, %{state | unresolved: Enum.uniq([operation | state.unresolved])}}
 
   def handle_call({:track, :collector, collector}, _from, state),
     do: {:reply, :ok, %{state | collectors: [collector | state.collectors]}}
@@ -735,9 +766,6 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Coordinator do
 
     {:noreply, %{state | helpers: helpers}}
   end
-
-  def handle_info({:unresolved, operation}, state),
-    do: {:noreply, %{state | unresolved: [operation | state.unresolved]}}
 
   def handle_info({:DOWN, ref, :process, target, reason}, %{monitor: ref, target: target} = state) do
     {:noreply, %{state | down: %{target: target, reason: reason, at: Jobs.now()}}}
@@ -854,20 +882,26 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Deadline do
     receive do
       {:helper_registered, ^token} ->
         if Jobs.now() < deadline do
-          send(helper, {:run, token})
-          await_result(coordinator, operation, deadline, token, helper, ref)
+          case Coordinator.launched(coordinator, operation, max(deadline - Jobs.now(), 1)) do
+            :ok ->
+              send(helper, {:run, token})
+              await_result(coordinator, operation, deadline, token, helper, ref)
+
+            _ ->
+              timeout(coordinator, operation, helper, ref)
+          end
         else
-          timeout(coordinator, operation, helper, ref, false)
+          timeout(coordinator, operation, helper, ref)
         end
 
       {:helper_registration_expired, ^token} ->
-        timeout(coordinator, operation, helper, ref, false)
+        timeout(coordinator, operation, helper, ref)
 
       {:DOWN, ^ref, :process, ^helper, reason} ->
         send(coordinator, {:settle_helper, helper})
         {:error, {:helper_down, operation, reason}}
     after
-      remaining(deadline) -> timeout(coordinator, operation, helper, ref, false)
+      remaining(deadline) -> timeout(coordinator, operation, helper, ref)
     end
   end
 
@@ -888,17 +922,14 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Deadline do
         send(coordinator, {:settle_helper, helper})
         {:error, {:helper_down, operation, reason}}
     after
-      remaining(deadline) -> timeout(coordinator, operation, helper, ref, true)
+      remaining(deadline) -> timeout(coordinator, operation, helper, ref)
     end
   end
 
-  defp timeout(coordinator, operation, helper, ref, launched?) do
+  defp timeout(coordinator, operation, helper, ref) do
     Process.exit(helper, :kill)
     settled = await_down(helper, ref, Jobs.now() + 100)
     if settled, do: send(coordinator, {:settle_helper, helper})
-
-    if launched? and operation in [:start, :reopen],
-      do: send(coordinator, {:unresolved, operation})
 
     timeout_result(operation, settled)
   end
@@ -1066,7 +1097,8 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.StoreView do
     call_ids =
       Enum.flat_map(history, &Enum.map(Map.get(&1, "tool_calls", []), fn call -> call["id"] end))
 
-    Enum.map(users, & &1["text"]) == Enum.map(@labels, &accepted[&1].text) and
+    match?([%{"kind" => "user", "text" => "input A"} | _], history) and
+      Enum.map(users, & &1["text"]) == Enum.map(@labels, &accepted[&1].text) and
       Enum.all?(call_ids, &(is_binary(&1) and &1 != "")) and
       length(call_ids) == length(Enum.uniq(call_ids)) and
       Enum.all?(@labels, fn label ->
@@ -1374,7 +1406,8 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Observer do
 
     Map.merge(judged, %{
       choices_digest: Elara.Lab.digest({witness.fault, witness.inputs, cleanup.choices}),
-      completed_turns: terminal_count(witness.history),
+      completed_turns:
+        if(judged.checks.history_identity, do: terminal_count(witness.history), else: 0),
       bounds: %{
         "recovery" => bound(complete, witness.recovery_ms, 5_000),
         "backlog" => bound(complete, witness.backlog_ms, backlog_limit(witness))
@@ -1458,9 +1491,21 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Observer do
 
     valid_clock?(witness.clocks.recovery, expected_recovery_origin) and
       valid_clock?(witness.clocks.backlog, expected_backlog_origin) and
+      causal_clock_origins?(witness) and
       witness.recovery_ms == witness.clocks.recovery.ms and
       witness.backlog_ms == witness.clocks.backlog.ms
   end
+
+  defp causal_clock_origins?(%{fault: fault} = witness)
+       when fault in [:provider_started, :provider_streaming] do
+    death_at = get_in(witness, [:death, :at])
+
+    is_integer(death_at) and witness.clocks.recovery.origin_at == death_at and
+      witness.clocks.backlog.origin_at == death_at
+  end
+
+  defp causal_clock_origins?(%{fault: :tool_running}), do: true
+  defp causal_clock_origins?(_), do: false
 
   defp valid_clock?(
          %{origin: expected, origin_at: origin, endpoint_at: endpoint, ms: ms},

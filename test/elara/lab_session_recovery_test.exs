@@ -372,31 +372,134 @@ defmodule Elara.Lab.SessionRecoveryTest do
     assert Coordinator.snapshot(coordinator).helpers == []
   end
 
-  test "late supervised starts remain unresolved and cannot confirm cleanup", %{dir: dir} do
+  test "late successful start and reopen stay unresolved through actual cleanup", %{dir: dir} do
+    for operation <- [:start, :reopen] do
+      {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
+      {:ok, supervisor} = DynamicSupervisor.start_link(strategy: :one_for_one)
+      log = Elara.Lab.choice_log()
+      assert :ok = Coordinator.track(coordinator, :collector, log)
+      owner = self()
+      deadline = System.monotonic_time(:millisecond) + 40
+      :sys.suspend(supervisor)
+
+      caller =
+        Task.async(fn ->
+          Deadline.call(coordinator, operation, deadline, fn ->
+            send(owner, {:operation_launched, operation, self()})
+
+            Elara.start_session_under(supervisor,
+              cwd: dir,
+              home: dir,
+              skill_paths: [],
+              plugins: [],
+              tools: [],
+              persist: true,
+              provider: Elara.Provider.Simulated.new(seed: 42, id: "late-#{operation}")
+            )
+          end)
+        end)
+
+      assert_receive {:operation_launched, ^operation, helper}, 200
+      assert helper in Coordinator.snapshot(coordinator).helpers
+      true = :erlang.suspend_process(caller.pid)
+      wait_until(deadline)
+      :sys.resume(supervisor)
+      assert_eventually(fn -> DynamicSupervisor.count_children(supervisor).active == 1 end)
+      true = :erlang.resume_process(caller.pid)
+
+      assert {:error, {:timeout, ^operation}} = Task.await(caller, 500)
+      assert operation in Coordinator.snapshot(coordinator).unresolved
+
+      cleanup = SessionRecovery.cleanup(coordinator, dir, log, false)
+      report = Observer.report(witness(:provider_started), cleanup)
+
+      refute cleanup.confirmed
+      refute report.cleanup_confirmed
+      refute report.complete
+      assert report.bounds == %{"recovery" => "undetermined", "backlog" => "undetermined"}
+      DynamicSupervisor.stop(supervisor)
+    end
+  end
+
+  test "launched start and reopen failures remain unresolved" do
+    for operation <- [:start, :reopen], failure <- [:invocation_error, :helper_down] do
+      {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
+      on_exit(fn -> Coordinator.stop(coordinator) end)
+      owner = self()
+
+      result =
+        case failure do
+          :invocation_error ->
+            Deadline.call(coordinator, operation, System.monotonic_time(:millisecond) + 500, fn ->
+              raise "#{operation} failed"
+            end)
+
+          :helper_down ->
+            caller =
+              Task.async(fn ->
+                Deadline.call(
+                  coordinator,
+                  operation,
+                  System.monotonic_time(:millisecond) + 500,
+                  fn ->
+                    send(owner, {:kill_start_helper, self()})
+                    Process.sleep(:infinity)
+                  end
+                )
+              end)
+
+            assert_receive {:kill_start_helper, helper}, 200
+            Process.exit(helper, :kill)
+            Task.await(caller, 500)
+        end
+
+      assert match?({:error, _}, result)
+      assert operation in Coordinator.snapshot(coordinator).unresolved
+    end
+  end
+
+  test "aborted workload uses actual cleanup and cannot report completion", %{dir: dir} do
     {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
-    {:ok, supervisor} = DynamicSupervisor.start_link(strategy: :one_for_one)
-    on_exit(fn -> Coordinator.stop(coordinator) end)
-    :sys.suspend(supervisor)
+    log = Elara.Lab.choice_log()
+    assert :ok = Coordinator.track(coordinator, :collector, log)
 
-    result =
-      Deadline.call(coordinator, :start, System.monotonic_time(:millisecond) + 20, fn ->
-        Elara.start_session_under(supervisor,
-          cwd: dir,
-          home: dir,
-          skill_paths: [],
-          plugins: [],
-          tools: [],
-          persist: true,
-          provider: Elara.Provider.Simulated.new(seed: 42, id: "late-start")
-        )
-      end)
+    cleanup = SessionRecovery.cleanup(coordinator, dir, log, false)
+    report = Observer.report(witness(:provider_started), cleanup)
 
-    assert {:error, {:timeout, :start}} = result
-    assert :start in Coordinator.snapshot(coordinator).unresolved
-    :sys.resume(supervisor)
-    Process.sleep(50)
-    assert DynamicSupervisor.count_children(supervisor).active == 1
-    DynamicSupervisor.stop(supervisor)
+    refute cleanup.confirmed
+    refute report.cleanup_confirmed
+    refute report.complete
+    assert report.bounds == %{"recovery" => "undetermined", "backlog" => "undetermined"}
+  end
+
+  test "bounded fallback discovery failure keeps cleanup unconfirmed", %{dir: dir} do
+    {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
+    log = Elara.Lab.choice_log()
+    assert :ok = Coordinator.track(coordinator, :collector, log)
+    store = Store.new(dir)
+    File.mkdir_p!(Path.dirname(store.path))
+    {_, 0} = System.cmd("mkfifo", [store.path])
+    on_exit(fn -> File.rm(store.path) end)
+
+    writer =
+      Port.open({:spawn_executable, "/bin/sh"}, [
+        :exit_status,
+        args: [
+          "-c",
+          "exec 3>\"$1\"; sleep 0.2; printf invalid >&3 || true",
+          "writer",
+          store.path
+        ]
+      ])
+
+    started = System.monotonic_time(:millisecond)
+    cleanup = SessionRecovery.cleanup(coordinator, dir, log, true)
+
+    assert System.monotonic_time(:millisecond) - started < 180
+    refute cleanup.confirmed
+    refute cleanup.discovery_confirmed
+    assert_receive {^writer, {:exit_status, 0}}, 500
+    File.rm!(store.path)
   end
 
   test "saved and reopened persisted mutations fail settlement and reporting", %{dir: dir} do
@@ -411,7 +514,24 @@ defmodule Elara.Lab.SessionRecoveryTest do
       {"extra interrupted C assistant", &extra_interrupted_c/1},
       {"multiple C terminal assistants", &duplicate_c_terminal/1},
       {"stale off-branch entry", &stale_off_branch/1},
-      {"selected leaf before C completion", &leaf_before_c/1}
+      {"selected leaf before C completion", &leaf_before_c/1},
+      {"leading terminal assistant", &prepend_history(&1, %Assistant{text: "unrelated"})},
+      {"leading interrupted assistant",
+       &prepend_history(&1, %Assistant{text: "partial", interrupted: true})},
+      {"leading tool-call assistant",
+       &prepend_history(
+         &1,
+         %Assistant{
+           tool_calls: [
+             %ToolCall{id: "orphan-call", name: "lab_marker", args: {:ok, %{"label" => "A"}}}
+           ]
+         }
+       )},
+      {"leading orphan tool result",
+       &prepend_history(
+         &1,
+         %ToolResult{call_id: "orphan", name: "lab_marker", outcome: {:ok, "unexpected"}}
+       )}
     ]
 
     for {name, mutate} <- mutations do
@@ -427,6 +547,11 @@ defmodule Elara.Lab.SessionRecoveryTest do
       refute report.complete, name
       assert report.bounds == %{"recovery" => "undetermined", "backlog" => "undetermined"}, name
       refute report.checks.history_identity and report.checks.exact_identities, name
+
+      decoded = report |> JSON.encode!() |> JSON.decode!()
+      assert decoded["complete"] == false
+      assert decoded["bounds"] == %{"recovery" => "undetermined", "backlog" => "undetermined"}
+      assert decoded["completed_turns"] <= 2
     end
   end
 
@@ -479,6 +604,10 @@ defmodule Elara.Lab.SessionRecoveryTest do
       &put_in(&1.ordering.injected_at, nil),
       &put_in(&1.death.target, "other-target"),
       &put_in(&1.clocks.recovery.origin, "wrong-origin"),
+      &shift_clock(&1, :recovery, -100),
+      &shift_clock(&1, :recovery, 4),
+      &shift_clock(&1, :recovery, 6),
+      &shift_clock(&1, :backlog, 4),
       fn witness ->
         witness
         |> Map.put(:recovery_ms, 10)
@@ -773,6 +902,19 @@ defmodule Elara.Lab.SessionRecoveryTest do
     %{store | entries: store.entries ++ [branch]}
   end
 
+  defp prepend_history(store, message) do
+    [first | rest] = store.entries
+
+    preamble = %Entry{
+      id: "preamble",
+      parent_id: nil,
+      timestamp: first.timestamp - 1,
+      message: message
+    }
+
+    %{store | entries: [preamble, %{first | parent_id: preamble.id} | rest]}
+  end
+
   defp leaf_before_c(store) do
     leaf =
       store.entries
@@ -792,7 +934,33 @@ defmodule Elara.Lab.SessionRecoveryTest do
     |> put_in([:clocks, :backlog, :ms], backlog_ms)
   end
 
+  defp shift_clock(witness, name, origin_at) do
+    ms = witness.clocks[name].ms
+
+    witness
+    |> put_in([:clocks, name, :origin_at], origin_at)
+    |> put_in([:clocks, name, :endpoint_at], origin_at + ms)
+  end
+
   defp label_index(label), do: Enum.find_index(@inputs, &(&1 == label))
+
+  defp wait_until(deadline) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+    if remaining > 0, do: Process.sleep(remaining + 1)
+  end
+
+  defp assert_eventually(predicate, attempts \\ 100)
+
+  defp assert_eventually(predicate, attempts) when attempts > 0 do
+    if predicate.() do
+      :ok
+    else
+      Process.sleep(5)
+      assert_eventually(predicate, attempts - 1)
+    end
+  end
+
+  defp assert_eventually(_predicate, 0), do: flunk("condition did not become true")
 
   defp expected_checks(:provider) do
     %{

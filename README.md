@@ -457,7 +457,15 @@ Integration is refused while the child's history contains any `indeterminate`
 tool result, for example a command killed by a timeout or the output cap. Its
 changes might be partial and could reach outside the worktree. A later
 successful turn does not clear this. The worktree is preserved for manual
-review; an explicit, scoped operator acknowledgement is a planned follow-up.
+review. `/review-child CHILD_ID` exports an immutable evidence patch and shows
+its SHA-256 digest plus every retained uncertain call occurrence. After
+reviewing those exact bytes, `/ack-child CHILD_ID SHA256 JSON_STRING_ARRAY`
+records a durable receipt; the JSON array must contain the exact call-ID
+multiset, including duplicates and opaque whitespace. This does not reconcile,
+replay or claim an effect outcome. Integration recaptures and applies the child
+bytes, never the exported review file, and fails closed if the patch or retained
+occurrences changed. Review and acknowledgement require the live original child
+and are controller-only; neither action integrates or cleans up automatically.
 `/cleanup-child CHILD_ID` is separate: it requires integration of the exact
 current tree, no ignored files, and a clean child worktree (commit the child's
 integrated changes first). It never uses forced removal. The child branch,
@@ -466,7 +474,8 @@ transcript and integration patches remain; a cleaned workspace cannot resume.
 Metadata/workspaces live under `~/.elara/sessions/_threads/` (or the configured
 Store root). Programmatic entry points are
 `Elara.Threads.start_child(parent_id, assignment, coding: true)`, `list/1`,
-`resume/2`, `integrate/2`, `cleanup/2`, and `stop_subtree/1`. Generic
+`resume/2`, `review_child/2`, `acknowledge_child/4`, `integrate/2`, `cleanup/2`,
+and `stop_subtree/1`. Generic
 saved-session startup also enforces the recorded child configuration. In-place
 hydrate and ordinary clone/fork of managed children are rejected rather than
 losing identity or widening read-only limits; use independent open or explicit

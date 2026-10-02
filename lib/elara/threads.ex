@@ -18,6 +18,16 @@ defmodule Elara.Threads do
 
   def list(parent), do: GenServer.call(__MODULE__, {:list, parent})
   def resume(id, opts \\ []), do: GenServer.call(__MODULE__, {:resume, id, opts}, :infinity)
+  def review_child(parent, id), do: GenServer.call(__MODULE__, {:review, parent, id}, :infinity)
+
+  def acknowledge_child(parent, id, expected_digest, expected_call_ids),
+    do:
+      GenServer.call(
+        __MODULE__,
+        {:acknowledge, parent, id, expected_digest, expected_call_ids},
+        :infinity
+      )
+
   def integrate(parent, id), do: GenServer.call(__MODULE__, {:integrate, parent, id}, :infinity)
   def cleanup(parent, id), do: GenServer.call(__MODULE__, {:cleanup, parent, id}, :infinity)
   def stop_subtree(parent), do: GenServer.call(__MODULE__, {:stop, parent})
@@ -252,15 +262,73 @@ defmodule Elara.Threads do
     {:reply, result, state}
   end
 
+  def handle_call({:review, parent, id}, _from, state) do
+    result =
+      with {:ok, r} <- owned_original(parent, id),
+           true <- r["coding"] and r["state"] != "cleaned" do
+        child_workspace_operation(id, fn evidence -> review_patch(r, evidence) end)
+      else
+        false -> {:error, :not_reviewable}
+        error -> error
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call(
+        {:acknowledge, parent, id, expected_digest, expected_call_ids},
+        _from,
+        state
+      ) do
+    result =
+      with {:ok, r} <- owned_original(parent, id),
+           true <- r["coding"] and r["state"] != "cleaned",
+           true <- valid_digest?(expected_digest),
+           true <-
+             is_list(expected_call_ids) and
+               Enum.all?(expected_call_ids, &(is_binary(&1) and String.valid?(&1))) do
+        child_workspace_operation(id, fn evidence ->
+          acknowledge_patch(r, evidence, expected_digest, expected_call_ids)
+        end)
+      else
+        false -> {:error, :invalid_acknowledgement}
+        error -> error
+      end
+
+    {:reply, result, state}
+  end
+
   def handle_call({:integrate, parent, id}, _from, state) do
     result =
       with {:ok, r} <- owned(parent, id),
            true <-
-             r["coding"] and r["state"] != "cleaned" and r["integration_state"] != "integrating",
-           :ok <- reconciled(id) do
-        workspace_operation(id, fn ->
-          workspace_operation(parent, fn -> integrate_patch(r) end)
-        end)
+             r["coding"] and r["state"] != "cleaned" and r["integration_state"] != "integrating" do
+        case Map.fetch(r, "acknowledgements") do
+          {:ok, receipts} when is_list(receipts) and receipts != [] ->
+            with {:ok, _} <- owned_original(parent, id),
+                 :ok <- live_original(parent) do
+              child_workspace_operation(id, fn evidence ->
+                live_workspace_operation(parent, fn -> integrate_acknowledged(r, evidence) end)
+              end)
+            end
+
+          :error ->
+            with :ok <- reconciled(id) do
+              workspace_operation(id, fn ->
+                workspace_operation(parent, fn -> integrate_patch(r) end)
+              end)
+            end
+
+          {:ok, []} ->
+            with :ok <- reconciled(id) do
+              workspace_operation(id, fn ->
+                workspace_operation(parent, fn -> integrate_patch(r) end)
+              end)
+            end
+
+          {:ok, _} ->
+            {:error, :acknowledgement_stale_or_malformed}
+        end
       else
         false -> {:error, :not_integrable}
         error -> error
@@ -272,9 +340,31 @@ defmodule Elara.Threads do
   def handle_call({:cleanup, parent, id}, _from, state) do
     result =
       with {:ok, r} <- owned(parent, id),
-           true <- r["coding"] and r["integration_state"] == "integrated",
-           :ok <- reconciled(id) do
-        workspace_operation(id, fn -> cleanup_worktree(r) end, true)
+           true <- r["coding"] and r["integration_state"] == "integrated" do
+        case Map.fetch(r, "acknowledgements") do
+          {:ok, receipts} when is_list(receipts) and receipts != [] ->
+            with {:ok, _} <- owned_original(parent, id),
+                 :ok <- live_original(parent) do
+              child_workspace_operation(
+                id,
+                fn evidence -> cleanup_acknowledged(r, evidence) end,
+                true
+              )
+            end
+
+          :error ->
+            with :ok <- reconciled(id) do
+              workspace_operation(id, fn -> cleanup_worktree(r) end, true)
+            end
+
+          {:ok, []} ->
+            with :ok <- reconciled(id) do
+              workspace_operation(id, fn -> cleanup_worktree(r) end, true)
+            end
+
+          {:ok, _} ->
+            {:error, :acknowledgement_stale_or_malformed}
+        end
       else
         false -> {:error, :unintegrated_work_preserved}
         error -> error
@@ -293,21 +383,125 @@ defmodule Elara.Threads do
      state}
   end
 
-  defp integrate_patch(r) do
+  defp review_patch(r, evidence) do
+    with [_ | _] <- evidence.occurrences,
+         {:ok, capture} <- capture_patch(r),
+         true <- capture.patch != "",
+         path = review_path(r["id"], capture.digest),
+         :ok <- write_once(path, capture.patch) do
+      {:ok,
+       %{
+         child: r["id"],
+         base: r["base_revision"],
+         tree: capture.tree,
+         digest: capture.digest,
+         path: path,
+         call_ids: Enum.map(evidence.occurrences, & &1.call_id),
+         occurrences: evidence.occurrences
+       }}
+    else
+      [] -> {:error, :nothing_to_acknowledge}
+      false -> {:error, :not_integrable}
+      error -> error
+    end
+  end
+
+  defp acknowledge_patch(
+         %{"acknowledgements" => receipts},
+         _evidence,
+         _expected_digest,
+         _expected_call_ids
+       )
+       when not is_nil(receipts) and not is_list(receipts),
+       do: {:error, :acknowledgement_stale_or_malformed}
+
+  defp acknowledge_patch(r, evidence, expected_digest, expected_call_ids) do
+    with [_ | _] <- evidence.occurrences,
+         true <-
+           Enum.sort(expected_call_ids) == Enum.sort(Enum.map(evidence.occurrences, & &1.call_id)),
+         {:ok, capture} <- capture_patch(r),
+         true <- capture.patch != "" and capture.digest == expected_digest do
+      receipt = %{
+        "version" => 1,
+        "child" => r["id"],
+        "base" => r["base_revision"],
+        "digest" => capture.digest,
+        "occurrences" => Enum.map(evidence.occurrences, &persist_occurrence/1),
+        "timestamp" => System.system_time(:millisecond)
+      }
+
+      with :ok <- save(Map.put(r, "acknowledgements", (r["acknowledgements"] || []) ++ [receipt])) do
+        {:ok, %{digest: capture.digest, occurrences: evidence.occurrences}}
+      end
+    else
+      [] ->
+        {:error, :nothing_to_acknowledge}
+
+      false ->
+        if Enum.sort(expected_call_ids) == Enum.sort(Enum.map(evidence.occurrences, & &1.call_id)),
+          do: {:error, :reviewed_patch_changed},
+          else: {:error, :uncertainty_occurrences_changed}
+
+      error ->
+        error
+    end
+  end
+
+  defp integrate_acknowledged(r, evidence) do
+    with {:ok, capture} <- capture_patch(r),
+         :ok <- matching_receipt(r, evidence, capture) do
+      integrate_patch(r, capture, :fresh)
+    end
+  end
+
+  defp cleanup_acknowledged(r, evidence) do
+    with {:ok, capture} <- capture_patch(r),
+         :ok <- matching_receipt(r, evidence, capture) do
+      cleanup_worktree(r, capture.tree)
+    end
+  end
+
+  defp matching_receipt(r, evidence, capture) do
+    receipt = List.last(r["acknowledgements"] || [])
+
+    expected = Enum.map(evidence.occurrences, &persist_occurrence/1)
+
+    if is_map(receipt) and map_size(receipt) == 6 and receipt["version"] == 1 and
+         receipt["child"] == r["id"] and receipt["base"] == r["base_revision"] and
+         receipt["digest"] == capture.digest and receipt["occurrences"] == expected and
+         is_integer(receipt["timestamp"]),
+       do: :ok,
+       else: {:error, :acknowledgement_stale_or_malformed}
+  end
+
+  defp persist_occurrence(occurrence) do
+    %{
+      "session_id" => occurrence.session_id,
+      "entry_id" => occurrence.entry_id,
+      "call_id" => occurrence.call_id,
+      "tool" => occurrence.tool,
+      "text" => occurrence.text
+    }
+  end
+
+  defp integrate_patch(r),
+    do: with({:ok, capture} <- capture_patch(r), do: integrate_patch(r, capture, :retained))
+
+  defp integrate_patch(r, capture, artifact) do
     id = r["id"]
 
     with {:ok, ""} <- git(r["parent_cwd"], ["status", "--porcelain", "--untracked-files=all"]),
          {:ok, revision} <- git(r["parent_cwd"], ["rev-parse", "HEAD"]),
-         {:ok, tree} <- capture_tree(r),
-         {:ok, patch} <- git(r["cwd"], ["diff", "--binary", r["base_revision"], tree]),
+         tree = capture.tree,
+         patch = capture.patch,
          true <- patch != "",
-         path = patch_path(id, patch),
+         path = application_path(id, patch, artifact),
          integration = %{
            "patch" => path,
            "tree" => tree,
            "parent_revision" => String.trim(revision)
          },
-         :ok <- File.write(path, patch),
+         :ok <- write_application(path, patch, artifact),
          :ok <- File.chmod(path, 0o600),
          {:ok, _} <- git(r["parent_cwd"], ["apply", "--check", "--index", path]),
          :ok <-
@@ -336,8 +530,11 @@ defmodule Elara.Threads do
     end
   end
 
-  defp cleanup_worktree(r) do
-    with {:ok, tree} <- capture_tree(r),
+  defp cleanup_worktree(r),
+    do: with({:ok, tree} <- capture_tree(r), do: cleanup_worktree(r, tree))
+
+  defp cleanup_worktree(r, tree) do
+    with :ok <- :ok,
          true <- tree == r["integration_tree"],
          {:ok, ""} <- git(r["cwd"], ["ls-files", "--others", "--ignored", "--exclude-standard"]),
          {:ok, _} <- git(r["parent_cwd"], ["worktree", "remove", r["cwd"]]),
@@ -589,6 +786,33 @@ defmodule Elara.Threads do
     end
   end
 
+  defp child_workspace_operation(id, operation, retire? \\ false) do
+    case Elara.session_pid(id) do
+      {:ok, pid} ->
+        GenServer.call(pid, {:child_workspace_operation, id, operation, retire?}, :infinity)
+
+      _ ->
+        {:error, :resume_child_before_workspace_operation}
+    end
+  end
+
+  defp live_workspace_operation(id, operation) do
+    case Elara.session_pid(id) do
+      {:ok, pid} ->
+        GenServer.call(pid, {:acknowledged_parent_workspace_operation, operation}, :infinity)
+
+      _ ->
+        {:error, :resume_parent_before_workspace_operation}
+    end
+  end
+
+  defp live_original(id) do
+    with ^id <- Elara.Session.Handoff.owner(id),
+         {:ok, _} <- Elara.session_pid(id),
+         do: :ok,
+         else: (_ -> {:error, :handoff_context_rejected})
+  end
+
   defp descendants(parent, records) do
     Enum.flat_map(
       Enum.filter(records, &(&1["parent_id"] in Elara.Session.Handoff.lineage(parent))),
@@ -603,6 +827,18 @@ defmodule Elara.Threads do
       if r["parent_id"] in Elara.Session.Handoff.lineage(parent),
         do: {:ok, r},
         else: {:error, :not_child_of_parent}
+    end
+  end
+
+  defp owned_original(parent, id) do
+    with {:ok, r} <- read(id),
+         true <- r["parent_id"] == parent,
+         ^id <- Elara.Session.Handoff.logical_id(id),
+         ^parent <- Elara.Session.Handoff.owner(parent) do
+      {:ok, r}
+    else
+      false -> {:error, :not_child_of_parent}
+      _ -> {:error, :handoff_context_rejected}
     end
   end
 
@@ -643,6 +879,57 @@ defmodule Elara.Threads do
     end
   end
 
+  defp capture_patch(r) do
+    with {:ok, tree} <- capture_tree(r),
+         {:ok, patch} <- git(r["cwd"], ["diff", "--binary", r["base_revision"], tree]) do
+      {:ok,
+       %{
+         tree: tree,
+         patch: patch,
+         digest: Base.encode16(:crypto.hash(:sha256, patch), case: :lower)
+       }}
+    end
+  end
+
+  defp valid_digest?(digest),
+    do: is_binary(digest) and byte_size(digest) == 64 and digest =~ ~r/\A[0-9a-f]{64}\z/
+
+  defp write_once(path, bytes) do
+    case File.open(path, [:write, :exclusive, :binary]) do
+      {:ok, file} ->
+        result = IO.binwrite(file, bytes)
+        File.close(file)
+
+        with :ok <- result,
+             :ok <- File.chmod(path, 0o600),
+             do: :ok
+
+      {:error, :eexist} ->
+        case File.read(path) do
+          {:ok, ^bytes} -> :ok
+          {:ok, _} -> {:error, :review_artifact_conflict}
+          error -> error
+        end
+
+      error ->
+        error
+    end
+  end
+
+  defp write_application(path, bytes, :fresh) do
+    case File.open(path, [:write, :exclusive, :binary]) do
+      {:ok, file} ->
+        result = IO.binwrite(file, bytes)
+        File.close(file)
+        result
+
+      error ->
+        error
+    end
+  end
+
+  defp write_application(path, bytes, :retained), do: File.write(path, bytes)
+
   defp git(cwd, args, env \\ []) do
     case System.cmd("git", args, cd: cwd, env: env, stderr_to_stdout: true) do
       {out, 0} -> {:ok, out}
@@ -662,6 +949,15 @@ defmodule Elara.Threads do
     do:
       record_path(id) <>
         "." <> Base.encode16(:crypto.hash(:sha256, patch), case: :lower) <> ".patch"
+
+  defp application_path(id, patch, :retained), do: patch_path(id, patch)
+
+  defp application_path(id, _patch, :fresh),
+    do:
+      record_path(id) <>
+        ".apply." <> Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false) <> ".patch"
+
+  defp review_path(id, digest), do: record_path(id) <> ".review." <> digest <> ".patch"
 
   defp read(id), do: with({:ok, bytes} <- File.read(record_path(id)), do: JSON.decode(bytes))
 

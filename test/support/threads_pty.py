@@ -3,6 +3,7 @@ import fcntl
 import json
 import os
 import pty
+import re
 import select
 import signal
 import socket
@@ -108,6 +109,24 @@ try:
         wait(lambda: len(children()) == 1 and "completed" in children()[0]["state"], "coding child completes")
         wait(lambda: b"base_revision" in output, "durable creation details")
         send(b"\x1b")
+        coding = children()[0]
+        output.clear()
+        command("/review-child " + coding["id"])
+        wait_visible(lambda: b"digest" in output and b"pty-uncertain" in output, "exact review evidence displayed")
+        digests = re.findall(rb"[0-9a-f]{64}", bytes(output))
+        assert digests, repr(bytes(output[-5000:]))
+        digest = digests[-1].decode()
+        assert not os.path.exists(os.path.join(os.getcwd(), "pty.txt")), "review must not integrate"
+        send(b"\x1b")
+        output.clear()
+        command("/ack-child " + coding["id"] + " " + digest + ' ["pty-uncertain"]')
+        wait_visible(lambda: b"occurrences" in output and b"pty-uncertain" in output, "explicit acknowledgement displayed")
+        acknowledged = next(c for c in children() if c["coding"])
+        assert len(acknowledged["acknowledgements"]) == 1, acknowledged
+        send(b"\x1b")
+        output.clear()
+        command("/ack-child " + coding["id"] + " " + ("0" * 64) + ' ["pty-uncertain"]')
+        wait_visible(lambda: b"reviewed patch changed" in output, "stale acknowledgement rejected")
         command("/delegate research PTY research failure")
         wait(lambda: len(children()) == 2 and any("failed" in c["state"] for c in children()), "sibling failure shown")
         send(b"\x1b")
@@ -119,7 +138,10 @@ try:
     send(b"\t")
     wait_visible(lambda: b"Inspection" in output, "Tab opens durable child metadata")
     # Completion notifications can push parent_id below the initial viewport.
-    send(b"\x1b[6~")
+    for _ in range(10):
+        send(b"\x1b[6~")
+        if b"parent_id" in output:
+            break
     wait_visible(lambda: b"parent_id" in output, "scroll inspects durable parent metadata")
     send(b"\x1b")
     command("/children")

@@ -403,6 +403,8 @@ defmodule Elara.Server do
               "child_start",
               "child_list",
               "thread_parent",
+              "child_review",
+              "child_acknowledge",
               "child_integrate",
               "child_cleanup",
               "child_stop_subtree"
@@ -599,6 +601,24 @@ defmodule Elara.Server do
       {:ok, %{"type" => "thread_open", "version" => 2, "session_id" => r["parent_id"]}}
     else
       _ -> {:error, :no_parent_thread}
+    end
+  end
+
+  defp run_lifecycle_command(session, "child_review", request, _provider, _cwd, _lifetime) do
+    with {:ok, review} <- Elara.Threads.review_child(session, request["session_id"]) do
+      {:ok, %{"type" => "child_result", "version" => 2, "result" => review}}
+    end
+  end
+
+  defp run_lifecycle_command(session, "child_acknowledge", request, _provider, _cwd, _lifetime) do
+    with {:ok, receipt} <-
+           Elara.Threads.acknowledge_child(
+             session,
+             request["session_id"],
+             request["digest"],
+             request["call_ids"]
+           ) do
+      {:ok, %{"type" => "child_result", "version" => 2, "result" => receipt}}
     end
   end
 

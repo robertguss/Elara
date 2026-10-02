@@ -1,28 +1,18 @@
 defmodule Elara.Lab.Scenarios.SessionRecovery do
   @moduledoc """
-  LAB-5 bounded recovery pilot. Exactly three normal inputs, A/B/C, are
-  accepted. The selected hook is held in its calling task until B and C are
-  queued, then released once. Provider faults kill the first answer task.
-  The ordinary direct `lab_marker` path (`effect_executor: nil`) kills the
-  session after the write and before the hook returns.
-
-  Reopen is paused, uses a distinct simulator id, and submits no new normal
-  input. B and C resume only through `resume_inputs/1`. The observer treats
-  neither marker bytes nor `:consumed` as completion. A started marker whose
-  persisted receipt is `"session restarted"` fails
-  `indeterminate_without_receipt`; that is the registered finding, not a
-  runtime change.
+  LAB-5 recovery harness. The selected fault caller is held until persisted B/C
+  backlog is observed, then a scenario-owned coordinator releases one injection.
+  Results are judged only from a coherent read-only persisted store view.
   """
 
   @behaviour Elara.Lab
 
   alias Elara.Lab.{Jobs, Tools}
-  alias Elara.Lab.Scenarios.SessionRecovery.{Gate, Observer, StorePath}
-  alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
+  alias Elara.Lab.Scenarios.SessionRecovery.{Coordinator, Deadline, Observer, StoreView}
+  alias Elara.Message.User
   alias Elara.Provider.Simulated
 
   @faults ~w(provider_started provider_streaming tool_running)
-  @labels ["A", "B", "C"]
   @hook "session-recovery"
   @simulator "recovery"
   @reopen_simulator "recovery-reopen"
@@ -43,9 +33,7 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
   def run(%{provider: :real}), do: raise("session_recovery runs on the simulated provider only")
 
   def run(%{seed: seed, dir: dir} = context) do
-    params = Map.get(context, :params, %{})
-
-    case parse_fault(params["fault"]) do
+    case parse_fault(get_in(context, [:params, "fault"])) do
       {:ok, fault} -> exercise(fault, seed, dir)
       :error -> unknown(dir)
     end
@@ -55,300 +43,201 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
     cwd = Path.join(dir, "workspace")
     File.mkdir_p!(cwd)
     log = Elara.Lab.choice_log()
-    {:ok, gate} = Gate.start(fault)
-    Tools.register_hook(@hook, Gate.hook(gate))
+    {point, key, target} = selected_fault(fault)
+    {:ok, coordinator} = Coordinator.start_link(fault: fault, point: point, key: key)
+    Coordinator.track(coordinator, :collector, log)
 
-    try do
-      provider = provider(seed, @simulator, log, fault, gate)
-      opts = session_opts(cwd, provider)
-
-      case Elara.start_session(opts) do
-        {:ok, session} ->
-          run_session(fault, seed, cwd, log, gate, opts, session)
-
-        {:error, reason} ->
-          incomplete("session_start_failed", reason, fault)
-      end
-    after
-      Tools.unregister_hook(@hook)
-      Gate.stop(gate)
-      if Process.alive?(log), do: Elara.Lab.choices(log)
-    end
-  end
-
-  defp run_session(fault, seed, cwd, log, gate, opts, session) do
-    {:ok, pid} = Elara.session_pid(session)
-    ref = Process.monitor(pid)
-    :ok = Elara.subscribe(session)
-    accepted = submit_all(session)
-    Gate.witness_backlog(gate, session, accepted)
-
-    case fault do
-      :tool_running -> session_case(seed, cwd, log, gate, opts, session, pid, ref, accepted)
-      point -> provider_case(point, cwd, gate, session, pid, ref, accepted)
-    end
-  end
-
-  defp provider_case(point, cwd, gate, session, pid, ref, accepted) do
-    origin = await_provider_death(gate, pid)
-    Process.demonitor(ref, [:flush])
-    recovery_ms = await_failed(session, accepted["A"].id, origin.at)
-    backlog = await_backlog(session, accepted, origin.at, 2)
-    probe = probe(session)
-
-    witness =
-      witness(point, cwd, session, accepted, origin, recovery_ms, backlog, probe, gate, nil)
-
-    stop = stop_session(session)
-    Observer.report(witness, stop)
-  end
-
-  defp session_case(seed, cwd, log, gate, _opts, session, pid, ref, accepted) do
-    origin = await_down(ref, pid, gate)
-    Gate.hold_until_down(gate, origin.down)
-    info = StorePath.find(cwd, session)
-    reopen_at = Jobs.now()
-
-    {:ok, reopened} =
-      Elara.start_session(
-        session_opts(cwd, provider(seed, @reopen_simulator, log, nil, gate)) ++
-          [resume: info.path, pause_inputs: true]
-      )
-
-    probe = probe_paused(reopened, reopen_at)
-    recovery_ms = await_failed(reopened, accepted["A"].id, origin.at)
-    paused_inputs = new_normal_inputs(reopened, accepted)
-    resume_at = Jobs.now()
-    :ok = Elara.resume_inputs(reopened)
-    backlog = await_backlog(reopened, accepted, resume_at, 2)
-
-    witness =
-      witness(
-        :tool_running,
-        cwd,
-        reopened,
-        accepted,
-        origin,
-        recovery_ms,
-        backlog,
-        probe,
-        gate,
-        paused_inputs
-      )
-
-    stop = stop_session(reopened)
-    Observer.report(witness, stop)
-  end
-
-  defp submit_all(session) do
-    Map.new(@labels, fn label ->
-      id = "recovery-#{label}"
-      text = "input #{label}"
-      user = %User{text: text}
-
-      {:ok, entry} =
-        Elara.submit_input(session, %{id: id, sender_id: "lab", kind: :normal, user: user})
-
-      {label, %{id: entry.id, label: label, text: text}}
+    Tools.register_hook(@hook, fn hook_point, hook_key ->
+      Coordinator.hook(coordinator, hook_point, hook_key, :session)
     end)
-  end
 
-  defp await_provider_death(gate, session_pid) do
-    started = Jobs.now()
-    deadline = started + @recovery_bound_ms
-    note_calling_task(gate, deadline)
-
-    receive do
-      {:lab_fault, key, point, :task} ->
-        task = Agent.get(gate, & &1.calling_task)
-        Agent.update(gate, &%{&1 | provider_fault: {key, point, :task}})
-        _death = await_monitored_task(task)
-        at = System.monotonic_time(:millisecond)
-        %{down: true, reason: :killed, fault_seen: true, at: at, started: started}
-    after
-      max(deadline - System.monotonic_time(:millisecond), 0) ->
-        %{
-          down: not Process.alive?(session_pid),
-          reason: :timeout,
-          fault_seen: false,
-          at: started
-        }
-    end
-  end
-
-  defp note_calling_task(gate, deadline) do
-    receive do
-      {:recovery_calling_task, task} when is_pid(task) ->
-        Agent.update(gate, &%{&1 | calling_task: task})
-    after
-      max(deadline - System.monotonic_time(:millisecond), 0) -> :timeout
-    end
-  end
-
-  defp await_monitored_task(task) when is_pid(task) do
-    if Process.alive?(task) do
-      ref = Process.monitor(task)
-
-      receive do
-        {:DOWN, ^ref, :process, ^task, reason} ->
-          %{down: true, reason: reason, fault_seen: true, at: Jobs.now()}
+    result =
+      try do
+        run_flow(fault, seed, cwd, log, coordinator, target)
+      rescue
+        error -> {:error, {:exception, Exception.message(error)}}
+      catch
+        kind, reason -> {:error, {kind, reason}}
       after
-        @recovery_bound_ms ->
-          %{down: not Process.alive?(task), reason: :timeout, fault_seen: true, at: Jobs.now()}
+        Tools.unregister_hook(@hook)
+      end
+
+    ordering = Coordinator.evidence(coordinator)
+    cleanup = cleanup(coordinator, cwd, log)
+
+    case result do
+      {:ok, witness} ->
+        witness
+        |> Map.merge(ordering)
+        |> Observer.report(cleanup)
+
+      {:error, reason} ->
+        incomplete("scenario_failed", reason, fault, cleanup, ordering)
+    end
+  end
+
+  defp run_flow(fault, seed, cwd, log, coordinator, target) do
+    deadline = Jobs.now() + @recovery_bound_ms
+    provider = provider(seed, @simulator, log, fault, coordinator)
+
+    with {:ok, {:ok, session}} <-
+           Deadline.call(coordinator, :start, deadline, fn ->
+             Elara.start_session(session_opts(cwd, provider))
+           end),
+         :ok <- Coordinator.track(coordinator, :session, session),
+         {:ok, pid} <- Elara.session_pid(session),
+         :ok <- maybe_observe_session_target(coordinator, target, pid),
+         {:ok, accepted_a} <- submit(session, "A", coordinator, deadline),
+         {:ok, _arrival} <- Coordinator.await_arrival(coordinator, remaining(deadline)),
+         {:ok, accepted_b} <- submit(session, "B", coordinator, deadline),
+         {:ok, accepted_c} <- submit(session, "C", coordinator, deadline),
+         accepted = %{"A" => accepted_a, "B" => accepted_b, "C" => accepted_c},
+         {:ok, path} <- StoreView.find_path(cwd, session, deadline),
+         {:ok, pending} <- StoreView.await_pending(path, cwd, accepted, deadline),
+         :ok <- Coordinator.witness_backlog(coordinator, pending.ids),
+         :ok <- Coordinator.release(coordinator),
+         {:ok, death} <- Coordinator.await_down(coordinator, @recovery_bound_ms) do
+      case fault do
+        :tool_running ->
+          session_recovery(seed, cwd, log, coordinator, path, accepted, death)
+
+        provider_fault ->
+          provider_recovery(provider_fault, cwd, coordinator, path, session, accepted, death)
       end
     else
-      %{down: true, reason: :killed, fault_seen: true, at: Jobs.now()}
+      {:error, reason} -> {:error, reason}
+      other -> {:error, {:unexpected, other}}
     end
   end
 
-  defp await_monitored_task(_missing) do
-    %{down: false, reason: :no_calling_task, fault_seen: true}
+  defp provider_recovery(fault, cwd, coordinator, path, session, accepted, death) do
+    recovery_deadline = death.at + @recovery_bound_ms
+
+    with {:ok, failed_view} <-
+           StoreView.await_failed(path, cwd, accepted["A"].id, recovery_deadline),
+         recovery_endpoint = Jobs.now(),
+         backlog_count = length(death.backlog_ids),
+         backlog_deadline = death.at + @recovery_bound_ms + backlog_count * @work_allowance_ms,
+         {:ok, settled_view} <- StoreView.await_settled(path, cwd, accepted, backlog_deadline),
+         backlog_endpoint = Jobs.now(),
+         {:ok, status} <-
+           Deadline.call(coordinator, :status, Jobs.now() + 1_000, fn -> Elara.status(session) end),
+         true <- is_map(status) do
+      {:ok,
+       StoreView.witness(settled_view, %{
+         fault: fault,
+         accepted: accepted,
+         cwd: cwd,
+         death: death,
+         probe: :ok,
+         paused_inputs: nil,
+         recovery_ms: recovery_endpoint - death.at,
+         backlog_ms: backlog_endpoint - death.at,
+         backlog_count: backlog_count,
+         backlog_settled: StoreView.settled?(settled_view, accepted),
+         clocks: %{
+           recovery: clock("target_down", death.at, recovery_endpoint),
+           backlog: clock("target_down", death.at, backlog_endpoint)
+         },
+         failed_view: failed_view
+       })}
+    else
+      false -> {:error, :unresponsive_status}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
-  defp await_down(ref, pid, gate) do
-    started = Jobs.now()
+  defp session_recovery(seed, cwd, log, coordinator, path, accepted, death) do
+    reopen_at = Jobs.now()
+    provider = provider(seed, @reopen_simulator, log, nil, coordinator)
 
-    down =
-      receive do
-        {:DOWN, ^ref, :process, ^pid, reason} -> %{down: true, reason: reason}
-      after
-        @recovery_bound_ms ->
-          %{
-            down: not Process.alive?(pid),
-            reason: if(Process.alive?(pid), do: :alive, else: :killed)
-          }
+    with {:ok, {:ok, reopened}} <-
+           Deadline.call(coordinator, :reopen, reopen_at + @recovery_bound_ms, fn ->
+             Elara.start_session(
+               session_opts(cwd, provider) ++ [resume: path, pause_inputs: true]
+             )
+           end),
+         :ok <- Coordinator.track(coordinator, :session, reopened),
+         {:ok, status} <-
+           Deadline.call(coordinator, :status, reopen_at + @recovery_bound_ms, fn ->
+             Elara.status(reopened)
+           end),
+         true <- is_map(status),
+         {:ok, paused_view} <-
+           StoreView.await_paused(path, cwd, accepted, reopen_at + @recovery_bound_ms),
+         recovery_endpoint = Jobs.now(),
+         {:ok, failed_view} <-
+           StoreView.await_failed(path, cwd, accepted["A"].id, death.at + @recovery_bound_ms),
+         paused_inputs = StoreView.extra_inputs(paused_view, accepted),
+         resume_at = Jobs.now(),
+         {:ok, :ok} <-
+           Deadline.call(coordinator, :resume, resume_at + @recovery_bound_ms, fn ->
+             Elara.resume_inputs(reopened)
+           end),
+         backlog_count = length(death.backlog_ids),
+         backlog_deadline = resume_at + @recovery_bound_ms + backlog_count * @work_allowance_ms,
+         {:ok, settled_view} <- StoreView.await_settled(path, cwd, accepted, backlog_deadline),
+         backlog_endpoint = Jobs.now() do
+      {:ok,
+       StoreView.witness(settled_view, %{
+         fault: :tool_running,
+         accepted: accepted,
+         cwd: cwd,
+         death: death,
+         probe: :ok,
+         paused_inputs: paused_inputs,
+         recovery_ms: recovery_endpoint - reopen_at,
+         backlog_ms: backlog_endpoint - resume_at,
+         backlog_count: backlog_count,
+         backlog_settled: StoreView.settled?(settled_view, accepted),
+         clocks: %{
+           recovery: clock("immediately_before_reopen", reopen_at, recovery_endpoint),
+           backlog: clock("explicit_resume", resume_at, backlog_endpoint),
+           a_failure: clock("target_down", death.at, Jobs.now())
+         },
+         failed_view: failed_view
+       })}
+    else
+      false -> {:error, :reopen_unresponsive}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp submit(session, label, coordinator, deadline) do
+    attrs = %{
+      id: "recovery-#{label}",
+      sender_id: "lab",
+      kind: :normal,
+      user: %User{text: "input #{label}"}
+    }
+
+    case Deadline.call(coordinator, :submit, deadline, fn ->
+           Elara.submit_input(session, attrs)
+         end) do
+      {:ok, {:ok, entry}} -> {:ok, %{id: entry.id, label: label, text: attrs.user.text}}
+      {:ok, {:error, reason}} -> {:error, {:submit_failed, label, reason}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp provider(seed, id, log, fault, coordinator) do
+    hook =
+      if fault in [:provider_started, :provider_streaming] do
+        fn point, key -> Coordinator.hook(coordinator, point, key, :task) end
       end
-
-    %{
-      down: down.down and not Process.alive?(pid),
-      reason: down.reason,
-      fault_seen: Gate.fault_seen?(gate),
-      at: if(down.down, do: Jobs.now(), else: started)
-    }
-  end
-
-  defp await_failed(session, id, origin) do
-    deadline = origin + @recovery_bound_ms
-
-    poll(
-      fn ->
-        match?(
-          {:ok, %{state: :failed, error: error}} when is_binary(error),
-          Elara.input_status(session, id)
-        )
-      end,
-      deadline
-    )
-
-    if Jobs.now() <= deadline, do: Jobs.now() - origin, else: nil
-  end
-
-  defp await_backlog(session, accepted, origin, count) do
-    deadline = origin + @recovery_bound_ms + count * @work_allowance_ms
-
-    settled? = fn ->
-      Enum.all?(["B", "C"], fn label ->
-        match?(
-          {:ok, %{state: :consumed, error: nil}},
-          Elara.input_status(session, accepted[label].id)
-        ) and
-          answer_settled?(Elara.transcript(session), accepted[label])
-      end) and active_id(session) == nil
-    end
-
-    poll(settled?, deadline)
-    %{ms: Jobs.now() - origin, count: count, settled: settled?.()}
-  end
-
-  defp probe(session) do
-    started = Jobs.now()
-
-    try do
-      if is_map(Elara.status(session)) and Jobs.now() - started <= 1_000, do: :ok, else: :timeout
-    catch
-      :exit, _ -> :timeout
-    end
-  end
-
-  defp probe_paused(session, origin) do
-    status = probe(session)
-    paused = snapshot_inbox(session)["paused"] == true
-
-    if status == :ok and paused and Jobs.now() - origin <= @recovery_bound_ms,
-      do: :ok,
-      else: :timeout
-  end
-
-  defp witness(
-         fault,
-         cwd,
-         session,
-         accepted,
-         origin,
-         recovery_ms,
-         backlog,
-         probe,
-         gate,
-         paused_inputs
-       ) do
-    history = Elara.transcript(session)
-    active = active_id(session)
-
-    inputs =
-      Map.new(accepted, fn {label, entry} ->
-        {:ok, receipt} = Elara.input_status(session, entry.id)
-
-        {label,
-         %{
-           accepted_id: entry.id,
-           user_message_id: entry.id,
-           call_id: call_id(history, label),
-           label: label,
-           receipt: %{state: receipt.state, error: receipt.error},
-           active_cleared: active == nil
-         }}
-      end)
-
-    %{
-      fault: fault,
-      fault_seen: origin.fault_seen,
-      target_down: origin.down,
-      inputs: inputs,
-      history: encode_history(history),
-      marker_labels: logical_labels(history),
-      marker_bytes: read_markers(cwd),
-      probe: probe,
-      recovery_ms: recovery_ms,
-      backlog_ms: backlog.ms,
-      backlog_count: backlog.count,
-      backlog_settled: backlog.settled,
-      paused_inputs: paused_inputs,
-      hook_returned_before_down: Gate.returned_before_down?(gate),
-      active_input_id: active,
-      one_shot: Gate.one_shot?(gate)
-    }
-  end
-
-  defp provider(seed, id, log, fault, gate) do
-    schedule =
-      if fault in [:provider_started, :provider_streaming],
-        do: %{{"#{@simulator}:1", fault} => :task},
-        else: %{}
 
     Simulated.new(
       seed: seed,
       id: id,
       profile: profile(fault),
       collector: log,
-      fault: Gate.provider_hook(gate, schedule, fault)
+      fault: hook
     )
   end
 
-  # Provider faults kill A's first answer request, so A must stream rather than
-  # call the marker. A tool-call response never reaches :provider_streaming.
   defp profile(fault) do
     labels =
-      if fault in [:provider_started, :provider_streaming], do: ["B", "C"], else: @labels
+      if fault in [:provider_started, :provider_streaming], do: ["B", "C"], else: ["A", "B", "C"]
 
     [
       ttft_ms: 10,
@@ -383,128 +272,121 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
     ]
   end
 
-  defp call_id(history, label) do
-    Enum.find_value(history, fn
-      %Assistant{tool_calls: calls} ->
-        Enum.find_value(calls, fn
-          %ToolCall{id: id, name: "lab_marker", args: {:ok, %{"label" => ^label}}} -> id
-          _ -> nil
-        end)
+  defp cleanup(coordinator, cwd, log) do
+    state = Coordinator.snapshot(coordinator)
+    sessions = state.sessions ++ Enum.map(Elara.list_sessions(cwd), & &1.id)
 
-      _ ->
-        nil
+    session_results =
+      sessions
+      |> Enum.uniq()
+      |> Enum.map(fn session ->
+        deadline = Jobs.now() + 1_000
+
+        case Deadline.call(coordinator, :stop, deadline, fn -> bounded_stop(session) end) do
+          {:ok, :ok} -> true
+          _ -> session_dead?(session)
+        end
+      end)
+
+    owned_pids =
+      [state.target, state.caller | state.helpers ++ MapSet.to_list(state.workers)]
+      |> Enum.filter(&is_pid/1)
+      |> Enum.uniq()
+
+    Enum.each(owned_pids, fn pid ->
+      if Process.alive?(pid), do: Process.exit(pid, :kill)
     end)
+
+    helpers_settled = await_dead(owned_pids, Jobs.now() + 1_000)
+    choices = collect_choices(coordinator, log)
+    if Process.alive?(log), do: Process.exit(log, :kill)
+    collector_settled = await_dead([log], Jobs.now() + 1_000)
+    unresolved = Coordinator.snapshot(coordinator).unresolved
+    Coordinator.stop(coordinator)
+    coordinator_settled = not Process.alive?(coordinator)
+
+    %{
+      confirmed:
+        Enum.all?(session_results) and helpers_settled and collector_settled and
+          coordinator_settled and unresolved == [],
+      sessions: session_results,
+      helpers_settled: helpers_settled,
+      collector_settled: collector_settled,
+      coordinator_settled: coordinator_settled,
+      unresolved: unresolved,
+      choices: choices
+    }
   end
 
-  defp encode_history(history) do
-    Enum.map(history, fn
-      %User{text: text} ->
-        %{"kind" => "user", "text" => text}
-
-      %Assistant{text: text, tool_calls: calls} ->
-        %{
-          "kind" => "assistant",
-          "text" => text,
-          "tool_calls" =>
-            Enum.map(calls, fn %ToolCall{id: id, name: name, args: args} ->
-              %{"id" => id, "name" => name, "args" => encode_args(args)}
-            end)
-        }
-
-      %ToolResult{call_id: id, name: name, outcome: outcome} ->
-        %{
-          "kind" => "tool_result",
-          "call_id" => id,
-          "name" => name,
-          "outcome" => encode_outcome(outcome)
-        }
-    end)
-  end
-
-  defp encode_args({:ok, args}), do: args
-  defp encode_args({:malformed, text}), do: %{"malformed" => text}
-  defp encode_outcome({kind, text}), do: %{"kind" => Atom.to_string(kind), "text" => text}
-
-  defp logical_labels(history) do
-    Enum.flat_map(history, fn
-      %Assistant{tool_calls: calls} ->
-        Enum.flat_map(calls, fn
-          %ToolCall{name: "lab_marker", args: {:ok, %{"label" => label}}} -> [label]
-          _ -> []
-        end)
-
-      _ ->
-        []
-    end)
-  end
-
-  defp answer_settled?(history, entry) do
-    id = call_id(history, entry.label)
-
-    Enum.any?(history, fn
-      %ToolResult{call_id: ^id, outcome: {:ok, "marked " <> label}} -> label == entry.label
-      _ -> false
-    end) and id != nil
-  end
-
-  defp active_id(session) do
-    case Elara.snapshot(session) do
-      %{snapshot: %{"inbox" => %{"active_input_id" => id}}} -> id
-      _ -> nil
-    end
-  end
-
-  defp snapshot_inbox(session) do
-    case Elara.snapshot(session) do
-      %{snapshot: %{"inbox" => inbox}} when is_map(inbox) -> inbox
+  defp collect_choices(coordinator, log) do
+    case Deadline.call(coordinator, :choices, Jobs.now() + 500, fn -> Elara.Lab.choices(log) end) do
+      {:ok, choices} -> choices
       _ -> %{}
     end
   end
 
-  defp new_normal_inputs(session, accepted) do
-    known = accepted |> Map.values() |> Enum.map(& &1.id) |> MapSet.new()
-
-    snapshot_inbox(session)
-    |> Map.get("entries", [])
-    |> Enum.count(&(not MapSet.member?(known, &1["id"])))
-  end
-
-  defp read_markers(cwd) do
-    path = Path.join(cwd, @marks)
-
-    if File.exists?(path), do: path |> File.read!() |> String.split("\n", trim: true), else: []
-  end
-
-  defp poll(fun, deadline) do
-    cond do
-      fun.() ->
-        :ok
-
-      Jobs.now() >= deadline ->
-        :timeout
-
-      true ->
-        Process.sleep(20)
-        poll(fun, deadline)
-    end
-  end
-
-  defp stop_session(session) do
+  defp bounded_stop(session) do
     case Elara.session_pid(session) do
       {:ok, pid} ->
         ref = Process.monitor(pid)
-        Jobs.stop_session(session)
+        Process.exit(pid, :shutdown)
 
         receive do
-          {:DOWN, ^ref, :process, ^pid, _} -> true
+          {:DOWN, ^ref, :process, ^pid, _} -> :ok
         after
-          2_000 -> Process.alive?(pid) == false
+          500 ->
+            Process.exit(pid, :kill)
+
+            receive do
+              {:DOWN, ^ref, :process, ^pid, _} -> :ok
+            after
+              250 -> {:error, :still_alive}
+            end
         end
 
       _ ->
-        true
+        :ok
     end
   end
+
+  defp session_dead?(session) do
+    case Elara.session_pid(session) do
+      {:ok, pid} -> not Process.alive?(pid)
+      _ -> true
+    end
+  end
+
+  defp await_dead([], _deadline), do: true
+
+  defp await_dead(pids, deadline) do
+    alive = Enum.filter(pids, &Process.alive?/1)
+
+    cond do
+      alive == [] ->
+        true
+
+      Jobs.now() >= deadline ->
+        false
+
+      true ->
+        Process.sleep(10)
+        await_dead(alive, deadline)
+    end
+  end
+
+  defp selected_fault(:tool_running), do: {:tool_running, "label:A", :session}
+  defp selected_fault(point), do: {point, "#{@simulator}:1", :task}
+
+  defp maybe_observe_session_target(coordinator, :session, pid),
+    do: Coordinator.set_expected_target(coordinator, pid)
+
+  defp maybe_observe_session_target(_coordinator, :task, _pid), do: :ok
+
+  defp clock(origin, origin_at, endpoint_at) do
+    %{origin: origin, origin_at: origin_at, endpoint_at: endpoint_at, ms: endpoint_at - origin_at}
+  end
+
+  defp remaining(deadline), do: max(deadline - Jobs.now(), 0)
 
   defp parse_fault(name) when name in @faults, do: {:ok, String.to_existing_atom(name)}
   defp parse_fault(_), do: :error
@@ -525,15 +407,18 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
     }
   end
 
-  defp incomplete(reason, detail, fault) do
+  defp incomplete(reason, detail, fault, cleanup, ordering) do
     %{
-      checks: %{known_fault: true, session_started: false},
+      checks: %{known_fault: true, prerequisites_observed: false},
       bounds: %{"recovery" => "undetermined", "backlog" => "undetermined"},
       incomplete: "#{reason}: #{inspect(detail)}",
       complete: false,
-      cleanup_confirmed: true,
+      cleanup_confirmed: cleanup.confirmed,
+      cleanup: cleanup,
+      ordering: ordering.ordering,
+      death: ordering.death,
       completed_turns: 0,
-      choices_digest: Elara.Lab.digest({reason, fault}),
+      choices_digest: Elara.Lab.digest({reason, fault, detail}),
       recovery_ms: nil,
       backlog_ms: nil,
       marker_count: 0,
@@ -543,318 +428,685 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
   end
 end
 
-defmodule Elara.Lab.Scenarios.SessionRecovery.Gate do
+defmodule Elara.Lab.Scenarios.SessionRecovery.Coordinator do
+  @moduledoc false
+  use GenServer
+
+  alias Elara.Lab.Faults
+  alias Elara.Lab.Jobs
+
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
+
+  def stop(pid) do
+    if Process.alive?(pid), do: GenServer.stop(pid, :normal, 1_000)
+    :ok
+  catch
+    :exit, _ -> :ok
+  end
+
+  def hook(pid, point, key, target) do
+    target_pid = target_pid(target)
+
+    case GenServer.call(pid, {:arrive, point, key, target, target_pid, self()}, :infinity) do
+      {:inject, selected_target} ->
+        GenServer.cast(pid, {:injected, self()})
+        Faults.inject(selected_target)
+        _ = await_down(pid, 5_000)
+        record_hook_return(pid)
+        :ok
+
+      :skip ->
+        :skip
+    end
+  end
+
+  def await_arrival(pid, timeout), do: await(pid, :arrival, timeout)
+  def await_down(pid, timeout), do: await(pid, :down, timeout)
+  def witness_backlog(pid, ids), do: GenServer.call(pid, {:backlog, ids})
+  def release(pid), do: GenServer.call(pid, :release)
+  def snapshot(pid), do: GenServer.call(pid, :snapshot)
+  def evidence(pid), do: GenServer.call(pid, :evidence)
+  def track(pid, kind, resource), do: GenServer.call(pid, {:track, kind, resource})
+  def helper_started(pid, helper), do: GenServer.call(pid, {:helper_started, helper})
+  def helper_settled(pid, helper), do: GenServer.call(pid, {:helper_settled, helper})
+  def unresolved(pid, operation), do: GenServer.call(pid, {:unresolved, operation})
+  def record_hook_return(pid), do: GenServer.call(pid, :hook_returned)
+  def observe_target(pid, target), do: GenServer.call(pid, {:observe_target, target})
+  def set_expected_target(pid, target), do: GenServer.call(pid, {:expected_target, target})
+
+  @impl true
+  def init(opts) do
+    {:ok,
+     %{
+       fault: opts[:fault],
+       point: opts[:point],
+       key: opts[:key],
+       expected_target: nil,
+       target: nil,
+       caller: nil,
+       monitor: nil,
+       arrival_from: nil,
+       arrived_at: nil,
+       monitor_installed_at: nil,
+       backlog_ids: [],
+       backlog_observed_at: nil,
+       released: false,
+       released_at: nil,
+       injections: 0,
+       injected_at: nil,
+       down: nil,
+       hook_returned_at: nil,
+       hook_returned_before_down: false,
+       helpers: [],
+       workers: MapSet.new(),
+       sessions: [],
+       collectors: [],
+       unresolved: []
+     }}
+  end
+
+  @impl true
+  def handle_call({:arrive, point, key, target, target_pid, caller}, from, state) do
+    state = %{state | workers: MapSet.put(state.workers, caller)}
+    selected = point == state.point and key == state.key
+
+    cond do
+      not selected or state.arrival_from != nil or state.injections > 0 ->
+        {:reply, :skip, state}
+
+      not is_pid(target_pid) or not Process.alive?(target_pid) ->
+        {:reply, :skip, %{state | unresolved: [:missing_target | state.unresolved]}}
+
+      not is_nil(state.expected_target) and state.expected_target != target_pid ->
+        {:reply, :skip, %{state | unresolved: [:wrong_target | state.unresolved]}}
+
+      true ->
+        installed = Jobs.now()
+        ref = Process.monitor(target_pid)
+        arrived = Jobs.now()
+
+        {:noreply,
+         %{
+           state
+           | target: target_pid,
+             caller: caller,
+             monitor: ref,
+             arrival_from: {from, target},
+             monitor_installed_at: installed,
+             arrived_at: arrived
+         }}
+    end
+  end
+
+  def handle_call({:backlog, ids}, _from, state) do
+    if length(ids) == 2 and Enum.all?(ids, &is_binary/1) and length(Enum.uniq(ids)) == 2 do
+      {:reply, :ok, %{state | backlog_ids: ids, backlog_observed_at: Jobs.now()}}
+    else
+      {:reply, {:error, :invalid_backlog}, state}
+    end
+  end
+
+  def handle_call(:release, _from, %{arrival_from: {from, target}, backlog_ids: [_, _]} = state) do
+    released = Jobs.now()
+    GenServer.reply(from, {:inject, target})
+
+    {:reply, :ok,
+     %{state | released: true, released_at: released, injections: state.injections + 1}}
+  end
+
+  def handle_call(:release, _from, state), do: {:reply, {:error, :barrier_incomplete}, state}
+
+  def handle_call({:observe_target, target}, _from, state) do
+    if is_pid(target) and Process.alive?(target) do
+      installed = Jobs.now()
+      ref = Process.monitor(target)
+
+      {:reply, :ok,
+       %{
+         state
+         | target: target,
+           monitor: ref,
+           monitor_installed_at: installed,
+           arrived_at: installed
+       }}
+    else
+      {:reply, {:error, :missing_target}, state}
+    end
+  end
+
+  def handle_call({:expected_target, target}, _from, state),
+    do: {:reply, :ok, %{state | expected_target: target}}
+
+  def handle_call(:hook_returned, _from, state) do
+    returned_at = Jobs.now()
+
+    {:reply, :ok,
+     %{
+       state
+       | hook_returned_at: returned_at,
+         hook_returned_before_down: state.hook_returned_before_down or is_nil(state.down)
+     }}
+  end
+
+  def handle_call({:track, :session, session}, _from, state),
+    do: {:reply, :ok, %{state | sessions: [session | state.sessions]}}
+
+  def handle_call({:track, :collector, collector}, _from, state),
+    do: {:reply, :ok, %{state | collectors: [collector | state.collectors]}}
+
+  def handle_call({:helper_started, helper}, _from, state),
+    do: {:reply, :ok, %{state | helpers: [helper | state.helpers]}}
+
+  def handle_call({:helper_settled, helper}, _from, state),
+    do: {:reply, :ok, %{state | helpers: List.delete(state.helpers, helper)}}
+
+  def handle_call({:unresolved, operation}, _from, state),
+    do: {:reply, :ok, %{state | unresolved: [operation | state.unresolved]}}
+
+  def handle_call(:snapshot, _from, state), do: {:reply, public_state(state), state}
+
+  def handle_call(:evidence, _from, state) do
+    death =
+      case state.down do
+        nil ->
+          %{matched: false, target: encode_pid(state.target), reason: nil, at: nil}
+
+        down ->
+          %{matched: true, target: encode_pid(down.target), reason: down.reason, at: down.at}
+      end
+
+    ordering = %{
+      fault_key: state.key,
+      fault_point: state.point,
+      monitor_installed_at: state.monitor_installed_at,
+      arrived_at: state.arrived_at,
+      backlog_observed_at: state.backlog_observed_at,
+      released_at: state.released_at,
+      injected_at: state.injected_at,
+      target_down_at: state.down && state.down.at,
+      hook_returned_at: state.hook_returned_at,
+      backlog_ids: state.backlog_ids
+    }
+
+    {:reply,
+     %{
+       death: death,
+       ordering: ordering,
+       fault_seen: not is_nil(state.arrived_at),
+       target_down: death.matched,
+       one_shot: state.injections == 1,
+       hook_returned_before_down: state.hook_returned_before_down
+     }, state}
+  end
+
+  @impl true
+  def handle_cast({:injected, caller}, state) do
+    if caller == state.caller,
+      do: {:noreply, %{state | injected_at: Jobs.now()}},
+      else: {:noreply, %{state | unresolved: [:wrong_injector | state.unresolved]}}
+  end
+
+  @impl true
+  def handle_info({:DOWN, ref, :process, target, reason}, %{monitor: ref, target: target} = state) do
+    {:noreply, %{state | down: %{target: target, reason: reason, at: Jobs.now()}}}
+  end
+
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, state), do: {:noreply, state}
+
+  defp await(pid, field, timeout) do
+    deadline = Jobs.now() + timeout
+
+    wait = fn wait ->
+      state = snapshot(pid)
+
+      value =
+        case field do
+          :arrival ->
+            if state.arrived_at,
+              do:
+                {:ok,
+                 %{
+                   target: state.target,
+                   arrived_at: state.arrived_at,
+                   monitor_installed_at: state.monitor_installed_at
+                 }}
+
+          :down ->
+            if state.down,
+              do:
+                {:ok,
+                 Map.merge(state.down, %{
+                   backlog_ids: state.backlog_ids,
+                   fault_key: state.key,
+                   fault_point: state.point
+                 })}
+        end
+
+      cond do
+        value ->
+          value
+
+        Jobs.now() >= deadline ->
+          {:error, :timeout}
+
+        true ->
+          Process.sleep(5)
+          wait.(wait)
+      end
+    end
+
+    wait.(wait)
+  end
+
+  defp target_pid(:task), do: self()
+
+  defp target_pid(:session) do
+    (Process.get(:"$callers") || [])
+    |> Enum.find(&(Registry.keys(Elara.Sessions, &1) != []))
+  end
+
+  defp public_state(state), do: Map.drop(state, [:arrival_from, :monitor])
+  defp encode_pid(pid) when is_pid(pid), do: inspect(pid)
+  defp encode_pid(_), do: nil
+end
+
+defmodule Elara.Lab.Scenarios.SessionRecovery.Deadline do
   @moduledoc false
 
-  def start(fault) do
-    Agent.start_link(fn ->
-      %{
-        fault: fault,
-        release: false,
-        arrived: %{},
-        injections: 0,
-        returned_before_down: false,
-        backlog: [],
-        provider_fault: nil,
-        calling_task: nil,
-        task_down: false,
-        task_down_at: nil
-      }
-    end)
-  end
+  alias Elara.Lab.Jobs
+  alias Elara.Lab.Scenarios.SessionRecovery.Coordinator
 
-  def stop(gate) do
-    if Process.alive?(gate), do: Agent.stop(gate)
-    :ok
-  end
-
-  # Only the marker fault holds the calling task. Provider faults must not block
-  # the marker hook; their injection is the provider task kill, not this hook.
-  def hook(gate) do
-    fn :tool_running, key ->
-      if state_fault(gate) == :tool_running and marker_label(key) == "A" do
-        me = self()
-        label = marker_label(key)
-
-        Agent.update(gate, fn state ->
-          %{state | arrived: Map.put(state.arrived || %{}, label, {key, me})}
-        end)
-
-        send(gate_waiter(gate), :check)
-
-        receive do
-          :release ->
-            count =
-              Agent.get_and_update(gate, fn state ->
-                {state.injections, %{state | injections: state.injections + 1}}
-              end)
-
-            if count == 0 do
-              Elara.Lab.Faults.inject(:session)
-              confirm_down(gate)
-            end
-
-            :ok
-        after
-          10_000 -> :ok
-        end
-      else
-        :ok
-      end
-    end
-  end
-
-  def witness_backlog(gate, session, accepted) do
-    deadline = System.monotonic_time(:millisecond) + 5_000
-
-    wait = fn wait ->
-      queued? =
-        Enum.all?(["B", "C"], fn label ->
-          match?(
-            {:ok, %{state: state}} when state in [:queued, :accepted],
-            Elara.input_status(session, accepted[label].id)
-          )
-        end)
-
-      cond do
-        queued? ->
-          Agent.update(
-            gate,
-            &%{&1 | backlog: [accepted["B"].id, accepted["C"].id], release: true}
-          )
-
-          send(gate_waiter(gate), :check)
-          :ok
-
-        System.monotonic_time(:millisecond) >= deadline ->
-          :timeout
-
-        true ->
-          Process.sleep(20)
-          wait.(wait)
-      end
-    end
-
-    wait.(wait)
-  end
-
-  def hold_until_down(gate, down?) do
-    Agent.update(gate, fn state ->
-      returned = match?({_, pid} when is_pid(pid), state.arrived["A"]) and not down?
-      %{state | returned_before_down: returned}
-    end)
-  end
-
-  defp confirm_down(gate) do
-    session =
-      (Process.get(:"$callers") || [])
-      |> Enum.find(&(Registry.keys(Elara.Sessions, &1) != []))
-
-    deadline = System.monotonic_time(:millisecond) + 5_000
-
-    wait = fn wait ->
-      cond do
-        is_nil(session) or not Process.alive?(session) ->
-          :ok
-
-        System.monotonic_time(:millisecond) >= deadline ->
-          Agent.update(gate, &%{&1 | returned_before_down: true})
-
-        true ->
-          Process.sleep(10)
-          wait.(wait)
-      end
-    end
-
-    wait.(wait)
-  end
-
-  defp marker_label("label:" <> label), do: label
-  defp marker_label(key), do: key
-
-  # `self()` inside the wrapper is the calling provider task. Record it before
-  # Faults kills it. The scenario process receives the firing notice.
-  def provider_hook(_gate, schedule, fault) do
+  def call(coordinator, operation, deadline, fun) when is_function(fun, 0) do
     owner = self()
-    inner = Elara.Lab.Faults.hook(schedule, owner)
+    token = make_ref()
 
-    fn point, key ->
-      if fault in [:provider_started, :provider_streaming] and point == fault do
-        send(owner, {:recovery_calling_task, self()})
-      end
+    helper =
+      spawn(fn ->
+        result =
+          try do
+            {:ok, fun.()}
+          rescue
+            error -> {:error, {:exception, Exception.message(error)}}
+          catch
+            kind, reason -> {:error, {kind, reason}}
+          end
 
-      inner.(point, key)
+        send(owner, {token, result})
+      end)
+
+    :ok = Coordinator.helper_started(coordinator, helper)
+    ref = Process.monitor(helper)
+    await(coordinator, operation, deadline, token, helper, ref)
+  end
+
+  defp await(coordinator, operation, deadline, token, helper, ref) do
+    timeout = max(deadline - Jobs.now(), 0)
+
+    receive do
+      {^token, result} ->
+        await_down(helper, ref, deadline)
+        Coordinator.helper_settled(coordinator, helper)
+        result
+
+      {:DOWN, ^ref, :process, ^helper, reason} ->
+        Coordinator.helper_settled(coordinator, helper)
+        {:error, {:helper_down, operation, reason}}
+    after
+      timeout ->
+        Process.exit(helper, :kill)
+        settled = await_down(helper, ref, Jobs.now() + 100)
+        Coordinator.helper_settled(coordinator, helper)
+        if operation in [:start, :reopen], do: Coordinator.unresolved(coordinator, operation)
+
+        if settled,
+          do: {:error, {:timeout, operation}},
+          else: {:error, {:timeout_unsettled, operation}}
     end
   end
 
-  def note_firing(gate, {:lab_fault, key, point, target}) do
-    calling = Agent.get(gate, & &1.calling_task)
-    Agent.update(gate, &%{&1 | provider_fault: {key, point, target}})
-    if target == :task and is_pid(calling), do: watch_task(gate, calling)
-    :ok
-  end
-
-  defp watch_task(gate, caller) do
-    spawn(fn ->
-      ref = Process.monitor(caller)
-
-      receive do
-        {:DOWN, ^ref, :process, ^caller, reason} ->
-          Agent.update(gate, fn state ->
-            %{
-              state
-              | task_down: true,
-                task_reason: reason,
-                task_down_at: System.monotonic_time(:millisecond)
-            }
-          end)
-      after
-        5_000 ->
-          Agent.update(gate, fn state ->
-            %{
-              state
-              | task_down: not Process.alive?(caller),
-                task_reason: :timeout,
-                task_down_at: System.monotonic_time(:millisecond)
-            }
-          end)
-      end
-    end)
-  end
-
-  def await_task_death(gate, session_pid) do
-    deadline = System.monotonic_time(:millisecond) + 5_000
-
-    wait = fn wait ->
-      state = Agent.get(gate, & &1)
-
-      cond do
-        state.task_down ->
-          %{down: true, reason: :killed, fault_seen: true, at: state.task_down_at}
-
-        System.monotonic_time(:millisecond) >= deadline ->
-          alive? = Process.alive?(session_pid)
-
-          %{
-            down: not alive?,
-            reason: if(alive?, do: :alive, else: :killed),
-            fault_seen: fault_seen?(gate),
-            at: System.monotonic_time(:millisecond)
-          }
-
-        true ->
-          Process.sleep(20)
-          wait.(wait)
-      end
-    end
-
-    wait.(wait)
-  end
-
-  def fault_seen?(gate) do
-    Agent.get(gate, fn state ->
-      state.injections > 0 or match?({_key, _point, _target}, state[:provider_fault])
-    end)
-  end
-
-  def returned_before_down?(gate), do: Agent.get(gate, & &1.returned_before_down)
-  def one_shot?(gate), do: Agent.get(gate, &(&1.injections <= 1 and map_size_fault(&1) <= 1))
-
-  defp map_size_fault(%{provider_fault: nil}), do: 0
-  defp map_size_fault(%{provider_fault: _}), do: 1
-
-  defp state_fault(gate), do: Agent.get(gate, & &1.fault)
-
-  defp gate_waiter(gate) do
-    case Process.get({:recovery_gate_waiter, gate}) do
-      pid when is_pid(pid) ->
-        pid
-
-      _ ->
-        parent = self()
-
-        pid =
-          spawn_link(fn ->
-            loop = fn loop ->
-              state = Agent.get(gate, & &1)
-
-              if state.release and state.injections == 0 and
-                   match?({_key, hook} when is_pid(hook), state.arrived["A"]) do
-                {_key, hook} = state.arrived["A"]
-                send(hook, :release)
-                send(parent, {:gate_released, gate})
-              else
-                receive do
-                  :check -> loop.(loop)
-                after
-                  5_000 -> :ok
-                end
-              end
-            end
-
-            loop.(loop)
-          end)
-
-        Process.put({:recovery_gate_waiter, gate}, pid)
-        pid
+  defp await_down(helper, ref, deadline) do
+    receive do
+      {:DOWN, ^ref, :process, ^helper, _} -> true
+    after
+      max(deadline - Jobs.now(), 0) -> not Process.alive?(helper)
     end
   end
 end
 
-defmodule Elara.Lab.Scenarios.SessionRecovery.StorePath do
+defmodule Elara.Lab.Scenarios.SessionRecovery.StoreView do
   @moduledoc false
 
-  def find(cwd, session) do
-    case Elara.list_sessions(cwd) do
-      infos when is_list(infos) ->
-        Enum.find(infos, &(&1.id == session)) || %{path: nil}
+  alias Elara.Lab.Jobs
+  alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
+  alias Elara.Session.Store
 
-      _ ->
-        %{path: nil}
+  @labels ["A", "B", "C"]
+  @marks "marks.txt"
+
+  def find_path(cwd, session, deadline) do
+    poll(deadline, fn ->
+      case Enum.find(Elara.list_sessions(cwd), &(&1.id == session)) do
+        %{path: path} when is_binary(path) -> {:ok, path}
+        _ -> :retry
+      end
+    end)
+  end
+
+  def await_pending(path, cwd, accepted, deadline) do
+    poll(deadline, fn ->
+      with {:ok, store} <- Store.open(path, cwd),
+           entries <- Enum.filter(store.inbox, &(&1.id in [accepted["B"].id, accepted["C"].id])),
+           true <- Enum.map(entries, & &1.id) == [accepted["B"].id, accepted["C"].id],
+           true <- Enum.all?(entries, &(&1.state in [:accepted, :queued])) do
+        {:ok, %{store: store, ids: Enum.map(entries, & &1.id)}}
+      else
+        _ -> :retry
+      end
+    end)
+  end
+
+  def await_failed(path, cwd, id, deadline) do
+    poll_store(path, cwd, deadline, fn store ->
+      Enum.any?(store.inbox, &(&1.id == id and &1.state == :failed and is_binary(&1.error)))
+    end)
+  end
+
+  def await_paused(path, cwd, accepted, deadline) do
+    poll_store(path, cwd, deadline, fn store ->
+      store.inputs_paused == true and
+        Enum.all?(["B", "C"], fn label ->
+          Enum.any?(store.inbox, fn entry ->
+            entry.id == accepted[label].id and entry.state in [:accepted, :queued]
+          end)
+        end)
+    end)
+  end
+
+  def await_settled(path, cwd, accepted, deadline),
+    do: poll_store(path, cwd, deadline, &settled?(&1, accepted))
+
+  def settled?(store, accepted) do
+    store.active_input_id == nil and
+      Enum.all?(["B", "C"], fn label ->
+        Enum.any?(store.inbox, fn entry ->
+          entry.id == accepted[label].id and entry.state == :consumed and is_nil(entry.error)
+        end)
+      end) and exact_history?(encode_history(store), accepted)
+  end
+
+  def extra_inputs(store, accepted) do
+    known = accepted |> Map.values() |> Enum.map(& &1.id) |> MapSet.new()
+    Enum.count(store.inbox, &(not MapSet.member?(known, &1.id)))
+  end
+
+  def witness(store, attrs) do
+    accepted = attrs.accepted
+    history = encode_history(store)
+    users = Enum.filter(history, &(&1["kind"] == "user"))
+
+    inputs =
+      Map.new(@labels, fn label ->
+        accepted_entry = accepted[label]
+        receipt = Enum.find(store.inbox, &(&1.id == accepted_entry.id))
+        user = Enum.find(users, &(&1["text"] == accepted_entry.text))
+        call = marker_call(segment(history, label), label)
+        result = call && marker_result(segment(history, label), call["id"])
+
+        {label,
+         %{
+           accepted_id: accepted_entry.id,
+           persisted_user_id: user && user["id"],
+           call_id: call && call["id"],
+           label: label,
+           receipt: receipt && %{state: receipt.state, error: receipt.error},
+           tool_outcome: result && result["outcome"],
+           active_cleared: is_nil(store.active_input_id)
+         }}
+      end)
+
+    %{
+      fault: attrs.fault,
+      inputs: inputs,
+      accepted_order: Enum.map(store.inbox, & &1.id),
+      history: history,
+      marker_labels: logical_labels(history),
+      marker_bytes: read_markers(attrs.cwd),
+      store_read: true,
+      probe: attrs.probe,
+      recovery_ms: attrs.recovery_ms,
+      backlog_ms: attrs.backlog_ms,
+      backlog_count: attrs.backlog_count,
+      backlog_settled: attrs.backlog_settled,
+      paused_inputs: attrs.paused_inputs,
+      active_input_id: store.active_input_id,
+      clocks: attrs.clocks
+    }
+  end
+
+  def exact_history?(store_or_history, accepted) do
+    history =
+      if is_list(store_or_history), do: store_or_history, else: encode_history(store_or_history)
+
+    users = Enum.filter(history, &(&1["kind"] == "user"))
+
+    Enum.map(users, & &1["text"]) == Enum.map(@labels, &accepted[&1].text) and
+      Enum.all?(@labels, fn label ->
+        user = Enum.at(users, label_index(label))
+        user && user["id"] && segment_valid?(segment(history, label), label)
+      end)
+  end
+
+  defp segment_valid?(segment, "A") do
+    calls = marker_calls(segment)
+    results = Enum.filter(segment, &(&1["kind"] == "tool_result"))
+    (calls == [] and results == []) or marker_a_pair?(segment, calls, results)
+  end
+
+  defp segment_valid?(segment, label) do
+    calls = marker_calls(segment)
+    results = Enum.filter(segment, &(&1["kind"] == "tool_result"))
+    terminals = Enum.filter(segment, &terminal?/1)
+
+    marker_pair?(calls, results, label) and length(terminals) == 1 and
+      ordered?(segment, hd(calls), hd(results), hd(terminals))
+  end
+
+  defp marker_pair?([call], [result], label) do
+    call["name"] == "lab_marker" and call["args"]["label"] == label and
+      result["call_id"] == call["id"] and result["name"] == "lab_marker" and
+      result["outcome"] == %{"kind" => "ok", "text" => "marked #{label}"}
+  end
+
+  defp marker_pair?(_, _, _), do: false
+
+  defp marker_a_pair?(segment, [call], [result]) do
+    call["name"] == "lab_marker" and call["args"]["label"] == "A" and
+      result["call_id"] == call["id"] and result["name"] == "lab_marker" and
+      get_in(result, ["outcome", "kind"]) in ["error", "indeterminate"] and
+      ordered_pair?(segment, call, result)
+  end
+
+  defp marker_a_pair?(_segment, _calls, _results), do: false
+
+  defp ordered?(segment, call, result, terminal) do
+    call_entry = Enum.find(segment, &(call in Map.get(&1, "tool_calls", [])))
+
+    indexes =
+      Enum.map(
+        [call_entry, result, terminal],
+        &Enum.find_index(segment, fn item -> item == &1 end)
+      )
+
+    indexes == Enum.sort(indexes) and Enum.all?(indexes, &is_integer/1)
+  end
+
+  defp ordered_pair?(segment, call, result) do
+    call_entry = Enum.find(segment, &(call in Map.get(&1, "tool_calls", [])))
+    indexes = Enum.map([call_entry, result], &Enum.find_index(segment, fn item -> item == &1 end))
+    indexes == Enum.sort(indexes) and Enum.all?(indexes, &is_integer/1)
+  end
+
+  defp terminal?(%{
+         "kind" => "assistant",
+         "tool_calls" => [],
+         "text" => text,
+         "interrupted" => false
+       })
+       when is_binary(text),
+       do: true
+
+  defp terminal?(_), do: false
+
+  defp marker_calls(segment) do
+    Enum.flat_map(segment, fn
+      %{"kind" => "assistant", "tool_calls" => calls} -> calls
+      _ -> []
+    end)
+  end
+
+  defp marker_call(segment, label) do
+    Enum.find(marker_calls(segment), fn call ->
+      call["name"] == "lab_marker" and call["args"]["label"] == label
+    end)
+  end
+
+  defp marker_result(segment, call_id),
+    do: Enum.find(segment, &(&1["kind"] == "tool_result" and &1["call_id"] == call_id))
+
+  defp segment(history, label) do
+    start = Enum.find_index(history, &(&1["kind"] == "user" and &1["text"] == "input #{label}"))
+
+    if is_integer(start) do
+      history
+      |> Enum.drop(start + 1)
+      |> Enum.take_while(&(&1["kind"] != "user"))
+    else
+      []
     end
   end
+
+  defp encode_history(store) do
+    Enum.map(store.entries, fn entry -> encode_entry(entry.id, entry.message) end)
+  end
+
+  defp encode_entry(id, %User{text: text}),
+    do: %{"id" => id, "kind" => "user", "text" => text}
+
+  defp encode_entry(id, %Assistant{} = assistant) do
+    %{
+      "id" => id,
+      "kind" => "assistant",
+      "text" => assistant.text,
+      "interrupted" => assistant.interrupted,
+      "tool_calls" => Enum.map(assistant.tool_calls, &encode_call/1)
+    }
+  end
+
+  defp encode_entry(id, %ToolResult{} = result) do
+    %{
+      "id" => id,
+      "kind" => "tool_result",
+      "call_id" => result.call_id,
+      "name" => result.name,
+      "outcome" => encode_outcome(result.outcome)
+    }
+  end
+
+  defp encode_call(%ToolCall{id: id, name: name, args: args}),
+    do: %{"id" => id, "name" => name, "args" => encode_args(args)}
+
+  defp encode_args({:ok, args}), do: args
+  defp encode_args({:malformed, text}), do: %{"malformed" => text}
+  defp encode_outcome({kind, text}), do: %{"kind" => Atom.to_string(kind), "text" => text}
+
+  defp logical_labels(history) do
+    Enum.flat_map(history, fn
+      %{"kind" => "assistant", "tool_calls" => calls} ->
+        Enum.flat_map(calls, fn
+          %{"name" => "lab_marker", "args" => %{"label" => label}} -> [label]
+          _ -> []
+        end)
+
+      _ ->
+        []
+    end)
+  end
+
+  defp read_markers(cwd) do
+    path = Path.join(cwd, @marks)
+    if File.exists?(path), do: path |> File.read!() |> String.split("\n", trim: true), else: []
+  end
+
+  defp poll_store(path, cwd, deadline, predicate) do
+    poll(deadline, fn ->
+      case Store.open(path, cwd) do
+        {:ok, store} -> if predicate.(store), do: {:ok, store}, else: :retry
+        {:error, _} -> :retry
+      end
+    end)
+  end
+
+  defp poll(deadline, fun) do
+    case fun.() do
+      {:ok, value} ->
+        {:ok, value}
+
+      :retry ->
+        if Jobs.now() < deadline do
+          Process.sleep(10)
+          poll(deadline, fun)
+        else
+          {:error, :store_deadline}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp label_index("A"), do: 0
+  defp label_index("B"), do: 1
+  defp label_index("C"), do: 2
 end
 
 defmodule Elara.Lab.Scenarios.SessionRecovery.Observer do
-  @moduledoc """
-  Rejects a witness that lacks the fault, the target death, unique accepted
-  ids, stable labels, matching history, a settled receipt, or a live probe.
-  `:consumed` is not terminal. Marker bytes are not causal completion proof.
-  """
+  @moduledoc false
 
-  alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
+  alias Elara.Lab.Scenarios.SessionRecovery.StoreView
 
   @labels ["A", "B", "C"]
 
   def judge(witness) do
-    ids = Enum.map(@labels, &witness.inputs[&1].accepted_id)
+    ids = Enum.map(@labels, &get_in(witness, [:inputs, &1, :accepted_id]))
 
     checks = %{
       known_fault: witness.fault in [:provider_started, :provider_streaming, :tool_running],
       fault_witnessed: witness.fault_seen == true,
-      target_down_witnessed: witness.target_down == true,
+      target_down_witnessed:
+        witness.target_down == true and get_in(witness, [:death, :matched]) == true,
       unique_accepted_inputs: length(Enum.uniq(ids)) == 3 and Enum.all?(ids, &is_binary/1),
-      backlog_witnessed_before_release: witness.backlog_count == 2,
-      one_shot_gate: Map.get(witness, :one_shot, true) == true and witness.fault_seen == true,
+      backlog_witnessed_before_release: barrier?(witness),
+      one_shot_gate: witness.one_shot == true and witness.fault_seen == true,
       stable_labels: witness.marker_labels == expected_labels(witness.fault),
-      exact_identities: exact?(witness.inputs),
-      settled_receipts:
-        Enum.all?(@labels, &settled?(witness.fault, &1, witness.inputs[&1].receipt)),
+      exact_identities: exact_identities?(witness),
+      persisted_state_read: witness.store_read == true,
+      settled_receipts: settled_receipts?(witness),
       active_input_cleared:
         witness.active_input_id == nil and Enum.all?(witness.inputs, &elem(&1, 1).active_cleared),
-      history_identity: history_identity?(witness),
-      no_unexpected_labels: unexpected(witness) == [],
-      backlog_completed: Map.get(witness, :backlog_settled, true) and backlog?(witness),
+      history_identity: StoreView.exact_history?(witness.history, accepted_fixture(witness)),
+      physical_marker_counts: witness.marker_bytes == expected_labels(witness.fault),
+      no_unexpected_labels: witness.marker_labels == expected_labels(witness.fault),
+      backlog_completed: witness.backlog_settled == true and settled_backlog?(witness),
       responsive_probe: witness.probe == :ok,
       timing_bounded: timing?(witness),
-      indeterminate_without_receipt: indeterminate?(witness),
+      indeterminate_without_receipt: typed_uncertainty?(witness),
       no_input_while_paused: witness.paused_inputs in [nil, 0],
       marker_hook_blocked_until_down: witness.hook_returned_before_down != true
     }
 
     %{
       checks: checks,
-      cleanup_confirmed: Map.get(witness, :cleanup_confirmed, true),
+      cleanup_confirmed: get_in(witness, [:cleanup, :confirmed]) == true,
       recovery_ms: witness.recovery_ms,
       backlog_ms: witness.backlog_ms,
       history: witness.history,
@@ -863,162 +1115,147 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Observer do
   end
 
   def report(witness, cleanup) do
-    judged = judge(Map.put(witness, :cleanup_confirmed, cleanup))
+    witness = Map.put(witness, :cleanup, cleanup)
+    judged = judge(witness)
 
-    judged
-    |> Map.merge(%{
-      choices_digest: Elara.Lab.digest(digest_term(witness)),
-      completed_turns:
-        Enum.count(
-          witness.history,
-          &(match?(%{"kind" => "assistant", "tool_calls" => []}, &1) and is_binary(&1["text"]))
-        ),
+    prerequisites =
+      Enum.all?(judged.checks, fn {name, value} ->
+        name == :indeterminate_without_receipt or value
+      end)
+
+    complete = prerequisites and cleanup.confirmed
+
+    Map.merge(judged, %{
+      choices_digest: Elara.Lab.digest({witness.fault, witness.inputs, cleanup.choices}),
+      completed_turns: terminal_count(witness.history),
       bounds: %{
-        "recovery" => if(judged.checks.timing_bounded, do: "holds", else: "fails"),
+        "recovery" => bound(complete and judged.checks.timing_bounded),
         "backlog" =>
-          if(judged.checks.backlog_completed and judged.checks.timing_bounded,
-            do: "holds",
-            else: "fails"
-          )
+          bound(complete and judged.checks.backlog_completed and judged.checks.timing_bounded)
       },
-      incomplete: if(judged.checks.responsive_probe, do: nil, else: "unresponsive_probe"),
-      complete: judged.checks.responsive_probe,
+      incomplete: if(complete, do: nil, else: "prerequisites_not_observed"),
+      complete: complete,
+      cleanup_confirmed: cleanup.confirmed,
+      cleanup: cleanup,
       marker_count: length(witness.marker_bytes),
-      fault: Atom.to_string(witness.fault)
+      fault: Atom.to_string(witness.fault),
+      ordering: witness.ordering,
+      death: witness.death,
+      clocks: witness.clocks
     })
   end
 
-  defp recovery(witness, ids) do
-    %{
-      accepted_ids: ids,
-      receipts: Map.new(witness.inputs, fn {label, input} -> {label, input.receipt} end),
-      history_count: length(witness.history),
-      marker_bytes: witness.marker_bytes,
-      marker_labels: witness.marker_labels,
-      fault: witness.fault,
-      timing: %{
-        recovery_ms: witness.recovery_ms,
-        backlog_ms: witness.backlog_ms,
-        origin: if(witness.fault == :tool_running, do: "explicit_resume", else: "target_down")
-      }
-    }
-  end
-
-  defp digest_term(witness) do
-    {witness.fault,
-     witness.inputs |> Map.new(fn {label, input} -> {label, input.accepted_id} end),
-     witness.marker_labels}
-  end
-
-  defp label_index("A"), do: 0
-  defp label_index("B"), do: 1
-  defp label_index("C"), do: 2
-
-  defp expected_labels(:tool_running), do: @labels
-  defp expected_labels(_fault), do: ["B", "C"]
-
-  defp exact?(inputs) do
-    Enum.all?(inputs, fn {label, input} ->
-      input.accepted_id == input.user_message_id and (label == "A" or is_binary(input.call_id))
-    end)
-  end
-
-  defp settled?(_fault, "A", %{state: :failed, error: error}) when is_binary(error), do: true
-  defp settled?(_fault, label, %{state: :consumed, error: nil}) when label in ["B", "C"], do: true
-  defp settled?(_, _, _), do: false
-
-  defp history_identity?(witness) do
+  defp exact_identities?(witness) do
     users = Enum.filter(witness.history, &(&1["kind"] == "user"))
+    accepted_ids = Enum.map(@labels, &witness.inputs[&1].accepted_id)
 
-    Enum.all?(witness.inputs, fn {label, input} ->
-      user? = Enum.at(users, label_index(label))["text"] == "input #{label}"
-      call? = label == "A" or call?(witness.history, input)
+    accepted_ids == witness.accepted_order and
+      Enum.with_index(@labels)
+      |> Enum.all?(fn {label, index} ->
+        input = witness.inputs[label]
+        user = Enum.at(users, index)
 
-      result? =
-        case input.receipt do
-          %{state: :consumed} ->
-            Enum.any?(witness.history, fn
-              %{
-                "kind" => "tool_result",
-                "call_id" => id,
-                "outcome" => %{"kind" => "ok", "text" => text}
-              } ->
-                id == input.call_id and text == "marked #{label}"
+        ((is_binary(input.accepted_id) and is_binary(input.persisted_user_id) and
+            input.accepted_id != input.persisted_user_id and user) &&
+           user["id"] == input.persisted_user_id) and user["text"] == "input #{label}"
+      end)
+  end
 
-              _ ->
-                false
-            end)
+  defp settled_receipts?(witness) do
+    match?(%{state: :failed, error: error} when is_binary(error), witness.inputs["A"].receipt) and
+      Enum.all?(["B", "C"], fn label ->
+        match?(%{state: :consumed, error: nil}, witness.inputs[label].receipt)
+      end)
+  end
 
-          %{state: :failed} ->
-            not Enum.any?(witness.history, fn
-              %{"kind" => "tool_result", "call_id" => id, "outcome" => %{"kind" => "ok"}} ->
-                id == input.call_id
-
-              _ ->
-                false
-            end)
-
-          _ ->
-            false
-        end
-
-      user? and call? and result?
+  defp settled_backlog?(witness) do
+    Enum.all?(["B", "C"], fn label ->
+      match?(%{state: :consumed, error: nil}, witness.inputs[label].receipt)
     end)
   end
 
-  defp call?(history, input) do
-    Enum.any?(history, fn
-      %{"kind" => "assistant", "tool_calls" => calls} ->
-        Enum.any?(calls, fn
-          %{"id" => id, "name" => "lab_marker", "args" => %{"label" => label}} ->
-            id == input.call_id and label == input.label
+  defp barrier?(witness) do
+    ordering = witness.ordering
 
-          _ ->
-            false
-        end)
+    witness.backlog_count == 2 and length(ordering.backlog_ids) == 2 and
+      is_integer(ordering.arrived_at) and is_integer(ordering.monitor_installed_at) and
+      is_integer(ordering.backlog_observed_at) and is_integer(ordering.released_at) and
+      ordering.monitor_installed_at <= ordering.arrived_at and
+      ordering.arrived_at <= ordering.backlog_observed_at and
+      ordering.backlog_observed_at <= ordering.released_at
+  end
+
+  defp timing?(witness) do
+    limit = 5_000 + witness.backlog_count * 1_000
+
+    is_integer(witness.recovery_ms) and witness.recovery_ms >= 0 and witness.recovery_ms <= 5_000 and
+      is_integer(witness.backlog_ms) and witness.backlog_ms >= 0 and witness.backlog_ms <= limit and
+      valid_clock?(witness.clocks.recovery) and valid_clock?(witness.clocks.backlog)
+  end
+
+  defp valid_clock?(%{origin_at: origin, endpoint_at: endpoint, ms: ms}) do
+    is_integer(origin) and is_integer(endpoint) and endpoint >= origin and ms == endpoint - origin
+  end
+
+  defp valid_clock?(_), do: false
+
+  defp typed_uncertainty?(%{fault: :tool_running} = witness) do
+    call_id = get_in(witness, [:inputs, "A", :call_id])
+
+    Enum.any?(witness.history, fn
+      %{
+        "kind" => "tool_result",
+        "call_id" => ^call_id,
+        "name" => "lab_marker",
+        "outcome" => %{"kind" => "indeterminate", "text" => text}
+      }
+      when is_binary(text) ->
+        true
 
       _ ->
         false
     end)
   end
 
-  defp unexpected(witness) do
-    expected = MapSet.new(expected_labels(witness.fault))
+  defp typed_uncertainty?(witness),
+    do: match?(%{state: :failed, error: error} when is_binary(error), witness.inputs["A"].receipt)
 
-    witness.marker_labels
-    |> Enum.frequencies()
-    |> Enum.reject(fn {label, count} -> count == 1 and MapSet.member?(expected, label) end)
-    |> Enum.map(&elem(&1, 0))
-  end
-
-  defp backlog?(witness) do
-    Enum.all?(["B", "C"], fn label ->
-      match?(%{state: :consumed, error: nil}, witness.inputs[label].receipt)
+  defp accepted_fixture(witness) do
+    Map.new(@labels, fn label ->
+      {label, %{id: witness.inputs[label].accepted_id, text: "input #{label}"}}
     end)
   end
 
-  defp timing?(witness) do
-    limit = 5_000 + witness.backlog_count * 1_000
+  defp expected_labels(:tool_running), do: @labels
+  defp expected_labels(_), do: ["B", "C"]
 
-    is_integer(witness.recovery_ms) and witness.recovery_ms <= 5_000 and
-      is_integer(witness.backlog_ms) and
-      witness.backlog_ms <= limit
+  defp terminal_count(history) do
+    Enum.count(history, fn
+      %{"kind" => "assistant", "tool_calls" => [], "text" => text, "interrupted" => false}
+      when is_binary(text) ->
+        true
+
+      _ ->
+        false
+    end)
   end
 
-  # A started mutation without a causal receipt must remain indeterminate.
-  # The ordinary direct-marker path currently inserts "session restarted"
-  # instead, so this check fails closed on that receipt.
-  defp indeterminate?(%{fault: :tool_running, inputs: %{"A" => %{receipt: receipt}}}) do
-    case receipt do
-      %{state: :failed, error: "session restarted"} -> false
-      %{error: error} when is_binary(error) -> error =~ "indeterminate"
-      _ -> false
-    end
+  defp recovery(witness, ids) do
+    %{
+      accepted_ids: ids,
+      persisted_user_ids:
+        Map.new(witness.inputs, fn {label, input} -> {label, input.persisted_user_id} end),
+      receipts: Map.new(witness.inputs, fn {label, input} -> {label, input.receipt} end),
+      tool_outcomes:
+        Map.new(witness.inputs, fn {label, input} -> {label, input.tool_outcome} end),
+      history_count: length(witness.history),
+      marker_bytes: witness.marker_bytes,
+      marker_labels: witness.marker_labels,
+      fault: witness.fault,
+      timing: witness.clocks
+    }
   end
 
-  defp indeterminate?(%{inputs: %{"A" => %{receipt: %{state: :failed, error: error}}}})
-       when is_binary(error),
-       do: true
-
-  defp indeterminate?(_), do: false
+  defp bound(true), do: "holds"
+  defp bound(false), do: "undetermined"
 end

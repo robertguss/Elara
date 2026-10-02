@@ -9,9 +9,9 @@
   leaving the started mutation indeterminate. That second claim is a predicted
   finding, not a pass condition and not a runtime fix.
 - **Queue item:** LAB-5 · **Date:** 2026-10-02 · **Base:** `ca01d8a8`
-- **Status:** registered, implemented, and measured twice. Attempt 1 is an
-  invalid harness failure. Attempt 2 is the only recovery measurement and was
-  not rerun. Parent LAB-5 remains unfinished.
+- **Status:** harness repaired; no accepted pilot measurement. Attempt 1 and
+  attempt 2 are invalid historical evidence. The original pilot and parent
+  LAB-5 remain unfinished.
 
 ## Method
 
@@ -71,62 +71,53 @@ runs, and it is not rerun toward a green summary.
 
 ## Results
 
-Two sweep attempts exist. They are not one 30-run measurement. Attempt 1 is an
-invalid harness failure and must not be replaced by attempt 2. No further
-registered or supplementary measurement was run after attempt 2.
+Two invalid sweep attempts exist. They are not one 30-run measurement and
+neither is accepted pilot evidence. No further registered or supplementary
+measurement was run after attempt 2.
 
 Attempt 1, candidate `b9a9ec0`, is invalid. All 30 children exited 1 before
 writing a result line because `Elara.Lab.write_results/2` could not JSON-encode
 `Elara.Message.User`. Its directory
 `/tmp/elara-lab-1085/session_recovery/20261002T015912688401Z-sweep-fault-seed42`
-was deleted before attempt 2. The retained record is
-[attempt-1-INVALID-HARNESS.md](evidence/rob-1085/attempt-1-INVALID-HARNESS.md).
+was deleted before attempt 2. All 30 children errored, zero result records were
+written, and the raw evidence is lost. The surviving narrative is
+[attempt-1-INVALID-HARNESS.md](../../lab/results/rob-1085/attempt-1-INVALID-HARNESS.md).
 
-Attempt 2, candidate `8a2c2c5`, finished and was not rerun. Raw files are in
-[attempt-2](evidence/rob-1085/attempt-2-8a2c2c5-20261002T020227820148Z). Mix
-exited non-zero because `tool_running` failed `indeterminate_without_receipt`
-in 10/10 seeds. That is the registered finding, not a harness pass.
+Attempt 2, candidate `8a2c2c5`, finished without the required pre-review gate
+and was not rerun. Its observer and causal protocol admitted false positives,
+so all completion and timing flags in those records are invalid. The original
+bytes, including erroneous flags, are retained under
+[attempt-2](../../lab/results/rob-1085/attempt-2-8a2c2c5-20261002T020227820148Z)
+and governed by the [invalidation manifest](../../lab/results/rob-1085/INVALIDATION.md).
 
-| Fault | Present | Exit | Failed check | Recovery ms | Backlog ms | Marker count |
-| ----- | ------- | ---- | ------------ | ----------- | ---------- | ------------ |
-| `provider_started` | 10/10 | 0 | none | 0–1 | 0–1 | 2 |
-| `provider_streaming` | 10/10 | 0 | none | 27–41 | 99–108 | 2 |
-| `tool_running` | 10/10 | 1 | `indeterminate_without_receipt` 10/10 | 7–12 | 68–73 | 3 |
-
-Every `tool_running` receipt for A was `%{state: failed, error: "session restarted"}`.
-B and C were consumed, with labels and bytes `A`, `B`, `C`. Provider A errors
-were the provider-task crash. Bounds `recovery` and `backlog` aggregated
-`holds` at every value; the sweep still failed because the check failed.
+The raw attempt-2 summary reported completed turns and bounded recovery, but
+those claims are withdrawn. In particular, all 10 `provider_streaming` records
+and all 10 `tool_running` records lack C's non-interrupted terminal assistant
+while claiming backlog completion. The harness also injected provider faults
+before its claimed barrier and fabricated or omitted death and timing evidence.
 
 ## Interpretation
 
-The predicted finding is reproduced on attempt 2: ordinary direct-marker reopen
-inserts `session restarted` rather than leaving the started mutation
-indeterminate. Provider-task deaths in that same attempt settled A failed and
-completed B and C inside the registered bounds. Attempt 1 shows nothing about
-recovery.
+Attempt 1 supports no recovery conclusion. Attempt 2 does not establish
+completed B/C turns, bounded recovery, bounded backlog, the registered causal
+protocol, or accepted reproduction of the registered finding.
 
-The following observer seams are recorded for review and were not patched
-after the Lead named them:
-
-- `await_provider_death/2` discards `_death` and returns `down: true` after a
-  firing is received.
-- `provider_hook/3` is not itself gated on the witnessed backlog.
-- `Elara.status/1` and `Elara.start_session/1` use the 5-second GenServer call
-  default, so a probe can consume the registered deadline.
-- `user_message_id` is copied from the accepted id rather than read from a
-  persisted user-message identity.
-
-Those seams are not a runtime fix and were not patched in this handoff.
+The only retained scientific observation is narrower: marker records contain
+A's input receipt `"session restarted"` and the associated persisted typed tool
+outcome `{:error, "interrupted"}`. This is a negative against causal
+indeterminacy. It is not evidence of correct protocol execution or completed,
+bounded backlog recovery.
 
 ## Changes
 
-Registration `328de9c`, scenario `b9a9ec0`, JSON encoding `8a2c2c5`. No runtime
-recovery change. The handoff commit records both sweep attempts and the
-unpatched review seams.
+Registration `328de9c`, original scenario `b9a9ec0`, serialization repair
+`8a2c2c5`, and corrected harness in ROB-1085. The correction changes only lab
+observation/orchestration and historical interpretation; it does not change
+runtime recovery behavior and adds no replacement measurement records.
 
 ## Limits and next
 
-This pilot is not full LAB-5. The future matrix still includes children,
-handoff, jobs, client, worker, stub, whole-VM and process-group faults, and
-schedules of at least 1000 runs. Those are out of scope here.
+The original pilot remains incomplete and this is not full LAB-5. The future
+matrix still includes children, handoff, jobs, client, worker, stub, whole-VM
+and process-group faults, and schedules of at least 1000 runs. A future pilot
+requires a separately reviewed measurement brief and explicit authorization.

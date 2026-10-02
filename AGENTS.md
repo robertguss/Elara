@@ -4,7 +4,7 @@
 
 Linear: team ROB, project Elara
 Delivery: push-branch
-Builder: grok47
+Builder: medium
 Tester: inherit
 Done: merged
 

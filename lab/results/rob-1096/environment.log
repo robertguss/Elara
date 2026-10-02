@@ -1,0 +1,30 @@
+ROB-1096 environment and provenance
+recorded_utc: 2026-10-02T14:25:20Z
+revision: a609b4a03a7d6a6bfc1a9eac409eaa877fe0cd75
+base_revision: 0f5e4a53dddfe9ad3b486cf430cbf4a6b94c06e6
+branch: work/rob-1096-pty-investigation
+git_status_porcelain_begin
+git_status_porcelain_end
+uname: Linux e2b.local 6.1.158+ #1 SMP PREEMPT_DYNAMIC Tue Jul 28 15:38:05 UTC 2026 x86_64 GNU/Linux
+architecture: x86_64
+os: Debian GNU/Linux 12
+Erlang/OTP 29 [erts-17.0.5] [source] [64-bit] [smp:8:8] [ds:8:8:10] [async-threads:1] [jit:ns]
+
+Elixir 1.20.3 (compiled with Erlang/OTP 29)
+Python 3.11.6
+rustc 1.98.1 (48a229cea 2026-09-01)
+cargo 1.98.1 (797e8a9bc 2026-08-05)
+target_resolution: test/elara/threads_test.exs:678 -> real PTY starts two children, inspects and opens coding work, then resumes after server restart
+historical_traceback: unavailable; import snapshot records only one failure, 3/3 isolated passes, and no recurrence
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+tui_binary_path: /home/user/workspace/repo/_build/test/lib/elara/priv/native/elara-tui
+computed_source_digest: b9348533ccb6564a8084156f18535d2ffa984f9ba6564cfaae574036ec1dc889
+stored_source_digest: b9348533ccb6564a8084156f18535d2ffa984f9ba6564cfaae574036ec1dc889
+digest_matches: true
+tui_binary_sha256: 62da508529e2dc8a211f9aa0c6e45cbaddc4502fdf62ff60f89112c913b977d3  _build/test/lib/elara/priv/native/elara-tui
+matrix_statuses:
+targeted-1: utc_end: 2026-10-02T14:20:06Z exit_status: 0
+targeted-2: utc_end: 2026-10-02T14:20:28Z exit_status: 0
+targeted-3: utc_end: 2026-10-02T14:20:49Z exit_status: 0
+threads-file: utc_end: 2026-10-02T14:21:14Z exit_status: 0
+full-suite: utc_end: 2026-10-02T14:25:00Z exit_status: 2

@@ -654,7 +654,9 @@ exactly-once execution guarantee.
   session alive after a client disconnects and execute tools elsewhere.
 - [Elixir API](docs/elixir-api.md): target another directory, subscribe to
   events, configure sessions, replay recordings, and coordinate child sessions.
-- [Roadmap](ROADMAP.md): the sole current implementation plan and status source.
+- [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215):
+  the sole current planning and status source; [Roadmap](ROADMAP.md) links the
+  research agenda, handoff, and historical inventory.
 
 ## Develop
 

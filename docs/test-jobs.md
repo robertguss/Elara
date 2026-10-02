@@ -1,6 +1,7 @@
 # Supervised focused test jobs
 
-JOB-1 in [ROADMAP.md](../ROADMAP.md) owns implementation status.
+[Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
+owns planning and status, including the historical JOB inventory.
 This is the bounded contract authorized after the
 [harness experiments](harness-experiments.md).
 

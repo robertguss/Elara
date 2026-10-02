@@ -1,12 +1,25 @@
 # AGENTS.md
 
-## Review workflow
+## Amp reviewed development
 
-When running inside Herdr beside another coding agent, the builder (left pane)
-loads the `driver` skill and the reviewer (right pane) loads the `oracle` skill.
-Every step gets an oracle plan review and diff review before it is committed.
-Each session covers one agreed chunk of work and ends with a reviewed
-`HANDOFF.md` at the repository root, from which both agents restart fresh.
+Linear: team ROB, project Elara
+Delivery: push-branch
+Builder: grok47
+Tester: inherit
+Done: merged
+
+[Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
+is the sole current planning and status source. Use the `amp-workflow` skill
+for implementation: Lead owns Linear, Oracle reviews plans and diffs, and
+fresh Builder and Tester orbs implement and verify the selected issue.
+Obtain issue-branch push authorization before publishing; this configuration
+does not authorize pushes, pull requests, merges, deployments, or releases.
+
+Read the current Linear handoff linked from `HANDOFF.md`; record continuation
+and review evidence there, not in a periodic repository handoff. Ready means
+explicitly authorized, not merely unblocked. Keep at most one executable lab
+item, and none while paused. The Lead checks queue discipline in Linear;
+repository tests only check the durable pointers.
 
 ## Cursor Cloud specific instructions
 
@@ -60,9 +73,10 @@ things that are non-obvious in the Cloud environment.
 
 ### Roadmap and status
 
-- `ROADMAP.md` is the sole current roadmap and status source. Update its queue
-  and item Result in the same commit that changes an item's status.
-- Work follows its research questions (RQ-n) and lab queue (LAB-n). Start each
+- Track scope, dependencies, decisions, Results, and status in Linear. After
+  authorized evidence commits are reviewed and pushed, link them and update
+  the issue before starting its successor. Mark Done only after merge.
+- Work follows Linear's research questions (RQ-n) and lab queue (LAB-n). Start each
   experiment from a refutable hypothesis, prefer seeded runs against simulated
   or scripted providers, and keep real-model runs opt-in and capped.
 - Write one page per experiment in `docs/lab/`; raw results go under

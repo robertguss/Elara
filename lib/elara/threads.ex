@@ -798,8 +798,11 @@ defmodule Elara.Threads do
 
   defp live_workspace_operation(id, operation) do
     case Elara.session_pid(id) do
-      {:ok, pid} -> GenServer.call(pid, {:workspace_operation, operation, false}, :infinity)
-      _ -> {:error, :resume_parent_before_workspace_operation}
+      {:ok, pid} ->
+        GenServer.call(pid, {:acknowledged_parent_workspace_operation, operation}, :infinity)
+
+      _ ->
+        {:error, :resume_parent_before_workspace_operation}
     end
   end
 

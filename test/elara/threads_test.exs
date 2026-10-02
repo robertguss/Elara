@@ -186,6 +186,13 @@ defmodule Elara.ThreadsTest do
     original_patch = File.read!(patch)
     assert File.read!(Path.join(cwd, "file.txt")) == "child\n"
     File.write!(Path.join(child["cwd"], "later.txt"), "must survive")
+    git(child["cwd"], ["add", "."])
+    git(child["cwd"], ["commit", "-qm", "committed later child work"])
+    assert {:error, :unintegrated_work_preserved} = Threads.cleanup(parent, id)
+    assert File.exists?(child["cwd"])
+    git(child["cwd"], ["reset", "--hard", "HEAD~1"])
+    File.write!(Path.join(child["cwd"], "file.txt"), "child\n")
+    File.write!(Path.join(child["cwd"], "later.txt"), "must survive")
     assert {:error, :unintegrated_work_preserved} = Threads.cleanup(parent, id)
     git(cwd, ["commit", "-qm", "parent accepts first result"])
     assert {:error, {:git, _}} = Threads.integrate(parent, id)
@@ -578,6 +585,50 @@ defmodule Elara.ThreadsTest do
     GenServer.stop(server)
   end
 
+  test "observer cannot review or acknowledge eligible child uncertainty", %{cwd: cwd} do
+    {parent, provider} = parent(cwd, [answer("done")])
+    {:ok, child} = Threads.start_child(parent, "coding", coding: true)
+    finished(parent, child["id"])
+    File.write!(Path.join(child["cwd"], "file.txt"), "observer must not apply\n")
+    retain_uncertainties(child, provider, [{"uncertain", "call", "bash", "maybe"}])
+    assert {:ok, review} = Threads.review_child(parent, child["id"])
+
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: provider, lifetime: :long_lived)
+    observer = socket(Elara.Server.port(server))
+
+    assert %{"type" => "attached"} =
+             request(observer, %{
+               "command" => "attach",
+               "session_id" => parent,
+               "mode" => "observe"
+             })
+
+    parent_tree = git(cwd, ["write-tree"])
+    child_tree = git(child["cwd"], ["write-tree"])
+    record = Threads.record(child["id"]) |> elem(1)
+    refute Map.has_key?(record, "acknowledgements")
+
+    for command <- ["child_review", "child_acknowledge"] do
+      request =
+        %{
+          "command" => command,
+          "session_id" => child["id"],
+          "digest" => review.digest,
+          "call_ids" => ["call"]
+        }
+
+      assert %{"type" => "session_error", "command" => ^command, "error" => "not_controller"} =
+               request(observer, request)
+
+      assert git(cwd, ["write-tree"]) == parent_tree
+      assert git(child["cwd"], ["write-tree"]) == child_tree
+      refute Map.has_key?(Threads.record(child["id"]) |> elem(1), "acknowledgements")
+    end
+
+    :gen_tcp.close(observer)
+    GenServer.stop(server)
+  end
+
   test "an uncertain command in a child blocks integration, so cleanup cannot proceed", %{
     cwd: cwd
   } do
@@ -608,8 +659,63 @@ defmodule Elara.ThreadsTest do
     assert File.exists?(child["cwd"])
   end
 
+  test "acknowledged integration refuses parent handoff interleaving before applying", %{cwd: cwd} do
+    {parent, provider} = parent(cwd, [answer("done")])
+    {:ok, child} = Threads.start_child(parent, "coding", coding: true)
+    finished(parent, child["id"])
+    File.write!(Path.join(child["cwd"], "file.txt"), "must not cross handoff\n")
+    retain_uncertainties(child, provider, [{"uncertain", "id", "bash", "maybe"}])
+    assert {:ok, review} = Threads.review_child(parent, child["id"])
+    assert {:ok, _} = Threads.acknowledge_child(parent, child["id"], review.digest, ["id"])
+    {:ok, parent_pid} = Elara.session_pid(parent)
+
+    :sys.replace_state(parent_pid, fn shell ->
+      uncertainty = %Message.ToolResult{
+        call_id: "parent-uncertain",
+        name: "bash",
+        outcome: {:indeterminate, "parent effect remains uncertain"}
+      }
+
+      {:ok, store} = Elara.Session.Store.append(shell.store, uncertainty)
+      %{shell | store: store, core: %{shell.core | history: shell.core.history ++ [uncertainty]}}
+    end)
+
+    assert {:error, :stop_or_reconcile_effects_first} =
+             GenServer.call(parent_pid, {:workspace_operation, fn -> :unexpected end, false})
+
+    :sys.suspend(parent_pid)
+    task = Task.async(fn -> Threads.integrate(parent, child["id"]) end)
+
+    try do
+      await(fn ->
+        {:messages, messages} = Process.info(parent_pid, :messages)
+
+        Enum.any?(messages, fn
+          {:"$gen_call", _, {:workspace_operation, _, false}} -> true
+          {:"$gen_call", _, {:acknowledged_parent_workspace_operation, _}} -> true
+          _ -> false
+        end)
+      end)
+
+      :sys.replace_state(parent_pid, fn shell ->
+        {:ok, prepared} = Elara.Session.Handoff.prepare(shell)
+        {:ok, created} = Elara.Session.Handoff.advance(prepared)
+        {:ok, transferred} = Elara.Session.Handoff.advance(created)
+        {:ok, started} = Elara.Session.Handoff.advance(transferred)
+        started
+      end)
+    after
+      :sys.resume(parent_pid)
+    end
+
+    assert {:error, :handoff_context_rejected} = Task.await(task, 10_000)
+    assert File.read!(Path.join(cwd, "file.txt")) == "base\n"
+    assert git(cwd, ["write-tree"]) == git(cwd, ["rev-parse", "HEAD^{tree}"])
+  end
+
   test "review and exact durable acknowledgement integrate retained off-branch uncertainty", %{
-    cwd: cwd
+    cwd: cwd,
+    root: root
   } do
     {parent, provider} = parent(cwd, [answer("done")])
     {:ok, child} = Threads.start_child(parent, "coding", coding: true)
@@ -639,6 +745,14 @@ defmodule Elara.ThreadsTest do
     assert {:error, :uncertainty_occurrences_changed} =
              Threads.acknowledge_child(parent, child["id"], review.digest, [" opaque, id "])
 
+    assert {:error, :uncertainty_occurrences_changed} =
+             Threads.acknowledge_child(
+               parent,
+               child["id"],
+               review.digest,
+               [" opaque, id ", " opaque, id ", "extra"]
+             )
+
     assert {:ok, receipt} =
              Threads.acknowledge_child(
                parent,
@@ -651,6 +765,12 @@ defmodule Elara.ThreadsTest do
     assert Enum.map(receipt.occurrences, & &1.entry_id) == ["uncertain-a", "uncertain-b"]
     assert [persisted] = Threads.record(child["id"]) |> elem(1) |> Map.fetch!("acknowledgements")
     assert persisted["digest"] == review.digest
+
+    path = record_path(root, child["id"])
+    record = JSON.decode!(File.read!(path))
+    File.write!(path, JSON.encode!(Map.put(record, "integration_state", "integrating")))
+    assert {:error, :not_integrable} = Threads.integrate(parent, child["id"])
+    File.write!(path, JSON.encode!(record))
 
     # The exported review artifact is evidence only; integration recaptures trusted bytes.
     File.write!(review.path, "malicious replacement")
@@ -789,14 +909,19 @@ defmodule Elara.ThreadsTest do
     assert {:error, :not_reviewable} = Threads.review_child(parent, research["id"])
   end
 
-  test "clean child has nothing to acknowledge and empty patch is never reviewable", %{cwd: cwd} do
-    {parent, _provider} = parent(cwd, [answer("done")])
+  test "clean child has nothing to acknowledge and empty uncertain patch is never reviewable", %{
+    cwd: cwd
+  } do
+    {parent, provider} = parent(cwd, [answer("done")])
     {:ok, child} = Threads.start_child(parent, "coding", coding: true)
     finished(parent, child["id"])
     assert {:error, :nothing_to_acknowledge} = Threads.review_child(parent, child["id"])
 
     assert {:error, :nothing_to_acknowledge} =
              Threads.acknowledge_child(parent, child["id"], String.duplicate("0", 64), [])
+
+    retain_uncertainties(child, provider, [{"uncertain-empty", "empty", "bash", "maybe"}])
+    assert {:error, :not_integrable} = Threads.review_child(parent, child["id"])
   end
 
   test "child quiescence barriers and the unchanged strict parent guard each fail closed", %{
@@ -837,7 +962,35 @@ defmodule Elara.ThreadsTest do
 
     assert {:error, :stop_or_reconcile_effects_first} = Threads.integrate(parent, child["id"])
     :sys.replace_state(parent_pid, fn _ -> parent_state end)
+
+    :sys.replace_state(parent_pid, fn shell ->
+      uncertainty = %Message.ToolResult{
+        call_id: "parent-uncertain",
+        name: "bash",
+        outcome: {:indeterminate, "parent uncertain"}
+      }
+
+      %{shell | core: %{shell.core | history: shell.core.history ++ [uncertainty]}}
+    end)
+
+    assert {:error, :stop_or_reconcile_effects_first} = Threads.integrate(parent, child["id"])
+    :sys.replace_state(parent_pid, fn _ -> parent_state end)
     assert {:ok, _} = Threads.integrate(parent, child["id"])
+  end
+
+  test "acknowledged cleanup rejects newly retained uncertainty", %{cwd: cwd} do
+    {parent, provider} = parent(cwd, [answer("done")])
+    {:ok, child} = Threads.start_child(parent, "coding", coding: true)
+    finished(parent, child["id"])
+    File.write!(Path.join(child["cwd"], "file.txt"), "child\n")
+    retain_uncertainties(child, provider, [{"uncertain", "id", "bash", "maybe"}])
+    assert {:ok, review} = Threads.review_child(parent, child["id"])
+    assert {:ok, _} = Threads.acknowledge_child(parent, child["id"], review.digest, ["id"])
+    assert {:ok, _} = Threads.integrate(parent, child["id"])
+
+    retain_uncertainties(child, provider, [{"new-uncertain", "new", "write", "new maybe"}])
+    assert {:error, :acknowledgement_stale_or_malformed} = Threads.cleanup(parent, child["id"])
+    assert File.exists?(child["cwd"])
   end
 
   test "acknowledged cleanup keeps ignored files and removes only the exact integrated tree", %{
@@ -925,8 +1078,10 @@ defmodule Elara.ThreadsTest do
         child = identity["child"]
         {:ok, agent} = Agent.start_link(fn -> [] end)
         provider = {Elara.Provider.Scripted, agent}
+        {:error, :handoff_context_rejected} = Threads.integrate(parent, child["id"])
         {:ok, parent_info} = Store.find(#{inspect(cwd)}, parent)
         {:ok, ^parent} = Elara.start_session(cwd: #{inspect(cwd)}, provider: provider, resume: parent_info.path, pause_inputs: true)
+        {:error, :resume_child_before_workspace_operation} = Threads.integrate(parent, child["id"])
         {:ok, child_id} = Threads.resume(child["id"], provider: provider)
         true = child_id == child["id"]
         {:ok, _} = Threads.integrate(parent, child_id)

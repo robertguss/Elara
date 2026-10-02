@@ -331,6 +331,14 @@ defmodule Elara.Session do
     {:reply, forward_handoff(shell, command), shell}
   end
 
+  def handle_call(
+        {:acknowledged_parent_workspace_operation, _operation},
+        _from,
+        %{store: %{context: %{"handoff" => _}}} = shell
+      ) do
+    {:reply, {:error, :handoff_context_rejected}, shell}
+  end
+
   def handle_call({:workspace_operation, operation, retire?}, _from, shell) do
     uncertain? =
       Enum.any?(
@@ -345,6 +353,21 @@ defmodule Elara.Session do
       if retire? and result == :ok,
         do: {:stop, :normal, :ok, shell},
         else: {:reply, result, shell}
+    else
+      {:reply, {:error, :stop_or_reconcile_effects_first}, shell}
+    end
+  end
+
+  def handle_call({:acknowledged_parent_workspace_operation, operation}, _from, shell) do
+    uncertain? =
+      Enum.any?(
+        shell.core.history,
+        &match?(%Message.ToolResult{outcome: {:indeterminate, _}}, &1)
+      )
+
+    if Core.idle?(shell.core) and map_size(shell.tasks) == 0 and
+         shell.effect_recovery_pending == [] and not uncertain? do
+      {:reply, operation.(), shell}
     else
       {:reply, {:error, :stop_or_reconcile_effects_first}, shell}
     end

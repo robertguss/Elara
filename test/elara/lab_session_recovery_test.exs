@@ -4,8 +4,6 @@ defmodule Elara.Lab.SessionRecoveryTest do
 
   alias Elara.Lab.Scenarios.SessionRecovery
   alias Elara.Lab.Scenarios.SessionRecovery.Observer
-  alias Elara.Message
-  alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
 
   @moduletag timeout: 60_000
 
@@ -178,8 +176,8 @@ defmodule Elara.Lab.SessionRecoveryTest do
           witness(:provider_started, fn witness ->
             update_in(witness.history, fn history ->
               Enum.map(history, fn
-                %ToolResult{name: "lab_marker"} = result ->
-                  %{result | outcome: {:ok, "marked Z"}}
+                %{"kind" => "tool_result"} = result ->
+                  put_in(result["outcome"]["text"], "marked Z")
 
                 other ->
                   other
@@ -227,25 +225,29 @@ defmodule Elara.Lab.SessionRecoveryTest do
 
     history =
       Enum.flat_map(@inputs, fn label ->
-        user = %User{text: "input #{label}", agent_source: nil}
-
-        call = %ToolCall{
-          id: "call-#{label}",
-          name: "lab_marker",
-          args: {:ok, %{"label" => label}}
-        }
+        call = %{"id" => "call-#{label}", "name" => "lab_marker", "args" => %{"label" => label}}
 
         result =
           case receipt(fault, label) do
             %{state: :failed} ->
-              nil
+              []
 
             %{state: :consumed} ->
-              Message.tool_result(call, {:ok, "marked #{label}"})
+              [
+                %{
+                  "kind" => "tool_result",
+                  "call_id" => "call-#{label}",
+                  "name" => "lab_marker",
+                  "outcome" => %{"kind" => "ok", "text" => "marked #{label}"}
+                },
+                %{"kind" => "assistant", "text" => "done #{label}", "tool_calls" => []}
+              ]
           end
 
-        [user, %Assistant{text: nil, tool_calls: [call]} | List.wrap(result)] ++
-          if(result, do: [%Assistant{text: "done #{label}", tool_calls: []}], else: [])
+        [
+          %{"kind" => "user", "text" => "input #{label}"},
+          %{"kind" => "assistant", "text" => nil, "tool_calls" => [call]} | result
+        ]
       end)
 
     mutate.(%{

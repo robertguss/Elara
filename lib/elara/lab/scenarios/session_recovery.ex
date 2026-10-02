@@ -314,7 +314,7 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
       fault_seen: origin.fault_seen,
       target_down: origin.down,
       inputs: inputs,
-      history: history,
+      history: encode_history(history),
       marker_labels: logical_labels(history),
       marker_bytes: read_markers(cwd),
       probe: probe,
@@ -395,6 +395,35 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
         nil
     end)
   end
+
+  defp encode_history(history) do
+    Enum.map(history, fn
+      %User{text: text} ->
+        %{"kind" => "user", "text" => text}
+
+      %Assistant{text: text, tool_calls: calls} ->
+        %{
+          "kind" => "assistant",
+          "text" => text,
+          "tool_calls" =>
+            Enum.map(calls, fn %ToolCall{id: id, name: name, args: args} ->
+              %{"id" => id, "name" => name, "args" => encode_args(args)}
+            end)
+        }
+
+      %ToolResult{call_id: id, name: name, outcome: outcome} ->
+        %{
+          "kind" => "tool_result",
+          "call_id" => id,
+          "name" => name,
+          "outcome" => encode_outcome(outcome)
+        }
+    end)
+  end
+
+  defp encode_args({:ok, args}), do: args
+  defp encode_args({:malformed, text}), do: %{"malformed" => text}
+  defp encode_outcome({kind, text}), do: %{"kind" => Atom.to_string(kind), "text" => text}
 
   defp logical_labels(history) do
     Enum.flat_map(history, fn
@@ -842,7 +871,7 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Observer do
       completed_turns:
         Enum.count(
           witness.history,
-          &match?(%Assistant{text: text, tool_calls: []} when is_binary(text), &1)
+          &(match?(%{"kind" => "assistant", "tool_calls" => []}, &1) and is_binary(&1["text"]))
         ),
       bounds: %{
         "recovery" => if(judged.checks.timing_bounded, do: "holds", else: "fails"),
@@ -899,22 +928,21 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Observer do
   defp settled?(_, _, _), do: false
 
   defp history_identity?(witness) do
-    users = Enum.filter(witness.history, &match?(%User{agent_source: nil}, &1))
+    users = Enum.filter(witness.history, &(&1["kind"] == "user"))
 
     Enum.all?(witness.inputs, fn {label, input} ->
-      user? =
-        case Enum.at(users, label_index(label)) do
-          %User{text: text} -> text == "input #{label}"
-          _ -> false
-        end
-
+      user? = Enum.at(users, label_index(label))["text"] == "input #{label}"
       call? = label == "A" or call?(witness.history, input)
 
       result? =
         case input.receipt do
           %{state: :consumed} ->
             Enum.any?(witness.history, fn
-              %ToolResult{call_id: id, outcome: {:ok, text}} ->
+              %{
+                "kind" => "tool_result",
+                "call_id" => id,
+                "outcome" => %{"kind" => "ok", "text" => text}
+              } ->
                 id == input.call_id and text == "marked #{label}"
 
               _ ->
@@ -922,10 +950,13 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Observer do
             end)
 
           %{state: :failed} ->
-            not Enum.any?(
-              witness.history,
-              &match?(%ToolResult{call_id: id, outcome: {:ok, _}} when id == input.call_id, &1)
-            )
+            not Enum.any?(witness.history, fn
+              %{"kind" => "tool_result", "call_id" => id, "outcome" => %{"kind" => "ok"}} ->
+                id == input.call_id
+
+              _ ->
+                false
+            end)
 
           _ ->
             false
@@ -937,9 +968,9 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Observer do
 
   defp call?(history, input) do
     Enum.any?(history, fn
-      %Assistant{tool_calls: calls} ->
+      %{"kind" => "assistant", "tool_calls" => calls} ->
         Enum.any?(calls, fn
-          %ToolCall{id: id, name: "lab_marker", args: {:ok, %{"label" => label}}} ->
+          %{"id" => id, "name" => "lab_marker", "args" => %{"label" => label}} ->
             id == input.call_id and label == input.label
 
           _ ->

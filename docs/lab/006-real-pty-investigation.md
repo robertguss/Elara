@@ -39,9 +39,12 @@ and binary provenance are in [`lab/results/rob-1096/`](../../lab/results/rob-109
 | Full suite | 829/830 passed; exit 2 |
 
 The real-PTY test passed in all five contexts, including the full suite. The
-full suite's only failure was unrelated: `Elara.Lab.SamplerTest` expected two
-loopback connection-owner peers but discovery returned one. Per the registered
-boundary, that failure was recorded without retry or unrelated remediation.
+full suite’s only failure was in a separate test, `Elara.Lab.SamplerTest`:
+connection-owner discovery returned two owners, but subsequent peer enumeration
+yielded one loopback peer where two were expected
+(`test/elara/lab_sampler_test.exs:27`). The cause and any relationship to the
+historical PTY failure were not established. Per the registered boundary, this
+failure was recorded without retry or remediation.
 
 ## Interpretation
 

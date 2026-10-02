@@ -1,0 +1,323 @@
+ROB-1096 matrix invocation: full-suite
+revision: a609b4a03a7d6a6bfc1a9eac409eaa877fe0cd75
+utc_start: 2026-10-02T14:21:21Z
+command: mix test --seed 285253
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 285253, max_cases: 16
+
+    warning: the default value for the last optional argument in the private function fun/7 is never used
+    │
+ 49 │   defp fun(class, module, function, arity, us, calls \\ 1, native \\ false),
+    │        ~
+    │
+    └─ test/elara/lab_profile_report_test.exs:49:8: Elara.Lab.ProfileReportTest (module)
+
+..............................................................................................................................................................................................................................................................................................................     warning: the following conditional expression:
+
+         send(self(), {:spawned, pid})
+
+     will always evaluate to:
+
+         dynamic({:spawned, term()})
+
+     where "pid" was given the type:
+
+         # type: dynamic()
+         # from: test/elara/lab_profile_test.exs
+         {:spawned, pid}
+
+     type warning found at:
+     │
+ 130 │           {:spawned, pid} -> send(self(), {:spawned, pid}) && [pid]
+     │           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     │
+     └─ test/elara/lab_profile_test.exs:130: Elara.Lab.ProfileTest."test classes a pid whose census and spawn records disagree is unclassified"/1
+
+.............................................
+14:21:34.662 [error] Task #PID<0.2152.0> started from #PID<0.2148.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.2147.0>, {:get_and_update, #Function<3.93906535/1 in Elara.Lab.Faults.hook/2>}, 5000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.3) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/faults.ex:38: anonymous fn/4 in Elara.Lab.Faults.hook/2
+    (elara 0.1.0) lib/elara/provider/simulated.ex:238: anonymous fn/7 in Elara.Provider.Simulated.stream_deltas/5
+    (elixir 1.20.3) lib/enum.ex:1857: anonymous fn/3 in Enum.map_reduce/3
+    (elixir 1.20.3) lib/enum.ex:4659: Enum.reduce_range/5
+    (elixir 1.20.3) lib/enum.ex:2626: Enum.map_reduce/3
+    (elara 0.1.0) lib/elara/provider/simulated.ex:231: Elara.Provider.Simulated.stream_deltas/5
+    (elara 0.1.0) lib/elara/provider/simulated.ex:204: Elara.Provider.Simulated.answer/4
+    (elara 0.1.0) lib/elara/provider/simulated.ex:125: Elara.Provider.Simulated.stream/3
+    (elixir 1.20.3) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.3) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<51.102867790/0 in Elara.Session.run_effect/4>
+    Args: []
+..................................warning: lab scenario concurrency raised; retained /tmp/elara-test-run-8386-189600039/elara-lab-concurrency-1-8386-090848c9a12f2306; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:138: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_concurrency_test.exs:359: Elara.Lab.ConcurrencyTest."test the scenario refuses to start while Elara.Exec runs a job"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-8386-189600039/elara-lab-concurrency-42-8386-18c6d1b9bee100c1; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:305: Elara.Lab.ConcurrencyTest."test a task outliving the shutdown deadline leaves cleanup unconfirmed and the root retained"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-8386-189600039/elara-lab-concurrency-42-8386-2f6a2af1cd071c10; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:374: Elara.Lab.ConcurrencyTest."test a changed execution epoch leaves cleanup unconfirmed"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.warning: lab scenario concurrency raised; retained /tmp/elara-test-run-8386-189600039/elara-lab-concurrency-1-8386-9f1cec1a0e9ae714; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:138: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  test/elara/lab_concurrency_test.exs:344: Elara.Lab.ConcurrencyTest."test a setup failure still restores scheduler timing and destroys the trace session"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+..warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-8386-189600039/elara-lab-concurrency-42-8386-204c5ccad2ce5122; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:497: Elara.Lab.ConcurrencyTest."test watchers die with their users when a run stops inside turn 1"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-8386-189600039/elara-lab-concurrency-42-8386-eaf39a9a02a3933d; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:321: Elara.Lab.ConcurrencyTest."test a provider task outliving shutdown keeps the ledger it writes; cohort stays unknown"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.........warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-8386-189600039/elara-lab-concurrency-42-8386-24e2c9972822ba79; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:486: Elara.Lab.ConcurrencyTest."test reports the transport cannot accept keep the run retained"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+..warning: lab scenario concurrency raised; retained /tmp/elara-test-run-8386-189600039/elara-lab-concurrency-1-8386-36e9dc8c38d1f198; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:138: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_concurrency_test.exs:544: Elara.Lab.ConcurrencyTest."test the scenario refuses the real provider"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+..........................................................................
+14:22:38.581 [error] Task #PID<0.14549.0> started from #PID<0.14543.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.14545.0>, {:ask, "retain this goal"}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.3) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.3) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.3) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<29.22929269/0 in Elara.ContextTest."test crash at prepared retains one successor and one logical continuation"/1>
+    Args: []
+.........................warning: lab scenario smoke raised; retained /tmp/elara-test-run-8386-189600039/elara-lab-smoke-1-8386-6bc6cc408fc54d8e; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:138: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_test.exs:64: Elara.LabTest."test real mode refuses a request cap below one request per turn, before any network use"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+warning: lab scenario smoke raised; retained /tmp/elara-test-run-8386-189600039/elara-lab-smoke-1-8386-f8a0c7a3b3c137f4; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:138: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_test.exs:68: Elara.LabTest."test real mode refuses a request cap below one request per turn, before any network use"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+..........warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-8386-189600039/elara-lab-checked-5-8386-b9524db40dbe0f53; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_test.exs:90: Elara.LabTest."test failed checks keep evidence; unconfirmed cleanup keeps the root bound and stops"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...............................................................
+
+  1) test connection discovery finds exactly the server's connection owners (Elara.Lab.SamplerTest)
+     test/elara/lab_sampler_test.exs:6
+     Assertion with == failed
+     code:  assert Enum.sort(peers) ==
+              Enum.sort(
+                for c <- clients do
+                  elem(:inet.sockname(c), 1)
+                end
+              )
+     left:  [{{127, 0, 0, 1}, 49386}]
+     right: [{{127, 0, 0, 1}, 49386}, {{127, 0, 0, 1}, 49388}]
+     stacktrace:
+       test/elara/lab_sampler_test.exs:27: (test)
+
+.................
+14:23:20.632 [error] Task #PID<0.18138.0> started from #PID<0.18131.0> terminating
+** (RuntimeError) boom
+    test/elara/session_test.exs:12: Elara.SessionTest.CrashTool.run/2
+    (elara 0.1.0) lib/elara/executor/router.ex:108: Elara.Executor.Router.attempt/5
+    (elixir 1.20.3) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.3) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: &Elara.Executor.Router.execute/4
+    Args: [Elara.Executor.Router, %Elara.Executor.Request{job_id: nil, operation_digest: nil, tool_call_id: "1", session_id: "WAVXCw4P0a_mgZWJTTRdhQ", tool_name: "crash", tool_version: "1", arguments: %{}, workspace_id: "8yijw4HLgCN3Mj9zvujqOsdBHPeFVwx7hBlTzVFykZQ", deadline_ms: 1790951030632, max_output_bytes: 16384, cancellation_id: "5c78kg8rN7XNP-3D", required_capabilities: [], placement: :any, mutating: false}, %Elara.Tool{name: "crash", description: "crash", parameters: %{"properties" => %{}, "type" => "object"}, run: {Elara.SessionTest.CrashTool, :run}, plugin: nil, version: "1", capabilities: [], placement: :any, mutating: false}, "/home/user/workspace/repo"]
+.................................................................................... ✳ elara   ~/workspace/repo                                                                 control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara           │ ember / ember · Thinking expanded · F1 help │           ~/workspace/repo
+summary session=Y4kpncrf_DfTkn7U_VihVg incarnation=VR4ihgOOq1FULKdt saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+ ✳ elara   ~/workspace/repo                                                                 control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara           │ ember / ember · Thinking expanded · F1 help │           ~/workspace/repo
+ embedded · exits with TUI · control · connected · head 0 · idle · outcome - · QzwmCm2XrFKwtp0pVWqlQ
+summary session=QzwmCm2XrFKwtp0pVWqlQw incarnation=S3ib7r6AZ-eBz51n saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+ ✳ elara   ~/workspace/repo                                                                 control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara           │ ember / ember · Thinking expanded · F1 help │           ~/workspace/repo
+summary session=4Iyuox0x9AmPS1v-09RisQ incarnation=WAxiQeNMcRl06Fzk saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+..............
+14:24:42.226 [error] Task #PID<0.20509.0> started from Elara.TestJobs terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["mix", "test", "test/job_test.exs"], [cwd: "/tmp/elara-test-run-8386-189600039/elara-test-job-164226", timeout_ms: 60000, max_bytes: 16384, expected_token: %{"generation" => 4, "incarnation" => "kHXDzUMNXeeVatsjC6uvtA"}]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.3) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.3) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.3) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<9.27741320/0 in Elara.TestJobs.start_job/6>
+    Args: []
+............................................................................................................................................
+Finished in 218.7 seconds (4.7s async, 214.0s sync)
+
+Result: 829/830 passed (11/11 properties, 818/819 tests)
+Failed: 1 test
+utc_end: 2026-10-02T14:25:00Z
+exit_status: 2

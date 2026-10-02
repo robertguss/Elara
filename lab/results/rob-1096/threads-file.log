@@ -1,0 +1,13 @@
+ROB-1096 matrix invocation: threads-file
+revision: a609b4a03a7d6a6bfc1a9eac409eaa877fe0cd75
+utc_start: 2026-10-02T14:20:55Z
+command: mix test test/elara/threads_test.exs --seed 285253
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 285253, max_cases: 16
+
+..................
+Finished in 18.0 seconds (0.00s async, 18.0s sync)
+
+Result: 18 passed
+utc_end: 2026-10-02T14:21:14Z
+exit_status: 0

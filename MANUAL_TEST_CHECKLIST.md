@@ -2,7 +2,8 @@
 
 This is an inventory and verification worksheet for functionality that is
 currently shipped. It is not a roadmap or a status source;
-[`ROADMAP.md`](ROADMAP.md) is the sole source for those, and this file does not
+[Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
+is the sole source for those, and this file does not
 mark any roadmap item complete.
 
 Use this to distinguish features that work through the product path from

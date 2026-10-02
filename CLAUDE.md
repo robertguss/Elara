@@ -12,14 +12,18 @@ there is no installed `elara` executable. User-facing surfaces are
 is no web UI.
 
 Elara is primarily a **BEAM harness research lab**; daily use is secondary. Work
-follows the research questions (RQ-n) and lab queue (LAB-n) in `ROADMAP.md`.
+follows the research questions (RQ-n) and lab queue (LAB-n) in
+[Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215).
 Build product features only when an experiment needs them.
 
-`ROADMAP.md` is the **sole** roadmap and status source. Update its queue table
-and the item's Result in the same commit that changes an item's status.
-`test/elara/roadmap_test.exs` checks every queue and history row's status,
-exactly one executable item while work remains, a `## LAB-n — …` section per
-queued item, and known dependencies. Experiment notes live in `docs/lab/`, one
+Linear is the sole current planning and status source. `ROADMAP.md` and
+`HANDOFF.md` are durable pointers, not duplicate tracking documents. Follow
+the Amp review workflow in `AGENTS.md`. Record continuation and review evidence
+in Linear. Ready requires explicit selection; dependencies alone do not
+authorize work. Allow no executable item while paused and at most one otherwise.
+The Lead reviews queue discipline in Linear; `test/elara/roadmap_test.exs`
+checks repository pointers only, without network access.
+Experiment notes live in `docs/lab/`, one
 page each; raw results go under `lab/results/`, not `docs/`.
 `docs/harness-experiments.md` is the pre-pivot experiment log. `AGENTS.md` holds
 environment notes; `MANUAL_TEST_CHECKLIST.md` is a manual verification
@@ -171,7 +175,7 @@ generation/lease-based atomic reload.
 
 ## Conventions that matter here
 
-- Start each experiment from a refutable hypothesis in `ROADMAP.md`. A result
+- Start each experiment from a refutable hypothesis in Linear. A result
   against the hypothesis is a finding; record it rather than tuning the
   experiment until it passes.
 - Prefer seeded, repeatable runs against simulated or scripted providers.
@@ -183,7 +187,7 @@ generation/lease-based atomic reload.
 - Lab infrastructure establishes runtime properties, not user-visible behavior.
   Claims about what a user sees still need the public product path (the
   verify-elara harness).
-- Keep write-ups proportional: one page per experiment in `docs/lab/`, roadmap
+- Keep write-ups proportional: one page per experiment in `docs/lab/`, issue
   Results of at most five lines, and raw data out of `docs/`.
 - Moduledocs are one-line statements of authority and boundary (e.g. "Mechanical
   shell around Core. Bookkeeping only."). Keep that register; state what a
@@ -191,4 +195,6 @@ generation/lease-based atomic reload.
 - Do not describe durable delivery, receipts, or worktrees as exactly-once
   external effects or as an OS sandbox — the docs are deliberately precise about
   this, and `write`/`edit`/`bash` are explicitly not sandboxed.
-- Commit and push each completed roadmap item before starting its successor.
+- Under the applicable authorization, review, commit and push evidence, then
+  link it and update the Linear issue before starting its successor. Done means
+  merged; a pushed branch is not Done.

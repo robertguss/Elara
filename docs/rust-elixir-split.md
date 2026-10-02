@@ -1,8 +1,11 @@
 # Rust + Elixir split: decision and implementation plan
 
-> **Status:** adopted 2026-09-02. `ROADMAP.md` holds the queue and status
-> (SPLIT-1 … SPLIT-5); this file holds the decision, evidence, architecture, and
-> reversal signals. Do not track status here.
+> **Status:** adopted 2026-09-02. [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
+> holds current planning and status; this file holds the decision, evidence,
+> architecture, and reversal signals. Do not track status here.
+> The dated addenda and implementation sequence below are historical evidence;
+> their references to `ROADMAP.md` describe the former tracking location, now
+> a pointer to Linear. They do not authorize queued or canceled work.
 
 ## 2026-09-26 lab-pivot addendum
 

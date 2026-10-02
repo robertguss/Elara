@@ -1,7 +1,8 @@
 # Lab notes
 
 One page per experiment. The research questions (RQ-n) and the queue (LAB-n)
-live in [`ROADMAP.md`](../../ROADMAP.md); a note records what one experiment
+live in [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215);
+a note records the versioned registration and what one experiment
 found. Experiments before the 2026-09-26 lab pivot are in
 [`harness-experiments.md`](../harness-experiments.md).
 

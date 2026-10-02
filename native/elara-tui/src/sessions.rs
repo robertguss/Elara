@@ -423,6 +423,28 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
         }
         "return" => InputAction::Session(json!({"version":2,"command":"thread_parent"})),
         "open" if !argument.is_empty() => InputAction::Reconnect(argument.to_owned()),
+        "review-child" if control && !argument.is_empty() => InputAction::Session(
+            json!({"version":2,"command":"child_review","session_id":argument}),
+        ),
+        "ack-child" if control => {
+            let mut parts = argument.splitn(3, ' ');
+            let child = parts.next().unwrap_or("");
+            let digest = parts.next().unwrap_or("");
+            let call_ids = parts
+                .next()
+                .and_then(|ids| serde_json::from_str::<Vec<String>>(ids).ok());
+            let Some(call_ids) = call_ids else {
+                model.notice = Some("Use /ack-child CHILD_ID SHA256 JSON_STRING_ARRAY".into());
+                return Some(InputAction::None);
+            };
+            if child.is_empty() || digest.is_empty() {
+                model.notice = Some("Use /ack-child CHILD_ID SHA256 JSON_STRING_ARRAY".into());
+                return Some(InputAction::None);
+            }
+            InputAction::Session(
+                json!({"version":2,"command":"child_acknowledge","session_id":child,"digest":digest,"call_ids":call_ids}),
+            )
+        }
         "integrate" | "cleanup-child" if control && !argument.is_empty() => InputAction::Session(
             json!({"version":2,"command":if name == "integrate" { "child_integrate" } else { "child_cleanup" },"session_id":argument}),
         ),
@@ -701,6 +723,8 @@ mod tests {
         assert_eq!(current.editor.text(), "/delegate invalid task");
         for action in [
             "/delegate coding task",
+            "/review-child id",
+            "/ack-child id digest [\"call\"]",
             "/integrate id",
             "/cleanup-child id",
             "/stop-subtree",
@@ -710,6 +734,30 @@ mod tests {
             assert_eq!(palette_command(&mut observer), Some(InputAction::None));
             assert_eq!(observer.editor.text(), action);
         }
+    }
+
+    #[test]
+    fn child_acknowledgement_parses_opaque_json_string_multiset() {
+        let mut current = model("control");
+        current
+            .editor
+            .insert("/ack-child child digest [\" opaque, id \",\"dup\",\"dup\"]");
+        assert_eq!(
+            palette_command(&mut current),
+            Some(InputAction::Session(json!({
+                "version": 2,
+                "command": "child_acknowledge",
+                "session_id": "child",
+                "digest": "digest",
+                "call_ids": [" opaque, id ", "dup", "dup"]
+            })))
+        );
+
+        let mut invalid = model("control");
+        invalid.editor.insert("/ack-child child digest [call]");
+        assert_eq!(palette_command(&mut invalid), Some(InputAction::None));
+        assert_eq!(invalid.editor.text(), "/ack-child child digest [call]");
+        assert!(invalid.notice.unwrap().contains("JSON_STRING_ARRAY"));
     }
 
     #[test]

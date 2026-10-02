@@ -53,6 +53,16 @@ pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
         true,
     ),
     (
+        "review-child",
+        "CHILD_ID: export exact uncertain patch evidence",
+        true,
+    ),
+    (
+        "ack-child",
+        "CHILD_ID SHA256 JSON_STRING_ARRAY: acknowledge evidence",
+        true,
+    ),
+    (
         "cleanup-child",
         "CHILD_ID: remove integrated workspace",
         true,

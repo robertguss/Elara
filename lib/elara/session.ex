@@ -350,6 +350,59 @@ defmodule Elara.Session do
     end
   end
 
+  # Unlike the general workspace callback, this authority is limited to the
+  # registered Threads process and never follows a handoff or runs offline.
+  def handle_call(
+        {:child_workspace_operation, _expected_id, _operation, _retire?},
+        _from,
+        %{store: %{context: %{"handoff" => _}}} = shell
+      ) do
+    {:reply, {:error, :child_handoff_context_rejected}, shell}
+  end
+
+  def handle_call(
+        {:child_workspace_operation, expected_id, operation, retire?},
+        {caller, _},
+        shell
+      ) do
+    threads = Process.whereis(Elara.Threads)
+
+    if caller == threads and shell.id == expected_id and
+         shell.store.context["sources"] in [nil, []] and
+         Core.idle?(shell.core) and map_size(shell.tasks) == 0 and
+         shell.effect_recovery_pending == [] do
+      occurrences =
+        shell.store.entries
+        |> Enum.filter(
+          &match?(%Store.Entry{message: %Message.ToolResult{outcome: {:indeterminate, _}}}, &1)
+        )
+        |> Enum.map(fn %Store.Entry{
+                         id: entry_id,
+                         message: %Message.ToolResult{
+                           call_id: call_id,
+                           name: tool,
+                           outcome: {:indeterminate, text}
+                         }
+                       } ->
+          %{
+            session_id: shell.id,
+            entry_id: entry_id,
+            call_id: call_id,
+            tool: tool,
+            text: text
+          }
+        end)
+
+      result = operation.(%{session_id: shell.id, cwd: shell.cwd, occurrences: occurrences})
+
+      if retire? and result == :ok,
+        do: {:stop, :normal, :ok, shell},
+        else: {:reply, result, shell}
+    else
+      {:reply, {:error, :child_workspace_operation_rejected}, shell}
+    end
+  end
+
   def handle_call({:why, selector}, _from, shell) do
     {:reply, FlightRecorder.why(shell.recorder, selector), shell}
   end

@@ -18,10 +18,10 @@ Build product features only when an experiment needs them.
 
 Linear is the sole current planning and status source. `ROADMAP.md` and
 `HANDOFF.md` are durable pointers, not duplicate tracking documents. Follow
-the Amp review workflow in `AGENTS.md`. Record continuation and review evidence
-in Linear. Ready requires explicit selection; dependencies alone do not
-authorize work. Allow no executable item while paused and at most one otherwise.
-The Lead reviews queue discipline in Linear; `test/elara/roadmap_test.exs`
+the driver loop in `AGENTS.md`. Record continuation and review evidence in
+Linear. Ready requires explicit selection; dependencies alone do not authorize
+work. Allow no executable item while paused and at most one otherwise. The
+driver reviews queue discipline in Linear; `test/elara/roadmap_test.exs`
 checks repository pointers only, without network access.
 Experiment notes live in `docs/lab/`, one
 page each; raw results go under `lab/results/`, not `docs/`.

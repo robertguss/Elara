@@ -1,25 +1,24 @@
 # AGENTS.md
 
-## Amp reviewed development
+## Driver
 
 Linear: team ROB, project Elara
-Delivery: push-branch
-Builder: medium
-Tester: inherit
-Done: merged
+Worker: pi
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
-is the sole current planning and status source. Use the `amp-workflow` skill
-for implementation: Lead owns Linear, Oracle reviews plans and diffs, and
-fresh Builder and Tester orbs implement and verify the selected issue.
-Obtain issue-branch push authorization before publishing; this configuration
-does not authorize pushes, pull requests, merges, deployments, or releases.
+is the sole current planning and status source. A Claude driver owns Linear,
+briefs, commits, and delivery; a Codex oracle reviews plans, diffs, and
+handoffs; a fresh Pi worker builds each step test-first and leaves changes
+uncommitted.
 
-Read the current Linear handoff linked from `HANDOFF.md`; record continuation
-and review evidence there, not in a periodic repository handoff. Ready means
-explicitly authorized, not merely unblocked. Keep at most one executable lab
-item, and none while paused. The Lead checks queue discipline in Linear;
-repository tests only check the durable pointers.
+Ready means explicitly authorized, not merely unblocked. Keep at most one
+executable lab item, and none while paused. Each issue is delivered on an issue
+branch `work/rob-<n>-<slug>`, pushed, PR'd, and merged after the oracle's
+sign-off and passing CI under the owner's standing authorization. Done means
+merged. Do not force-push, deploy, release, or delete evidence without a
+specific owner decision. At each chunk end, the driver rewrites `HANDOFF.md` for
+the fresh driver and oracle, pointing at Linear for queue, status, and review
+evidence. Repository tests only check the durable pointers.
 
 ## Cursor Cloud specific instructions
 

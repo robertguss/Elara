@@ -1,0 +1,55 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+persisted: {"valid control", true, true, %{"backlog" => "holds", "recovery" => "holds"},
+ [], 2}
+persisted: {"reused B/C call IDs", false, false,
+ %{"backlog" => "undetermined", "recovery" => "undetermined"},
+ [:exact_identities, :history_identity], 2}
+decoder rejected: {"empty B call/result ID", {:malformed_line, 5, :invalid_entry}}
+persisted: {"wrong B inbox user", false, false,
+ %{"backlog" => "undetermined", "recovery" => "undetermined"},
+ [:exact_identities], 2}
+persisted: {"wrong B sender", false, false,
+ %{"backlog" => "undetermined", "recovery" => "undetermined"},
+ [:exact_identities], 2}
+persisted: {"wrong B kind", false, false,
+ %{"backlog" => "undetermined", "recovery" => "undetermined"},
+ [:exact_identities], 2}
+persisted: {"reordered inbox", false, false,
+ %{"backlog" => "undetermined", "recovery" => "undetermined"},
+ [:exact_identities], 2}
+persisted: {"extra interrupted C", false, false,
+ %{"backlog" => "undetermined", "recovery" => "undetermined"},
+ [:exact_identities, :history_identity], 2}
+persisted: {"extra C terminal", false, false,
+ %{"backlog" => "undetermined", "recovery" => "undetermined"},
+ [:exact_identities, :history_identity], 3}
+persisted: {"leaf before C", false, false,
+ %{"backlog" => "undetermined", "recovery" => "undetermined"},
+ [:exact_identities, :history_identity, :no_unexpected_labels, :stable_labels],
+ 1}
+persisted: {"offbranch C completion", false, false,
+ %{"backlog" => "undetermined", "recovery" => "undetermined"},
+ [:exact_identities, :history_identity, :no_unexpected_labels, :stable_labels],
+ 1}
+persisted: {"wrong B result ID", false, false,
+ %{"backlog" => "undetermined", "recovery" => "undetermined"},
+ [:exact_identities, :history_identity], 2}
+persisted: {"active input C", false, false,
+ %{"backlog" => "undetermined", "recovery" => "undetermined"},
+ [:active_input_cleared], 2}
+persisted: {"leading terminal assistant", true, true,
+ %{"backlog" => "holds", "recovery" => "holds"}, [], 3}
+persisted: {"leading orphan tool result", true, true,
+ %{"backlog" => "holds", "recovery" => "holds"}, [], 2}
+threshold: {5000, 7000, true, %{"backlog" => "holds", "recovery" => "holds"}, nil}
+threshold: {5001, 5002, true, %{"backlog" => "holds", "recovery" => "fails"}, nil}
+threshold: {5000, 7001, true, %{"backlog" => "fails", "recovery" => "holds"}, nil}
+recovery clock before target death: {true, %{"backlog" => "holds", "recovery" => "holds"}, []}
+expired start and side effect: {{:error, {:timeout, :start}}, false}
+expired store: {:error, :store_deadline}
+delayed coordinator result ms side effect: {{:error, {:timeout, :probe}}, 21, false}
+blocked store result ms: {{:error, :store_deadline}, 21}
+writer exit: 0
+ownership before side effect: true
+late successful start result unresolved sessions helpers live children: {{:error, {:timeout, :start}}, [], [], [], 1}
+blocked reopen result unresolved live children: {{:error, {:timeout, :reopen}}, [:reopen], 1}

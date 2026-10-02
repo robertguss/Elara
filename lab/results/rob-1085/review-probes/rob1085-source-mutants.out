@@ -1,0 +1,145 @@
+
+--- call_ids ---
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 0, max_cases: 16
+
+...............
+
+  1) test saved and reopened persisted mutations fail settlement and reporting (Elara.Lab.SessionRecoveryTest)
+     test/elara/lab_session_recovery_test.exs:402
+     reused B/C call IDs
+     code: for {name, mutate} <- mutations do
+     stacktrace:
+       test/elara/lab_session_recovery_test.exs:419: anonymous fn/3 in Elara.Lab.SessionRecoveryTest."test saved and reopened persisted mutations fail settlement and reporting"/1
+       (elixir 1.20.3) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/elara/lab_session_recovery_test.exs:417: (test)
+
+........
+Finished in 2.3 seconds (0.00s async, 2.3s sync)
+
+Result: 23/24 passed
+Failed: 1 test
+
+--- segment ---
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 0, max_cases: 16
+
+...............
+
+  1) test saved and reopened persisted mutations fail settlement and reporting (Elara.Lab.SessionRecoveryTest)
+     test/elara/lab_session_recovery_test.exs:402
+     extra interrupted C assistant
+     code: for {name, mutate} <- mutations do
+     stacktrace:
+       test/elara/lab_session_recovery_test.exs:419: anonymous fn/3 in Elara.Lab.SessionRecoveryTest."test saved and reopened persisted mutations fail settlement and reporting"/1
+       (elixir 1.20.3) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/elara/lab_session_recovery_test.exs:417: (test)
+
+........
+Finished in 2.3 seconds (0.00s async, 2.3s sync)
+
+Result: 23/24 passed
+Failed: 1 test
+
+--- chain ---
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+warning: function selected_chain_covers_store?/1 is unused
+└─ independent-mutant-chain.ex:1287:8: Elara.Lab.Scenarios.SessionRecovery.StoreView (module)
+
+Running ExUnit with seed: 0, max_cases: 16
+
+...............
+
+  1) test saved and reopened persisted mutations fail settlement and reporting (Elara.Lab.SessionRecoveryTest)
+     test/elara/lab_session_recovery_test.exs:402
+     stale off-branch entry
+     code: for {name, mutate} <- mutations do
+     stacktrace:
+       test/elara/lab_session_recovery_test.exs:419: anonymous fn/3 in Elara.Lab.SessionRecoveryTest."test saved and reopened persisted mutations fail settlement and reporting"/1
+       (elixir 1.20.3) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/elara/lab_session_recovery_test.exs:417: (test)
+
+........
+Finished in 2.4 seconds (0.00s async, 2.4s sync)
+
+Result: 23/24 passed
+Failed: 1 test
+
+--- receipt ---
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+warning: variable "receipts_match" is unused (if the variable is not meant to be used, prefix it with an underscore)
+└─ (elara 0.1.0) independent-mutant-receipt.ex:1274:5: Elara.Lab.Scenarios.SessionRecovery.StoreView.exact_store?/2
+
+Running ExUnit with seed: 0, max_cases: 16
+
+...............
+
+  1) test saved and reopened persisted mutations fail settlement and reporting (Elara.Lab.SessionRecoveryTest)
+     test/elara/lab_session_recovery_test.exs:402
+     wrong B inbox user
+     code: for {name, mutate} <- mutations do
+     stacktrace:
+       test/elara/lab_session_recovery_test.exs:419: anonymous fn/3 in Elara.Lab.SessionRecoveryTest."test saved and reopened persisted mutations fail settlement and reporting"/1
+       (elixir 1.20.3) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/elara/lab_session_recovery_test.exs:417: (test)
+
+........
+Finished in 2.3 seconds (0.00s async, 2.3s sync)
+
+Result: 23/24 passed
+Failed: 1 test
+
+--- bound ---
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 0, max_cases: 16
+
+.................
+
+  1) test coherent timing evidence reports threshold failures independently (Elara.Lab.SessionRecoveryTest)
+     test/elara/lab_session_recovery_test.exs:446
+     Assertion with == failed
+     code:  assert recovery_failure.bounds == %{"recovery" => "fails", "backlog" => "holds"}
+     left:  %{"backlog" => "holds", "recovery" => "undetermined"}
+     right: %{"backlog" => "holds", "recovery" => "fails"}
+     stacktrace:
+       test/elara/lab_session_recovery_test.exs:455: (test)
+
+......
+Finished in 2.3 seconds (0.00s async, 2.3s sync)
+
+Result: 23/24 passed
+Failed: 1 test
+
+--- late_success ---
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+warning: variable "completed_at" is unused (if the variable is not meant to be used, prefix it with an underscore)
+└─ (elara 0.1.0) independent-mutant-late_success.ex:876:24: Elara.Lab.Scenarios.SessionRecovery.Deadline.await_result/6
+
+warning: this clause in cond will never match:
+
+    false
+
+since it has type:
+
+    false
+
+└─ (elara 0.1.0) independent-mutant-late_success.ex:882:17: Elara.Lab.Scenarios.SessionRecovery.Deadline.await_result/6
+
+Running ExUnit with seed: 0, max_cases: 16
+
+..........
+
+  1) test a success completed after the absolute deadline is rejected (Elara.Lab.SessionRecoveryTest)
+     test/elara/lab_session_recovery_test.exs:277
+     match (=) failed
+     code:  assert {:error, {:timeout, :probe}} = Task.await(caller, 500)
+     left:  {:error, {:timeout, :probe}}
+     right: {:ok, :late_success}
+     stacktrace:
+       test/elara/lab_session_recovery_test.exs:301: (test)
+
+.............
+Finished in 2.2 seconds (0.00s async, 2.2s sync)
+
+Result: 23/24 passed
+Failed: 1 test

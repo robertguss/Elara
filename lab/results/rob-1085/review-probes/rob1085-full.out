@@ -1,0 +1,538 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 255980, max_cases: 16
+
+......    warning: the default value for the last optional argument in the private function fun/7 is never used
+    │
+ 49 │   defp fun(class, module, function, arity, us, calls \\ 1, native \\ false),
+    │        ~
+    │
+    └─ test/elara/lab_profile_report_test.exs:49:8: Elara.Lab.ProfileReportTest (module)
+
+..................................................................................................................................................................................................................................................................................................     warning: the following conditional expression:
+
+         send(self(), {:spawned, pid})
+
+     will always evaluate to:
+
+         dynamic({:spawned, term()})
+
+     where "pid" was given the type:
+
+         # type: dynamic()
+         # from: test/elara/lab_profile_test.exs
+         {:spawned, pid}
+
+     type warning found at:
+     │
+ 130 │           {:spawned, pid} -> send(self(), {:spawned, pid}) && [pid]
+     │           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     │
+     └─ test/elara/lab_profile_test.exs:130: Elara.Lab.ProfileTest."test classes a pid whose census and spawn records disagree is unclassified"/1
+
+..............................................................................................................    Updating crates.io index
+ Downloading crates ...
+  Downloaded darling_macro v0.24.1
+  Downloaded futures-core v0.3.34
+  Downloaded approx v0.5.1
+  Downloaded autocfg v1.5.1
+  Downloaded deranged v0.5.8
+  Downloaded toml_datetime v1.1.1+spec-1.1.0
+  Downloaded cfg-if v1.0.4
+  Downloaded ident_case v1.0.1
+  Downloaded tracing-attributes v0.1.31
+  Downloaded by_address v1.2.1
+  Downloaded futures-macro v0.3.34
+  Downloaded convert_case v0.10.0
+  Downloaded errno v0.3.14
+  Downloaded powerfmt v0.2.0
+  Downloaded document-features v0.2.12
+  Downloaded futures-task v0.3.34
+  Downloaded instability v0.3.13
+  Downloaded castaway v0.2.4
+  Downloaded heck v0.5.0
+  Downloaded indoc v2.0.7
+  Downloaded glob v0.3.4
+  Downloaded kasuari v0.4.12
+  Downloaded pulldown-cmark-escape v0.11.0
+  Downloaded proc-macro-crate v3.5.0
+  Downloaded rustc_version v0.4.1
+  Downloaded equivalent v1.0.2
+  Downloaded num_threads v0.1.7
+  Downloaded palette_math v0.7.7
+  Downloaded yansi v1.0.1
+  Downloaded unicase v2.9.0
+  Downloaded unicode-truncate v2.0.1
+  Downloaded scopeguard v1.2.0
+  Downloaded num-conv v0.2.2
+  Downloaded tui-markdown v0.3.9
+  Downloaded strum v0.28.0
+  Downloaded either v1.18.0
+  Downloaded futures-timer v3.0.4
+  Downloaded getopts v0.2.24
+  Downloaded ratatui-crossterm v0.1.2
+  Downloaded strsim v0.11.1
+  Downloaded unicode-ident v1.0.24
+  Downloaded allocator-api2 v0.2.21
+  Downloaded bitflags v2.13.1
+  Downloaded palette_derive v0.7.7
+  Downloaded pin-project-lite v0.2.17
+  Downloaded signal-hook-mio v0.2.5
+  Downloaded slab v0.4.12
+  Downloaded thiserror v2.0.20
+  Downloaded thiserror-impl v2.0.20
+  Downloaded toml_parser v1.1.3+spec-1.1.0
+  Downloaded tracing-core v0.1.36
+  Downloaded foldhash v0.2.0
+  Downloaded lock_api v0.4.14
+  Downloaded quote v1.0.47
+  Downloaded signal-hook-registry v1.4.8
+  Downloaded unicode-segmentation v1.13.3
+  Downloaded static_assertions v1.1.0
+  Downloaded rustversion v1.0.23
+  Downloaded strum_macros v0.28.0
+  Downloaded time-core v0.1.9
+  Downloaded darling v0.24.1
+  Downloaded line-clipping v0.3.8
+  Downloaded lru v0.18.4
+  Downloaded parking_lot_core v0.9.12
+  Downloaded relative-path v1.9.3
+  Downloaded aho-corasick v1.1.5
+  Downloaded smallvec v1.16.0
+  Downloaded winnow v1.0.4
+  Downloaded once_cell v1.21.4
+  Downloaded unicode-width v0.2.0
+  Downloaded litrs v1.0.0
+  Downloaded parking_lot v0.12.5
+  Downloaded rstest v0.26.1
+  Downloaded ryu v1.0.23
+  Downloaded serde_derive v1.0.229
+  Downloaded signal-hook v0.3.18
+  Downloaded base64 v0.22.1
+  Downloaded darling_core v0.24.1
+  Downloaded log v0.4.34
+  Downloaded proc-macro2 v1.0.107
+  Downloaded semver v1.0.28
+  Downloaded num-traits v0.2.19
+  Downloaded serde v1.0.229
+  Downloaded toml_edit v0.25.13+spec-1.1.0
+  Downloaded derive_more-impl v2.1.1
+  Downloaded diff v0.1.13
+  Downloaded pretty_assertions v1.4.1
+  Downloaded ratatui v0.30.2
+  Downloaded rstest_macros v0.26.1
+  Downloaded compact_str v0.9.1
+  Downloaded derive_more v2.1.1
+  Downloaded tracing v0.1.44
+  Downloaded indexmap v2.14.1
+  Downloaded crossterm v0.29.0
+  Downloaded futures-util v0.3.34
+  Downloaded mio v1.2.3
+  Downloaded hashbrown v0.17.1
+  Downloaded itertools v0.14.0
+  Downloaded itertools v0.15.0
+  Downloaded pulldown-cmark v0.13.4
+  Downloaded regex v1.13.1
+  Downloaded hashbrown v0.16.1
+  Downloaded libm v0.2.16
+  Downloaded portable-atomic v1.15.0
+  Downloaded ratatui-core v0.1.2
+  Downloaded ratatui-widgets v0.3.2
+  Downloaded time v0.3.55
+  Downloaded palette v0.7.7
+  Downloaded syn v3.0.4
+  Downloaded syn v2.0.119
+  Downloaded regex-syntax v0.8.11
+  Downloaded rustix v1.1.4
+  Downloaded regex-automata v0.4.18
+  Downloaded linux-raw-sys v0.12.1
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling equivalent v1.0.2
+   Compiling libc v0.2.189
+   Compiling cfg-if v1.0.4
+   Compiling unicode-segmentation v1.13.3
+   Compiling rustversion v1.0.23
+   Compiling foldhash v0.2.0
+   Compiling allocator-api2 v0.2.21
+   Compiling bitflags v2.13.1
+   Compiling unicode-width v0.2.0
+   Compiling either v1.18.0
+   Compiling thiserror v2.0.20
+   Compiling strsim v0.11.1
+   Compiling itoa v1.0.18
+   Compiling heck v0.5.0
+   Compiling ident_case v1.0.1
+   Compiling itertools v0.14.0
+   Compiling hashbrown v0.17.1
+   Compiling hashbrown v0.16.1
+   Compiling static_assertions v1.1.0
+   Compiling memchr v2.8.3
+   Compiling castaway v0.2.4
+   Compiling parking_lot_core v0.9.12
+   Compiling ryu v1.0.23
+   Compiling syn v3.0.4
+   Compiling syn v2.0.119
+   Compiling semver v1.0.28
+   Compiling winnow v1.0.4
+   Compiling signal-hook v0.3.18
+   Compiling errno v0.3.14
+   Compiling lru v0.18.4
+   Compiling indexmap v2.14.1
+   Compiling rustc_version v0.4.1
+   Compiling signal-hook-registry v1.4.8
+   Compiling compact_str v0.9.1
+   Compiling aho-corasick v1.1.5
+   Compiling convert_case v0.10.0
+   Compiling rustix v1.1.4
+   Compiling unicode-truncate v2.0.1
+   Compiling instability v0.3.13
+   Compiling regex-syntax v0.8.11
+   Compiling log v0.4.34
+   Compiling smallvec v1.16.0
+   Compiling scopeguard v1.2.0
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling lock_api v0.4.14
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling mio v1.2.3
+   Compiling rstest_macros v0.26.1
+   Compiling pin-project-lite v0.2.17
+   Compiling litrs v1.0.0
+   Compiling toml_edit v0.25.13+spec-1.1.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling indoc v2.0.7
+   Compiling document-features v0.2.12
+   Compiling signal-hook-mio v0.2.5
+   Compiling parking_lot v0.12.5
+   Compiling relative-path v1.9.3
+   Compiling proc-macro-crate v3.5.0
+   Compiling futures-task v0.3.34
+   Compiling regex-automata v0.4.18
+   Compiling zmij v1.0.23
+   Compiling darling_core v0.24.1
+   Compiling slab v0.4.12
+   Compiling glob v0.3.4
+   Compiling futures-core v0.3.34
+   Compiling pulldown-cmark v0.13.4
+   Compiling serde_core v1.0.229
+   Compiling once_cell v1.21.4
+   Compiling tracing-core v0.1.36
+   Compiling getopts v0.2.24
+   Compiling line-clipping v0.3.8
+   Compiling serde_json v1.0.151
+   Compiling diff v0.1.13
+   Compiling unicase v2.9.0
+   Compiling yansi v1.0.1
+   Compiling futures-timer v3.0.4
+   Compiling pulldown-cmark-escape v0.11.0
+   Compiling pretty_assertions v1.4.1
+   Compiling itertools v0.15.0
+   Compiling thiserror-impl v2.0.20
+   Compiling futures-macro v0.3.34
+   Compiling strum_macros v0.28.0
+   Compiling derive_more-impl v2.1.1
+   Compiling kasuari v0.4.12
+   Compiling derive_more v2.1.1
+   Compiling regex v1.13.1
+   Compiling crossterm v0.29.0
+   Compiling futures-util v0.3.34
+   Compiling tracing-attributes v0.1.31
+   Compiling darling_macro v0.24.1
+   Compiling base64 v0.22.1
+   Compiling darling v0.24.1
+   Compiling strum v0.28.0
+   Compiling ratatui-core v0.1.2
+   Compiling tracing v0.1.44
+   Compiling ratatui-widgets v0.3.2
+   Compiling ratatui-crossterm v0.1.2
+   Compiling rstest v0.26.1
+   Compiling tui-markdown v0.3.9
+   Compiling ratatui v0.30.2
+   Compiling elara-tui v0.1.0 (/home/user/workspace/repo/native/elara-tui)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.22s
+..........................................warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-5737-774968409/elara-lab-concurrency-42-5737-572f0634242f1cb4; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:486: Elara.Lab.ConcurrencyTest."test reports the transport cannot accept keep the run retained"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+....warning: lab scenario concurrency raised; retained /tmp/elara-test-run-5737-774968409/elara-lab-concurrency-1-5737-2072ffe723bc2051; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:138: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_concurrency_test.exs:544: Elara.Lab.ConcurrencyTest."test the scenario refuses the real provider"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-5737-774968409/elara-lab-concurrency-42-5737-1eea44a3de483b90; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:497: Elara.Lab.ConcurrencyTest."test watchers die with their users when a run stops inside turn 1"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+......warning: lab scenario concurrency raised; retained /tmp/elara-test-run-5737-774968409/elara-lab-concurrency-1-5737-fd099ce97166a6ae; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:138: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_concurrency_test.exs:359: Elara.Lab.ConcurrencyTest."test the scenario refuses to start while Elara.Exec runs a job"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-5737-774968409/elara-lab-concurrency-42-5737-9505b11e9d05340d; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:321: Elara.Lab.ConcurrencyTest."test a provider task outliving shutdown keeps the ledger it writes; cohort stays unknown"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...warning: lab scenario concurrency raised; retained /tmp/elara-test-run-5737-774968409/elara-lab-concurrency-1-5737-7a991a61c30a2d44; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:138: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  test/elara/lab_concurrency_test.exs:344: Elara.Lab.ConcurrencyTest."test a setup failure still restores scheduler timing and destroys the trace session"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-5737-774968409/elara-lab-concurrency-42-5737-fd6618e65c0b4929; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:305: Elara.Lab.ConcurrencyTest."test a task outliving the shutdown deadline leaves cleanup unconfirmed and the root retained"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.....warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-5737-774968409/elara-lab-concurrency-42-5737-9c75577f9e5164b1; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:374: Elara.Lab.ConcurrencyTest."test a changed execution epoch leaves cleanup unconfirmed"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.........................................................................
+
+  1) test connection discovery finds exactly the server's connection owners (Elara.Lab.SamplerTest)
+     test/elara/lab_sampler_test.exs:6
+     Assertion with == failed
+     code:  assert Enum.sort(peers) ==
+              Enum.sort(
+                for c <- clients do
+                  elem(:inet.sockname(c), 1)
+                end
+              )
+     left:  [{{127, 0, 0, 1}, 46216}]
+     right: [{{127, 0, 0, 1}, 46216}, {{127, 0, 0, 1}, 46228}]
+     stacktrace:
+       test/elara/lab_sampler_test.exs:27: (test)
+
+......................
+12:47:32.963 [error] Task #PID<0.15237.0> started from Elara.TestJobs terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["mix", "test", "test/job_test.exs"], [cwd: "/tmp/elara-test-run-5737-774968409/elara-test-job-100706", timeout_ms: 60000, max_bytes: 16384, expected_token: %{"generation" => 3, "incarnation" => "fuLrdMJhJ6MmDykmfkPbAQ"}]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.3) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.3) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.3) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<9.27741320/0 in Elara.TestJobs.start_job/6>
+    Args: []
+.................
+12:47:34.595 [error] Task #PID<0.15690.0> started from #PID<0.15686.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.15685.0>, {:get_and_update, #Function<3.93906535/1 in Elara.Lab.Faults.hook/2>}, 5000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.3) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/faults.ex:38: anonymous fn/4 in Elara.Lab.Faults.hook/2
+    (elara 0.1.0) lib/elara/provider/simulated.ex:238: anonymous fn/7 in Elara.Provider.Simulated.stream_deltas/5
+    (elixir 1.20.3) lib/enum.ex:1857: anonymous fn/3 in Enum.map_reduce/3
+    (elixir 1.20.3) lib/enum.ex:4659: Enum.reduce_range/5
+    (elixir 1.20.3) lib/enum.ex:2626: Enum.map_reduce/3
+    (elara 0.1.0) lib/elara/provider/simulated.ex:231: Elara.Provider.Simulated.stream_deltas/5
+    (elara 0.1.0) lib/elara/provider/simulated.ex:204: Elara.Provider.Simulated.answer/4
+    (elara 0.1.0) lib/elara/provider/simulated.ex:125: Elara.Provider.Simulated.stream/3
+    (elixir 1.20.3) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.3) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<51.102867790/0 in Elara.Session.run_effect/4>
+    Args: []
+............................................................................................................
+12:48:11.625 [error] Task #PID<0.18339.0> started from #PID<0.18333.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.18335.0>, {:ask, "retain this goal"}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.3) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.3) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.3) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<29.22929269/0 in Elara.ContextTest."test crash at prepared retains one successor and one logical continuation"/1>
+    Args: []
+................... ✳ elara   ~/workspace/repo                                                                 control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara           │ ember / ember · Thinking expanded · F1 help │           ~/workspace/repo
+summary session=6sY-OCWhxrqPSF41iNzGug incarnation=RuJCCLNGt-UssAEd saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+ ✳ elara   ~/workspace/repo                                                                 control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara           │ ember / ember · Thinking expanded · F1 help │           ~/workspace/repo
+ embedded · exits with TUI · control · connected · head 0 · idle · outcome - · 0VmTZcrB1tgVEikOjicP_
+summary session=0VmTZcrB1tgVEikOjicP_w incarnation=Hx8zHqwEp6gw-29L saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+ ✳ elara   ~/workspace/repo                                                                 control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara           │ ember / ember · Thinking expanded · F1 help │           ~/workspace/repo
+summary session=8TxMST9HhuvsrjxX3NU2kg incarnation=tJ6pgIju4a4z2O6R saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+........................warning: lab scenario smoke raised; retained /tmp/elara-test-run-5737-774968409/elara-lab-smoke-1-5737-3313d2019f8e1e18; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:138: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_test.exs:64: Elara.LabTest."test real mode refuses a request cap below one request per turn, before any network use"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+warning: lab scenario smoke raised; retained /tmp/elara-test-run-5737-774968409/elara-lab-smoke-1-5737-4250224b6495cf0f; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:138: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.3) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_test.exs:68: Elara.LabTest."test real mode refuses a request cap below one request per turn, before any network use"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.............warning: lab cleanup unconfirmed; retained /tmp/elara-test-run-5737-774968409/elara-lab-checked-5-5737-d120e09aea2cdd2d; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:162: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:117: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:67: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.3) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.3) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:65: Elara.Lab.run/2
+  test/elara/lab_test.exs:90: Elara.LabTest."test failed checks keep evidence; unconfirmed cleanup keeps the root bound and stops"/1
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.0.3) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.3) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...........................................................................
+12:49:20.117 [error] Task #PID<0.21798.0> started from #PID<0.21791.0> terminating
+** (RuntimeError) boom
+    test/elara/session_test.exs:12: Elara.SessionTest.CrashTool.run/2
+    (elara 0.1.0) lib/elara/executor/router.ex:108: Elara.Executor.Router.attempt/5
+    (elixir 1.20.3) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.3) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: &Elara.Executor.Router.execute/4
+    Args: [Elara.Executor.Router, %Elara.Executor.Request{job_id: nil, operation_digest: nil, tool_call_id: "1", session_id: "fgyo3DLJzT-fJieTqg6i3w", tool_name: "crash", tool_version: "1", arguments: %{}, workspace_id: "8yijw4HLgCN3Mj9zvujqOsdBHPeFVwx7hBlTzVFykZQ", deadline_ms: 1790945390117, max_output_bytes: 16384, cancellation_id: "jwuO2ITmi58JqtqD", required_capabilities: [], placement: :any, mutating: false}, %Elara.Tool{name: "crash", description: "crash", parameters: %{"properties" => %{}, "type" => "object"}, run: {Elara.SessionTest.CrashTool, :run}, plugin: nil, version: "1", capabilities: [], placement: :any, mutating: false}, "/home/user/workspace/repo"]
+.
+Finished in 240.1 seconds (6.5s async, 233.5s sync)
+
+Result: 823/824 passed (11/11 properties, 812/813 tests)
+Failed: 1 test

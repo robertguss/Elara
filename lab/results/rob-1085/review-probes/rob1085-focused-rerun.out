@@ -1,0 +1,19 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 0, max_cases: 16
+
+..............
+
+  1) test late supervised starts remain unresolved and cannot confirm cleanup (Elara.Lab.SessionRecoveryTest)
+     test/elara/lab_session_recovery_test.exs:375
+     Assertion with == failed
+     code:  assert DynamicSupervisor.count_children(supervisor).active == 1
+     left:  0
+     right: 1
+     stacktrace:
+       test/elara/lab_session_recovery_test.exs:398: (test)
+
+.........
+Finished in 2.3 seconds (0.00s async, 2.3s sync)
+
+Result: 23/24 passed
+Failed: 1 test

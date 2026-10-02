@@ -515,6 +515,86 @@ and `lab/results/concurrency/20260927T125116839454Z-sweep-sessions-seed42`
 under `caffeinate -ims` with `MIX_ENV` unset (dev). Host samples are in
 `lab/results/concurrency/lab3-host.log`.
 
+### Attribution
+
+Measured 2026-10-02 at `eaa88f9`, with `MIX_ENV` unset (dev, debug stub), on AC power and under `caffeinate -ims`, as registered. The sweep directory is `lab/results/concurrency/20261002T210908440701Z-sweep-sessions-seed42`. It has two result lines, both `eaa88f9`, clean tree, seed 42, `topology=sessions`, `trace=profile`, and unchanged 600 s workload parameters. The sweep exited 1 because the supplementary N = 500 repetition failed `users_ok`; that profile is invalid and unranked. The registered N = 10 profile is clean, valid and eligible to rank. Because one profile is invalid, LAB-3 stays unfinished under the fallback rule.
+
+Complete attribution tables are linked at [profile-windows.tsv](../../lab/results/concurrency/20261002T210908440701Z-sweep-sessions-seed42/profile-windows.tsv), [profile-classes.tsv](../../lab/results/concurrency/20261002T210908440701Z-sweep-sessions-seed42/profile-classes.tsv), [profile-functions.tsv](../../lab/results/concurrency/20261002T210908440701Z-sweep-sessions-seed42/profile-functions.tsv), [profile-modules.tsv](../../lab/results/concurrency/20261002T210908440701Z-sweep-sessions-seed42/profile-modules.tsv) and [profile-memory.tsv](../../lab/results/concurrency/20261002T210908440701Z-sweep-sessions-seed42/profile-memory.tsv). The traced/untraced comparison is `compare-20260927T101541605186Z-sweep-sessions-seed42.tsv`; the untraced baseline is `lab/results/concurrency/20260927T101541605186Z-sweep-sessions-seed42`; the count baseline is `lab/results/concurrency/20260927T125116839454Z-sweep-sessions-seed42`. As in Table D, each traced/untraced pair is one pair only and does not isolate profiling overhead.
+
+**Table I:** profile-window eligibility. Lateness columns are `a1 − 480s`, `a2 − a1`, `f1 − 600s`, and `f2 − f1`, in ms. Coverage is the birth-coverage receipt count and unclassified own-time share.
+
+| N | Status | Validity | Ranked? | a1 late | a2-a1 | f1 late | f2-f1 | Overlap | Coverage |
+| --: | :-- | :-- | :-- | --: | --: | --: | --: | --: | :-- |
+| 10 | clean | valid | yes | 708 | 15 | 5 | 11 | 119,277 ms | 972/972 receipt-present; unclassified 0.0% |
+| 500 (supplementary) | exit:1; checks:users_ok | invalid: interior_overlap; lateness_over_30s; run_checks_failed | no | 133,708 | 12 | 13,720 | 10 | 0 ms | 3/3 receipt-present; unclassified 0.0% |
+
+**Table J:** classes. Shares are of traced own scheduled time; ranked shares are only for ranked classes. Every row has the validity and lateness values in `profile-classes.tsv`. The `other` modules are from `repetitions.jsonl`, because the function and module TSVs include ranked classes only.
+
+| N | Validity and lateness | Class | Kind | Pids | Own µs | Share traced | Share ranked |
+| --: | :-- | :-- | :-- | --: | --: | --: | --: |
+| 10 | valid; 708/15/5/11 ms | session | ranked | 20 | 144,725,406 | 79.996% | 97.651% |
+| 10 | valid; 708/15/5/11 ms | connection | ranked | 20 | 2,706,918 | 1.496% | 1.826% |
+| 10 | valid; 708/15/5/11 ms | task | ranked | 962 | 754,693 | 0.417% | 0.509% |
+| 10 | valid; 708/15/5/11 ms | exec | ranked | 1 | 19,710 | 0.011% | 0.013% |
+| 10 | valid; 708/15/5/11 ms | other | descriptive | 1,173 | 31,568,586 | 17.449% | — |
+| 10 | valid; 708/15/5/11 ms | client | descriptive | 50 | 1,001,177 | 0.553% | — |
+| 10 | valid; 708/15/5/11 ms | transport | descriptive | 1 | 139,785 | 0.077% | — |
+| 10 | valid; 708/15/5/11 ms | threads | descriptive | 1 | 0 | 0.000% | — |
+| 500 (supplementary) | invalid; 133708/12/13720/10 ms | session | ranked, unranked result | 5 | 1,651 | 84.364% | 96.044% |
+| 500 (supplementary) | invalid; 133708/12/13720/10 ms | client | descriptive | 840 | 238 | 12.161% | — |
+| 500 (supplementary) | invalid; 133708/12/13720/10 ms | threads | descriptive | 1 | 0 | 0.000% | — |
+| 500 (supplementary) | invalid; 133708/12/13720/10 ms | transport | descriptive | 1 | 0 | 0.000% | — |
+| 500 (supplementary) | invalid; 133708/12/13720/10 ms | connection/task/exec | ranked, unranked result | 8 | 68 | 3.474% | 3.956% |
+
+For N = 10, `other` is 17.449% of traced own time, a limitation rather than an amendment to the ranked classes. Its top modules in `repetitions.jsonl` are `:prim_file` (31,202,232 µs), `:file_io_server` (288,665 µs), `Exqlite.Sqlite3NIF` (51,777 µs), `:erlang` (16,620 µs) and `:lists` (2,059 µs). The invalid N = 500 supplementary profile has no `other` own time.
+
+**Table K:** N = 10 top ranked functions and modules. Shares and rates are estimates at history size 200,100 bytes and 200 sessions-root files, normalized by the observed 119,282 ms interior; the 119,308 ms envelope is shown beside it. Native entries may include blocking time. The supplementary N = 500 profile is invalid and is not ranked.
+
+| Rank | Validity and lateness | Function | Class | µs | Class share | Ranked share | Calls | Native | Approx µs/s (interior; envelope) |
+| --: | :-- | :-- | :-- | --: | --: | --: | --: | :-- | --: |
+| 1 | valid; 708/15/5/11 ms | `:json.escape_binary/5` | session | 45,946,508 | 31.747% | 31.002% | 1,085,202,237 | no | 385,192 (119,282 ms; 119,308 ms) |
+| 2 | valid; 708/15/5/11 ms | `:json.escape_binary_ascii/5` | session | 32,120,990 | 22.194% | 21.673% | 791,160,379 | no | 269,286 (119,282 ms; 119,308 ms) |
+| 3 | valid; 708/15/5/11 ms | `:erlang.term_to_binary/2` | session | 10,092,272 | 6.973% | 6.810% | 542,483 | yes | 84,609 (119,282 ms; 119,308 ms) |
+| 4 | valid; 708/15/5/11 ms | `:crypto.hash_update_nif/2` | session | 7,758,766 | 5.361% | 5.235% | 1,098,351 | yes | 65,046 (119,282 ms; 119,308 ms) |
+| 5 | valid; 708/15/5/11 ms | `Elara.FlightRecorder.fingerprint/1` | session | 6,030,289 | 4.167% | 4.069% | 393,690 | no | 50,555 (119,282 ms; 119,308 ms) |
+
+| Rank | Validity and lateness | Module | Class | µs | Class share | Ranked share | Calls | Native? | Approx µs/s |
+| --: | :-- | :-- | :-- | --: | --: | --: | --: | :-- | --: |
+| 1 | valid; 708/15/5/11 ms | `:json` | session | 82,254,847 | 56.835% | 55.500% | 1,967,540,526 | no | 689,583 |
+| 2 | valid; 708/15/5/11 ms | `:erlang` | session | 16,838,273 | 11.635% | 11.361% | 6,482,297 | yes; 16,610,808 native µs | 141,164 |
+| 3 | valid; 708/15/5/11 ms | `:crypto` | session | 8,789,277 | 6.073% | 5.930% | 4,321,989 | yes; 8,343,302 native µs | 73,685 |
+| 4 | valid; 708/15/5/11 ms | `Elara.FlightRecorder` | session | 7,807,719 | 5.395% | 5.268% | 14,832,458 | no | 65,456 |
+| 5 | valid; 708/15/5/11 ms | `JSON.Encoder.Map` | session | 6,572,090 | 4.541% | 4.434% | 55,835,306 | no | 55,097 |
+
+**Table L:** RQ-2 suspects. Paths are source-audited only; no runtime caller tracer was run.
+
+| Suspect | Evidence validity and lateness | Source-audited path | Attribution |
+| :-- | :-- | :-- | :-- |
+| `Store.save/1` | N = 10 valid; 708/15/5/11 ms; N = 500 supplementary invalid; 133708/12/13720/10 ms | `Elara.Session` calls it when pausing inputs and writing check evidence (`lib/elara/session.ex:295`, `:442`); `Store.save/1` encodes the complete store through `JSON.encode!/1` (`lib/elara/session/store.ex:574-576`). Handoff also calls `Store.save/1` (`lib/elara/session/handoff.ex:129`, `:167`, `:176`), but no handoff fired. | Wrapper own time is low (7,427 µs; rank 312), but its JSON callee is inside the top ranked module. The aggregate profile cannot apportion shared JSON encoding between `Store.save/1`, `Context.budget/2`, protocol/store encoders and other callers. |
+| `Context.budget/2` | N = 10 valid; 708/15/5/11 ms; N = 500 supplementary invalid; 133708/12/13720/10 ms | Provider dispatch and context projection call `Context.budget/2` (`lib/elara/session.ex:1509`, `:2462`); `budget/2` JSON-encodes public history, tools and individual public messages (`lib/elara/session/context.ex:17`, `:19`, `:35`). | Wrapper own time is low (2,685 µs; rank 393), but its JSON callees may contribute to the top JSON hotspot. The aggregate profile cannot assign the shared JSON own time to this caller. |
+| `Handoff.lineage/1` | N = 10 valid; 708/15/5/11 ms; N = 500 supplementary invalid; 133708/12/13720/10 ms | Threads relationship and slot code call lineage (`lib/elara/threads.ex:38-39`, `:142`, `:222`). `lineage/1` calls `store/1`, which scans session files with `Path.wildcard/1`, opens the match with `Store.open/1`, reads it with `File.read/1`, and JSON-decodes the header and entries (`lib/elara/session/handoff.ex:9-23`; `lib/elara/session/store.ex:116-120`, `:685`, `:908`). The sessions run asserts no handoff. | Profile records 1,141 `Handoff.lineage/1` calls (793 µs, rank 473), 1,141 `Store.open/2` calls (1,797 µs, rank 419), 1,141 `Path.wildcard/1` calls (142 µs, rank 695), session-class `File.read/1` calls (1,711 calls, 368 µs, rank 568) and session-class `JSON.decode/1` calls (68,262 calls, 6,311 µs, rank 325). The callee path is source-supported, but aggregate `File.read/1`/JSON decode time cannot be apportioned only to lineage, and no bottleneck is attributed. |
+| `FlightRecorder.complete_transition/4` | N = 10 valid; 708/15/5/11 ms; N = 500 supplementary invalid; 133708/12/13720/10 ms | `Elara.Session` completes each transition through `FlightRecorder.complete_transition/4` (`lib/elara/session.ex:1438`); it fingerprints normalized effects with `:erlang.term_to_binary/2` and `:crypto.hash/2` (`lib/elara/flight_recorder.ex:123-129`, `:812-815`). | Source supports term serialization and crypto hashing, not JSON. Its wrapper is rank 96; `Elara.FlightRecorder.fingerprint/1` is rank 5, but aggregate `:erlang`/`:crypto` own time cannot be apportioned only to recorder calls. |
+| `Exec.run/2` | N = 10 valid; 708/15/5/11 ms; N = 500 supplementary invalid; 133708/12/13720/10 ms | Tool execution enters through `Elara.Tools.bash/2` to `Elara.Exec.run/2` (`lib/elara/tools.ex:71-73`). | Not a ranked hotspot (8 µs; rank 954); waiting evidence shows dirty IO/bash delay, but own time does not point to `Exec.run/2`. |
+| `:file.sync/1` | N = 10 valid; 708/15/5/11 ms; N = 500 supplementary invalid; 133708/12/13720/10 ms | Flight recorder writes frames with `:erlang.term_to_binary/2` (`lib/elara/flight_recorder.ex:832-835`) and syncs the recorder file with `:file.sync/1` (`lib/elara/flight_recorder.ex:841-842`). | `:file.sync/1` is visible but low in the valid profile (7,170 µs; rank 315). Count and waiting evidence show high dirty-IO activity at N = 500, but N = 500 attribution is not allowed because the profile is invalid. |
+
+**Table M:** waiting evidence. The profile side is traced; the timing side is the seed-42 untraced run. One pair cannot isolate profiling overhead. `:file.sync/1` rates are from the count run's `report.tsv`.
+
+| N | Validity and lateness | p95 latency untraced → traced | Ratio untraced → traced | Session mailbox max/p99 untraced → traced | Connection mailbox max/p99 untraced → traced | Exec mailbox max/p99 untraced → traced | Dirty CPU untraced → traced | Dirty IO untraced → traced | Bash excess p95 untraced → traced | `:file.sync/1`/s |
+| --: | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | --: |
+| 10 | valid; 708/15/5/11 ms | 5 → 7 ms | 0.9900 → 0.9848 | 2/0 → 73/1 | 1/0 → 1/0 | 0/0 → 0/0 | 0.0073 → 0.0073 | 0.0369 → 0.0446 | 26 → 34 ms | 416.66 |
+| 500 (supplementary) | invalid; 133708/12/13720/10 ms | 2,402 → 3,257 ms | 0.1862 → 0.1811 | 130/82 → 151/89 | 1/0 → 1/0 | 1/0 → 0/0 | 0.1079 → 0.1056 | 0.6950 → 0.6948 | 6,161 → 8,818 ms | 3,936.67 |
+
+**Table N:** memory-holder census. Values are holders at the census instants, not allocations or the window peak. The `system` difference includes profiler storage. N = 500 is supplementary and invalid.
+
+| N | Validity and lateness | Census | t0-relative census | Unique binary bytes | VM binary memory | Signed unreconciled difference | VM system bytes |
+| --: | :-- | :-- | :-- | --: | --: | --: | --: |
+| 10 | valid; 708/15/5/11 ms | before activation | 480,011–480,041 ms | 25,713,645 | 48,893,016 | +23,179,371 | 108,699,882 |
+| 10 | valid; 708/15/5/11 ms | after freeze | 600,016–600,042 ms | 25,374,826 | 50,836,064 | +25,461,238 | 133,332,441 |
+| 500 (supplementary) | invalid; 133708/12/13720/10 ms | before activation | 613,698–613,699 ms | 613,916 | 49,150,224 | +48,536,308 | 108,446,834 |
+| 500 (supplementary) | invalid; 133708/12/13720/10 ms | after freeze | 613,730–613,732 ms | 756,135 | 49,162,680 | +48,406,545 | 117,146,289 |
+
+**Recompute.** Table I uses `profile-windows.tsv` columns `status`, `validity_status`, `validity_reasons`, `ranked`, the four latenesses, `overlap_ms`, `receipt_present`, `births_after_n` and `unclassified_share`. Table J uses `profile-classes.tsv` columns `class`, `kind`, `pids`, `own_us`, `share_traced`, `share_ranked`, plus `profile.functions[]` in `repetitions.jsonl` grouped by `class=other` and module. Table K uses `profile-functions.tsv` and `profile-modules.tsv` columns `rank_ranked`, `function`/`module`, `class`, `us`, `share_of_class`, `share_of_ranked`, `calls`, `native`/`includes_native`, `native_us`, `us_per_s_approx`, `interior_ms`, and `envelope_ms`. Table L uses the source files named in the table and Table K/count evidence. Table M uses the comparison TSV columns `base`, `other` for the named fields and the count run `report.tsv` column `:file.sync/1 per second`. Table N uses `profile-memory.tsv` columns `census_started_after_t0_ms`, `census_ended_after_t0_ms`, `kind`, `name`, and `bytes` for `binary_unique_total`, `erlang_binary_memory`, `unreconciled_binary_difference`, and `vm_memory`/`system`.
+
 ### Child-thread variant
 
 Measured 2026-09-27 at `97d2166`, as registered. Children sweep 18:21–20:37 UTC,
@@ -693,6 +773,26 @@ This covers the sessions curve only.
   or anything about the BEAM as such. There is no comparison, so these are
   Elara properties under the attribution rule.
 
+### Attribution
+
+The registered N = 10 profile ranks session serialization and hashing work, not Exec or server-connection work. The top ranked module is `:json` at 55.5% of ranked own scheduled time, followed by native-heavy `:erlang` term serialization at 11.4% and `:crypto` hashing at 5.9%. `Elara.FlightRecorder.fingerprint/1` is the fifth ranked function, and `Elara.FlightRecorder` is the fourth ranked module, so the source-audited recorder path is visible in own time at the observed 200,100-byte history and 200-file root size.
+
+That is not enough to rank a throughput or latency bottleneck for LAB-3. Waiting evidence at N = 10 is mild: p95 latency is 7 ms traced, throughput is 0.985, Exec mailbox is 0/0, and dirty IO is 0.0446. At N = 500, where latency and throughput fail badly and dirty IO is about 0.695, the supplementary profile is invalid (`users_ok` check failed, activation was late and the interior overlap was 0 ms), so the registered rule forbids ranking it. Therefore the high-N latency and throughput failures are not attributed by this step.
+
+`:file.sync/1` remains a suspect, not a closed bottleneck claim. Count runs show 3,936.67 `:file.sync/1` calls/s at N = 500 and dirty-IO utilization is high in both untraced and traced N = 500 runs, but the valid own-time ranking exists only at N = 10 and does not independently identify `:file.sync/1` as the bottleneck. Own scheduled elapsed time is not CPU time, and native or dirty entries may include blocking time.
+
+Memory is also not attributed. Table N describes holders at two census instants; it does not say where bytes were allocated or what held the run's peak. At N = 10, unique binary bytes are about 25.4–25.7 MB while separately sampled VM binary memory is 48.9–50.8 MB, leaving a positive unreconciled difference. At invalid supplementary N = 500 the censuses occurred after the missed window and are unranked.
+
+Because the supplementary N = 500 profile is invalid, LAB-3 stays unfinished unless the owner revises scope or authorizes a new run. N = 10 may be read as a valid low-N attribution profile only.
+
+Proposed Linear Result for the driver:
+
+1. Ran registered profile sweep at `eaa88f9`, seed 42, N=10 registered and N=500 supplementary, on owner M3 Max as authorized.
+2. N=10 is clean/valid/eligible; own-time ranking is session-heavy (`:json` 55.5% ranked, `:erlang` 11.4%, `:crypto` 5.9%, `Elara.FlightRecorder` 5.3%).
+3. N=500 supplementary exited 1 (`users_ok`), activation missed the registered window and overlap was 0 ms; it is invalid/unranked under the fallback rule.
+4. No high-N bottleneck is attributed: own-time and waiting evidence do not both apply to a valid high-N profile; memory censuses are holders, not allocations.
+5. LAB-3 remains unfinished and should pause for ROB-1091 / owner direction before any rerun or later lab work.
+
 ### Child-thread variant
 
 - **The child path adds a bound failure: the hypothesis is refuted at K = 16,
@@ -753,6 +853,15 @@ This covers the sessions curve only.
   every bound by wide margins. The samples can miss shorter bursts.
 - **Dev build.** The runs used `MIX_ENV=dev`, the default, with the native
   stub's debug build.
+
+### Attribution
+
+- **Invalid supplementary profile.** The N = 500 profile is reported but not ranked. It failed `users_ok`, which establishes abnormal user-process exits, but the result and retained sweep log do not emit those exits' reasons. It activated 133.708 s late, froze 13.720 s late, and had 0 ms overlap with the registered [480 s, 600 s) window; the pre-activation census starts at 613,698 ms and lasts about 1 ms, so the missed deadline predates that census. Neither failure cause is attributed by this evidence. No repair or rerun was made, per the owner decision that reruns require new authorization.
+- **No high-N attribution.** The only eligible ranking is N = 10, where the run is still within the latency and throughput budgets. The failing N = 500 evidence is useful descriptive data, but it cannot support ranked bottleneck claims under the registration.
+- **`other` is descriptive.** At N = 10 it is 17.449% of traced own time, led by `:prim_file` and `:file_io_server`. It remains outside the ranked classes and is a limitation, not an amendment to the registration.
+- **Own scheduled time is not CPU time.** Native and dirty entries, including `:erlang`, `:crypto` and file/port operations, may include blocking time. Agreement with dirty-IO utilization is not independent corroboration.
+- **Memory censuses are holders, not allocations.** They describe measured live processes and binary references at two instants. They do not explain the peak, and their signed unreconciled binary-memory differences are attributed to nothing. The `system` increase includes profiler storage.
+- **Host not quiet.** The owner chose to run without quieting the laptop. Five-minute samples (`lab3-profile-host.log`) show external activity during the profile sweep: before launch, multiple `rustc` processes at 34–96%, XProtect at 87% and `clang` at 80%; during N = 10, `node` at 111%, CodexBar at 102% and a WebKit process at 51%. The N = 500 samples are dominated by Elara's own BEAM at 1,267.2% and 1,004.2% CPU, with CodexBar at 69% in one sample; they do not establish an external-load explanation for N = 500. The overlap establishes a confound, not its effect, and samples can miss shorter bursts.
 
 ### Child-thread variant
 

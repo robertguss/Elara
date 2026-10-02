@@ -73,7 +73,14 @@ defmodule Elara.LabTest do
   test "unknown scenarios are rejected with the known list" do
     assert {:error,
             {:unknown_scenario, "nope",
-             ["concurrency", "concurrent_jobs", "provider_fault", "session_crash", "smoke"]}} =
+             [
+               "concurrency",
+               "concurrent_jobs",
+               "provider_fault",
+               "session_crash",
+               "session_recovery",
+               "smoke"
+             ]}} =
              Elara.Lab.run("nope", seed: 1)
   end
 

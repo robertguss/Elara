@@ -1,0 +1,4 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+{"repetitions":1,"failed_checks":{"indeterminate_without_receipt":1},"retained_dirs":[],"elapsed_ms":{"max":172,"min":172,"mean":172.0},"choices_digests":["31bccc00e56c07e53cb9ad8b6f6181fac8cb8b3a151977eab11ccad9ed0887a3"],"completed_turns":{"max":1,"min":1,"mean":1.0},"evidence_dirs":["/tmp/elara-lab-1085/session_recovery/20261002T020227820148Z-sweep-fault-seed42/tmp/17-tool_running-seed47/elara-lab-session_recovery-47-42082-a6ed24953975ce93"],"latency_p50_ms":null,"latency_p95_ms":null,"latency_p99_ms":null,"seeds":[47]}
+results: /tmp/elara-lab-1085/session_recovery/20261002T020227820148Z-sweep-fault-seed42/results/17-tool_running-seed47/session_recovery/20261002T020313549885Z-seed47.jsonl
+** (Mix) lab run failed: checks %{indeterminate_without_receipt: 1}, retained []

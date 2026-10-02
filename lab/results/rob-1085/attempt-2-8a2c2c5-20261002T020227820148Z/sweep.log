@@ -1,0 +1,38 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+[1/30] fault=provider_started seed=42 exit 0 ok
+[2/30] fault=provider_streaming seed=42 exit 0 ok
+[3/30] fault=tool_running seed=42 exit 1 NOT OK
+[4/30] fault=provider_started seed=43 exit 0 ok
+[5/30] fault=provider_streaming seed=43 exit 0 ok
+[6/30] fault=tool_running seed=43 exit 1 NOT OK
+[7/30] fault=provider_started seed=44 exit 0 ok
+[8/30] fault=provider_streaming seed=44 exit 0 ok
+[9/30] fault=tool_running seed=44 exit 1 NOT OK
+[10/30] fault=provider_started seed=45 exit 0 ok
+[11/30] fault=provider_streaming seed=45 exit 0 ok
+[12/30] fault=tool_running seed=45 exit 1 NOT OK
+[13/30] fault=provider_started seed=46 exit 0 ok
+[14/30] fault=provider_streaming seed=46 exit 0 ok
+[15/30] fault=tool_running seed=46 exit 1 NOT OK
+[16/30] fault=provider_started seed=47 exit 0 ok
+[17/30] fault=provider_streaming seed=47 exit 0 ok
+[18/30] fault=tool_running seed=47 exit 1 NOT OK
+[19/30] fault=provider_started seed=48 exit 0 ok
+[20/30] fault=provider_streaming seed=48 exit 0 ok
+[21/30] fault=tool_running seed=48 exit 1 NOT OK
+[22/30] fault=provider_started seed=49 exit 0 ok
+[23/30] fault=provider_streaming seed=49 exit 0 ok
+[24/30] fault=tool_running seed=49 exit 1 NOT OK
+[25/30] fault=provider_started seed=50 exit 0 ok
+[26/30] fault=provider_streaming seed=50 exit 0 ok
+[27/30] fault=tool_running seed=50 exit 1 NOT OK
+[28/30] fault=provider_started seed=51 exit 0 ok
+[29/30] fault=provider_streaming seed=51 exit 0 ok
+[30/30] fault=tool_running seed=51 exit 1 NOT OK
+{"key":"fault","points":[{"bounds":{"backlog":"holds","recovery":"holds"},"errors":0,"expected_repetitions":10,"failed_checks":{},"fields":{"backlog_ms":{"max":1,"mean":0.4,"min":0},"marker_count":{"max":2,"mean":2.0,"min":2},"recovery_ms":{"max":1,"mean":0.1,"min":0}},"incomplete":{},"present":10,"value":"provider_started"},{"bounds":{"backlog":"holds","recovery":"holds"},"errors":0,"expected_repetitions":10,"failed_checks":{},"fields":{"backlog_ms":{"max":108,"mean":103.1,"min":99},"marker_count":{"max":2,"mean":2.0,"min":2},"recovery_ms":{"max":41,"mean":37.2,"min":27}},"incomplete":{},"present":10,"value":"provider_streaming"},{"bounds":{"backlog":"holds","recovery":"holds"},"errors":0,"expected_repetitions":10,"failed_checks":{"indeterminate_without_receipt":10},"fields":{"backlog_ms":{"max":73,"mean":69.7,"min":68},"marker_count":{"max":3,"mean":3.0,"min":3},"recovery_ms":{"max":12,"mean":8.2,"min":7}},"incomplete":{},"present":10,"value":"tool_running"}],"ratio_below_threshold_values":[],"repetitions":10,"saturation_value":null}
+fault=provider_started: 10/10 present, 0 errors, incomplete %{}, backlog=holds recovery=holds
+fault=provider_streaming: 10/10 present, 0 errors, incomplete %{}, backlog=holds recovery=holds
+fault=tool_running: 10/10 present, 0 errors, incomplete %{}, backlog=holds recovery=holds
+saturation: nil
+sweep: /tmp/elara-lab-1085/session_recovery/20261002T020227820148Z-sweep-fault-seed42
+** (Mix) sweep incomplete: at least one repetition is not a clean measurement; see /tmp/elara-lab-1085/session_recovery/20261002T020227820148Z-sweep-fault-seed42

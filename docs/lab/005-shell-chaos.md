@@ -9,9 +9,9 @@
   leaving the started mutation indeterminate. That second claim is a predicted
   finding, not a pass condition and not a runtime fix.
 - **Queue item:** LAB-5 · **Date:** 2026-10-02 · **Base:** `ca01d8a8`
-- **Status:** harness repaired; no accepted pilot measurement. Attempt 1 and
-  attempt 2 are invalid historical evidence. The original pilot and parent
-  LAB-5 remain unfinished.
+- **Status:** repair candidate awaiting acceptance; no accepted pilot
+  measurement. Attempt 1 and attempt 2 are invalid historical evidence. The
+  original pilot and parent LAB-5 remain unfinished.
 
 ## Method
 

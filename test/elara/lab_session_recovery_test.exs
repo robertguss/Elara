@@ -4,6 +4,9 @@ defmodule Elara.Lab.SessionRecoveryTest do
 
   alias Elara.Lab.Scenarios.SessionRecovery
   alias Elara.Lab.Scenarios.SessionRecovery.{Coordinator, Deadline, Observer, StoreView}
+  alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
+  alias Elara.Session.Store
+  alias Elara.Session.Store.Entry
 
   @moduletag timeout: 60_000
 
@@ -207,7 +210,20 @@ defmodule Elara.Lab.SessionRecoveryTest do
     {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
     on_exit(fn -> Coordinator.stop(coordinator) end)
 
-    for operation <- [:probe, :start, :reopen, :stop, :status, :snapshot] do
+    for operation <- [
+          :probe,
+          :start,
+          :reopen,
+          :stop,
+          :status,
+          :snapshot,
+          :submit,
+          :resume,
+          :choices,
+          :find_path,
+          :store_read,
+          :marker_read
+        ] do
       started = System.monotonic_time(:millisecond)
 
       assert {:error, {:timeout, ^operation}} =
@@ -223,7 +239,265 @@ defmodule Elara.Lab.SessionRecoveryTest do
     assert :reopen in Coordinator.snapshot(coordinator).unresolved
   end
 
+  test "expired and delayed deadline registration cannot execute work" do
+    {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
+    on_exit(fn -> Coordinator.stop(coordinator) end)
+    owner = self()
+
+    assert {:error, {:timeout, :start}} =
+             Deadline.call(coordinator, :start, System.monotonic_time(:millisecond) - 1, fn ->
+               send(owner, :expired_work_ran)
+               :started
+             end)
+
+    refute_receive :expired_work_ran, 20
+
+    :sys.suspend(coordinator)
+
+    resumer =
+      spawn(fn ->
+        Process.sleep(100)
+        :sys.resume(coordinator)
+      end)
+
+    started = System.monotonic_time(:millisecond)
+
+    assert {:error, {:timeout, :probe}} =
+             Deadline.call(coordinator, :probe, started + 20, fn ->
+               send(owner, :delayed_work_ran)
+               :completed
+             end)
+
+    assert System.monotonic_time(:millisecond) - started < 80
+    refute_receive :delayed_work_ran, 120
+    refute Process.alive?(resumer)
+    assert Coordinator.snapshot(coordinator).helpers == []
+  end
+
+  test "a success completed after the absolute deadline is rejected" do
+    {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
+    on_exit(fn -> Coordinator.stop(coordinator) end)
+    owner = self()
+    deadline = System.monotonic_time(:millisecond) + 40
+
+    caller =
+      Task.async(fn ->
+        Deadline.call(coordinator, :probe, deadline, fn ->
+          send(owner, {:deadline_helper, self()})
+
+          receive do
+            :finish -> :late_success
+          end
+        end)
+      end)
+
+    assert_receive {:deadline_helper, helper}, 100
+    true = :erlang.suspend_process(caller.pid)
+    Process.sleep(50)
+    send(helper, :finish)
+    Process.sleep(10)
+    true = :erlang.resume_process(caller.pid)
+
+    assert {:error, {:timeout, :probe}} = Task.await(caller, 500)
+    assert Coordinator.snapshot(coordinator).helpers == []
+  end
+
+  test "coordinator polling obeys its deadline while the coordinator is suspended" do
+    {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
+    on_exit(fn -> Coordinator.stop(coordinator) end)
+    :sys.suspend(coordinator)
+
+    resumer =
+      spawn(fn ->
+        Process.sleep(100)
+        :sys.resume(coordinator)
+      end)
+
+    started = System.monotonic_time(:millisecond)
+    assert {:error, :timeout} = Coordinator.await_arrival(coordinator, 20)
+    assert System.monotonic_time(:millisecond) - started < 80
+    Process.sleep(100)
+    refute Process.alive?(resumer)
+  end
+
+  test "a blocked persisted-store read obeys its absolute deadline", %{dir: dir} do
+    {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
+    on_exit(fn -> Coordinator.stop(coordinator) end)
+    store = persisted_store(dir)
+    fifo = Path.join(dir, "blocked-store")
+    {_, 0} = System.cmd("mkfifo", [fifo])
+
+    writer =
+      Port.open({:spawn_executable, "/bin/sh"}, [
+        :exit_status,
+        args: ["-c", "sleep 0.15; cat \"$1\" > \"$2\"", "writer", store.path, fifo]
+      ])
+
+    started = System.monotonic_time(:millisecond)
+
+    assert {:error, :store_deadline} =
+             StoreView.await_failed(
+               fifo,
+               dir,
+               "accepted-A",
+               coordinator,
+               started + 20
+             )
+
+    assert System.monotonic_time(:millisecond) - started < 100
+    assert Coordinator.snapshot(coordinator).helpers == []
+    Port.close(writer)
+  end
+
+  test "a blocked physical-marker read obeys its absolute deadline", %{dir: dir} do
+    {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
+    on_exit(fn -> Coordinator.stop(coordinator) end)
+    marker_path = Path.join(dir, "marks.txt")
+    {_, 0} = System.cmd("mkfifo", [marker_path])
+
+    writer =
+      Port.open({:spawn_executable, "/bin/sh"}, [
+        :exit_status,
+        args: ["-c", "sleep 0.15; printf 'B\\nC\\n' > \"$1\"", "writer", marker_path]
+      ])
+
+    started = System.monotonic_time(:millisecond)
+
+    assert {:error, :marker_deadline} =
+             StoreView.read_markers(dir, coordinator, started + 20)
+
+    assert System.monotonic_time(:millisecond) - started < 140
+    assert_receive {^writer, {:exit_status, 0}}, 500
+    Process.sleep(10)
+    assert Coordinator.snapshot(coordinator).helpers == []
+  end
+
+  test "late supervised starts remain unresolved and cannot confirm cleanup", %{dir: dir} do
+    {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
+    {:ok, supervisor} = DynamicSupervisor.start_link(strategy: :one_for_one)
+    on_exit(fn -> Coordinator.stop(coordinator) end)
+    :sys.suspend(supervisor)
+
+    result =
+      Deadline.call(coordinator, :start, System.monotonic_time(:millisecond) + 20, fn ->
+        Elara.start_session_under(supervisor,
+          cwd: dir,
+          home: dir,
+          skill_paths: [],
+          plugins: [],
+          tools: [],
+          persist: true,
+          provider: Elara.Provider.Simulated.new(seed: 42, id: "late-start")
+        )
+      end)
+
+    assert {:error, {:timeout, :start}} = result
+    assert :start in Coordinator.snapshot(coordinator).unresolved
+    :sys.resume(supervisor)
+    Process.sleep(50)
+    assert DynamicSupervisor.count_children(supervisor).active == 1
+    DynamicSupervisor.stop(supervisor)
+  end
+
+  test "saved and reopened persisted mutations fail settlement and reporting", %{dir: dir} do
+    mutations = [
+      {"reused B/C call IDs", &reuse_call_ids/1},
+      {"wrong B inbox user", &wrong_inbox_user/1},
+      {"wrong B inbox sender",
+       &update_receipt(&1, "accepted-B", fn receipt -> %{receipt | sender_id: "wrong"} end)},
+      {"wrong B inbox kind",
+       &update_receipt(&1, "accepted-B", fn receipt -> %{receipt | kind: :steer} end)},
+      {"misordered inbox receipts", &%{&1 | inbox: Enum.reverse(&1.inbox)}},
+      {"extra interrupted C assistant", &extra_interrupted_c/1},
+      {"multiple C terminal assistants", &duplicate_c_terminal/1},
+      {"stale off-branch entry", &stale_off_branch/1},
+      {"selected leaf before C completion", &leaf_before_c/1}
+    ]
+
+    for {name, mutate} <- mutations do
+      store = dir |> persisted_store() |> mutate.() |> save_and_reopen(dir)
+      refute StoreView.settled?(store, accepted_inputs()), name
+
+      report =
+        store
+        |> StoreView.witness(witness_attrs(dir))
+        |> Map.merge(protocol_evidence())
+        |> Observer.report(confirmed_cleanup())
+
+      refute report.complete, name
+      assert report.bounds == %{"recovery" => "undetermined", "backlog" => "undetermined"}, name
+      refute report.checks.history_identity and report.checks.exact_identities, name
+    end
+  end
+
+  test "store decoding rejects invalid receipt session and duplicate receipt IDs", %{dir: dir} do
+    mutations = [
+      &update_receipt(&1, "accepted-B", fn receipt -> %{receipt | session_id: "wrong"} end),
+      &%{&1 | inbox: &1.inbox ++ [hd(&1.inbox)]}
+    ]
+
+    for mutate <- mutations do
+      store = dir |> persisted_store() |> mutate.()
+      {:ok, store} = Store.save(store)
+      assert {:error, _reason} = Store.open(store.path, dir)
+    end
+  end
+
+  test "coherent timing evidence reports threshold failures independently" do
+    cleanup = confirmed_cleanup()
+
+    recovery_failure =
+      witness(:provider_started)
+      |> put_timing(5_001, 5_002)
+      |> Observer.report(cleanup)
+
+    assert recovery_failure.complete
+    assert recovery_failure.bounds == %{"recovery" => "fails", "backlog" => "holds"}
+    assert recovery_failure.incomplete == nil
+
+    backlog_failure =
+      witness(:provider_started)
+      |> put_timing(5_000, 7_001)
+      |> Observer.report(cleanup)
+
+    assert backlog_failure.complete
+    assert backlog_failure.bounds == %{"recovery" => "holds", "backlog" => "fails"}
+
+    inconsistent =
+      witness(:provider_started)
+      |> put_timing(10, 20)
+      |> put_in([:clocks, :recovery, :ms], 9)
+      |> Observer.report(cleanup)
+
+    refute inconsistent.complete
+    assert inconsistent.bounds == %{"recovery" => "undetermined", "backlog" => "undetermined"}
+  end
+
+  test "causal IDs, event timestamps, and clock summaries must agree" do
+    mutations = [
+      &put_in(&1.ordering.backlog_ids, ["wrong-B", "wrong-C"]),
+      &put_in(&1.ordering.injected_at, nil),
+      &put_in(&1.death.target, "other-target"),
+      &put_in(&1.clocks.recovery.origin, "wrong-origin"),
+      fn witness ->
+        witness
+        |> Map.put(:recovery_ms, 10)
+        |> put_in([:clocks, :recovery, :endpoint_at], 1_000_004)
+        |> put_in([:clocks, :recovery, :ms], 999_999)
+      end
+    ]
+
+    for mutate <- mutations do
+      report = witness(:provider_started) |> mutate.() |> Observer.report(confirmed_cleanup())
+      refute report.complete
+      assert report.bounds == %{"recovery" => "undetermined", "backlog" => "undetermined"}
+    end
+  end
+
   test "missing persisted state fails closed", %{dir: dir} do
+    {:ok, coordinator} = Coordinator.start_link(fault: :provider_started)
+    on_exit(fn -> Coordinator.stop(coordinator) end)
+
     accepted = %{
       "A" => %{id: "in-A"},
       "B" => %{id: "in-B"},
@@ -235,6 +509,7 @@ defmodule Elara.Lab.SessionRecoveryTest do
                Path.join(dir, "missing.jsonl"),
                dir,
                accepted,
+               coordinator,
                System.monotonic_time(:millisecond)
              )
   end
@@ -317,6 +592,207 @@ defmodule Elara.Lab.SessionRecoveryTest do
 
     %{seed: 42, dir: dir, params: %{"fault" => Atom.to_string(fault)}, provider: :simulated}
   end
+
+  defp persisted_store(dir) do
+    store = Store.new(dir)
+
+    store =
+      Enum.reduce(@inputs, store, fn label, store ->
+        {:ok, store} = Store.append(store, %User{text: "input #{label}"})
+
+        if label == "A" do
+          {:ok, store} = Store.append(store, %Assistant{text: "partial", interrupted: true})
+          store
+        else
+          call = %ToolCall{
+            id: "call-#{label}",
+            name: "lab_marker",
+            args: {:ok, %{"label" => label}}
+          }
+
+          {:ok, store} = Store.append(store, %Assistant{tool_calls: [call]})
+
+          {:ok, store} =
+            Store.append(store, %ToolResult{
+              call_id: call.id,
+              name: call.name,
+              outcome: {:ok, "marked #{label}"}
+            })
+
+          {:ok, store} = Store.append(store, %Assistant{text: "done #{label}"})
+          store
+        end
+      end)
+
+    inbox =
+      Enum.map(@inputs, fn label ->
+        %{
+          id: "accepted-#{label}",
+          session_id: store.id,
+          sender_id: "lab",
+          kind: :normal,
+          state: if(label == "A", do: :failed, else: :consumed),
+          error: if(label == "A", do: "provider died", else: nil),
+          user: %User{text: "input #{label}"},
+          created_at: label_index(label)
+        }
+      end)
+
+    {:ok, store} = Store.put_inbox(store, inbox, false)
+    File.write!(Path.join(dir, "marks.txt"), "B\nC\n")
+    save_and_reopen(store, dir)
+  end
+
+  defp accepted_inputs do
+    Map.new(@inputs, fn label ->
+      {label, %{id: "accepted-#{label}", text: "input #{label}"}}
+    end)
+  end
+
+  defp witness_attrs(dir) do
+    %{
+      accepted: accepted_inputs(),
+      cwd: dir,
+      fault: :provider_started,
+      probe: :ok,
+      paused_inputs: nil,
+      recovery_ms: 10,
+      backlog_ms: 20,
+      backlog_count: 2,
+      backlog_settled: true,
+      clocks: %{
+        recovery: %{origin: "target_down", origin_at: 5, endpoint_at: 15, ms: 10},
+        backlog: %{origin: "target_down", origin_at: 5, endpoint_at: 25, ms: 20}
+      },
+      marker_bytes: ["B", "C"]
+    }
+  end
+
+  defp protocol_evidence do
+    %{
+      fault_seen: true,
+      target_down: true,
+      one_shot: true,
+      hook_returned_before_down: false,
+      death: %{matched: true, target: "target", reason: :killed, at: 5},
+      ordering: %{
+        monitor_installed_at: 1,
+        arrived_at: 1,
+        backlog_observed_at: 2,
+        released_at: 3,
+        injected_at: 4,
+        target_down_at: 5,
+        target: "target",
+        backlog_ids: ["accepted-B", "accepted-C"]
+      }
+    }
+  end
+
+  defp confirmed_cleanup, do: %{confirmed: true, choices: %{}}
+
+  defp save_and_reopen(store, dir) do
+    {:ok, store} = Store.save(store)
+    {:ok, store} = Store.open(store.path, dir)
+    store
+  end
+
+  defp reuse_call_ids(store) do
+    %{store | entries: Enum.map(store.entries, &rewrite_call_id(&1, "shared"))}
+  end
+
+  defp rewrite_call_id(%Entry{message: %Assistant{tool_calls: [_]} = message} = entry, id) do
+    %{entry | message: %{message | tool_calls: Enum.map(message.tool_calls, &%{&1 | id: id})}}
+  end
+
+  defp rewrite_call_id(%Entry{message: %ToolResult{} = message} = entry, id),
+    do: %{entry | message: %{message | call_id: id}}
+
+  defp rewrite_call_id(entry, _id), do: entry
+
+  defp wrong_inbox_user(store) do
+    %{
+      store
+      | inbox:
+          Enum.map(
+            store.inbox,
+            &if(&1.id == "accepted-B", do: %{&1 | user: %User{text: "WRONG"}}, else: &1)
+          )
+    }
+  end
+
+  defp update_receipt(store, id, fun) do
+    %{store | inbox: Enum.map(store.inbox, &if(&1.id == id, do: fun.(&1), else: &1))}
+  end
+
+  defp extra_interrupted_c(store) do
+    terminal_index =
+      Enum.find_index(store.entries, &match?(%Entry{message: %Assistant{text: "done C"}}, &1))
+
+    terminal = Enum.at(store.entries, terminal_index)
+
+    extra = %Entry{
+      id: "extra-interrupted-C",
+      parent_id: terminal.parent_id,
+      timestamp: terminal.timestamp,
+      message: %Assistant{text: "stale", interrupted: true}
+    }
+
+    terminal = %{terminal | parent_id: extra.id}
+
+    %{
+      store
+      | entries:
+          store.entries
+          |> List.replace_at(terminal_index, terminal)
+          |> List.insert_at(terminal_index, extra)
+    }
+  end
+
+  defp duplicate_c_terminal(store) do
+    terminal =
+      Enum.find(store.entries, &match?(%Entry{message: %Assistant{text: "done C"}}, &1))
+
+    duplicate = %{
+      terminal
+      | id: "duplicate-terminal-C",
+        parent_id: terminal.id,
+        timestamp: terminal.timestamp + 1
+    }
+
+    %{store | entries: store.entries ++ [duplicate], leaf: duplicate.id}
+  end
+
+  defp stale_off_branch(store) do
+    branch = %Entry{
+      id: "stale-off-branch",
+      parent_id: hd(store.entries).id,
+      timestamp: List.last(store.entries).timestamp + 1,
+      message: %Assistant{text: "stale", interrupted: true}
+    }
+
+    %{store | entries: store.entries ++ [branch]}
+  end
+
+  defp leaf_before_c(store) do
+    leaf =
+      store.entries
+      |> Enum.find(&match?(%Entry{message: %Assistant{text: "done B"}}, &1))
+      |> Map.fetch!(:id)
+
+    %{store | leaf: leaf}
+  end
+
+  defp put_timing(witness, recovery_ms, backlog_ms) do
+    witness
+    |> Map.put(:recovery_ms, recovery_ms)
+    |> Map.put(:backlog_ms, backlog_ms)
+    |> put_in([:clocks, :recovery, :endpoint_at], 5 + recovery_ms)
+    |> put_in([:clocks, :recovery, :ms], recovery_ms)
+    |> put_in([:clocks, :backlog, :endpoint_at], 5 + backlog_ms)
+    |> put_in([:clocks, :backlog, :ms], backlog_ms)
+  end
+
+  defp label_index(label), do: Enum.find_index(@inputs, &(&1 == label))
 
   defp expected_checks(:provider) do
     %{
@@ -485,7 +961,7 @@ defmodule Elara.Lab.SessionRecoveryTest do
       cleanup_confirmed: true,
       backlog_settled: true,
       one_shot: true,
-      death: %{matched: true, reason: "killed", target: "target"},
+      death: %{matched: true, reason: "killed", target: "target", at: 5},
       ordering: %{
         arrived_at: 1,
         monitor_installed_at: 1,
@@ -493,6 +969,7 @@ defmodule Elara.Lab.SessionRecoveryTest do
         released_at: 3,
         injected_at: 4,
         target_down_at: 5,
+        target: "target",
         backlog_ids: ["in-B", "in-C"]
       },
       clocks: %{

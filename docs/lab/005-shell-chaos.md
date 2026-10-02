@@ -9,8 +9,9 @@
   leaving the started mutation indeterminate. That second claim is a predicted
   finding, not a pass condition and not a runtime fix.
 - **Queue item:** LAB-5 · **Date:** 2026-10-02 · **Base:** `ca01d8a8`
-- **Status:** registered before implementation and before the 30-run pilot.
-  This note does not claim the pilot has been run.
+- **Status:** registered, implemented, and measured twice. Attempt 1 is an
+  invalid harness failure. Attempt 2 is the only recovery measurement and was
+  not rerun. Parent LAB-5 remains unfinished.
 
 ## Method
 
@@ -70,21 +71,59 @@ runs, and it is not rerun toward a green summary.
 
 ## Results
 
-Not yet run. The pilot retains raw `repetitions.jsonl` lines, including the
-schedule, witnessed firing and death, accepted ids, receipts, history-count
-evidence, marker counts, timing origins and measurements. Success directories
-are deleted, so paths alone are not evidence. Custom curve fields are
-`recovery_ms`, `backlog_ms` and `marker_count`.
+Two sweep attempts exist. They are not one 30-run measurement. Attempt 1 is an
+invalid harness failure and must not be replaced by attempt 2. No further
+registered or supplementary measurement was run after attempt 2.
+
+Attempt 1, candidate `b9a9ec0`, is invalid. All 30 children exited 1 before
+writing a result line because `Elara.Lab.write_results/2` could not JSON-encode
+`Elara.Message.User`. Its directory
+`/tmp/elara-lab-1085/session_recovery/20261002T015912688401Z-sweep-fault-seed42`
+was deleted before attempt 2. The retained record is
+[attempt-1-INVALID-HARNESS.md](evidence/rob-1085/attempt-1-INVALID-HARNESS.md).
+
+Attempt 2, candidate `8a2c2c5`, finished and was not rerun. Raw files are in
+[attempt-2](evidence/rob-1085/attempt-2-8a2c2c5-20261002T020227820148Z). Mix
+exited non-zero because `tool_running` failed `indeterminate_without_receipt`
+in 10/10 seeds. That is the registered finding, not a harness pass.
+
+| Fault | Present | Exit | Failed check | Recovery ms | Backlog ms | Marker count |
+| ----- | ------- | ---- | ------------ | ----------- | ---------- | ------------ |
+| `provider_started` | 10/10 | 0 | none | 0–1 | 0–1 | 2 |
+| `provider_streaming` | 10/10 | 0 | none | 27–41 | 99–108 | 2 |
+| `tool_running` | 10/10 | 1 | `indeterminate_without_receipt` 10/10 | 7–12 | 68–73 | 3 |
+
+Every `tool_running` receipt for A was `%{state: failed, error: "session restarted"}`.
+B and C were consumed, with labels and bytes `A`, `B`, `C`. Provider A errors
+were the provider-task crash. Bounds `recovery` and `backlog` aggregated
+`holds` at every value; the sweep still failed because the check failed.
 
 ## Interpretation
 
-Not yet available. A reproduced interrupted marker receipt refutes the strong
-recovery claim and is reported as a finding. It does not authorize a runtime
-change or a weaker observer.
+The predicted finding is reproduced on attempt 2: ordinary direct-marker reopen
+inserts `session restarted` rather than leaving the started mutation
+indeterminate. Provider-task deaths in that same attempt settled A failed and
+completed B and C inside the registered bounds. Attempt 1 shows nothing about
+recovery.
+
+The following observer seams are recorded for review and were not patched
+after the Lead named them:
+
+- `await_provider_death/2` discards `_death` and returns `down: true` after a
+  firing is received.
+- `provider_hook/3` is not itself gated on the witnessed backlog.
+- `Elara.status/1` and `Elara.start_session/1` use the 5-second GenServer call
+  default, so a probe can consume the registered deadline.
+- `user_message_id` is copied from the accepted id rather than read from a
+  persisted user-message identity.
+
+Those seams are not a runtime fix and were not patched in this handoff.
 
 ## Changes
 
-None yet. This registration is the method commit.
+Registration `328de9c`, scenario `b9a9ec0`, JSON encoding `8a2c2c5`. No runtime
+recovery change. The handoff commit records both sweep attempts and the
+unpatched review seams.
 
 ## Limits and next
 

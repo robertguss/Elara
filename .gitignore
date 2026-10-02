@@ -37,3 +37,4 @@ elara-*.tar
 
 # Raw lab experiment output; notes in docs/lab/ quote the summaries.
 /lab/results/
+.empryo

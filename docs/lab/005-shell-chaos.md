@@ -11,9 +11,9 @@
 - **Queue item:** LAB-5 · **Date:** 2026-10-02 · **Base:** `ca01d8a8`
 - **Status:** harness accepted in PR #9 at `017db4d`; no accepted pilot
   measurement. Attempts 1, 2 and 3 are invalid historical evidence. The
-  serialization fix and one re-run of the registered command are authorized by
-  the owner on 2026-10-03, with a smoke pre-check. The parent LAB-5 remains
-  unfinished.
+  serialization repair is implemented in ROB-1231; one re-run of the registered
+  command, after the smoke pre-check below, is authorized by the owner on
+  2026-10-03. The parent LAB-5 remains unfinished.
 
 ## Method
 
@@ -70,6 +70,31 @@ That is the cross product of those three faults with seeds 42 through 51:
 default of 3; the test config's 100 is not the measurement environment.
 Registration and implementation must be committed clean before this command
 runs, and it is not rerun toward a green summary.
+
+### Addendum — smoke pre-check (2026-10-03, ROB-1085 option c)
+
+Added after attempt 3; the registration above is unchanged. The owner chose
+option (c) on 2026-10-03 (ROB-1085 comments): repair result serialization, run
+one smoke child per fault, then run the registered command once more. Before
+that run, exactly once:
+
+    MIX_ENV=dev mix elara.lab sweep session_recovery \
+      --over fault=provider_started,provider_streaming,tool_running \
+      --n 1 --seed 42 \
+      --results lab/results/rob-1085-smoke
+
+Its three pairs are each fault at seed 42. Output is retained under
+`lab/results/rob-1085-smoke/session_recovery/<stamp>-sweep-fault-seed42/`. It
+is excluded from the pilot and never counted or reported as pilot evidence.
+
+Launch criterion for the registered run: exactly those three pairs are present.
+Each is a scenario result row, not an error-only row, decodes as JSON, and has
+`.host.commit` equal to the full run SHA and `.host.dirty` false. Malformed or
+error-only rows, or evidence that cannot be trusted, block the launch. Exit
+status and checks are not criteria: the predicted `tool_running` finding fails
+a check, so the sweep exits non-zero. Smoke and pilot run at the same merged
+revision with no tracked edits between them. The smoke is not retried without
+further owner authorization.
 
 ## Results
 
@@ -154,6 +179,11 @@ observation/orchestration and historical interpretation; it does not change
 runtime recovery behavior and adds no replacement measurement records.
 ROB-1085 2/3 is planned to fix and test the rule-choice serialization path
 before any replacement measurement.
+ROB-1231 makes session_recovery result lines JSON-safe at the scenario's result
+boundary, after every digest is computed, and adds per-line `host` provenance
+(`commit`, `dirty`). Checks, bounds and recovery/backlog timing measurements
+are unchanged; the runner's `elapsed_ms` now includes host collection and
+conversion.
 
 ## Limits and next
 

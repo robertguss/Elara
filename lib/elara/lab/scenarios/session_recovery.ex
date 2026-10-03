@@ -37,7 +37,33 @@ defmodule Elara.Lab.Scenarios.SessionRecovery do
       {:ok, fault} -> exercise(fault, seed, dir)
       :error -> unknown(dir)
     end
+    |> finalize()
   end
+
+  @doc false
+  # The result boundary, after every digest is computed from raw terms: adds
+  # host provenance and makes the line encodable by `Elara.Lab.write_results/2`.
+  # Tuples become lists and opaque terms their `inspect/1` text, so this keeps
+  # the scenario's evidence but is not a lossless encoding of arbitrary terms.
+  @spec finalize(map()) :: map()
+  def finalize(result), do: result |> Map.put(:host, Elara.Lab.host()) |> json_safe()
+
+  defp json_safe(%_{} = struct), do: inspect(struct)
+
+  defp json_safe(map) when is_map(map),
+    do: Map.new(map, fn {k, v} -> {json_key(k), json_safe(v)} end)
+
+  defp json_safe(list) when is_list(list), do: Enum.map(list, &json_safe/1)
+  defp json_safe(tuple) when is_tuple(tuple), do: tuple |> Tuple.to_list() |> json_safe()
+  defp json_safe(term) when is_atom(term) or is_number(term), do: term
+
+  defp json_safe(term) when is_binary(term),
+    do: if(String.valid?(term), do: term, else: inspect(term))
+
+  defp json_safe(term), do: inspect(term)
+
+  defp json_key(key) when is_atom(key) or is_binary(key), do: key
+  defp json_key(key), do: inspect(key)
 
   defp exercise(fault, seed, dir) do
     cwd = Path.join(dir, "workspace")

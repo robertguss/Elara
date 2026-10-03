@@ -119,7 +119,12 @@ its request and index and writes a request ledger, so a client joins arrivals
 to intended times exactly. Each result line carries latency, throughput,
 memory, queue, scheduler and (with `trace=counts`) call-count measurements,
 the host, and `bounds`: whether each RQ-2 bound holds, fails or is
-undetermined for that repetition. It refuses to start while `Elara.Exec` runs
+undetermined for that repetition. It also carries diagnostics-only `user_failures`
+(bounded normalized user exit labels; truncation can merge different reasons)
+and `timers` (timer arm, deadline and handling-delay snapshots), and samples the
+coordinator mailbox under `queues.coordinator`; these fields recover failure
+labels and localize delay, but carry no verdict, change no check or bound, and a
+queue-length snapshot cannot prove earlier backlog or guarantee a root cause. It refuses to start while `Elara.Exec` runs
 a job. Its cleanup is confirmed only when every user, session, task and client
 it started has ended, no execution job is pending, and the stub's epoch is
 unchanged; until its provider tasks end, it keeps their ledger.

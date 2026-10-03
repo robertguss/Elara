@@ -353,11 +353,23 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         {ref, pid}
       end
 
-    Process.send_after(self(), :window_start, max(run.window_from - t0, 0))
-    Process.send_after(self(), :load_end, p.duration_ms)
+    {_, timers} = arm_timer(%{}, :window_start, p.window_start_ms, max(run.window_from - t0, 0))
+    {_, timers} = arm_timer(timers, :load_end, p.duration_ms, p.duration_ms)
 
-    if p.trace == "profile",
-      do: Process.send_after(self(), :profile_start, p.duration_ms - p.profile_window_ms)
+    timers =
+      if p.trace == "profile" do
+        {_, timers} =
+          arm_timer(
+            timers,
+            :profile_start,
+            p.duration_ms - p.profile_window_ms,
+            p.duration_ms - p.profile_window_ms
+          )
+
+        timers
+      else
+        timers
+      end
 
     coordinate(
       Map.merge(run, %{
@@ -376,7 +388,8 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         attaches: [],
         turns: [],
         summaries: %{},
-        user_failures: [],
+        user_failures: user_failures(),
+        timers: timers,
         attempts: %{}
       })
     )
@@ -415,12 +428,17 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   defp coordinate(run) do
     receive do
       :window_start ->
+        run = timer_handled(run, :window_start)
+        run.hook.(:window_start_received)
         coordinate(open_window(run))
 
       :profile_start ->
+        run = timer_handled(run, :profile_start)
+        run.hook.({:profile_start_received, run.timers.profile_start})
         coordinate(start_profile(run))
 
       :load_end ->
+        run = timer_handled(run, :load_end)
         run = run |> freeze_profile() |> close_window(run.load_end) |> collect_profile()
         send(self(), :tick)
         coordinate(%{run | phase: :drain, drain_deadline: run.load_end + run.p.drain_ms})
@@ -476,7 +494,9 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     run = %{run | users: Map.delete(run.users, ref)}
 
     run =
-      if reason == :normal, do: run, else: %{run | user_failures: [reason | run.user_failures]}
+      if reason == :normal,
+        do: run,
+        else: %{run | user_failures: user_failure(run.user_failures, reason)}
 
     cond do
       run.users != %{} -> coordinate(run)
@@ -545,6 +565,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
 
   # Memory census, then activation, at the profile window's start.
   defp start_profile(run) do
+    run.hook.(:profile_start_work)
     clients = run.clients
     to = run.p.duration_ms
 
@@ -585,6 +606,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
 
   defp user(run, index, offset) do
     wait_until(run.t0 + offset)
+    run.hook.({:user_started, index})
     cycle(run, index, 1)
   end
 
@@ -1132,7 +1154,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
               s.duplicates == 0 and s.invalid == 0
           end),
       clients_closed: Enum.all?(summaries, fn {_sim, s} -> s.close == :closed end),
-      users_ok: run.user_failures == [],
+      users_ok: run.user_failures.total == 0,
       no_handoff: transcripts.frozen == 0,
       sessions_openable: transcripts.unopenable == 0,
       sessions_persisted: transcripts.reconciled.sessions_persisted,
@@ -1205,6 +1227,8 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       throughput: %{arrivals_in_window: arrivals, r_ideal: Float.round(r_ideal, 3), ratio: ratio},
       memory: Map.delete(memory, :samples),
       queues: queues(sampled),
+      user_failures: user_failures_report(run.user_failures),
+      timers: timers_report(run),
       bash_excess_ms: Histogram.percentiles(Histogram.snapshot(run.shared.bash)),
       schedulers: schedulers(run.swt),
       counts: counts(run.counts, run.window_to && run.window_to - run.window_from, arrivals),
@@ -1251,6 +1275,113 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   end
 
   defp guard?(stop), do: stop in [:guard_memory, :guard_mailbox, :guard_lag]
+
+  @user_failure_limit 20
+  @user_failure_bytes 200
+
+  @doc false
+  def user_failure_report_for_test(reasons),
+    do:
+      reasons
+      |> Enum.reduce(empty_user_failures(), &user_failure(&2, &1))
+      |> user_failures_report()
+
+  defp user_failures, do: empty_user_failures()
+
+  defp empty_user_failures, do: %{total: 0, retained: %{}, omitted: 0}
+
+  defp user_failure(acc, reason) do
+    reason = normalize_user_failure(reason)
+
+    cond do
+      Map.has_key?(acc.retained, reason) ->
+        %{acc | total: acc.total + 1, retained: Map.update!(acc.retained, reason, &(&1 + 1))}
+
+      map_size(acc.retained) < @user_failure_limit ->
+        %{acc | total: acc.total + 1, retained: Map.put(acc.retained, reason, 1)}
+
+      true ->
+        %{acc | total: acc.total + 1, omitted: acc.omitted + 1}
+    end
+  end
+
+  defp normalize_user_failure(reason) do
+    reason
+    |> inspect(limit: 20, printable_limit: @user_failure_bytes)
+    |> truncate_utf8(@user_failure_bytes)
+  end
+
+  defp truncate_utf8(binary, max) when byte_size(binary) <= max, do: binary
+
+  defp truncate_utf8(binary, max) do
+    binary
+    |> binary_part(0, max)
+    |> valid_utf8_prefix()
+  end
+
+  defp valid_utf8_prefix(binary) do
+    if String.valid?(binary),
+      do: binary,
+      else: valid_utf8_prefix(binary_part(binary, 0, byte_size(binary) - 1))
+  end
+
+  defp user_failures_report(acc) do
+    retained =
+      acc.retained
+      |> Enum.sort_by(fn {reason, count} -> {-count, reason} end)
+      |> Enum.map(fn {reason, count} -> %{reason: reason, count: count} end)
+
+    %{
+      total: acc.total,
+      retained: retained,
+      retained_distinct: length(retained),
+      omitted: acc.omitted
+    }
+  end
+
+  defp arm_timer(timers, name, target_ms, delay_ms) do
+    armed_ms = System.monotonic_time(:millisecond)
+    Process.send_after(self(), name, delay_ms)
+
+    timer = %{
+      target_ms: target_ms,
+      armed_ms: armed_ms,
+      deadline_ms: armed_ms + delay_ms,
+      handled_ms: nil,
+      handling_late_ms: nil,
+      target_late_ms: nil,
+      coordinator_queue_len: nil
+    }
+
+    {timer, Map.put(timers, name, timer)}
+  end
+
+  defp timer_handled(run, name) do
+    handled_ms = System.monotonic_time(:millisecond)
+
+    coordinator_queue_len =
+      case Process.info(self(), :message_queue_len) do
+        {:message_queue_len, n} -> n
+        nil -> nil
+      end
+
+    update_in(run.timers[name], fn timer ->
+      timer
+      |> Map.put(:handled_ms, handled_ms - run.t0)
+      |> Map.put(:handling_late_ms, handled_ms - timer.deadline_ms)
+      |> Map.put(:target_late_ms, handled_ms - (run.t0 + timer.target_ms))
+      |> Map.put(:coordinator_queue_len, coordinator_queue_len)
+    end)
+  end
+
+  defp timers_report(run) do
+    Map.new(run.timers, fn {name, timer} ->
+      {name,
+       timer
+       |> Map.update!(:armed_ms, &(&1 - run.t0))
+       |> Map.update!(:deadline_ms, &(&1 - run.t0))}
+    end)
+  end
 
   # A start whose return was never reported is censored: outcome and duration
   # unknown, never invented. Durations cover returned starts begun before load end.
@@ -1351,7 +1482,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     window = Map.get(sampled.mailboxes, :window, %{})
 
     mailboxes =
-      Map.new([:session, :connection, :exec, :threads, :transport], fn class ->
+      Map.new([:session, :connection, :exec, :threads, :transport, :coordinator], fn class ->
         {class, stats(Map.get(window, class, %{counts: %{}, unavailable: 0}))}
       end)
 

@@ -162,6 +162,65 @@ defmodule Elara.Lab.ConcurrencyTest do
     assert Enum.uniq(labels) == labels
   end
 
+  test "a tiny complete run reports empty user failures" do
+    result = run(%{})
+
+    assert result.user_failures == %{total: 0, retained: [], retained_distinct: 0, omitted: 0}
+  end
+
+  test "a user abnormal exit reports a bounded normalized reason" do
+    hook = fn
+      {:user_started, 1} -> exit({:injected_user_failure, "reason"})
+      _point -> :ok
+    end
+
+    result = run(%{}, 42, hook: hook)
+
+    refute result.checks.users_ok
+    assert result.user_failures.total >= 1
+
+    assert %{reason: ~s({:injected_user_failure, "reason"}), count: count} =
+             Enum.find(
+               result.user_failures.retained,
+               &(&1.reason == ~s({:injected_user_failure, "reason"}))
+             )
+
+    assert count >= 1
+
+    assert result.user_failures.total ==
+             Enum.sum(Enum.map(result.user_failures.retained, & &1.count)) +
+               result.user_failures.omitted
+  end
+
+  test "user failure report orders retained reasons and counts repeats after capacity" do
+    long = String.duplicate("é", 150)
+
+    reasons =
+      [long, :gamma, :alpha, :beta] ++
+        Enum.map(4..19, &{:distinct, &1}) ++
+        [:gamma, :gamma, :alpha, :beta, {:omitted, 1}, :gamma, {:omitted, 2}]
+
+    failures = Concurrency.user_failure_report_for_test(reasons)
+    decoded = JSON.decode!(JSON.encode!(failures))
+
+    assert decoded["total"] == length(reasons)
+    assert decoded["retained_distinct"] == 20
+    assert decoded["omitted"] == 2
+
+    assert Enum.take(decoded["retained"], 3) == [
+             %{"reason" => ":gamma", "count" => 4},
+             %{"reason" => ":alpha", "count" => 2},
+             %{"reason" => ":beta", "count" => 2}
+           ]
+
+    assert Enum.at(decoded["retained"], 3)["count"] == 1
+
+    long_entry = Enum.find(decoded["retained"], &String.starts_with?(&1["reason"], "\"é"))
+    assert is_map(long_entry)
+    assert byte_size(long_entry["reason"]) <= 200
+    assert String.valid?(long_entry["reason"])
+  end
+
   test "a tiny complete run passes every check and measures every part" do
     result = run(%{})
 
@@ -585,6 +644,68 @@ defmodule Elara.Lab.ConcurrencyTest do
       assert is_integer(profile.collection_ms)
       assert is_binary(JSON.encode!(result))
       assert profile_sessions() == [] and classifiers() == []
+    end
+
+    test "a profile run reports timer arming and handling diagnostics" do
+      result = run(@profiled)
+
+      for name <- [:window_start, :profile_start, :load_end] do
+        timer = result.timers[name]
+        assert is_integer(timer.target_ms)
+        assert is_integer(timer.armed_ms)
+        assert is_integer(timer.deadline_ms)
+        assert is_integer(timer.handled_ms)
+        assert timer.handling_late_ms == timer.handled_ms - timer.deadline_ms
+        assert timer.target_late_ms == timer.handled_ms - timer.target_ms
+        assert timer.handled_ms >= timer.deadline_ms
+        assert is_integer(timer.coordinator_queue_len)
+      end
+    end
+
+    test "profile_start handled timestamp is captured before profile work" do
+      {:ok, events} = Agent.start_link(fn -> [] end)
+
+      hook = fn
+        {:profile_start_received, timer} ->
+          Agent.update(events, &[{:timer_captured, timer.handled_ms} | &1])
+
+        :profile_start_work ->
+          Agent.update(events, &[:profile_work | &1])
+
+        _point ->
+          :ok
+      end
+
+      result = run(@profiled, 42, hook: hook)
+
+      assert result.timers.profile_start.handled_ms != nil
+
+      assert [{:timer_captured, captured_ms}, :profile_work] = Agent.get(events, &Enum.reverse/1)
+      assert captured_ms == result.timers.profile_start.handled_ms
+    end
+
+    test "profile_start lateness includes time spent blocked on earlier coordinator work" do
+      delay = 100
+
+      hook = fn
+        :window_start_received -> Process.sleep(250)
+        _point -> :ok
+      end
+
+      result = run(Map.put(@profiled, "profile_window_ms", "1400"), 42, hook: hook)
+
+      assert result.timers.profile_start.handling_late_ms >= delay
+    end
+
+    test "a stop before the profile window reports an unhandled profile_start timer" do
+      result =
+        run(Map.merge(@profiled, %{"guard_memory_mb" => "1", "profile_window_ms" => "500"}))
+
+      assert result.incomplete == :guard_memory
+      assert result.timers.profile_start.handled_ms == nil
+      assert result.timers.profile_start.handling_late_ms == nil
+      assert result.timers.profile_start.target_late_ms == nil
+      assert result.timers.profile_start.coordinator_queue_len == nil
     end
 
     test "every client of the run is a client, exited ones included" do

@@ -1,4 +1,4 @@
-# Handoff — driver chunk ending 2026-10-03 (afternoon)
+# Handoff — driver chunk ending 2026-10-03 (late afternoon)
 
 Linear is the queue and status source: the
 [Elara project](https://linear.app/robert-guss/project/elara-7ee4b27c1215) and
@@ -6,7 +6,7 @@ its
 [current handoff](https://linear.app/robert-guss/document/current-handoff-lab-3-attribution-and-continuation-569eb39fa4cd)
 document, whose top entry is this chunk's. Record continuation state, blockers,
 review evidence, and delivery there. This file is the driver's chunk-end handoff
-for the fresh driver and oracle. It points at Linear rather than restating it.
+for the next driver and oracle. It points at Linear rather than restating it.
 The complete pre-migration handoff is preserved in the
 [import snapshot](https://github.com/robertguss/Elara/blob/03b257159f987e0baf4de9b57f71af156721a5d0/HANDOFF.md);
 its host observations are historical.
@@ -15,144 +15,169 @@ its host observations are historical.
 
 Observed 2026-10-03 on the owner's M3 Max (macOS, AC power), checkout
 `/Users/robertguss/Projects/startups/Elara`. `main` and `origin/main` are at
-`f9ccd9b`. This handoff was written on branch `work/driver-handoff-2026-10-03b`
-from `f9ccd9b`; its commit merges to `main` before the fresh driver starts.
-Reviewed through `f9ccd9b`; pushed through `f9ccd9b`. The live remote had no
-other `work/` heads; local remote-tracking refs may be stale (`git fetch
---prune`). Re-check HEAD, the working tree and the remote before acting.
+`6401912`. This handoff was written on branch `work/driver-handoff-2026-10-03c`
+from `6401912`, and its commit merges to `main` (squash) before anyone resumes.
+Reviewed through `6401912`; pushed through `6401912`. The live remote had no
+`work/` heads; local remote-tracking refs may be stale (`git fetch --prune`).
+Re-check HEAD, the working tree and the remote before acting.
 
 ## 2. Queue
 
-Linear: team ROB, project Elara. Snapshot 2026-10-03: one executable item,
-[ROB-1238](https://linear.app/robert-guss/issue/ROB-1238) (Ready). It is
-ROB-1228 2/2, one N=500 diagnostic run localizing LAB-3's profile setup stall.
-Its brief was approved after 4 oracle plan rounds, but the run never launched:
-the host-load gate did not hold in its 60-minute window. Its latest `[driver]`
-comment records what happened. Resuming needs a fresh oracle plan re-review
-first: `run.sh` pins HEAD and `origin/main` to `f9ccd9b`, which this handoff's
-merge changes. That re-review covers revision selection, provenance checks and
-fresh evidence filenames for the second gate window. The existing
-`rob-1238-prelaunch.log` stays in place; do not rename or move it. Then, in
-order: ROB-1083 (LAB-3, the owner's
-answer (a)), ROB-1235 (the LAB-5 fail-closed fix), and the rest of ROB-1085
-(LAB-5). The order and its reasons are in the Linear current handoff's top entry
-and in ROB-1085's latest `[driver]` comment. No issue is parked in Needs Input.
+Linear: team ROB, project Elara. Snapshot 2026-10-03: **no executable item.**
+Nothing is Ready, in a started status, or parked in Needs Input. The owner has
+switched Elara to the new `crew` skill (§4), so the outgoing driver pulled no
+further issue. The next driver selects one, under the owner's autonomy grant
+(§6), and moves it to Ready before planning.
+
+The driver's recorded order (ROB-1083's latest `[driver]` comment):
+
+1. [ROB-1243](https://linear.app/robert-guss/issue/ROB-1243) (Backlog): LAB-3
+   further diagnosis. It must tell queue wait from supervisor work in the
+   census's `Elara.SessionSup` `which_children` interval. Its measurement
+   protocol needs an oracle plan review, and it is another N=500, load-gated
+   run.
+2. [ROB-1083](https://linear.app/robert-guss/issue/ROB-1083) LAB-3 (owner answer
+   (a)): a fix once the cause is clear, then one more N=500 rerun.
+3. The rest of [ROB-1085](https://linear.app/robert-guss/issue/ROB-1085) LAB-5:
+   the fault matrix and at least 1000 schedules.
 
 Gates and deferred work, unchanged and still current:
+
 - LAB-4 ([ROB-1084](https://linear.app/robert-guss/issue/ROB-1084)) needs LAB-3
   and [ROB-1091](https://linear.app/robert-guss/issue/ROB-1091).
 - LAB-6 (ROB-1086) and LAB-8 (ROB-1088) need LAB-5; the ROB-1095 Coordinator
   decision (drop) is made.
 - LAB-7 (ROB-1087) needs LAB-4 and LAB-6.
 - ROB-1097–1106 are parked ideas.
-- ROB-1107/1108 are deferred hands-on acceptance of implementation that
-  already exists.
+- ROB-1107/1108 are deferred hands-on acceptance of implementation that already
+  exists.
 - Backlog: ROB-1216 (intermittent SSE test), ROB-1233 and ROB-1234.
 
 ## 3. Read these first
 
-- `AGENTS.md` `## Driver` (config and delivery rules) and `CLAUDE.md`.
+- `AGENTS.md` `## Driver` (delivery rules) and `CLAUDE.md`.
 - The Linear issue you pull, all of its comments, and the project's "Direction,
   research agenda and operating rules" document.
-- For ROB-1238: ROB-1228's description, `docs/lab/README.md` (the `setup`
-  diagnostics paragraph), and note 003 Limits → Attribution.
-- For LAB-5: `docs/lab/005-shell-chaos.md` (registration, smoke addendum,
-  attempts 1–4).
+- For LAB-3 / ROB-1243: note 003's "Setup-stall diagnosis (ROB-1228,
+  2026-10-03)" subsection under Limits → Attribution, `docs/lab/README.md` (the
+  `setup` diagnostics paragraph), and ROB-1238's completion comment.
+- For LAB-5: `docs/lab/005-shell-chaos.md` (attempt 4 and "Fix verification
+  (ROB-1235)") and ROB-1235's completion comment.
 
 ## 4. Context
 
-- Staffing: a Pi worker built ROB-1230. The owner then told the outgoing
-  driver, "from now on I want you to do all the work yourself in this session",
-  so the driver built ROB-1231, 1232, 1237 and 1238 itself. That override
-  applied to the outgoing session. Whether it continues is for the owner to
-  say; `AGENTS.md` still names Pi.
-- Separately, the owner gave the driver full autonomy over what to work on,
-  instead of asking. The driver chose the queue order above and recorded it in
-  Linear.
-- LAB-5's registered pilot is complete and valid (attempt 4, `c82a17f`). The
-  predicted finding held 10/10: a started mutation reopened without an effect
-  executor is recorded as failed/"interrupted", not indeterminate, against the
-  fail-closed rule. ROB-1235 is that fix. LAB-5 itself (the fault matrix and
-  ≥1000 schedules) remains unfinished.
-- LAB-3: ROB-1237 added opt-in timing of the first census's phases. The driver's
-  hypothesis is synchronous supervisor enumeration in `Profile.census/1`, but it
-  is unproven. ROB-1238 must distinguish queue wait from supervisor execution
-  and scheduling before any causal fix is proposed.
+- **Workflow switch (owner decision, 2026-10-03).** Elara is moving from the
+  driver/oracle/worker loop to the `crew` skill: an Opus driver, a Sonnet
+  builder and a Fable oracle. The outgoing driver finished its last step and
+  stopped there. No replacement driver was started, and the current oracle was
+  left running.
+- **First action under crew, before selecting any work.** The crew skill reads
+  its Linear configuration from a `## Crew` section in `CLAUDE.md`. That section
+  does not exist yet, and without it the skill skips Linear. So:
+  1. Add `## Crew` to `CLAUDE.md` with `Linear: team ROB, project Elara`.
+  2. Reconcile the old staffing text in `AGENTS.md` `## Driver` (Codex oracle,
+     Pi worker) with the crew roles.
+  3. Keep Elara's rules where crew's defaults differ:
+     - the owner's autonomy grant over queue order and selection (crew defaults
+       to user-only Ready selection);
+     - at most one executable item;
+     - issue branch, PR, oracle sign-off and passing CI before merge;
+     - Done means merged, not committed.
+- **Staffing in the old loop.** The owner told the earlier driver to "do all the
+  work yourself", and this chunk's driver kept to that: it built every step
+  itself, with no worker.
+- **LAB-3.** ROB-1228's diagnosis localized one N=500 run's setup delay: 148,443
+  of the first census's 148,446 ms fell in the census's
+  `which_children(Elara.SessionSup)` interval, including its bracketing queue
+  reads and bookkeeping. `SessionSup`'s queue read 543 before and 0 after. Queue
+  wait, supervisor work and scheduling are not distinguished, and whether the
+  earlier ~133 s delays share this localization is unproven. So no fix is
+  proposed yet (owner answer (a)).
+- **LAB-5.** ROB-1235 fixed the pilot's fail-closed finding: restart repair now
+  records the possibly running call as indeterminate. The unchanged pilot
+  workload passes 30/30. This is deliberately conservative: a read-only call cut
+  off by a restart is also indeterminate. The executor-recovery residual is in
+  `docs/sessions.md`. LAB-5 itself (the matrix and at least 1000 schedules)
+  remains unfinished.
 
 ## 5. This chunk
 
-- PR #18 `897becb` ROB-1230: LAB-5 attempt 3 recorded as invalid.
-- PR #19 `c82a17f` ROB-1231: session_recovery results made JSON-safe, with host
-  provenance.
-- PR #20 `3bf748d` ROB-1232: the registered LAB-5 pilot (attempt 4). The oracle
-  independently recomputed every table number.
-- PR #21 `f9ccd9b` ROB-1237: setup-phase timing.
-- ROB-1238: not run (load gate).
+- PR #23 `d71e97f` ROB-1238 (ROB-1228 2/2): the N=500 setup-stall diagnostic and
+  note 003's write-up. Attempt 2 ran at `3854b7e`. ROB-1228 is Done, and the
+  follow-up is ROB-1243.
+- PR #24 `6401912` ROB-1235: restart repair fails closed, verified by the pilot
+  workload at fix commit `c8678b6`.
 
-Each issue's `[driver]` completion comment records its oracle rounds and
-findings, its verify results, and which of those the oracle checked
-independently. Full-suite and focused test results are driver-reported
-throughout.
+What the oracle checked itself: it recomputed every note number from the raw
+JSONL and the host log, for both issues. It also reran ROB-1235's seven focused
+test files (148 passed). Driver-reported only: the full `mix test` (864 passed,
+0 failures, seed 913206), format/compile checks, the red-before test evidence,
+and both sweeps' execution. Details are in each issue's `[driver]` completion
+comment.
 
 ## 6. Decisions and authorizations in force
 
 All are recorded in Linear: the standing delivery authorization (AGENTS.md
 `## Driver`), the owner's LAB-3 answer (a) on ROB-1083, the LAB-5 option (c) on
-ROB-1085, and the owner's grant of autonomy (ROB-1085 comment). Nothing extra is
-held in this file.
+ROB-1085, and the owner's grant of autonomy (ROB-1085 comment). One decision is
+not on an issue yet: the switch to the `crew` skill (§4). It covers how the loop
+is staffed, not the queue or any authorization.
 
 ## 7. Operational state
 
-- Worker: per `AGENTS.md`, `pi` with no arguments, one fresh pane per step. Pi
-  built ROB-1230 this chunk; the driver built the rest (§4). No worker is
-  running.
-- No Elara BEAM, sweep, sampler or watchdog is running. An unrelated BEAM from
-  another checkout (`wts-dops/stellic`) comes and goes; it is external load.
-- Retained evidence (untracked, keep, per ROB-1092):
-  `lab/results/session_recovery/` (attempts 3 and 4, repro, logs),
-  `lab/results/rob-1085-smoke/`, and `lab/results/concurrency-diag/`. The last
-  holds ROB-1238's `run.sh`, `wd.py`, `fixture.sh`, the fixture log and the
-  prelaunch log.
-- `run.sh` refuses to overwrite `rob-1238-prelaunch.log` and pins `f9ccd9b`.
-  A second attempt needs a re-reviewed launcher with fresh evidence names; the
-  existing log stays in place.
-- Earlier LAB-3 evidence stays under `lab/results/concurrency/` (both N=500
-  profiles, `20261002T210908440701Z-…` and `20261003T123711789702Z-…`, plus
-  their `lab3-profile*` logs).
+- No worker is running, and no Elara BEAM, sweep, sampler or watchdog is
+  running. An unrelated BEAM from another checkout (`wts-dops/stellic`) comes
+  and goes; it is external load.
+- Retained evidence (gitignored, keep, per ROB-1092):
+  - `lab/results/concurrency-diag/` holds both ROB-1238 attempts.
+    - Attempt 1 (gate failed, not run): `run.sh`, `fixture.sh`,
+      `rob-1238-prelaunch.log`, `rob-1238-compile.out` and
+      `rob-1238-watchdog-fixture.log`.
+    - Attempt 2 (the run): `run-a2.sh`, `fixture-a2.sh`, the `rob-1238-a2-*`
+      logs and `concurrency/20261003T165722555796Z-sweep-sessions-seed42/`.
+    - `wd.py` is shared by both attempts and unchanged.
+  - `lab/results/rob-1235/` holds the fix-verification sweep.
+  - Still kept from before: `lab/results/session_recovery/`,
+    `lab/results/rob-1085-smoke/` and `lab/results/concurrency/`.
+- Both ROB-1238 launchers refuse to overwrite their logs and pin their revisions
+  (`f9ccd9b` and `3854b7e`). Do not rerun them: a new diagnostic gets its own
+  reviewed launcher and fresh evidence names.
 
 ## 8. Conventions and gotchas
 
-- The shell is zsh: `PIPESTATUS` is unset there. Run measurements under explicit
-  Bash and capture `${PIPESTATUS[@]}` immediately. macOS `/bin/bash` is 3.2 (no
-  associative arrays); this chunk's watchdog is Python for that reason.
+- The shell is zsh: `PIPESTATUS` is unset there, `ls` is aliased (use
+  `command ls` in scripts), and `echo ===` fails. Run measurements from a Bash
+  script file and capture `${PIPESTATUS[@]}` immediately. Claude Code's safety
+  check refuses inline `bash -c` scripts it cannot inspect, so write the script
+  to a file first. macOS `/bin/bash` is 3.2.
 - Quote heredocs (`<<'EOF'`) for prompts and briefs. Write briefs as `.txt`: a
   formatter hook reflows `.md` files written in the scratchpad.
-- `pgrep -lf beam.smp` self-matches Herdr prompt text. Use `pgrep -x beam.smp`
-  with `ps -o pid,args` and the cwd from `lsof -a -d cwd -p PID -Fn`.
-- Host load from the owner's other workspaces (Playwright Chrome, java, macOS
-  media analysis) reached load averages of 120. Under that load, full `mix test`
-  runs failed different tests each time, `main` included. The cause is not
-  established. Save every full run to a file and rerun failing files in
-  isolation. Before delivery, satisfy the step's reviewed verification gate:
-  a passing full run, or a baseline exception the oracle accepts.
-- Do not run tests or compiles in the checkout while a sweep or diagnostic
-  runs, including the oracle.
+- The built-in `write` tool makes `Elara.start_session` open a LocalExecutor
+  (lib/elara.ex:362). A test that needs the direct (`effect_executor: nil`) path
+  must use a custom mutating tool.
+- Host load: elevated 1-min load averages (30–55) coincided with activity from
+  the owner's other workspaces (iOS simulator and Xcode tests, Spotlight, node,
+  CodexBar). The samples do not apportion that load. A 60-min load gate failed
+  in the previous chunk and held in this one. Full `mix test` passed cleanly
+  this chunk under light load. Under heavy load, earlier chunks saw different
+  tests fail each run, so save every full run to a file and rerun failing files
+  in isolation. An exception for a known intermittent needs the oracle's
+  acceptance.
+- Do not run tests or compiles in the checkout while a sweep or diagnostic runs,
+  including the oracle.
 - Established intermittents: the `attachment_test.exs:408` task census, the
-  sampler peer count, and the OpenAI fragmented-SSE test (ROB-1216). Observed
-  under heavy load this chunk, cause unestablished: OpaqueShell fixture
-  registration (ROB-1233), AttachmentTest interrupt history, OpenAI loopback
-  chat, CheckDiagnosis, ContextTest fresh-BEAM recovery, InputAttachmentsProduct,
-  ThreadsTest real PTY, and two ConcurrencyTest runs. Each passed in isolation.
+  sampler peer count, and the OpenAI fragmented-SSE test (ROB-1216). Seen under
+  heavy load earlier, cause unestablished: OpaqueShell fixture registration
+  (ROB-1233) and several others listed in the previous handoff (git history).
 - Linear: no Linear MCP in the driver's session. Use GraphQL with
-  `$LINEAR_API_KEY`. Linear documents can contain control characters that `jq`
-  rejects; read and update them from Python with
+  `$LINEAR_API_KEY`, and read documents from Python with
   `json.loads(..., strict=False)`. Driver comments start with `[driver]`.
-- `herdr agent prompt --wait` can outlast a 10-minute tool call. Fall back to
-  `herdr agent wait`, and read only once the agent is idle.
-- A `session_recovery` sweep exits non-zero by design: the predicted
-  `indeterminate_without_receipt` check fails for `tool_running`.
+- `pgrep -lf beam.smp` self-matches agent prompt text. Use `pgrep -x beam.smp`
+  with `ps -o pid,args` and the cwd from `lsof -a -d cwd -p PID -Fn`.
+- Squash merges change SHAs. Cite the measured commit (here `c8678b6`, also
+  reachable through PR #24's head), never the squash SHA.
 
 ## 9. Skills
 
-Required: `driver` for the driver, `oracle` for the oracle, and `worker` for
-each worker if workers resume. Optional: `herdr`.
+Required: `crew`, per the owner's switch (§4). The old loop's `driver`, `oracle`
+and `worker` skills apply only if the owner reverts. Optional: `herdr`.

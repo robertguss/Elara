@@ -62,6 +62,52 @@ defmodule Elara.Lab.ProfileTest do
     end
   end
 
+  defmodule BlockedInit do
+    def start_link(test), do: :proc_lib.start_link(__MODULE__, :init, [test])
+
+    def init(test) do
+      send(test, {:blocked, self()})
+      receive(do: (:release -> :ok))
+      :proc_lib.init_ack({:ok, self()})
+      receive(do: (:stop -> :ok))
+    end
+  end
+
+  # A DynamicSupervisor (parent: the test) with one Agent child, one child
+  # blocked in its init, and one more start_child queued behind it.
+  defp blocked_supervisor do
+    test = self()
+    {:ok, sup} = DynamicSupervisor.start_link(strategy: :one_for_one)
+
+    {:ok, agent} =
+      DynamicSupervisor.start_child(sup, %{id: :agent, start: {Agent, :start_link, [fn -> 0 end]}})
+
+    spawn(fn ->
+      DynamicSupervisor.start_child(sup, %{
+        id: :blocked,
+        start: {BlockedInit, :start_link, [test]}
+      })
+    end)
+
+    assert_receive {:blocked, blocked}, 5_000
+
+    on_exit(fn ->
+      send(blocked, :release)
+      send(blocked, :stop)
+    end)
+
+    spawn(fn ->
+      DynamicSupervisor.start_child(sup, %{
+        id: :queued,
+        start: {Agent, :start_link, [fn -> 1 end]}
+      })
+    end)
+
+    assert wait_until(fn -> Process.info(sup, :message_queue_len) >= {:message_queue_len, 1} end)
+
+    {sup, agent, blocked}
+  end
+
   defp start_session do
     {:ok, agent} = Agent.start_link(fn -> [] end)
     dir = Path.join(System.tmp_dir!(), "elara-profile-#{System.unique_integer([:positive])}")
@@ -288,26 +334,62 @@ defmodule Elara.Lab.ProfileTest do
     end
 
     test "the supervisor call is bracketed by its own call_start and call_done" do
-      {:ok, sup} = DynamicSupervisor.start_link(strategy: :one_for_one)
-      :ok = :sys.suspend(sup)
+      # Held through the shared `supervised/5` wrapper, with a real TaskSup call.
+      on_exit(fn -> :sys.resume(Elara.TaskSup) end)
       test = self()
+      task_sup = Process.whereis(Elara.TaskSup)
+      :ok = :sys.suspend(Elara.TaskSup)
 
-      # The call is queued, so call_start has passed; hold it a strictly
-      # positive interval on the monotonic clock before resuming the target.
+      census =
+        Task.async(fn ->
+          Profile.timed_census(clients: fn -> [] end, connections: fn -> [] end)
+        end)
+
+      # The census's own call is queued, so call_start has passed; hold it a
+      # strictly positive interval on the monotonic clock before resuming.
       spawn_link(fn ->
-        wait_until(fn -> Process.info(sup, :message_queue_len) == {:message_queue_len, 1} end)
+        queued? = fn ->
+          {:messages, messages} = Process.info(task_sup, :messages)
+
+          Enum.any?(messages, fn
+            {:"$gen_call", {pid, _tag}, :which_children} -> pid == census.pid
+            _ -> false
+          end)
+        end
+
+        seen = wait_until(queued?, 500)
         held_at = System.monotonic_time(:millisecond)
         advance_past(held_at + 2)
-        :ok = :sys.resume(sup)
-        send(test, :resumed)
+        :ok = :sys.resume(Elara.TaskSup)
+        send(test, {:resumed, seen})
       end)
 
-      {_census, setup} =
-        Profile.timed_census(clients: fn -> [] end, connections: fn -> [] end, session_sup: sup)
+      {_census, setup} = Task.await(census, 10_000)
 
-      assert_received :resumed
-      reading = setup.supervisors.session_sup
+      assert_receive {:resumed, true}, 1_000
+      reading = setup.supervisors.task_sup
       assert reading.call_done - reading.call_start >= 2
+
+      assert setup.marks.census_start <= reading.call_start and
+               reading.call_start <= reading.call_done and
+               reading.call_done <= setup.marks.task_children_done
+    end
+
+    test "the timed census reads a blocked session supervisor promptly and keeps its reading keys" do
+      {sup, agent, blocked} = blocked_supervisor()
+
+      task =
+        Task.async(fn ->
+          Profile.timed_census(clients: fn -> [] end, connections: fn -> [] end, session_sup: sup)
+        end)
+
+      assert {:ok, {census, setup}} = Task.yield(task, 1_000)
+      reading = setup.supervisors.session_sup
+
+      assert reading.children == 2
+      assert reading.queue_after >= 1
+      assert is_integer(reading.queue_before)
+      assert Enum.sort(for {pid, :session} <- census, do: pid) == Enum.sort([agent, blocked])
 
       assert setup.marks.task_classified_done <= reading.call_start and
                reading.call_start <= reading.call_done and
@@ -346,6 +428,54 @@ defmodule Elara.Lab.ProfileTest do
 
       for phase <- Profile.census_marks() -- [:census_start, :connections_done] do
         assert setup.marks[phase] >= setup.marks.connections_done
+      end
+    end
+  end
+
+  describe "the session reading" do
+    test "the census does not wait on a session supervisor blocked in a child's init" do
+      {sup, agent, blocked} = blocked_supervisor()
+      opts = [clients: fn -> [] end, connections: fn -> [] end, session_sup: sup]
+
+      task = Task.async(fn -> Profile.census(opts) end)
+      assert {:ok, census} = Task.yield(task, 1_000)
+
+      sessions = for {pid, :session} <- census, do: pid
+      assert Enum.sort(sessions) == Enum.sort([agent, blocked])
+      refute {self(), :session} in census
+      refute {sup, :session} in census
+      assert {:message_queue_len, n} = Process.info(sup, :message_queue_len)
+      assert n >= 1
+
+      send(blocked, :release)
+      send(blocked, :stop)
+    end
+
+    test "on an idle supervisor the census's sessions are which_children's" do
+      {:ok, sup} = DynamicSupervisor.start_link(strategy: :one_for_one)
+
+      for i <- 1..2,
+          do:
+            {:ok, _} =
+              DynamicSupervisor.start_child(sup, %{
+                id: i,
+                start: {Agent, :start_link, [fn -> i end]}
+              })
+
+      census = Profile.census(clients: fn -> [] end, connections: fn -> [] end, session_sup: sup)
+      expected = for {_, pid, _, _} <- DynamicSupervisor.which_children(sup), do: pid
+
+      assert length(expected) == 2
+      assert MapSet.new(for {pid, :session} <- census, do: pid) == MapSet.new(expected)
+    end
+
+    test "an unresolvable session supervisor makes the census exit" do
+      {pid, ref} = spawn_monitor(fn -> :ok end)
+      assert_receive {:DOWN, ^ref, :process, ^pid, _}
+
+      for sup <- [pid, :elara_profile_no_such_sup] do
+        opts = [clients: fn -> [] end, connections: fn -> [] end, session_sup: sup]
+        assert catch_exit(Profile.census(opts))
       end
     end
   end

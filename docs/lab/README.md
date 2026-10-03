@@ -132,7 +132,28 @@ With `trace=profile`, the profile block also carries diagnostics-only `setup`
 `census_done`), then `capture_done`, `activate_start` and `activate_done`.
 `supervisors` gives `Elara.TaskSup`'s and `Elara.SessionSup`'s
 `message_queue_len` just before and just after the census's own call to each,
-and the length of the list that call returned. The readings are not
+and the length of the list that call returned. `Elara.TaskSup` is read by a
+supervisor call. `Elara.SessionSup`'s reading is a links read
+(`Process.info(pid, [:links, :parent])`, ROB-1255), not a supervisor call, so it
+does not wait in SessionSup's mailbox. It contains the live children, including
+any child mid-init (a child whose init then fails is still read as a session
+for that census), and never the parent. It differs from the earlier
+`which_children` census only for starts still queued: with nothing queued the
+two are the same set, and a single in-progress start gives the same set too
+(the links read includes it mid-init) unless its init fails. With queued starts
+the links read lists the children alive at that instant, mid-init included,
+rather than every child after the queue drains. Activation then no longer
+waits for that drain, so a profile with starts queued at activation (window
+timestamps, validity, class pid counts, own time, the first memory census and
+the `setup` block) is not comparable with earlier runs at that N; sessions
+spawned after the first census are classified by the spawn trace, not the
+census. A run whose SessionSup held no queued start at the first census reads
+the same set and is unaffected. The registered N = 10 profile (eaa88f9)
+recorded no SessionSup reading, so this is not shown for it; at N = 10 a start
+in flight at that instant would move at most that session from the census to
+the spawn trace. Not
+guaranteed: a mid-init child may never finish init, and any process linked to
+SessionSup other than its parent is read as a session. The readings are not
 simultaneous snapshots. A long interval localizes elapsed time to a phase; it
 does not distinguish queue wait from supervisor work or scheduling. The marks
 add clock reads and `Process.info/2` calls, which can perturb scheduling.
@@ -146,7 +167,8 @@ unchanged; until its provider tasks end, it keeps their ledger.
 adds diagnostics to apportion `Elara.SessionSup`'s time; with 0 a run is
 unchanged. In every profile run, each census `supervisors` reading also has
 `call_start` and `call_done` (ms after t0, clock reads only) around the
-supervisor call itself, after `queue_before` and before `queue_after`. With the
+supervisor call itself (for SessionSup, the links read), after `queue_before`
+and before `queue_after`. With the
 probe on: (1) the sampler takes one `Elara.Lab.SupProbe` reading of SessionSup
 per tick, as `session_sup.samples` (`t`, `phase`, `read_us`, `status`,
 `current_function`, the top 4 `frames`, `queue_len`, `composition` counts by

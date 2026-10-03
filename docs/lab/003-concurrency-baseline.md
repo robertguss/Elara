@@ -919,6 +919,129 @@ Two queue-length readings are not a backlog history. The marks add clock reads a
 
 **Host.** `rob-1238-a2-host.log` samples `uptime` and the top 8 processes by CPU every 60 s. It can miss shorter activity, and also any process outside a sample's top 8. The figures below are sampled extrema. Elara's BEAM ranged from 293% to 818% CPU. The 1-min load average rose from 3.04 at launch to 55.12 at 17:01:22Z. Other sampled processes at or above 20% CPU included `mds_stores` 81% (16:59Z), CodexBar 65% (16:59Z), `node` 65% (16:58Z), `diagnosticd` 53% (17:00Z) and OrbStack 25% (17:06Z). iOS simulator processes appear in samples from 16:57:22Z on (up to 62% at 17:00Z). WTSCompanion (up to 40%), a Maestro UI-test driver (up to 25%) and `xcodebuild` (24%) appear at 17:03–17:05Z. So simulator activity overlaps the diagnostic, but its start, end and continuity are unknown. The overlap is a confound, not an established effect.
 
+#### SessionSup diagnosis (ROB-1243, 2026-10-03)
+
+A diagnostic, not a LAB-3 measurement or rerun: it is not counted, ranks nothing and makes no attribution or bottleneck claim about the product's workload. It apportions `Elara.SessionSup`'s time over the census call that ROB-1228's diagnosis localized, using ROB-1251's `session_sup_probe=1` (`docs/lab/README.md`). Hypothesis H, registered before the run: during the census's SessionSup call, SessionSup mostly waits on child inits that it serializes (`Elara.Session.init/1` inside `DynamicSupervisor.start_child`, `lib/elara.ex:94`), and the call queues behind them.
+
+**Protocol.** Command: `caffeinate -ims mix elara.lab sweep concurrency --over sessions=500 --n 1 --seed 42 --set trace=profile --set session_sup_probe=1 --results lab/results/concurrency-diag`, run once at `3c4399f` (main = origin/main, clean tree, `MIX_ENV` unset) by `lab/results/concurrency-diag/run-1243.sh` on the owner's M3 Max on AC power. Launch gate: two 1-min load readings 60 s apart, both at most 8, within 120 min. Readings (`rob-1243-prelaunch.log`): 70.39 (22:00:08Z), 30.07, 7.54, confirmed 7.97 at 22:11:08Z. The run lasted 22:11:09–22:21:32Z. A watchdog with a 40-min deadline (validated against a forking fixture beforehand) was cancelled at the normal finish, and the sampler stopped. The result line is `3c4399f`, clean tree, seed 42, `sessions=500`, `trace=profile`, `session_sup_probe=1`, no error. The sweep exited 1 (`sweep incomplete`; see Validity below). Evidence: `lab/results/concurrency-diag/concurrency/20261003T221109754815Z-sweep-sessions-seed42/` and `rob-1243-{prelaunch.log,sweep.out,host.log,watchdog.log,watchdog-fixture.log,compile.out}`.
+
+The probe perturbs what it measures (README, `session_sup_probe` paragraph): each read pauses SessionSup for `read_us` while its mailbox is copied, the `:running` trace sends its tracer one message per schedule event, helper processes are spawned, and about one probe-caused schedule-in/out pair per tick is included in the counts. Probe-on runs are not comparable with probe-off runs on memory, queues, latency or class shares, so the comparison to ROB-1238 below is of timing structure only.
+
+**Table D-setup-probe:** first-census marks, in ms after t0 (`.profile.setup.marks`), and the interval since the previous mark, beside ROB-1238's values.
+
+| Mark | ms after t0 | Interval (ms) | ROB-1238 ms | ROB-1238 interval |
+| :-- | --: | --: | --: | --: |
+| `census_start` | 480,015 | — | 480,032 | — |
+| `connections_done` | 480,017 | 2 | 480,033 | 1 |
+| `task_children_done` | 480,017 | 0 | 480,033 | 0 |
+| `task_classified_done` | 480,025 | 8 | 480,035 | 2 |
+| `session_children_done` | 609,592 | 129,567 | 628,478 | 148,443 |
+| `clients_done` | 609,592 | 0 | 628,478 | 0 |
+| `census_done` | 609,593 | 1 | 628,478 | 0 |
+| `capture_done` | 609,599 | 6 | 628,481 | 3 |
+| `activate_start` | 609,625 | 26 | 628,501 | 20 |
+| `activate_done` | 609,638 | 13 | 628,517 | 16 |
+
+**Census reading** (`.profile.setup.supervisors.session_sup`): `call_start` 480,027, `call_done` 609,592, so |I| = 129,565 ms; 500 children; `queue_before` 522 (ROB-1238: 543), `queue_after` 0. The census probe (taken before `queue_before`; `probe_elapsed_us` 2,291): `available` true, `status` waiting, `current_function` `:proc_lib.sync_start/2`, frames `:proc_lib.sync_start/2` ← `DynamicSupervisor.start_child/3` ← `DynamicSupervisor.handle_start_child/2` ← `:gen_server.try_handle_call/4`, `queue_len` 522, `read_us` 2,236, `run_queue` 15, composition `start_child` 326, `exit` 196, every other class 0 (`which_children` 0: the census call was not yet queued).
+
+**Over the census call interval** (`rob-1243-analysis.out`, computed from `.session_sup.running`):
+- Buckets: 129 included (starts 480,581–608,581 ms, consecutive at 1,000 ms), 2 edge buckets reported and excluded (479,581 and 609,581). Excluded fraction (129,565 − 129,000) / 129,565 = 0.436%.
+- T = 129,000,000 µs. Shares of T: S_init (`:proc_lib.sync_start/2`) 99.925% (128,903,394 µs); S_cpu (`running_us`) 0.075% (96,606 µs); S_idle (`:gen_server.loop/5`) 0%; S_other 0%; S_pre 0% (no other off key appeared). They sum to 1.
+- Coverage holds: starts consecutive, and every included bucket's `running_us` + Σ`off_us` is 1,000,000 µs (deviation 0).
+- Probe samples: 65 inside I, none unavailable, summed `read_us` 134,114 µs = 0.104% of |I|. Run queue inside I ranged 0–145.
+- Sample spacing inside I: 47 of 64 gaps are at most 2 s (39 of them 1,001–1,002 ms) and 17 are longer, up to 11,921 ms (median 1,001 ms). Over all 351 samples the minimum gap is 1,001 ms and the maximum 11,921 ms (72 gaps over 2 s). The 1 s tick therefore did not hold, and the tail resolution below is the local sample spacing, not 1 s. `t` is the tick's start (`lib/elara/lab/sampler.ex:199`); the probe read is the tick's last step (`:242`) and the next tick is armed before the work (`:133-134`), so a reading lies anywhere in [`t`, next sample's `t`), and a gap over 1 s is the previous tick's own duration. Evidence that `t` is not the read time: the sample stamped 479,296 ms, before `call_start` (480,027), already shows `which_children` 1 (queue 523), while the census probe at about 480,025 shows 0, and the census call is the only sender, so that sample was read after 480,027. The 65 samples counted inside I are those stamped inside it; one further sample, stamped outside, was read inside. Why ticks ran long is not explained by the evidence: the sample before a long gap had run queue ≥100 in 6 of 17 cases, against 1 of 47 for the short gaps, but 11 of the 17 had a run queue below 100; the 11.9 s gap (551,878 → 563,799) coincides with a 12-bucket stretch with no recorded schedule-in (551,581 on), and the cause of the long ticks is not shown.
+- `t_w` = 608,951 ms (every one of the 65 samples stamped inside I shows `which_children` ≥ 1; the first sample with `which_children` ≥ 1 is stamped 479,296 ms, before `call_start`, see above); the tail is 641 ms = 0.495% of |I|. Because the true read lies at or after `t_w`'s stamp, the tail is an upper bound, so the tail condition still holds.
+
+Samples inside I (`.session_sup.samples`; all 65 have `status` waiting, `current_function` `:proc_lib.sync_start/2`, `which_children` 1):
+
+| t (ms) | queue_len | start_child | exit | read_us | run_queue |
+| --: | --: | --: | --: | --: | --: |
+| 480684 | 523 | 326 | 196 | 2157 | 22 |
+| 481685 | 522 | 325 | 196 | 2132 | 90 |
+| 486045 | 522 | 325 | 196 | 1774 | 0 |
+| 489182 | 533 | 325 | 207 | 1707 | 2 |
+| 490183 | 532 | 324 | 207 | 1765 | 0 |
+| 491184 | 531 | 323 | 207 | 1673 | 1 |
+| 492185 | 531 | 323 | 207 | 1789 | 1 |
+| 493186 | 530 | 322 | 207 | 2090 | 26 |
+| 494187 | 530 | 322 | 207 | 3496 | 139 |
+| 498423 | 530 | 322 | 207 | 3799 | 54 |
+| 501947 | 529 | 321 | 207 | 1606 | 0 |
+| 503524 | 540 | 321 | 218 | 1825 | 2 |
+| 504525 | 543 | 321 | 221 | 1792 | 2 |
+| 505527 | 542 | 319 | 222 | 2049 | 3 |
+| 506528 | 541 | 318 | 222 | 1586 | 0 |
+| 507529 | 540 | 317 | 222 | 1584 | 0 |
+| 508530 | 540 | 317 | 222 | 2867 | 134 |
+| 512175 | 539 | 316 | 222 | 3839 | 132 |
+| 514629 | 539 | 316 | 222 | 1615 | 1 |
+| 518725 | 552 | 316 | 235 | 2508 | 1 |
+| 519727 | 558 | 316 | 241 | 1588 | 0 |
+| 520728 | 556 | 314 | 241 | 1769 | 0 |
+| 521730 | 555 | 313 | 241 | 1823 | 3 |
+| 522731 | 549 | 307 | 241 | 1583 | 2 |
+| 523732 | 542 | 300 | 241 | 2724 | 123 |
+| 527231 | 542 | 300 | 241 | 1575 | 2 |
+| 530886 | 542 | 300 | 241 | 1891 | 0 |
+| 531887 | 544 | 299 | 244 | 1740 | 2 |
+| 532888 | 543 | 298 | 244 | 1558 | 0 |
+| 533889 | 542 | 297 | 244 | 1667 | 0 |
+| 534890 | 539 | 294 | 244 | 1708 | 35 |
+| 536888 | 539 | 294 | 244 | 1776 | 13 |
+| 538073 | 539 | 294 | 244 | 1691 | 1 |
+| 539074 | 538 | 293 | 244 | 2514 | 5 |
+| 540075 | 536 | 291 | 244 | 1459 | 1 |
+| 545872 | 536 | 291 | 244 | 1732 | 0 |
+| 546873 | 540 | 291 | 248 | 1484 | 1 |
+| 547874 | 539 | 290 | 248 | 1537 | 1 |
+| 548875 | 538 | 289 | 248 | 1696 | 1 |
+| 549876 | 537 | 288 | 248 | 1543 | 1 |
+| 550877 | 537 | 288 | 248 | 1756 | 3 |
+| 551878 | 537 | 288 | 248 | 1926 | 28 |
+| 563799 | 536 | 287 | 248 | 2165 | 1 |
+| 568587 | 538 | 287 | 250 | 1703 | 1 |
+| 569636 | 538 | 287 | 250 | 1502 | 0 |
+| 570637 | 538 | 286 | 251 | 1497 | 0 |
+| 571638 | 537 | 285 | 251 | 1735 | 7 |
+| 572639 | 536 | 284 | 251 | 2625 | 134 |
+| 577052 | 536 | 284 | 251 | 3932 | 145 |
+| 580245 | 536 | 284 | 251 | 6248 | 118 |
+| 581993 | 536 | 284 | 251 | 1998 | 1 |
+| 586269 | 535 | 283 | 251 | 8162 | 2 |
+| 587433 | 538 | 283 | 254 | 1274 | 0 |
+| 588435 | 538 | 283 | 254 | 1580 | 1 |
+| 589436 | 537 | 282 | 254 | 1784 | 0 |
+| 590784 | 537 | 282 | 254 | 1489 | 0 |
+| 591785 | 536 | 281 | 254 | 1504 | 0 |
+| 592786 | 536 | 281 | 254 | 2420 | 56 |
+| 599487 | 540 | 280 | 259 | 2107 | 2 |
+| 603684 | 655 | 280 | 374 | 1434 | 0 |
+| 604946 | 683 | 280 | 402 | 3549 | 0 |
+| 605948 | 684 | 241 | 442 | 1383 | 1 |
+| 606949 | 599 | 167 | 431 | 802 | 0 |
+| 607950 | 572 | 102 | 469 | 494 | 2 |
+| 608951 | 538 | 45 | 492 | 334 | 0 |
+
+**Decisive conditions:** `running` is a list (yes); coverage holds (yes); no unavailable sample inside I (yes); summed `read_us` 0.104% of |I| (< 5%); excluded fraction 0.436% (< 10%); S_other 0% (< 10%); tail 0.495% of |I| (< 10%). All hold, so the result is decisive.
+
+**session_starts** (`.session_starts`; caller-side duration of each whole `Elara.start_session/1` call): 699 calls, 696 begun before load end, with percentiles over the load p50 290,456 ms, p95 579,240, p99 580,178, max 580,280. Calls begun inside I: 0 (696 begun before `call_start`, 3 after `call_done`, all at 609,638 ms). Descriptive, not a rule input: 327 calls returned inside I (369 before, 3 after), with durations p50 324,979 ms and max 580,280; no call spans all of I. Against these, S_init time is 128,903 ms: 394 ms per call that returned inside I, and 395 ms per queued `start_child` in the census probe (326). The cross-check the brief names, starts begun inside I against S_init time, therefore shows nothing: S_init time accrues entirely to calls begun earlier. Per bucket, `ins` sums to 889 over the 129 buckets, with 66 buckets having none (longest run 12 consecutive buckets from 551,581 ms) and 9 buckets having 10 or more (max 156). This is consistent with a mix of long unbroken waits and bursts of short ones. It does not separate them or say how long any single init ran. The mean also hides a two-phase drain in the samples: `start_child` went 326 → 280 between the samples stamped 480,684 and 604,946 ms (46 in about 124 s), then 280 → 45 by 608,951 (235 in about 4 s), while `exit` jumped 259 → 374 at 603,684 (after the 600,000 ms load target). The stamps are tick starts, so these times are approximate. No cause is claimed.
+
+**Validity** (`.profile.validity`), as reported: `invalid: interior_overlap; lateness_over_30s; run_checks_failed`. `load_end` was handled at 609,638 ms, 9,633 ms late, with a coordinator queue of 2,035; the sampled coordinator queue (`.queues.coordinator`) peaked at 1,491 (p99 1,409, 275 observations).
+
+**Host.** `rob-1243-host.log` samples `uptime` and the top 8 processes by CPU every 60 s, and can miss shorter activity. The figures are sampled extrema. Elara's BEAM (pid 50243) ranged from 99.9% to 904.6% CPU (270.0% at 22:17Z). The 1-min load average rose from 7.97 at launch to 61.56 at 22:19Z. Other sampled processes at or above 60% CPU: a second `beam.smp`, pid 75980 (the mise Erlang install, not Elara's), at 891.4% at 22:21:10Z in the same sample in which Elara's BEAM was at 99.9%; a WebKit WebContent process 127% (22:14Z), `swift-frontend` 100% and 99% (22:21Z), FSEvents 95% (22:17Z), `simctl` 92% (22:18Z), SwiftBuild 86% (22:20Z), `node` 76% (22:13Z), `mds_stores` 76% (22:18Z) and 69.6% (22:20Z), `beam.smp` pid 49772 at 72.7% (22:12Z) and pid 53336 at 96.6% (22:13Z), and OrbStack 64% (22:12Z). The log cuts command lines at 260 characters, so what the other `beam.smp` processes ran is not shown, and whether the 22:21:10Z sample falls inside I depends on t0, which the log does not record. The overlap is a confound, not an established effect.
+
+**Interpretation.** The stall recurred: the census call took 129,565 ms (ROB-1238: about 148 s). The result is decisive, and S_init is 99.925% of T, at or above 0.5, so **H is supported**: over the call, SessionSup's traced time was almost entirely spent off-CPU after an out-event in `:proc_lib.sync_start/2`, the wait inside `DynamicSupervisor.start_child` for a child's init. Its own running time was 0.075%, and none of the time went to idle, other or preemption classes. H's second prediction also holds: the census probe's composition has `start_child` 326 of the 522 queued messages (62.5%, a majority), with `exit` 196. The 65 samples show the same state throughout: waiting in `sync_start`; a sample stamped 479,296 ms, before I, already shows the call queued; and `start_child` draining from 326 to 45 while `exit` grew from 196 to 492.
+
+What this does not establish:
+- It is one run, probe-on, so it cannot speak to variance or to the product's workload.
+- S_pre is 0, but preemption is only inferred from out-events away from a receive point; wake-up delay sits inside S_init and cannot be separated from waiting.
+- SessionSup waiting in `sync_start` does not say whether the child's init was itself running or unscheduled, so it does not say that `Session.init/1` itself is slow.
+- The probe readings are sampling instants, here 1–12 s apart, and the probe perturbs what it measures.
+- The cross-check against session starts does not corroborate or contradict S_init: no start began inside I.
+A supported H may motivate a fix proposal, filed as a new issue with a failing test first; none is built here.
+
+**Recompute.** All numbers come from `lab/results/concurrency-diag/rob-1243-analysis.py <sweep>/repetitions.jsonl`, whose output is `lab/results/concurrency-diag/rob-1243-analysis.out`. Its inputs are the jq paths `.profile.setup.marks`, `.profile.setup.supervisors.session_sup`, `.session_sup.running`, `.session_sup.samples`, `.session_starts`, `.profile.validity`, `.timers.load_end` and `.queues.coordinator`; gate readings and the result check are in `rob-1243-prelaunch.log`, host figures in `rob-1243-host.log`.
+
 ### Child-thread variant
 
 - **Sequential sweeps.** The children ran first and the control second, so

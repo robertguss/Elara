@@ -659,6 +659,101 @@ defmodule Elara.Lab.SessionRecoveryTest do
     assert decoded["cleanup"]["confirmed"] == true
   end
 
+  test "every fault's real result survives write_results with rule choices and host provenance" do
+    root =
+      Path.join(System.tmp_dir!(), "lab-recovery-lines-#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm_rf!(root) end)
+
+    for fault <- ~w(provider_started provider_streaming tool_running) do
+      {:ok, [result]} = Elara.Lab.run(SessionRecovery, seed: 42, params: %{"fault" => fault})
+      kept = result[:evidence_dir] || result[:retained_dir]
+      if kept, do: on_exit(fn -> File.rm_rf!(kept) end)
+
+      path = Elara.Lab.write_results(Path.join(root, fault), [result])
+      assert [line] = path |> File.read!() |> String.split("\n", trim: true)
+      decoded = JSON.decode!(line)
+      same = fn term -> term |> JSON.encode!() |> JSON.decode!() end
+
+      assert decoded["fault"] == fault
+      assert decoded["checks"] == same.(result.checks)
+      assert decoded["incomplete"] == result.incomplete
+      assert decoded["choices_digest"] == result.choices_digest
+
+      choices = decoded["cleanup"]["choices"] |> Map.values() |> Enum.concat()
+      assert Enum.any?(choices, &match?(["rule", index] when is_integer(index), &1))
+
+      assert %{"commit" => _, "dirty" => _} = decoded["host"]
+      assert decoded["recovery"]["receipts"]["A"] == same.(result.recovery.receipts["A"])
+
+      assert decoded["recovery"]["tool_outcomes"]["A"] ==
+               same.(result.recovery.tool_outcomes["A"])
+
+      assert decoded["death"]["reason"] == "killed"
+    end
+  end
+
+  test "finalize adds host provenance and makes nested terms JSON-safe" do
+    pid = self()
+    ref = make_ref()
+    fun = fn -> :ok end
+
+    result =
+      SessionRecovery.finalize(%{
+        choices: %{"sim" => [{:rule, 0}, {:tool, "lab_marker"}, :answer, {:error, :timeout}]},
+        nested: %{1 => {:a, [{:b, pid}]}, "s" => ref, k: fun},
+        plain: [true, nil, 1.5, "text", <<255>>]
+      })
+
+    assert result.choices == %{
+             "sim" => [[:rule, 0], [:tool, "lab_marker"], :answer, [:error, :timeout]]
+           }
+
+    assert result.nested == %{
+             "1" => [:a, [[:b, inspect(pid)]]],
+             "s" => inspect(ref),
+             k: inspect(fun)
+           }
+
+    assert result.plain == [true, nil, 1.5, "text", inspect(<<255>>)]
+    assert %{commit: _, dirty: _} = result.host
+    assert {:ok, decoded} = result |> JSON.encode!() |> JSON.decode()
+
+    assert decoded["choices"]["sim"] == [
+             ["rule", 0],
+             ["tool", "lab_marker"],
+             "answer",
+             ["error", "timeout"]
+           ]
+  end
+
+  test "the choices digest covers raw choices and survives finalize and write_results" do
+    root =
+      Path.join(System.tmp_dir!(), "lab-recovery-digest-#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm_rf!(root) end)
+
+    raw = %{"recovery" => [{:rule, 0}, {:rule, 1}], "recovery-reopen" => [{:rule, 0}]}
+    witness = witness(:provider_started)
+    expected = Elara.Lab.digest({witness.fault, witness.inputs, raw})
+
+    result =
+      witness
+      |> Observer.report(%{confirmed: true, choices: raw})
+      |> SessionRecovery.finalize()
+      |> Map.merge(%{scenario: "session_recovery", seed: 42})
+
+    decoded =
+      Elara.Lab.write_results(root, [result]) |> File.read!() |> String.trim() |> JSON.decode!()
+
+    assert decoded["choices_digest"] == expected
+
+    assert decoded["cleanup"]["choices"] == %{
+             "recovery" => [["rule", 0], ["rule", 1]],
+             "recovery-reopen" => [["rule", 0]]
+           }
+  end
+
   test "provider faults settle A failed and complete B and C; the marker path stays strict" do
     for fault <- [:provider_started, :provider_streaming] do
       result = SessionRecovery.run(context(fault))

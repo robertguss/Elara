@@ -189,6 +189,32 @@ defmodule Elara.Session.StoreTest do
            ] = Store.history(store)
   end
 
+  test "append_all persists every message in one save or none", %{cwd: cwd} do
+    call = %ToolCall{id: "call-1", name: "read", args: {:ok, %{}}}
+    {:ok, assistant} = Message.assistant(nil, [call])
+    store = Store.new(cwd)
+    assert {:ok, store} = Store.append(store, Message.user("go"))
+    assert {:ok, store} = Store.append(store, assistant)
+
+    # The second message cannot be encoded. One save means the first is not
+    # persisted either; a loop of single appends would leave it on disk.
+    bad = %Message.ToolResult{call_id: "call-2", name: "read", outcome: {:unencodable, "x"}}
+
+    assert_raise FunctionClauseError, fn ->
+      Store.append_all(store, [Message.tool_result(call, {:ok, "a"}), bad])
+    end
+
+    assert {:ok, reopened} = Store.open(store.path, cwd)
+    assert Store.history(reopened) == [Message.user("go"), assistant]
+
+    done = Message.tool_result(call, {:ok, "a"})
+    assert {:ok, ^store} = Store.append_all(store, [])
+    assert {:ok, store} = Store.append_all(store, [done, Message.user("next")])
+    assert {:ok, reopened} = Store.open(store.path, cwd)
+    assert Store.history(reopened) == [Message.user("go"), assistant, done, Message.user("next")]
+    assert reopened.leaf == store.leaf
+  end
+
   test "moving the leaf creates branches and history walks only the active path", %{cwd: cwd} do
     store = Store.new(cwd)
     assert {:ok, store} = Store.append(store, Message.user("first"))

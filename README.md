@@ -609,6 +609,11 @@ call. Saved handoff headers require this build for resume.
 Any running mutating tool (`bash`, `write`, `edit`) that is interrupted, times
 out or crashes before returning its own result is likewise `indeterminate`.
 Calls that had not started when a turn stopped report an ordinary error.
+When a session reopens after dying mid-turn, the one call that may have been
+running is `indeterminate` whatever its tool, because today's tool
+configuration cannot prove what that call did. The calls after it report an
+ordinary error. Receipt-backed `write` recovery is described in
+[docs/sessions.md](docs/sessions.md).
 
 For example, `{"path":"config.exs","old_text":"old_name","new_text":"new_name","replace_all":true}`
 replaces all exact occurrences in that file. Omitting `replace_all` or passing

@@ -98,8 +98,15 @@ does not.
 - `/help`, `/h`, and `/?` work while idle or during a turn.
 - `//text` sends `/text` as a normal prompt rather than parsing it as a command.
 
-An interrupted tool call is recorded as interrupted in history so a later
-provider request does not receive an unmatched tool call.
+An interrupted tool call gets a result in history so a later provider request
+does not receive an unmatched tool call. When a session reopens after dying
+mid-turn, the first unresolved call is the only one that can have started. If
+its arguments parsed, it is recorded as `indeterminate`, even for a read-only
+tool, because the current tool set cannot prove what it did. The calls after
+it are recorded as `interrupted`. All repairs are saved together. One limit:
+if the session dies again while executor-backed recovery is still writing its
+results, a later reopen may record a call that never started as
+`indeterminate`. That errs toward uncertainty, never toward a false error.
 
 ## Explain an event with `/why`
 

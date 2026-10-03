@@ -153,6 +153,28 @@ defmodule Elara.Session.Store do
     save(%{store | entries: store.entries ++ [entry], leaf: entry.id})
   end
 
+  @doc "Append messages in order with one atomic save: all of them persist, or none."
+  def append_all(%__MODULE__{} = store, []), do: {:ok, store}
+
+  def append_all(%__MODULE__{} = store, messages) when is_list(messages) do
+    {entries, leaf} =
+      Enum.map_reduce(messages, store.leaf, fn message, parent_id
+                                               when is_struct(message, User) or
+                                                      is_struct(message, Assistant) or
+                                                      is_struct(message, ToolResult) ->
+        entry = %Entry{
+          id: generate_id(),
+          parent_id: parent_id,
+          timestamp: System.system_time(:millisecond),
+          message: message
+        }
+
+        {entry, entry.id}
+      end)
+
+    save(%{store | entries: store.entries ++ entries, leaf: leaf})
+  end
+
   @doc "Atomically persist an inbox change, optionally with a consumed user message."
   def put_inbox(%__MODULE__{} = store, inbox, paused, user \\ nil, active_id \\ nil)
       when is_list(inbox) and is_boolean(paused) do

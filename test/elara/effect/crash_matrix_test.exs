@@ -54,6 +54,31 @@ defmodule Elara.Effect.CrashMatrixTest do
     }
   end
 
+  test "a boundary resolved as not_started leaves later unresolved calls interrupted",
+       context do
+    executor = start_executor(context.executor_path)
+    marker = marker_call(context.marker_path, fixture("v3_row_1"))
+    read = %ToolCall{id: "read-call", name: "read", args: {:ok, %{"path" => "a"}}}
+
+    store = Store.new(context.cwd)
+    assert {:ok, store} = Store.append(store, Message.user("run marker"))
+    assert {:ok, store} = Store.append(store, assistant(nil, [marker, read]))
+
+    recovered = start_marker_session(context, executor, script([]), no_fault(), store.path)
+
+    assert [
+             %ToolResult{call_id: marker_id, outcome: {:error, not_started}},
+             %ToolResult{call_id: "read-call", outcome: {:error, "interrupted"}}
+           ] = tool_results(recovered)
+
+    assert marker_id == marker.id
+    assert not_started =~ "not_started"
+    assert [] = marker_records(context.marker_path)
+
+    stop_session(recovered)
+    assert :ok = TestExecutor.close(executor)
+  end
+
   test "row 1: crash before controller intent commit classifies not_started without execution",
        context do
     parent = self()

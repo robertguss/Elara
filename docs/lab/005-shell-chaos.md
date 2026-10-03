@@ -208,6 +208,18 @@ Evidence under `lab/results/session_recovery/`:
 `rob-1232-smoke.out` and `rob-1232-repro-tool_running-42/`. The smoke is under
 `lab/results/rob-1085-smoke/session_recovery/20261003T141357242701Z-sweep-fault-seed42/`.
 
+### Fix verification (ROB-1235, 2026-10-03)
+
+This is not a LAB-5 measurement and is not counted. ROB-1235 changed restart repair so that, on reopen, the first unresolved call (the only one that can have started) is a typed `indeterminate` whenever its arguments parsed; later unresolved calls stay `error` "interrupted", and every repair is persisted in one save. The unchanged registered workload then ran once from a clean tree at the fix commit `c8678b64ca47b317458ca9b9f8d8715d42114a31` (PR #24's fix commit), on 2026-10-03 at 17:32:54–17:33:20Z:
+
+    MIX_ENV=dev mix elara.lab sweep session_recovery \
+      --over fault=provider_started,provider_streaming,tool_running \
+      --n 10 --seed 42 --results lab/results/rob-1235
+
+The sweep and tee both exited 0. All 30 lines carry `host.commit` `c8678b6…` and `host.dirty` false, and are `complete` with every check true. The 20 provider-fault rows settled A `failed` with the provider-crash error and no tool outcome, as in attempt 4. In all 10 `tool_running` rows, A's receipt is still `failed` "session restarted", but A's marker outcome is now `indeterminate` ("session restarted while this call may have been running; its outcome is unknown and it may have partially changed the workspace"), so `indeterminate_without_receipt` holds 10/10. Recovery took at most 46 ms and backlog completion at most 366 ms, so both bounds held. Evidence: `lab/results/rob-1235/` (`rob-1235-prelaunch.log`, `rob-1235-sweep.out`, `session_recovery/20261003T173255392112Z-sweep-fault-seed42/`).
+
+Limits: one seeded sweep with a simulated provider, on the ordinary direct path only (`effect_executor: nil`). It says nothing about the rest of the LAB-5 matrix, about real providers, or about exactly-once effects. Indeterminate is deliberately conservative: a read-only call cut off by a restart is also reported indeterminate, because the reopened session's tool set cannot prove what the call was. A death while executor-backed recovery is still writing its results can make a never-started call indeterminate on a later reopen (docs/sessions.md).
+
 ## Interpretation
 
 Attempt 1 supports no recovery conclusion. Attempt 2 does not establish

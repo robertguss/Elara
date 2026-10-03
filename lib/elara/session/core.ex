@@ -86,9 +86,16 @@ defmodule Elara.Session.Core do
     new(config, [])
   end
 
-  @spec new(Config.t(), [Message.t()]) :: State.t()
-  def new(%Config{} = config, history) when is_list(history) do
-    %State{config: config, history: repair_history(history), phase: :idle, next_ref: 1}
+  @doc """
+  Build an idle state from persisted history, repairing unresolved tool calls.
+  `boundary:` names the one call that may have been running when the session
+  stopped (default: the first unresolved call; `nil`: none); see
+  `repair_history/2`.
+  """
+  @spec new(Config.t(), [Message.t()], keyword()) :: State.t()
+  def new(%Config{} = config, history, opts \\ []) when is_list(history) do
+    boundary = Keyword.get(opts, :boundary, :first_unresolved)
+    %State{config: config, history: repair_history(history, boundary), phase: :idle, next_ref: 1}
   end
 
   @spec rebase_history(State.t(), [Message.t()]) :: State.t()
@@ -101,8 +108,19 @@ defmodule Elara.Session.Core do
     %{state | config: %{state.config | tools: tools}}
   end
 
-  @spec repair_history([Message.t()]) :: [Message.t()]
-  def repair_history(history) when is_list(history) do
+  @restarted "session restarted while this call may have been running; " <>
+               "its outcome is unknown and it may have partially changed the workspace"
+
+  @doc """
+  Give every unresolved trailing tool call a result. Calls run one at a time and
+  a result is persisted before the next call starts, so only the boundary call
+  can have started: with parsed arguments it fails closed as indeterminate,
+  whatever today's tool config says, because that config cannot prove what the
+  call was when it ran. Every other unresolved call never started and reports
+  an ordinary error. It cannot tell whether the boundary call started at all.
+  """
+  @spec repair_history([Message.t()], :first_unresolved | String.t() | nil) :: [Message.t()]
+  def repair_history(history, boundary \\ :first_unresolved) when is_list(history) do
     {trailing_results, rest} =
       history
       |> Enum.reverse()
@@ -115,17 +133,24 @@ defmodule Elara.Session.Core do
           |> Enum.map(& &1.call_id)
           |> MapSet.new()
 
-        interrupted =
-          calls
-          |> Enum.reject(&MapSet.member?(completed, &1.id))
-          |> Enum.map(&Message.tool_result(&1, {:error, "interrupted"}))
+        unresolved = Enum.reject(calls, &MapSet.member?(completed, &1.id))
 
-        history ++ interrupted
+        boundary =
+          case {boundary, unresolved} do
+            {:first_unresolved, [first | _]} -> first.id
+            {:first_unresolved, []} -> nil
+            {id, _} -> id
+          end
+
+        history ++ Enum.map(unresolved, &Message.tool_result(&1, restart_outcome(&1, boundary)))
 
       _ ->
         history
     end
   end
+
+  defp restart_outcome(%ToolCall{id: id, args: {:ok, _}}, id), do: {:indeterminate, @restarted}
+  defp restart_outcome(%ToolCall{}, _boundary), do: {:error, "interrupted"}
 
   @spec idle?(State.t()) :: boolean()
   def idle?(%State{phase: :idle}), do: true

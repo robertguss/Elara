@@ -32,12 +32,11 @@ defmodule Elara.RoadmapTest do
     assert roadmap =~ "lab/results/"
   end
 
-  test "repository guidance uses the driver loop" do
-    agents = File.read!(Path.join(@root, "AGENTS.md"))
+  test "repository guidance uses the crew loop" do
+    claude = File.read!(Path.join(@root, "CLAUDE.md"))
 
-    assert agents =~ "## Driver", "AGENTS.md must define the driver workflow"
-    assert agents =~ "Linear: team ROB, project Elara"
-    assert agents =~ "Worker: pi"
+    assert claude =~ "## Crew", "CLAUDE.md must configure the crew skill"
+    assert claude =~ "Linear: team ROB, project Elara"
 
     for path <- ["AGENTS.md", "CLAUDE.md", "HANDOFF.md"] do
       contents = File.read!(Path.join(@root, path))

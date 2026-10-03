@@ -21,7 +21,8 @@ defmodule Elara.Lab.Scenarios.Concurrency.Profiling do
     {census, setup} =
       Profile.timed_census(
         clients: Keyword.fetch!(opts, :clients),
-        connections: Keyword.fetch!(opts, :connections)
+        connections: Keyword.fetch!(opts, :connections),
+        probe: Keyword.get(opts, :probe, false)
       )
 
     classes = Map.new(census)
@@ -243,11 +244,24 @@ defmodule Elara.Lab.Scenarios.Concurrency.Profiling do
     end
   end
 
-  # Setup marks relative to t0 (ms); supervisor readings as taken.
+  # Setup marks and each supervisor call's bracket relative to t0 (ms); the
+  # other supervisor readings as taken.
   defp setup(state) do
     t0 = state.handle.t0
-    %{state.setup | marks: Map.new(state.setup.marks, fn {phase, at} -> {phase, at - t0} end)}
+
+    supervisors =
+      Map.new(state.setup.supervisors, fn {key, reading} ->
+        {key, reading |> shift(:call_start, t0) |> shift(:call_done, t0)}
+      end)
+
+    %{
+      state.setup
+      | marks: Map.new(state.setup.marks, fn {phase, at} -> {phase, at - t0} end),
+        supervisors: supervisors
+    }
   end
+
+  defp shift(reading, key, t0), do: Map.update!(reading, key, &(&1 - t0))
 
   defp invalid(validity, []), do: validity
 

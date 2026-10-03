@@ -160,22 +160,33 @@ defmodule Elara.Lab.Profile do
   @doc """
   `census/1` with setup diagnostics (ROB-1228): monotonic ms marks at each of
   `census_marks/0`, and each supervisor's `message_queue_len` just before and
-  after its own call, with the length of the list that call returned. It adds
+  after its own call, with the length of the list that call returned, and
+  `call_start`/`call_done` (monotonic ms) bracketing the call itself. It adds
   only clock reads and `Process.info/2`, but those still perturb scheduling.
+  Options beyond `census/1`'s: `:session_sup` (the supervisor read, default
+  `Elara.SessionSup`) and `probe: true`, which takes an `Elara.Lab.SupProbe`
+  reading of it before the queue read (`probe`, with `probe_elapsed_us`, the
+  whole probe's caller-side time). The probe pauses that supervisor while its
+  mailbox is copied.
   """
   @spec timed_census(keyword()) :: {[{pid(), atom()}], map()}
   def timed_census(opts), do: census(opts, %{marks: %{}, supervisors: %{}})
 
   # `timing` nil is the untimed path: the same calls in the same order.
   defp census(opts, timing) do
+    session_sup = Keyword.get(opts, :session_sup, Elara.SessionSup)
     timing = mark(timing, :census_start)
     connections = MapSet.new(Keyword.fetch!(opts, :connections).() || [])
     timing = mark(timing, :connections_done)
 
     {children, timing} =
-      supervised(timing, :task_sup, Elara.TaskSup, fn ->
-        Task.Supervisor.children(Elara.TaskSup)
-      end)
+      supervised(
+        timing,
+        :task_sup,
+        Elara.TaskSup,
+        fn -> Task.Supervisor.children(Elara.TaskSup) end,
+        false
+      )
 
     timing = mark(timing, :task_children_done)
 
@@ -193,9 +204,13 @@ defmodule Elara.Lab.Profile do
     timing = mark(timing, :task_classified_done)
 
     {session_children, timing} =
-      supervised(timing, :session_sup, Elara.SessionSup, fn ->
-        DynamicSupervisor.which_children(Elara.SessionSup)
-      end)
+      supervised(
+        timing,
+        :session_sup,
+        session_sup,
+        fn -> DynamicSupervisor.which_children(session_sup) end,
+        timing != nil and Keyword.get(opts, :probe, false)
+      )
 
     timing = mark(timing, :session_children_done)
 
@@ -231,18 +246,35 @@ defmodule Elara.Lab.Profile do
   defp mark(timing, phase),
     do: put_in(timing, [:marks, phase], System.monotonic_time(:millisecond))
 
-  defp supervised(nil, _key, _name, call), do: {call.(), nil}
+  defp supervised(nil, _key, _name, call, _probe?), do: {call.(), nil}
 
-  defp supervised(timing, key, name, call) do
+  defp supervised(timing, key, name, call, probe?) do
+    probe = if probe?, do: timed_probe(name), else: %{}
     before = queue_len(name)
+    call_start = System.monotonic_time(:millisecond)
     children = call.()
+    call_done = System.monotonic_time(:millisecond)
 
-    reading = %{queue_before: before, queue_after: queue_len(name), children: length(children)}
+    reading =
+      Map.merge(probe, %{
+        queue_before: before,
+        call_start: call_start,
+        call_done: call_done,
+        queue_after: queue_len(name),
+        children: length(children)
+      })
+
     {children, put_in(timing, [:supervisors, key], reading)}
   end
 
+  defp timed_probe(name) do
+    started = System.monotonic_time(:microsecond)
+    probe = Elara.Lab.SupProbe.read(name)
+    %{probe: probe, probe_elapsed_us: System.monotonic_time(:microsecond) - started}
+  end
+
   defp queue_len(name) do
-    with pid when is_pid(pid) <- Process.whereis(name),
+    with pid when is_pid(pid) <- if(is_pid(name), do: name, else: Process.whereis(name)),
          {:message_queue_len, n} <- Process.info(pid, :message_queue_len) do
       n
     else

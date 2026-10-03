@@ -50,7 +50,9 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     "stall_first_answer_ms" => 0,
     "client_hold" => 0,
     "server_port" => 0,
-    "resume_delay_ms" => 0
+    "resume_delay_ms" => 0,
+    # Diagnostic, 0 or 1: probe SessionSup each sample tick and time each start.
+    "session_sup_probe" => 0
   }
   @counted [
     {:file, :sync, 1},
@@ -287,6 +289,13 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     unless trace in ["none", "counts", "profile"],
       do: raise(ArgumentError, "trace must be none, counts or profile, got #{inspect(trace)}")
 
+    unless ints.session_sup_probe in [0, 1],
+      do:
+        raise(
+          ArgumentError,
+          "session_sup_probe must be 0 or 1, got #{inspect(ints.session_sup_probe)}"
+        )
+
     topology = Map.get(params, "topology", "sessions")
 
     unless topology in ["sessions", "children"],
@@ -322,7 +331,8 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         clients: run.clients,
         stub_os_pid: Elara.Exec.status().os_pid,
         guard_memory_bytes: p.guard_memory_mb * 1_048_576,
-        guard_mailbox: p.guard_mailbox
+        guard_mailbox: p.guard_mailbox,
+        probe: p.session_sup_probe == 1
       )
 
     defer(fn -> Process.exit(sampler, :kill) end)
@@ -385,6 +395,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         profiling: nil,
         profile_outcome: nil,
         sessions: [],
+        session_starts: [],
         attaches: [],
         turns: [],
         summaries: %{},
@@ -466,6 +477,15 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   # Reports that arrive both while coordinating and while settling.
   defp record(run, {:session, sim_id, id}),
     do: {:ok, %{run | sessions: [{sim_id, id} | run.sessions]}}
+
+  defp record(run, {:session, sim_id, id, begun, ms}),
+    do:
+      {:ok,
+       %{
+         run
+         | sessions: [{sim_id, id} | run.sessions],
+           session_starts: [{begun, ms} | run.session_starts]
+       }}
 
   defp record(run, {:attached, id, result}),
     do: {:ok, %{run | attaches: [{id, result} | run.attaches]}}
@@ -573,6 +593,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       Profiling.start(
         t0: run.t0,
         window: {to - run.p.profile_window_ms, to},
+        probe: run.p.session_sup_probe == 1,
         clients: fn -> for {pid, _sim} <- :ets.tab2list(clients), do: pid end,
         connections: fn -> Sampler.connections(run.listen, run.port) || [] end
       )
@@ -652,6 +673,8 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       sim_id = "u#{index}c#{number}"
       client = request_client(run, sim_id)
 
+      begun = if run.p.session_sup_probe == 1, do: System.monotonic_time(:millisecond)
+
       {:ok, id} =
         Elara.start_session(
           provider: provider(run, sim_id),
@@ -661,7 +684,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
           context_limit: 1_000_000
         )
 
-      send(run.coordinator, {:session, sim_id, id})
+      report_session(run, sim_id, id, begun)
       attach = Client.attach(client, id, 10_000)
       send(run.coordinator, {:attached, id, attach})
       if attach == :ok, do: turns(run, id, 1)
@@ -670,6 +693,16 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       cycle(run, index, number + 1)
     end
   end
+
+  # With the probe on, the start's timing rides on the existing report.
+  defp report_session(%{p: %{session_sup_probe: 1}} = run, sim_id, id, begun),
+    do:
+      send(
+        run.coordinator,
+        {:session, sim_id, id, begun, System.monotonic_time(:millisecond) - begun}
+      )
+
+  defp report_session(run, sim_id, id, _begun), do: send(run.coordinator, {:session, sim_id, id})
 
   defp provider(run, sim_id) do
     Simulated.new(
@@ -889,7 +922,12 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     run = collect_clients(run, ledger_final)
     left_clients = Map.values(run.client_refs)
     Enum.each(left_clients, &Process.exit(&1, :kill))
-    samples = Sampler.stop(run.sampler)
+
+    samples =
+      if run.p.session_sup_probe == 1,
+        do: Sampler.stop(run.sampler, 20_000),
+        else: Sampler.stop(run.sampler)
+
     GenServer.stop(run.server)
     run = await_profile(run)
 
@@ -1272,7 +1310,32 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       choices_digest: Elara.Lab.digest({run.offsets, profile(p)}),
       cleanup_confirmed: settlement.cleanup_confirmed
     }
+    |> Map.merge(probe_result(run, sampled))
   end
+
+  # Present only with session_sup_probe=1: readings and trace buckets as ms
+  # after t0, and each start's caller-side duration. Diagnostic, no verdict.
+  defp probe_result(%{p: %{session_sup_probe: 1}} = run, sampled) do
+    starts = Enum.sort(run.session_starts)
+
+    %{
+      session_sup: %{
+        samples: Enum.map(sampled.probe, &Map.update!(&1, :t, fn t -> t - run.t0 end)),
+        running:
+          case sampled.running do
+            :unavailable -> :unavailable
+            buckets -> Enum.map(buckets, &Map.update!(&1, :start, fn t -> t - run.t0 end))
+          end
+      },
+      session_starts: %{
+        count: length(starts),
+        start_ms: Elara.Lab.percentiles(for {begun, ms} <- starts, begun < run.load_end, do: ms),
+        starts: for({begun, ms} <- starts, do: [begun - run.t0, ms])
+      }
+    }
+  end
+
+  defp probe_result(_run, _sampled), do: %{}
 
   defp guard?(stop), do: stop in [:guard_memory, :guard_mailbox, :guard_lag]
 

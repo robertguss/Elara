@@ -9,11 +9,11 @@
   leaving the started mutation indeterminate. That second claim is a predicted
   finding, not a pass condition and not a runtime fix.
 - **Queue item:** LAB-5 · **Date:** 2026-10-02 · **Base:** `ca01d8a8`
-- **Status:** harness accepted in PR #9 at `017db4d`; no accepted pilot
-  measurement. Attempts 1, 2 and 3 are invalid historical evidence. The
-  serialization repair is implemented in ROB-1231; one re-run of the registered
-  command, after the smoke pre-check below, is authorized by the owner on
-  2026-10-03. The parent LAB-5 remains unfinished.
+- **Status:** harness accepted in PR #9 at `017db4d`; serialization repaired
+  in ROB-1231 (`c82a17f`). Attempts 1, 2 and 3 are invalid historical evidence.
+  Attempt 4, the registered pilot at `c82a17f` (2026-10-03), is valid: claim 1
+  held in 20/20 provider runs and the predicted finding held in 10/10 marker
+  runs. The parent LAB-5 remains unfinished.
 
 ## Method
 
@@ -101,6 +101,7 @@ further owner authorization.
 Two invalid sweep attempts exist. They are not one 30-run measurement and
 neither is accepted pilot evidence. No further registered or supplementary
 measurement was run after attempt 2.
+(2026-10-03: this paragraph predates attempts 3 and 4 below.)
 
 Attempt 1, candidate `b9a9ec0`, is invalid. All 30 children exited 1 before
 writing a result line because `Elara.Lab.write_results/2` could not JSON-encode
@@ -159,6 +160,54 @@ retained but not analyzed or rehabilitated here. The accepted PR #9 harness
 JSON round-trip test used a constructed witness, not a rule-matched run through
 `write_results/2`.
 
+### Attempt 4 — registered pilot at c82a17f (2026-10-03)
+
+The accepted PR #9 harness plus the ROB-1231 result-boundary repair
+(`finalize/1`: host provenance and JSON-safe conversion; checks, bounds and
+recovery/backlog timing unchanged), run against runtime revision `c82a17f`. It
+is not a runtime identical to PR #9's. The smoke pre-check met its launch
+criterion (3 result rows, provenance `c82a17f`/clean, no error rows); it is not
+pilot evidence. The registered command then ran once, from a clean tree at
+`c82a17f` under `MIX_ENV=dev`. The sweep exited 1 and tee exited 0. All 30 lines
+are scenario results with `.host.commit` `c82a17f…` and `.host.dirty` false,
+and cover each fault at seeds 42–51 once.
+
+| Fault                | Runs | Exit ≠ 0 | Complete | Cleanup | Retained | Evidence | Recovery / backlog bound | `recovery_ms` n, min/med/max | `backlog_ms` n, min/med/max | Markers | Failed checks                       |
+| -------------------- | ---- | -------- | -------- | ------- | -------- | -------- | ------------------------ | ---------------------------- | --------------------------- | ------- | ----------------------------------- |
+| `provider_started`   | 10   | 0        | 10       | 10      | 0        | 0        | 10 / 10 holds            | 10, 16/27/40                 | 10, 104/232/294             | 2 ×10   | none                                |
+| `provider_streaming` | 10   | 0        | 10       | 10      | 0        | 0        | 10 / 10 holds            | 10, 16/17/28                 | 10, 104/133.5/279           | 2 ×10   | none                                |
+| `tool_running`       | 10   | 10       | 10       | 10      | 0        | 10       | 10 / 10 holds            | 10, 13/14/44                 | 10, 102/171/266             | 3 ×10   | `indeterminate_without_receipt` ×10 |
+
+Fields: `.sweep.exit_status`, `.complete`, `.cleanup.confirmed`, presence of
+`.retained_dir` and `.evidence_dir`, `.bounds`, `.recovery_ms`, `.backlog_ms`,
+`.marker_count` (every row complete, so no placeholder counts), and `.checks`.
+Bounds: recovery 5 s; backlog 5 s plus 2 × 1 s.
+
+| Fault                | A receipt (`.recovery.receipts.A`)  | A tool outcome (`.recovery.tool_outcomes.A`) | A history after its user entry            | B, C                         |
+| -------------------- | ----------------------------------- | -------------------------------------------- | ----------------------------------------- | ---------------------------- |
+| `provider_started`   | `failed`, provider crash ×10        | unobserved (null) ×10                        | none ×10                                  | settled ×10, markers B, C    |
+| `provider_streaming` | `failed`, provider crash ×10        | unobserved (null) ×10                        | none ×10                                  | settled ×10, markers B, C    |
+| `tool_running`       | `failed`, `"session restarted"` ×10 | `error`, `"interrupted"` ×10                 | tool call, then error `"interrupted"` ×10 | settled ×10, markers A, B, C |
+
+"Provider crash" is the receipt error `{:provider_error, %Elara.Provider.Error{kind:
+:crash, message: "provider task crashed: :killed"}}` (status nil).
+"Settled" means the observer's composite rule held: a `consumed` receipt with no
+error, history identity, and a cleared `active_input_id` (`.checks`). `.death`
+matched with reason `killed` in all 30 rows; `completed_turns` is 2 in all 30.
+
+Representative single-case reproduction: (`tool_running`,
+`indeterminate_without_receipt`), seed 42. Pilot evidence is kept in the
+sweep's `tmp/2-tool_running-seed42/`. One re-run, outside the measurement,
+reproduced the same failed check, receipt and outcome at `c82a17f`/clean:
+
+    MIX_ENV=dev mix elara.lab run session_recovery --n 1 --seed 42 --set fault=tool_running --results lab/results/session_recovery/rob-1232-repro-tool_running-42
+
+Evidence under `lab/results/session_recovery/`:
+`20261003T141414704662Z-sweep-fault-seed42/` (with `report.tsv`,
+`points.tsv`), `rob-1232-prelaunch.log`, `rob-1232-pilot-sweep.out`,
+`rob-1232-smoke.out` and `rob-1232-repro-tool_running-42/`. The smoke is under
+`lab/results/rob-1085-smoke/session_recovery/20261003T141357242701Z-sweep-fault-seed42/`.
+
 ## Interpretation
 
 Attempt 1 supports no recovery conclusion. Attempt 2 does not establish
@@ -170,6 +219,25 @@ A's input receipt `"session restarted"` and the associated persisted typed tool
 outcome `{:error, "interrupted"}`. This is a negative against causal
 indeterminacy. It is not evidence of correct protocol execution or completed,
 bounded backlog recovery.
+(2026-10-03: the two paragraphs above predate attempt 4.)
+
+Attempt 4, claim 1: supported. In all 20 provider-fault runs, A settled
+`failed` with a provider-crash error and no persisted assistant or tool
+history, then B and C each settled once with exactly one marker each, inside
+both bounds (recovery at most 40 ms, backlog at most 294 ms).
+
+Attempt 4, claim 2: the predicted finding held in 10/10. The witnessed
+`tool_running` hook occurs after A's marker write, and A's bytes are also
+present. Recovery with `effect_executor: nil` nevertheless recorded A's receipt as `failed` "session restarted" and its typed tool outcome
+as `error` "interrupted". It was not left indeterminate. This is against the
+fail-closed rule for uncertain mutations. The marker bytes do not prove
+completion, so the honest classification was indeterminate. Recovery itself
+was bounded, and B and C still settled.
+
+The pilot does not show: behaviour under the rest of the LAB-5 fault matrix
+(children, handoff, jobs, client, worker, stub, whole VM, process groups);
+choice-schedule variation (see Limits); behaviour under an explicit effect
+executor; or anything about real providers.
 
 ## Changes
 
@@ -193,3 +261,21 @@ and process-group faults, and schedules of at least 1000 runs. A future pilot
 requires a separately reviewed measurement brief and explicit authorization.
 ROB-1085 3/3 is the authorized single re-run of the registered command, after
 the fix and smoke pre-check.
+(2026-10-03: the paragraph above predates attempt 4, which completed the
+original 30-run pilot. Full LAB-5 is still unfinished.)
+
+Attempt 4 limits:
+- One run per fault and seed, with no variance isolation.
+- Each fault produced the same recorded choice-category sequence across seeds
+  42–51, but seeded answer text differed. These runs repeat the same
+  fault/workload structure without isolating timing variance or demonstrating
+  broader choice-schedule coverage. `choices_digest` also includes per-run input
+  identities, so differing digests do not establish differing choice
+  schedules.
+- The host carried external load: load averages about 9–12 (1 min) and 23–47
+  (5/15 min) during the run, and one unrelated BEAM in another checkout; see
+  `rob-1232-prelaunch.log`.
+
+Next: the predicted finding is a candidate runtime fix. Its scope is an owner
+decision, outside this pilot. The remaining matrix and the at-least-1000
+schedules remain.

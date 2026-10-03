@@ -256,6 +256,71 @@ defmodule Elara.Lab.ProfileTest do
     end
   end
 
+  defp advance_past(target, spins \\ 10_000_000) do
+    now = System.monotonic_time(:millisecond)
+
+    cond do
+      now >= target -> now
+      spins == 0 -> flunk("the monotonic clock did not advance")
+      true -> advance_past(target, spins - 1)
+    end
+  end
+
+  describe "the timed first census" do
+    test "it returns the plain census with seven ordered marks and both supervisors' readings" do
+      client = spawn(fn -> Work.park() end)
+      on_exit(fn -> Process.exit(client, :kill) end)
+      opts = [clients: fn -> [client] end, connections: fn -> [] end]
+
+      {census, setup} = Profile.timed_census(opts)
+
+      assert census == Profile.census(opts)
+      assert {client, :client} in census
+      assert Map.keys(setup.marks) |> Enum.sort() == Enum.sort(Profile.census_marks())
+      marks = Enum.map(Profile.census_marks(), &setup.marks[&1])
+      assert marks == Enum.sort(marks)
+
+      for key <- [:task_sup, :session_sup] do
+        reading = setup.supervisors[key]
+        assert is_integer(reading.queue_before) and is_integer(reading.queue_after)
+        assert is_integer(reading.children)
+      end
+    end
+
+    test "a held phase's time lands between its own marks" do
+      test = self()
+      gate = make_ref()
+
+      connections = fn ->
+        send(test, {:held, self()})
+        receive do: ({:release, ^gate} -> [])
+      end
+
+      task =
+        Task.async(fn ->
+          Profile.timed_census(clients: fn -> [] end, connections: connections)
+        end)
+
+      on_exit(fn -> Process.exit(task.pid, :kill) end)
+
+      assert_receive {:held, holder}, 5_000
+      held_at = System.monotonic_time(:millisecond)
+      # Hold the gate across a strictly positive interval: a bounded spin on
+      # the monotonic clock, not a sleep.
+      released_at = advance_past(held_at + 2)
+      send(holder, {:release, gate})
+      {_census, setup} = Task.await(task, 5_000)
+
+      assert setup.marks.census_start <= held_at
+      assert released_at <= setup.marks.connections_done
+      assert setup.marks.connections_done - setup.marks.census_start >= 2
+
+      for phase <- Profile.census_marks() -- [:census_start, :connections_done] do
+        assert setup.marks[phase] >= setup.marks.connections_done
+      end
+    end
+  end
+
   describe "the window" do
     test "the freeze stops counting, also in modules loaded later; modules loaded in the window count" do
       handle = activate()

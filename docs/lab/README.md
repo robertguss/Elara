@@ -124,7 +124,20 @@ undetermined for that repetition. It also carries diagnostics-only `user_failure
 and `timers` (timer arm, deadline and handling-delay snapshots), and samples the
 coordinator mailbox under `queues.coordinator`; these fields recover failure
 labels and localize delay, but carry no verdict, change no check or bound, and a
-queue-length snapshot cannot prove earlier backlog or guarantee a root cause. It refuses to start while `Elara.Exec` runs
+queue-length snapshot cannot prove earlier backlog or guarantee a root cause.
+With `trace=profile`, the profile block also carries diagnostics-only `setup`
+(ROB-1228). `marks` are ms after t0 at each phase of the first census
+(`census_start`, `connections_done`, `task_children_done`,
+`task_classified_done`, `session_children_done`, `clients_done`,
+`census_done`), then `capture_done`, `activate_start` and `activate_done`.
+`supervisors` gives `Elara.TaskSup`'s and `Elara.SessionSup`'s
+`message_queue_len` just before and just after the census's own call to each,
+and the length of the list that call returned. The readings are not
+simultaneous snapshots. A long interval localizes elapsed time to a phase; it
+does not distinguish queue wait from supervisor work or scheduling. The marks
+add clock reads and `Process.info/2` calls, which can perturb scheduling.
+Activation's own census is untimed, and a profile that never activated
+reports `setup` as `unavailable`. It refuses to start while `Elara.Exec` runs
 a job. Its cleanup is confirmed only when every user, session, task and client
 it started has ended, no execution job is pending, and the stub's epoch is
 unchanged; until its provider tasks end, it keeps their ledger.

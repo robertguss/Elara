@@ -13,22 +13,35 @@ defmodule Elara.Lab.Scenarios.Concurrency.Profiling do
   @doc """
   Census the named classes' memory, then activate the profile with `opts`
   (`Profile.activate/1`'s). Nothing outside the named classes is measured by
-  this first census.
+  this first census. Its phases are timed (`Profile.timed_census/1`, plus the
+  capture and activation), for diagnosis only.
   """
   @spec start(keyword()) :: map()
   def start(opts) do
-    census =
-      Profile.census(
+    {census, setup} =
+      Profile.timed_census(
         clients: Keyword.fetch!(opts, :clients),
         connections: Keyword.fetch!(opts, :connections)
       )
 
     classes = Map.new(census)
     capture = MemoryCensus.capture(Map.keys(classes), fn _pid -> true end)
+    capture_done = now()
+    before = MemoryCensus.summarize(capture, &Map.get(classes, &1))
+    activate_start = now()
+    handle = Profile.activate(opts)
+
+    marks =
+      Map.merge(setup.marks, %{
+        capture_done: capture_done,
+        activate_start: activate_start,
+        activate_done: now()
+      })
 
     %{
-      before: MemoryCensus.summarize(capture, &Map.get(classes, &1)),
-      handle: Profile.activate(opts),
+      before: before,
+      handle: handle,
+      setup: %{setup | marks: marks},
       capture: nil,
       holder: nil,
       collector: nil,
@@ -172,6 +185,7 @@ defmodule Elara.Lab.Scenarios.Concurrency.Profiling do
   @spec report(map() | nil, map() | nil, map()) :: map()
   def report(nil, _outcome, facts),
     do: %{
+      setup: :unavailable,
       validity: invalid(%{status: :invalid, reasons: []}, [:not_activated | run_reasons(facts)])
     }
 
@@ -182,6 +196,7 @@ defmodule Elara.Lab.Scenarios.Concurrency.Profiling do
       memory: %{before_activation: state.before, after_freeze: nil},
       clients_started: length(state.handle.clients.()),
       t0_ms: state.handle.t0,
+      setup: setup(state),
       collection_ms: outcome.collection_ms,
       collection_failure: outcome.reason
     }
@@ -226,6 +241,12 @@ defmodule Elara.Lab.Scenarios.Concurrency.Profiling do
         |> put_in([:memory, :after_freeze], after_freeze)
         |> Map.put(:validity, invalid(result.validity, collection ++ run_reasons(facts)))
     end
+  end
+
+  # Setup marks relative to t0 (ms); supervisor readings as taken.
+  defp setup(state) do
+    t0 = state.handle.t0
+    %{state.setup | marks: Map.new(state.setup.marks, fn {phase, at} -> {phase, at - t0} end)}
   end
 
   defp invalid(validity, []), do: validity

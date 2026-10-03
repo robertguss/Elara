@@ -359,6 +359,41 @@ defmodule Elara.Lab.Scenarios.Concurrency.ProfilingTest do
       {state, outcome}
     end
 
+    test "setup timing is reported relative to t0 on success and failure, and unavailable without activation" do
+      phases =
+        Elara.Lab.Profile.census_marks() ++ [:capture_done, :activate_start, :activate_done]
+
+      assert_setup = fn profile, state ->
+        assert Map.keys(profile.setup.marks) |> Enum.sort() == Enum.sort(phases)
+        marks = Enum.map(phases, &profile.setup.marks[&1])
+        assert marks == Enum.sort(marks)
+        assert hd(marks) >= 0
+        assert profile.setup.marks.activate_start <= state.handle.a1 - state.handle.t0
+        assert profile.setup.marks.activate_done >= state.handle.a2 - state.handle.t0
+        assert Map.keys(profile.setup.supervisors) |> Enum.sort() == [:session_sup, :task_sup]
+        assert is_binary(JSON.encode!(profile))
+      end
+
+      {state, outcome} = collected()
+      assert outcome.status == :ok
+      assert_setup.(Profiling.report(state, outcome, facts()), state)
+
+      failed =
+        without_future_tracing()
+        |> Profiling.collect(60_000, fn
+          :profile_collect -> raise "boom"
+          _point -> :ok
+        end)
+
+      failed_outcome = Profiling.await(failed)
+      Profiling.join(failed)
+      Elara.Lab.Profile.dispose(failed.handle)
+      assert failed_outcome.status == :collection_failed
+      assert_setup.(Profiling.report(failed, failed_outcome, facts()), failed)
+
+      assert Profiling.report(nil, nil, facts()).setup == :unavailable
+    end
+
     test "no activation is reported as invalid, not activated" do
       profile = Profiling.report(nil, nil, %{checks: %{}, complete: true, incomplete: nil})
       assert profile.validity == %{status: :invalid, reasons: [:not_activated]}

@@ -142,11 +142,45 @@ defmodule Elara.Lab.Profile do
   unclassified if nothing names its origin.
   """
   @spec census(keyword()) :: [{pid(), atom()}]
-  def census(opts) do
+  def census(opts), do: opts |> census(nil) |> elem(0)
+
+  @census_marks [
+    :census_start,
+    :connections_done,
+    :task_children_done,
+    :task_classified_done,
+    :session_children_done,
+    :clients_done,
+    :census_done
+  ]
+
+  @doc "The phases `timed_census/1` marks, in execution order."
+  def census_marks, do: @census_marks
+
+  @doc """
+  `census/1` with setup diagnostics (ROB-1228): monotonic ms marks at each of
+  `census_marks/0`, and each supervisor's `message_queue_len` just before and
+  after its own call, with the length of the list that call returned. It adds
+  only clock reads and `Process.info/2`, but those still perturb scheduling.
+  """
+  @spec timed_census(keyword()) :: {[{pid(), atom()}], map()}
+  def timed_census(opts), do: census(opts, %{marks: %{}, supervisors: %{}})
+
+  # `timing` nil is the untimed path: the same calls in the same order.
+  defp census(opts, timing) do
+    timing = mark(timing, :census_start)
     connections = MapSet.new(Keyword.fetch!(opts, :connections).() || [])
+    timing = mark(timing, :connections_done)
+
+    {children, timing} =
+      supervised(timing, :task_sup, Elara.TaskSup, fn ->
+        Task.Supervisor.children(Elara.TaskSup)
+      end)
+
+    timing = mark(timing, :task_children_done)
 
     tasks =
-      for pid <- Task.Supervisor.children(Elara.TaskSup) do
+      for pid <- children do
         class =
           cond do
             pid in connections -> :connection
@@ -156,8 +190,17 @@ defmodule Elara.Lab.Profile do
         {pid, class}
       end
 
+    timing = mark(timing, :task_classified_done)
+
+    {session_children, timing} =
+      supervised(timing, :session_sup, Elara.SessionSup, fn ->
+        DynamicSupervisor.which_children(Elara.SessionSup)
+      end)
+
+    timing = mark(timing, :session_children_done)
+
     sessions =
-      for {_id, pid, _type, _mods} <- DynamicSupervisor.which_children(Elara.SessionSup),
+      for {_id, pid, _type, _mods} <- session_children,
           is_pid(pid),
           do: {pid, :session}
 
@@ -168,12 +211,43 @@ defmodule Elara.Lab.Profile do
       end
     end
 
-    (named.(Elara.Exec, :exec) ++
-       sessions ++
-       tasks ++
-       Enum.map(Keyword.fetch!(opts, :clients).(), &{&1, :client}) ++
-       named.(Elara.Threads, :threads) ++ named.(Elara.Threads.Communication, :transport))
-    |> Enum.uniq_by(&elem(&1, 0))
+    exec = named.(Elara.Exec, :exec)
+    clients = Enum.map(Keyword.fetch!(opts, :clients).(), &{&1, :client})
+    timing = mark(timing, :clients_done)
+
+    census =
+      (exec ++
+         sessions ++
+         tasks ++
+         clients ++
+         named.(Elara.Threads, :threads) ++ named.(Elara.Threads.Communication, :transport))
+      |> Enum.uniq_by(&elem(&1, 0))
+
+    {census, mark(timing, :census_done)}
+  end
+
+  defp mark(nil, _phase), do: nil
+
+  defp mark(timing, phase),
+    do: put_in(timing, [:marks, phase], System.monotonic_time(:millisecond))
+
+  defp supervised(nil, _key, _name, call), do: {call.(), nil}
+
+  defp supervised(timing, key, name, call) do
+    before = queue_len(name)
+    children = call.()
+
+    reading = %{queue_before: before, queue_after: queue_len(name), children: length(children)}
+    {children, put_in(timing, [:supervisors, key], reading)}
+  end
+
+  defp queue_len(name) do
+    with pid when is_pid(pid) <- Process.whereis(name),
+         {:message_queue_len, n} <- Process.info(pid, :message_queue_len) do
+      n
+    else
+      _ -> nil
+    end
   end
 
   @doc """

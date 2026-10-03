@@ -9,9 +9,11 @@
   leaving the started mutation indeterminate. That second claim is a predicted
   finding, not a pass condition and not a runtime fix.
 - **Queue item:** LAB-5 · **Date:** 2026-10-02 · **Base:** `ca01d8a8`
-- **Status:** repair candidate awaiting acceptance; no accepted pilot
-  measurement. Attempt 1 and attempt 2 are invalid historical evidence. The
-  original pilot and parent LAB-5 remain unfinished.
+- **Status:** harness accepted in PR #9 at `017db4d`; no accepted pilot
+  measurement. Attempts 1, 2 and 3 are invalid historical evidence. The
+  serialization fix and one re-run of the registered command are authorized by
+  the owner on 2026-10-03, with a smoke pre-check. The parent LAB-5 remains
+  unfinished.
 
 ## Method
 
@@ -96,6 +98,42 @@ and all 10 `tool_running` records lack C's non-interrupted terminal assistant
 while claiming backlog completion. The harness also injected provider faults
 before its claimed barrier and fabricated or omitted death and timing evidence.
 
+### Attempt 3 — registered pilot at f631254 (2026-10-03), invalid
+
+Attempt 3 ran exactly once from a clean tree at `f631254` under `MIX_ENV=dev`:
+
+    MIX_ENV=dev mix elara.lab sweep session_recovery \
+      --over fault=provider_started,provider_streaming,tool_running \
+      --n 10 --seed 42 \
+      --results lab/results
+
+Preflight passed 27 focused `session_recovery` tests, dev compile was clean,
+and no BEAM was running. The sweep exited 1 and tee exited 0. All 30 children
+exited 1 before writing a result; `repetitions.jsonl` has 30 error-only rows
+with reason `missing_result`. Child logs show `Protocol.UndefinedError`,
+`JSON.Encoder` not implemented for Tuple, value `{:rule, 0}`. Evidence under
+`lab/results/session_recovery/`: `rob-1085-pilot-prelaunch.log`,
+`rob-1085-pilot-sweep.out`, and
+`20261003T131521458102Z-sweep-fault-seed42/` (`repetitions.jsonl`,
+`summary.json`, `logs/`, `results/`, `tmp/`).
+
+The cause is source-traced, oracle-verified by inspection, and still to be
+confirmed by the ROB-1085 2/3 regression test.
+`lib/elara/provider/simulated.ex:139` creates `{:rule, index}` and line 115
+sends it to the collector. `lib/elara/lab.ex:283` keeps raw choices in lists
+keyed by simulator id. `lib/elara/lab/scenarios/session_recovery.ex:355` puts
+those lists into cleanup, line 1418 puts cleanup into the result, and
+`lib/elara/lab.ex:318` JSON-encodes it. The carrier is
+`.cleanup.choices[simulator_id][]`.
+
+Attempt 3 produced no serialized scenario-result records and supplies no
+accepted pilot measurements of checks, bounds, timings or A outcomes. Retained
+session artifacts under the sweep's `tmp/` have not been validated as recovery
+evidence. Serialization failed after the scenario returned; those artifacts are
+retained but not analyzed or rehabilitated here. The accepted PR #9 harness
+JSON round-trip test used a constructed witness, not a rule-matched run through
+`write_results/2`.
+
 ## Interpretation
 
 Attempt 1 supports no recovery conclusion. Attempt 2 does not establish
@@ -114,6 +152,8 @@ Registration `328de9c`, original scenario `b9a9ec0`, serialization repair
 `8a2c2c5`, and corrected harness in ROB-1085. The correction changes only lab
 observation/orchestration and historical interpretation; it does not change
 runtime recovery behavior and adds no replacement measurement records.
+ROB-1085 2/3 is planned to fix and test the rule-choice serialization path
+before any replacement measurement.
 
 ## Limits and next
 
@@ -121,3 +161,5 @@ The original pilot remains incomplete and this is not full LAB-5. The future
 matrix still includes children, handoff, jobs, client, worker, stub, whole-VM
 and process-group faults, and schedules of at least 1000 runs. A future pilot
 requires a separately reviewed measurement brief and explicit authorization.
+ROB-1085 3/3 is the authorized single re-run of the registered command, after
+the fix and smoke pre-check.

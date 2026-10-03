@@ -1,23 +1,22 @@
 # AGENTS.md
 
-## Driver
-
-Linear: team ROB, project Elara
-Worker: pi
+## Delivery and tracking
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
-is the sole current planning and status source. A Claude driver owns Linear,
-briefs, commits, and delivery; a Codex oracle reviews plans, diffs, and
-handoffs; a fresh Pi worker builds each step test-first and leaves changes
-uncommitted.
+is the sole current planning and status source. Elara is built with the `crew`
+skill, configured in `CLAUDE.md`: an Opus driver owns Linear, briefs, commits,
+and delivery; a Sonnet builder builds each step test-first and leaves changes
+uncommitted; a Fable oracle reviews the plans, diffs, and handoffs that Jev
+routes to it, and the driver reviews the rest.
 
 Ready means explicitly authorized, not merely unblocked. Keep at most one
 executable lab item, and none while paused. Each issue is delivered on an issue
-branch `work/rob-<n>-<slug>`, pushed, PR'd, and merged after the oracle's
-sign-off and passing CI under the owner's standing authorization. Done means
+branch `work/rob-<n>-<slug>`, pushed, PR'd, and merged after review
+sign-off (the oracle's, or the driver's where Jev routes the review to it) and
+passing CI under the owner's standing authorization. Done means
 merged. Do not force-push, deploy, release, or delete evidence without a
 specific owner decision. At each chunk end, the driver rewrites `HANDOFF.md` for
-the fresh driver and oracle, pointing at Linear for queue, status, and review
+the fresh crew, pointing at Linear for queue, status, and review
 evidence. Repository tests only check the durable pointers.
 
 ## Cursor Cloud specific instructions

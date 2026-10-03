@@ -18,7 +18,7 @@ Build product features only when an experiment needs them.
 
 Linear is the sole current planning and status source. `ROADMAP.md` and
 `HANDOFF.md` are durable pointers, not duplicate tracking documents. Follow
-the driver loop in `AGENTS.md`. Record continuation and review evidence in
+the crew loop: `## Crew` below, and the delivery rules in `AGENTS.md`. Record continuation and review evidence in
 Linear. Ready requires explicit selection; dependencies alone do not authorize
 work. Allow no executable item while paused and at most one otherwise. The
 driver reviews queue discipline in Linear; `test/elara/roadmap_test.exs`
@@ -198,3 +198,7 @@ generation/lease-based atomic reload.
 - Under the applicable authorization, review, commit and push evidence, then
   link it and update the Linear issue before starting its successor. Done means
   merged; a pushed branch is not Done.
+
+## Crew
+
+Linear: team ROB, project Elara

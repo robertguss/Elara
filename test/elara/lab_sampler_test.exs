@@ -64,6 +64,32 @@ defmodule Elara.Lab.SamplerTest do
     assert result.mailboxes.baseline.exec.unavailable == 0
   end
 
+  test "coordinator mailbox is sampled without tripping the session mailbox guard" do
+    owner = self()
+    for i <- 1..5, do: send(owner, {:coordinator_backlog, i})
+
+    sampler =
+      Sampler.start(
+        owner: owner,
+        sample_ms: 10,
+        listen: nil,
+        server_port: nil,
+        clients: :ets.new(:clients, [:public]),
+        stub_os_pid: nil,
+        guard_memory_bytes: 1,
+        guard_mailbox: 1
+      )
+
+    assert_receive {:guard, :memory, _, _}, 1_000
+    result = Sampler.stop(sampler)
+
+    coordinator = result.mailboxes.baseline.coordinator
+    assert Enum.any?(Map.keys(coordinator.counts), &(&1 >= 5))
+    refute_received {:guard, :mailbox, _, _}
+
+    for i <- 1..5, do: assert_receive({:coordinator_backlog, ^i})
+  end
+
   test "samples and mailboxes are phased; a cutoff ends the window early" do
     sampler =
       Sampler.start(

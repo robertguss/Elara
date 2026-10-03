@@ -887,6 +887,38 @@ The owner-approved N = 500 supplementary instrumented rerun does not close the h
 
 - **N = 500 instrumented rerun limits.** The owner-approved rerun used different code from the original invalid profile: ROB-1217's observation-only diagnostics add about one `Process.info/2` per sample tick and per timer. That overhead is part of the rerun and cannot be separated here. The rerun's host samples (`lab3-profile-n500-rerun-host.log`) show Elara's own BEAM at 717.3% and 1,052.1% CPU during the measurement, with external processes including WindowServer up to 44.6%, `mds` 30.6%, `mds_stores` 12.6%, `fseventsd` 15.2%, a WebKit content process 7.7%, ChatGPT 6.4%, a Codex renderer 6.8%, Amp 8.1%, and pi 10.2%. Before launch, XProtect was 32.2% and WindowServer 42.3%. The samples separate Elara's BEAM load from external processes, but can miss shorter bursts. One rerun cannot isolate run-to-run variance.
 
+#### Setup-stall diagnosis (ROB-1228, 2026-10-03)
+
+A diagnostic, not a LAB-3 measurement or rerun: it is not counted, ranks nothing and makes no attribution or bottleneck claim. It times the first census of `start_profile/1` using ROB-1237's `setup` marks (`docs/lab/README.md`).
+
+**Protocol.** Command: `caffeinate -ims mix elara.lab sweep concurrency --over sessions=500 --n 1 --seed 42 --set trace=profile --results lab/results/concurrency-diag`, the ROB-1083 rerun's configuration, run once from a clean tree with `MIX_ENV` unset on the owner's M3 Max on AC power. Attempt 1 (at `f9ccd9b`) never launched: its load gate did not hold for 60 min (`lab/results/concurrency-diag/rob-1238-prelaunch.log`). Attempt 2 ran at `3854b7e`, which differs from `f9ccd9b` only in `HANDOFF.md`. Launch gate: two 1-min load readings 60 s apart, both at most 8, within 60 min. It held at 16:56–16:57Z (4.01, 3.04), and the run lasted 16:57:22–17:08:03Z. A watchdog with a 40-min deadline (validated against a forking fixture beforehand) was cancelled at the normal finish. Its cleanup confirmation, had it fired, would cover discovered processes only: a double-forked descendant whose intermediate parent exits before discovery can escape it. The result line is `3854b7e`, clean tree, seed 42, `sessions=500`, `trace=profile`. The sweep exited 1 (`users_ok`; `user_failures` holds 58 `:no_client`). Evidence: `lab/results/concurrency-diag/concurrency/20261003T165722555796Z-sweep-sessions-seed42/` and `rob-1238-a2-{prelaunch.log,sweep.out,host.log,watchdog.log,watchdog-fixture.log}`.
+
+**Table D-setup:** first-census marks, in ms after t0 (`.profile.setup.marks`), and the interval since the previous mark.
+
+| Mark | ms after t0 | Interval (ms) |
+| :-- | --: | --: |
+| `census_start` | 480,032 | — |
+| `connections_done` | 480,033 | 1 |
+| `task_children_done` | 480,033 | 0 |
+| `task_classified_done` | 480,035 | 2 |
+| `session_children_done` | 628,478 | 148,443 |
+| `clients_done` | 628,478 | 0 |
+| `census_done` | 628,478 | 0 |
+| `capture_done` | 628,481 | 3 |
+| `activate_start` | 628,501 | 20 |
+| `activate_done` | 628,517 | 16 |
+
+Supervisor readings (`.profile.setup.supervisors`): `Elara.TaskSup` queue 0 before and 0 after, with 234 children; `Elara.SessionSup` queue 543 before and 0 after, with 500 children. Pre-census setup, `.profile.setup.marks.census_start − .timers.profile_start.handled_ms`, is 480,032 − 480,028 = 4 ms. `profile_start` was handled 2 ms after its deadline, with a coordinator queue of 0. `load_end` was handled at 628,517 ms, 28,491 ms late, with a coordinator queue of 2,118. The sampled coordinator queue (`.queues.coordinator`) peaked at 1,159 (p99 1,147, 222 observations). Validity (`.profile.validity`) is `invalid: interior_overlap; lateness_over_30s; run_checks_failed`, as reported.
+
+**Interpretation.** The gap recurred. Pre-census setup took 4 ms. Of the 148,446 ms from `census_start` to `census_done`, 148,443 ms fall between `task_classified_done` and `session_children_done`. That interval holds the census's `DynamicSupervisor.which_children(Elara.SessionSup)` call, the `message_queue_len` reads on either side of it and the wrapper's bookkeeping (`lib/elara/lab/profile.ex`), so it is not isolated call latency. `Elara.SessionSup` had 543 queued messages just before the call and 0 after. Every other phase took at most 20 ms. This run localizes its setup delay to that interval. The earlier runs' ~133 s activation delays (132,648 ms at `26a64f1`) had no phase timings, so whether they share that localization remains unproven. It does not establish:
+- whether the time was spent queued behind those 543 messages, in the supervisor's own work, in scheduling, or in the bracketing `Process.info/2` reads;
+- what the queued messages were;
+- whether the 58 `:no_client` exits or the coordinator's backlog follow from it.
+
+Two queue-length readings are not a backlog history. The marks add clock reads and `Process.info/2` calls, which can perturb scheduling. One run cannot speak to variance. No causal fix is proposed. The further diagnosis needed, and an untested fix direction, are filed as a follow-up issue.
+
+**Host.** `rob-1238-a2-host.log` samples `uptime` and the top 8 processes by CPU every 60 s. It can miss shorter activity, and also any process outside a sample's top 8. The figures below are sampled extrema. Elara's BEAM ranged from 293% to 818% CPU. The 1-min load average rose from 3.04 at launch to 55.12 at 17:01:22Z. Other sampled processes at or above 20% CPU included `mds_stores` 81% (16:59Z), CodexBar 65% (16:59Z), `node` 65% (16:58Z), `diagnosticd` 53% (17:00Z) and OrbStack 25% (17:06Z). iOS simulator processes appear in samples from 16:57:22Z on (up to 62% at 17:00Z). WTSCompanion (up to 40%), a Maestro UI-test driver (up to 25%) and `xcodebuild` (24%) appear at 17:03–17:05Z. So simulator activity overlaps the diagnostic, but its start, end and continuity are unknown. The overlap is a confound, not an established effect.
+
 ### Child-thread variant
 
 - **Sequential sweeps.** The children ran first and the control second, so

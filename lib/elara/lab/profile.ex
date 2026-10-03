@@ -140,6 +140,16 @@ defmodule Elara.Lab.Profile do
   An `Elara.TaskSup` child is a connection if it owns a server socket or its
   initial call names `Elara.Server`, a task if it names another module, and
   unclassified if nothing names its origin.
+
+  The sessions are a read of `Elara.SessionSup`'s links minus its parent, not a
+  supervisor call: the live children at that instant, a child still in its init
+  included, so it does not wait behind queued starts. With no start queued
+  that is `DynamicSupervisor.which_children/1`'s set (a start in progress too,
+  unless its init fails); with starts queued it lists the children alive now,
+  not those after the queue drains. Not
+  guaranteed: a mid-init child may never finish init, and any process linked to
+  the supervisor other than its parent is read as a session. It exits if the
+  supervisor does not resolve.
   """
   @spec census(keyword()) :: [{pid(), atom()}]
   def census(opts), do: opts |> census(nil) |> elem(0)
@@ -161,7 +171,9 @@ defmodule Elara.Lab.Profile do
   `census/1` with setup diagnostics (ROB-1228): monotonic ms marks at each of
   `census_marks/0`, and each supervisor's `message_queue_len` just before and
   after its own call, with the length of the list that call returned, and
-  `call_start`/`call_done` (monotonic ms) bracketing the call itself. It adds
+  `call_start`/`call_done` (monotonic ms) bracketing the call itself (for
+  `Elara.SessionSup`, the links read described at `census/1`, and `children`
+  counts the session pids it returned). It adds
   only clock reads and `Process.info/2`, but those still perturb scheduling.
   Options beyond `census/1`'s: `:session_sup` (the supervisor read, default
   `Elara.SessionSup`) and `probe: true`, which takes an `Elara.Lab.SupProbe`
@@ -203,21 +215,17 @@ defmodule Elara.Lab.Profile do
 
     timing = mark(timing, :task_classified_done)
 
-    {session_children, timing} =
+    {session_pids, timing} =
       supervised(
         timing,
         :session_sup,
         session_sup,
-        fn -> DynamicSupervisor.which_children(session_sup) end,
+        fn -> linked_children(session_sup) end,
         timing != nil and Keyword.get(opts, :probe, false)
       )
 
     timing = mark(timing, :session_children_done)
-
-    sessions =
-      for {_id, pid, _type, _mods} <- session_children,
-          is_pid(pid),
-          do: {pid, :session}
+    sessions = for pid <- session_pids, do: {pid, :session}
 
     named = fn name, class ->
       case Process.whereis(name) do
@@ -265,6 +273,19 @@ defmodule Elara.Lab.Profile do
       })
 
     {children, put_in(timing, [:supervisors, key], reading)}
+  end
+
+  # The supervisor's links minus its parent: a signal read, not a call, so it
+  # does not wait in the supervisor's mailbox. Exits if the supervisor is gone.
+  defp linked_children(sup) do
+    pid = if is_pid(sup), do: sup, else: Process.whereis(sup)
+
+    with true <- is_pid(pid),
+         [links: links, parent: parent] <- Process.info(pid, [:links, :parent]) do
+      for link <- links, is_pid(link), link != parent, do: link
+    else
+      _ -> exit({:noproc, {__MODULE__, :census, sup}})
+    end
   end
 
   defp timed_probe(name) do

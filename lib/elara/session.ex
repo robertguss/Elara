@@ -928,9 +928,19 @@ defmodule Elara.Session do
   defp prepare_claimed_session(store, config, recovery) do
     case ControllerJournal.start_link(path: recovery.journal_path) do
       {:ok, journal} ->
+        # Fix the possibly running call before reconciliation resolves any call,
+        # so a resolved boundary cannot move it to a call that never started.
+        boundary =
+          case store |> Store.history() |> unresolved_tool_calls() do
+            [first | _] -> first.id
+            [] -> nil
+          end
+
         case recover_store(store, config.tools, journal, recovery) do
           {:ok, store} ->
-            case persist_repairs(store, Core.new(config, Store.history(store))) do
+            core = Core.new(config, Store.history(store), boundary: boundary)
+
+            case persist_repairs(store, core) do
               {:ok, store, core} ->
                 pending = recovery_barrier_jobs(store, config.tools, journal, recovery)
                 {:ok, store, core, journal, pending}
@@ -1371,17 +1381,11 @@ defmodule Elara.Session do
     end
   end
 
+  # One save, so a crash cannot persist part of a repair and move the boundary.
   defp persist_repairs(store, core) do
     extras = Enum.drop(core.history, length(Store.history(store)))
 
-    extras
-    |> Enum.reduce_while({:ok, store}, fn message, {:ok, store} ->
-      case Store.append(store, message) do
-        {:ok, store} -> {:cont, {:ok, store}}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-    |> case do
+    case Store.append_all(store, extras) do
       {:ok, store} ->
         {:ok, store, core}
 

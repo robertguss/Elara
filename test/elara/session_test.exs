@@ -523,6 +523,54 @@ defmodule Elara.SessionTest do
              )
   end
 
+  @restarted "session restarted while this call may have been running; " <>
+               "its outcome is unknown and it may have partially changed the workspace"
+
+  test "resume without an executor keeps the possibly running call indeterminate" do
+    cwd = unique_cwd()
+    first = %ToolCall{id: "call-1", name: "mark", args: {:ok, %{"label" => "a"}}}
+    second = %ToolCall{id: "call-2", name: "mark", args: {:ok, %{"label" => "b"}}}
+    {:ok, assistant} = Message.assistant(nil, [first, second])
+
+    store = Store.new(cwd)
+    assert {:ok, store} = Store.append(store, Message.user("write both"))
+    assert {:ok, store} = Store.append(store, assistant)
+
+    next_provider = recording_script([{:ok, asst("after")}], cwd)
+
+    assert {:ok, session} =
+             Elara.start_session(
+               provider: next_provider,
+               tools: [
+                 %Elara.Tool{
+                   name: "mark",
+                   description: "mutating test tool, never run here",
+                   parameters: %{"type" => "object"},
+                   mutating: true,
+                   run: {Elara.Tools, :write}
+                 }
+               ],
+               cwd: cwd,
+               resume: store.path
+             )
+
+    prior = [
+      Message.user("write both"),
+      assistant,
+      Message.tool_result(first, {:indeterminate, @restarted}),
+      Message.tool_result(second, {:error, "interrupted"})
+    ]
+
+    assert Elara.transcript(session) == prior
+    {:ok, on_disk} = Store.open(store.path, cwd)
+    assert Store.history(on_disk) == prior
+
+    assert {:ok, "after"} = Elara.ask(session, "next")
+    assert_receive {:provider_observed, %Provider.Request{messages: request_messages}, _}
+    assert request_messages == prior ++ [Message.user("next")]
+    GenServer.stop(session_pid(session))
+  end
+
   test "resume persists interrupted tool results before the next turn" do
     cwd = unique_cwd()
     first = %ToolCall{id: "call-1", name: "read", args: {:ok, %{"path" => "a"}}}
@@ -545,7 +593,7 @@ defmodule Elara.SessionTest do
                resume: store.path
              )
 
-    repaired = Message.tool_result(second, {:error, "interrupted"})
+    repaired = Message.tool_result(second, {:indeterminate, @restarted})
     prior = [Message.user("read both"), assistant, completed, repaired]
     assert Elara.transcript(session) == prior
 

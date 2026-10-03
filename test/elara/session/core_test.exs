@@ -7,6 +7,9 @@ defmodule Elara.Session.CoreTest do
   alias Elara.Session.Core
   alias Elara.Tool
 
+  @restarted "session restarted while this call may have been running; " <>
+               "its outcome is unknown and it may have partially changed the workspace"
+
   defp config(opts) do
     tools =
       Tool.table([
@@ -254,9 +257,83 @@ defmodule Elara.Session.CoreTest do
              %Message.ToolResult{
                call_id: "call-2",
                name: "echo",
-               outcome: {:error, "interrupted"}
+               outcome: {:indeterminate, @restarted}
              }
            ] = state.history
+  end
+
+  defp repaired_outcomes(history) do
+    for %Message.ToolResult{call_id: id, outcome: outcome} <- history, do: {id, outcome}
+  end
+
+  test "new/2 leaves only the first unresolved call indeterminate after a restart" do
+    {:ok, assistant} = Message.assistant(nil, [call("c1", "echo"), call("c2", "echo")])
+    state = Core.new(config([]), [Message.user("go"), assistant])
+
+    assert repaired_outcomes(state.history) == [
+             {"c1", {:indeterminate, @restarted}},
+             {"c2", {:error, "interrupted"}}
+           ]
+  end
+
+  test "a completed prefix moves the restart boundary to the first unresolved call" do
+    calls = [call("c1", "echo"), call("c2", "echo"), call("c3", "echo")]
+    {:ok, assistant} = Message.assistant(nil, calls)
+    done = Message.tool_result(hd(calls), {:ok, "a"})
+    state = Core.new(config([]), [Message.user("go"), assistant, done])
+
+    assert repaired_outcomes(state.history) == [
+             {"c1", {:ok, "a"}},
+             {"c2", {:indeterminate, @restarted}},
+             {"c3", {:error, "interrupted"}}
+           ]
+  end
+
+  test "a malformed boundary call never executed and stays interrupted" do
+    calls = [call("c1", "echo", {:malformed, "{"}), call("c2", "echo")]
+    {:ok, assistant} = Message.assistant(nil, calls)
+    state = Core.new(config([]), [Message.user("go"), assistant])
+
+    assert repaired_outcomes(state.history) == [
+             {"c1", {:error, "interrupted"}},
+             {"c2", {:error, "interrupted"}}
+           ]
+  end
+
+  test "the restart boundary stays indeterminate whatever today's tool config says" do
+    for name <- ["removed_tool", "echo"] do
+      {:ok, assistant} = Message.assistant(nil, [call("c1", name)])
+      state = Core.new(config([]), [Message.user("go"), assistant])
+
+      # "removed_tool" is absent from the config; "echo" is configured non-mutating.
+      assert repaired_outcomes(state.history) == [{"c1", {:indeterminate, @restarted}}]
+    end
+  end
+
+  test "new/3 with a boundary resolved before repair leaves every remaining call interrupted" do
+    {:ok, assistant} = Message.assistant(nil, [call("c1", "echo"), call("c2", "echo")])
+    not_started = Message.tool_result(call("c1", "echo"), {:error, "effect not_started"})
+    history = [Message.user("go"), assistant, not_started]
+
+    assert repaired_outcomes(Core.new(config([]), history, boundary: "c1").history) == [
+             {"c1", {:error, "effect not_started"}},
+             {"c2", {:error, "interrupted"}}
+           ]
+
+    assert repaired_outcomes(
+             Core.new(config([]), [Message.user("go"), assistant], boundary: nil).history
+           ) ==
+             [{"c1", {:error, "interrupted"}}, {"c2", {:error, "interrupted"}}]
+  end
+
+  test "rebase_history/2 applies the restart boundary" do
+    {:ok, assistant} = Message.assistant(nil, [call("c1", "echo"), call("c2", "echo")])
+    state = Core.rebase_history(Core.new(config([])), [Message.user("go"), assistant])
+
+    assert repaired_outcomes(state.history) == [
+             {"c1", {:indeterminate, @restarted}},
+             {"c2", {:error, "interrupted"}}
+           ]
   end
 
   test "row 1: ask from idle appends user and calls provider" do

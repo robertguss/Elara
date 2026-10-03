@@ -771,8 +771,7 @@ defmodule Elara.Lab.SessionRecoveryTest do
 
     marker = SessionRecovery.run(context(:tool_running))
 
-    assert Elara.Lab.failed_checks(marker) == [:indeterminate_without_receipt],
-           inspect(marker.checks, pretty: true)
+    assert Elara.Lab.failed_checks(marker) == [], inspect(marker.checks, pretty: true)
 
     assert marker.cleanup_confirmed
     assert marker.complete
@@ -781,9 +780,9 @@ defmodule Elara.Lab.SessionRecoveryTest do
     assert is_integer(marker.recovery_ms)
     assert is_integer(marker.backlog_ms)
 
-    # Ordinary direct-marker reopen is predicted to insert interrupted rather
-    # than leave the started mutation indeterminate. That is a finding.
-    assert marker.checks.indeterminate_without_receipt == false
+    # ROB-1235: the started marker call stays indeterminate on an ordinary
+    # direct reopen; the input receipt still records the restart.
+    assert marker.checks.indeterminate_without_receipt
     assert marker.recovery.receipts["A"].error == "session restarted"
   end
 

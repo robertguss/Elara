@@ -287,6 +287,35 @@ defmodule Elara.Lab.ProfileTest do
       end
     end
 
+    test "the supervisor call is bracketed by its own call_start and call_done" do
+      {:ok, sup} = DynamicSupervisor.start_link(strategy: :one_for_one)
+      :ok = :sys.suspend(sup)
+      test = self()
+
+      # The call is queued, so call_start has passed; hold it a strictly
+      # positive interval on the monotonic clock before resuming the target.
+      spawn_link(fn ->
+        wait_until(fn -> Process.info(sup, :message_queue_len) == {:message_queue_len, 1} end)
+        held_at = System.monotonic_time(:millisecond)
+        advance_past(held_at + 2)
+        :ok = :sys.resume(sup)
+        send(test, :resumed)
+      end)
+
+      {_census, setup} =
+        Profile.timed_census(clients: fn -> [] end, connections: fn -> [] end, session_sup: sup)
+
+      assert_received :resumed
+      reading = setup.supervisors.session_sup
+      assert reading.call_done - reading.call_start >= 2
+
+      assert setup.marks.task_classified_done <= reading.call_start and
+               reading.call_start <= reading.call_done and
+               reading.call_done <= setup.marks.session_children_done
+
+      refute Map.has_key?(reading, :probe)
+    end
+
     test "a held phase's time lands between its own marks" do
       test = self()
       gate = make_ref()

@@ -8,10 +8,32 @@ defmodule Elara.Lab.Sampler do
   @doc """
   Start an unlinked sampler. `opts`: `:owner` (receives guard reports),
   `:sample_ms`, `:listen` and `:server_port`, `:clients` (ETS of client pids),
-  `:stub_os_pid`, `:guard_memory_bytes`, `:guard_mailbox`.
+  `:stub_os_pid`, `:guard_memory_bytes`, `:guard_mailbox`. With `probe: true`
+  each tick also takes an `Elara.Lab.SupProbe` reading of `:probe_target`
+  (default `Elara.SessionSup`) and a running trace of it is kept
+  (`Elara.Lab.RunningTrace`); `start/1` then returns once the trace is
+  installed or known unavailable.
   """
   @spec start(keyword()) :: pid()
-  def start(opts), do: spawn(fn -> init(Map.new(opts)) end)
+  def start(opts) do
+    opts = Map.new(opts)
+    parent = self()
+    ref = make_ref()
+    pid = spawn(fn -> init(opts, {parent, ref}) end)
+
+    if Map.get(opts, :probe, false) do
+      monitor = Process.monitor(pid)
+
+      receive do
+        {^ref, :ready} -> Process.demonitor(monitor, [:flush])
+        {:DOWN, ^monitor, :process, _, _} -> :ok
+      after
+        10_000 -> :ok
+      end
+    end
+
+    pid
+  end
 
   @doc """
   Start phasing samples: before `t0` is `:baseline`, then `:warmup` until
@@ -21,7 +43,11 @@ defmodule Elara.Lab.Sampler do
   def load(sampler, t0, window_from, load_end, shared),
     do: send(sampler, {:load, %{t0: t0, from: window_from, load_end: load_end, shared: shared}})
 
-  @doc "Stop and return `%{samples, mailboxes}`; mailbox histograms are kept per phase."
+  @doc """
+  Stop and return `%{samples, mailboxes}`; mailbox histograms are kept per phase.
+  A probing sampler adds `probe` (readings in time order, each with its tick's
+  `t` and `phase`) and `running` (the trace's buckets, or `:unavailable`).
+  """
   @spec stop(pid(), timeout()) :: map()
   def stop(sampler, timeout \\ 10_000) do
     ref = Process.monitor(sampler)
@@ -79,7 +105,7 @@ defmodule Elara.Lab.Sampler do
     end
   end
 
-  defp init(opts) do
+  defp init(opts, {parent, ref}) do
     stub_port =
       opts.stub_os_pid &&
         Enum.find(Port.list(), &(Port.info(&1, :os_pid) == {:os_pid, opts.stub_os_pid}))
@@ -90,9 +116,13 @@ defmodule Elara.Lab.Sampler do
         samples: [],
         phases: nil,
         mailboxes: %{},
-        tripped: MapSet.new()
+        tripped: MapSet.new(),
+        probes: [],
+        tracer: nil
       })
 
+    state = start_probe(state)
+    if probing?(state), do: send(parent, {ref, :ready})
     send(self(), :sample)
     loop(state)
   end
@@ -107,7 +137,61 @@ defmodule Elara.Lab.Sampler do
         loop(%{state | phases: phases})
 
       {:stop, from, ref} ->
-        send(from, {ref, %{samples: Enum.reverse(state.samples), mailboxes: state.mailboxes}})
+        result = %{samples: Enum.reverse(state.samples), mailboxes: state.mailboxes}
+        send(from, {ref, probe_result(state, result)})
+    end
+  end
+
+  # Strictly inside `stop/2`'s wait; the scenario gives a probing sampler more.
+  @trace_stop_ms 5_000
+
+  defp probing?(state), do: Map.get(state, :probe, false)
+
+  defp probe_target(state), do: Map.get(state, :probe_target, Elara.SessionSup)
+
+  # A target that is not running, or a trace that does not install, is recorded
+  # as unavailable and never fails the run.
+  defp start_probe(state) do
+    if probing?(state) do
+      target = resolve(probe_target(state))
+
+      tracer =
+        with pid when is_pid(pid) <- target,
+             {:ok, tracer} <- Elara.Lab.RunningTrace.start(self(), pid, state.sample_ms) do
+          tracer
+        else
+          _ -> :unavailable
+        end
+
+      %{state | tracer: tracer}
+    else
+      state
+    end
+  end
+
+  defp resolve(name) when is_atom(name), do: Process.whereis(name)
+  defp resolve(target), do: target
+
+  defp probe_result(state, result) do
+    if probing?(state) do
+      running =
+        case state.tracer do
+          tracer when is_pid(tracer) -> Elara.Lab.RunningTrace.stop(tracer, @trace_stop_ms)
+          _ -> :unavailable
+        end
+
+      Map.merge(result, %{probe: Enum.reverse(state.probes), running: running})
+    else
+      result
+    end
+  end
+
+  defp probe(state, t, phase) do
+    if probing?(state) do
+      reading = Map.merge(Elara.Lab.SupProbe.read(probe_target(state)), %{t: t, phase: phase})
+      %{state | probes: [reading | state.probes]}
+    else
+      state
     end
   end
 
@@ -154,7 +238,8 @@ defmodule Elara.Lab.Sampler do
         Enum.max(Enum.filter(session_lengths, &is_integer/1), fn -> 0 end)
       )
 
-    %{state | samples: [sample | state.samples]}
+    state = %{state | samples: [sample | state.samples]}
+    probe(state, t, phase)
   end
 
   defp phase(nil, _t), do: :baseline

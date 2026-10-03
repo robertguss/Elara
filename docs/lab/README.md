@@ -142,6 +142,50 @@ a job. Its cleanup is confirmed only when every user, session, task and client
 it started has ended, no execution job is pending, and the stub's epoch is
 unchanged; until its provider tasks end, it keeps their ledger.
 
+`--set session_sup_probe=1` (ROB-1243, default 0; only 0 and 1 are accepted)
+adds diagnostics to apportion `Elara.SessionSup`'s time; with 0 a run is
+unchanged. In every profile run, each census `supervisors` reading also has
+`call_start` and `call_done` (ms after t0, clock reads only) around the
+supervisor call itself, after `queue_before` and before `queue_after`. With the
+probe on: (1) the sampler takes one `Elara.Lab.SupProbe` reading of SessionSup
+per tick, as `session_sup.samples` (`t`, `phase`, `read_us`, `status`,
+`current_function`, the top 4 `frames`, `queue_len`, `composition` counts by
+message class, `run_queue`), read from a short-lived helper so the mailbox copy
+never stays on the sampler's heap; (2) the sampler keeps a `:running` trace of
+SessionSup in a session of its own (`session_sup.running`: per `sample_ms`
+bucket, `running_us`, `ins`, `outs` by out MFA, and `off_us` by the MFA of the
+out-event that began each off interval, top 4 plus `other`; the session is
+destroyed at stop or when the sampler dies; running time before the first
+out-event and an interval still open at stop are dropped); (3) with
+`trace=profile`, the census's SessionSup reading carries `probe`, taken before
+`queue_before`, and `probe_elapsed_us`; (4) in the sessions topology the result
+has `session_starts` (`count`, `start_ms` percentiles over starts begun before
+load end, and `starts` as `[begun_ms_after_t0, ms]`), timing each whole
+`Elara.start_session/1` call. Limits. Sampled `status` separates only waiting
+from not-waiting; running time comes from the trace. "Runnable" is inferred:
+off time after an out-event away from a receive point such as
+`:gen_server.loop/5` or `:proc_lib.sync_start/2` is taken as preemption, an
+inference and not an observation. Off time after an out at a receive point is
+waiting plus wake-up delay, which cannot be separated; wake-up delay, the
+likeliest scheduling delay here, is not observable by this trace. Each probe
+read schedules a waiting target in and out once, so `ins` and out counts
+include about one probe-caused pair per tick. The trace sends its tracer one
+message per schedule event, a perturbation beside the read pause. The census's
+`task_classified_done` to `call_start` bracket includes the whole census probe
+(`probe_elapsed_us`), not only the queue read. A reading is an instant, and a
+1 s tick misses short states. Each probe read pauses SessionSup for `read_us`
+while its mailbox is copied, and the copy costs memory in the helper, so
+probe-on runs are not comparable with probe-off runs on memory, queues or
+latency. With `trace=profile`, helpers spawned after activation are call-time
+traced and land in class `other` (or unclassified), so probe-on profile runs
+are not comparable on class shares either. SessionSup waiting in `sync_start`
+does not say whether the child's init was itself running or unscheduled.
+`session_starts` includes the caller-side preparation (skills discovery, prompt
+rendering, store and executor preparation, `lib/elara.ex:42-58`) and the
+`:session_id` call after `start_child` (`lib/elara.ex:95`); starts that never
+returned are not counted. These are diagnostics only and change no check,
+bound or window rule.
+
 With `--set topology=children`, each user's session is a coding child of one
 paused parent (`thread_limit` is lifted to `sessions` for the run), and its
 assignment is turn 1. Results then carry `children` (start attempts, censored

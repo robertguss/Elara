@@ -605,6 +605,40 @@ defmodule Elara.Lab.ConcurrencyTest do
     end
   end
 
+  describe "the SessionSup probe" do
+    test "only 0 and 1 are accepted" do
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        assert_raise ArgumentError, ~r/session_sup_probe/, fn ->
+          Elara.Lab.run(Concurrency,
+            seed: 1,
+            params: Map.put(@tiny, "session_sup_probe", "2")
+          )
+        end
+      end)
+    end
+
+    test "a probed run reports readings, running buckets and start timings" do
+      result = run(%{"session_sup_probe" => "1"})
+
+      assert failed(result) == []
+      assert [reading | _] = result.session_sup.samples
+      assert reading.available and is_integer(reading.read_us) and is_integer(reading.t)
+      assert is_list(result.session_sup.running)
+
+      assert %{count: count, starts: starts, start_ms: _} = result.session_starts
+      assert count == result.cumulative_sessions and length(starts) == count
+      assert Enum.all?(starts, &match?([begun, ms] when is_integer(begun) and ms >= 0, &1))
+      assert is_binary(JSON.encode!(result))
+    end
+
+    test "the same run without the probe has neither key" do
+      result = run(%{"session_sup_probe" => "0"})
+
+      refute Map.has_key?(result, :session_sup)
+      refute Map.has_key?(result, :session_starts)
+    end
+  end
+
   describe "profile runs" do
     @profiled %{"trace" => "profile", "profile_window_ms" => "1000"}
 
@@ -644,6 +678,17 @@ defmodule Elara.Lab.ConcurrencyTest do
       assert is_integer(profile.collection_ms)
       assert is_binary(JSON.encode!(result))
       assert profile_sessions() == [] and classifiers() == []
+    end
+
+    test "the census's SessionSup reading carries the probe only when it is on" do
+      on = run(Map.put(@profiled, "session_sup_probe", "1"))
+      off = run(@profiled)
+
+      reading = on.profile.setup.supervisors.session_sup
+      assert reading.probe.available and is_integer(reading.probe_elapsed_us)
+      assert is_integer(reading.call_start) and reading.call_start <= reading.call_done
+      refute Map.has_key?(off.profile.setup.supervisors.session_sup, :probe)
+      assert is_integer(off.profile.setup.supervisors.session_sup.call_start)
     end
 
     test "a profile run reports timer arming and handling diagnostics" do

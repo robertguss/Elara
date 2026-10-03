@@ -123,6 +123,113 @@ defmodule Elara.Lab.SamplerTest do
     end
   end
 
+  defp start_probed(target, extra \\ []) do
+    Sampler.start(
+      [
+        owner: self(),
+        sample_ms: 20,
+        listen: nil,
+        server_port: nil,
+        clients: :ets.new(:clients, [:public]),
+        stub_os_pid: nil,
+        guard_memory_bytes: 1_000_000_000_000,
+        guard_mailbox: 1_000_000,
+        probe: true,
+        probe_target: target
+      ] ++ extra
+    )
+  end
+
+  defp spin_until(at),
+    do: if(System.monotonic_time(:millisecond) < at, do: spin_until(at), else: :ok)
+
+  defp traced_target do
+    test = self()
+
+    spawn(fn ->
+      receive do: (:go -> :ok)
+      spin_until(System.monotonic_time(:millisecond) + 15)
+      send(test, :spun)
+      receive do: (:again -> :ok)
+      receive do: (:never -> :ok)
+    end)
+  end
+
+  test "with the probe on, a running trace times the target's on and off CPU, then is destroyed" do
+    target = traced_target()
+    on_exit(fn -> Process.exit(target, :kill) end)
+    sampler = start_probed(target)
+
+    send(target, :go)
+    assert_receive :spun, 2_000
+    spin_until(System.monotonic_time(:millisecond) + 5)
+    send(target, :again)
+    Process.sleep(40)
+    result = Sampler.stop(sampler)
+
+    buckets = result.running
+    assert Enum.sum(Enum.map(buckets, & &1.running_us)) > 0
+    assert Enum.sum(Enum.map(buckets, & &1.ins)) >= 1
+    assert Enum.sum(for b <- buckets, {_mfa, us} <- b.off_us, do: us) > 0
+    assert Enum.all?(buckets, &(is_integer(&1.start) and is_map(&1.outs)))
+    assert result.probe != [] and Enum.all?(result.probe, &(is_integer(&1.t) and &1.phase))
+    assert :trace.session_info(target) == []
+  end
+
+  test "a killed sampler's trace session is destroyed" do
+    target = traced_target()
+    on_exit(fn -> Process.exit(target, :kill) end)
+    sampler = start_probed(target)
+    assert :trace.session_info(target) != []
+
+    Process.exit(sampler, :kill)
+    wait_for(fn -> :trace.session_info(target) end, &(&1 == []))
+  end
+
+  test "with the probe off, the sampler reports no probe data and creates no trace session" do
+    before = :trace.session_info(:all)
+
+    sampler =
+      Sampler.start(
+        owner: self(),
+        sample_ms: 10,
+        listen: nil,
+        server_port: nil,
+        clients: :ets.new(:clients, [:public]),
+        stub_os_pid: nil,
+        guard_memory_bytes: 1_000_000_000_000,
+        guard_mailbox: 1_000_000
+      )
+
+    Process.sleep(50)
+    assert :trace.session_info(:all) == before
+    result = Sampler.stop(sampler)
+
+    refute Map.has_key?(result, :probe)
+    refute Map.has_key?(result, :running)
+    assert :trace.session_info(:all) == before
+  end
+
+  test "with the probe off, starting a sampler leaves nothing in the caller's mailbox" do
+    {:message_queue_len, before} = Process.info(self(), :message_queue_len)
+
+    sampler =
+      Sampler.start(
+        owner: self(),
+        sample_ms: 10,
+        listen: nil,
+        server_port: nil,
+        clients: :ets.new(:clients, [:public]),
+        stub_os_pid: nil,
+        guard_memory_bytes: 1_000_000_000_000,
+        guard_mailbox: 1_000_000
+      )
+
+    refute_receive {_ref, :ready}, 100
+    assert Process.info(self(), :message_queue_len) == {:message_queue_len, before}
+    Sampler.stop(sampler)
+  end
+
   defp wait_for(fun, done?, tries \\ 50) do
     value = fun.()
 

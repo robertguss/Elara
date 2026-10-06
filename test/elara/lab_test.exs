@@ -78,6 +78,7 @@ defmodule Elara.LabTest do
                "concurrency",
                "concurrent_jobs",
                "handoff_recovery",
+               "job_recovery",
                "provider_fault",
                "session_crash",
                "session_recovery",

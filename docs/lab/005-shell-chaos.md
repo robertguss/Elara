@@ -491,3 +491,79 @@ source hashes matched. Integrated verification at candidate `d1473e3` passed
 924 (11 properties, 913 tests), seed 1085, in 275.4 seconds. Full output is
 `full-suite-integrated.log`; the earlier failures and controls remain retained.
 This adds no registered measurement rows. Exact reviewed delivery is in Linear.
+
+### Test-job recovery preparation (2026-10-06)
+
+This preparation at base `1d330c9` is excluded from the pilot and required
+>=1000 schedules. `job_recovery` uses public job start/status/idempotent replay,
+a real focused Mix fixture, a held source callback and queued B/C inputs.
+The provider serves only the declared inputs and independently known report.
+No provider credentials or network request is used. Fresh dev VMs retain
+production restart intensity 3; ExUnit uses the separate test setting.
+
+The hypothesis is that session or job-owner failure preserves one job identity
+and physical launch, does not consume inputs twice, preserves uncertainty and
+settles owned actors and native work. Three checkpoints are implemented:
+
+- `session_running`: kill the source while its job runs and provider is held.
+  Reopen from disk with B/C paused. A has a durable failed receipt; the original
+  runner/execution remains running. Release the fixture and resume B/C. The
+  original job passes and its report is interpreted; A stays failed.
+- `runner_running`: kill the actual runner while the command is held. The job
+  becomes indeterminate and its slot releases after executor settlement. The
+  source, B/C and known report finish; native work stops before cleanup.
+- `manager_running`: kill the named manager which actually links the runner.
+  Its supervised replacement recovers the record as indeterminate. The linked
+  runner and native command stop; source and known queued/report inputs finish.
+
+Before injection, read the active input, completed `job-A` receipt, queued
+B/C identities, source Task monitor, manager/runner link and running execution.
+Native cwd ownership uses inode/device equality. The witnessed process group
+must differ from the controller's group and contain the native PID. Immediately
+before injection, recheck the held callback, live runner/native group and
+unchanged execution. Released callbacks, premature death and finished jobs
+invalidate the fault. Two real monitors witness killed DOWN for the declared
+role after one injection. Killing the wrong role fails even when every other
+progress and cleanup check passes.
+
+The observer independently derives the expected report from the known terminal
+job record, including its key, owner, evidence body and receipt identity. Each
+input requires its own persisted terminal and tool results. A start-tool return,
+launch marker or interpreted indeterminate report cannot prove job success.
+Public start replay with the same logical ID retains key/status/execution and
+physical launch count one. All observations precede cleanup.
+
+Seeds vary B/C order and provider work from 1 to 20 ms. Setup has a separate
+10-second bound. Recovery has a 5-second bound from the reopening/recovery
+origin; continuation, B/C and one report settle within 9 seconds, including
+at most four 1-second work allowances. Late evidence cannot repair the clocks.
+
+Cleanup closes admission and settles admitted callbacks, then uses a bounded
+serialized public job-status barrier before cancellation/settlement. It checks
+the witnessed PID/group have no live members, runner death, released slot,
+executor job count zero and the manager's active/pending/delivery work empty
+before session/helper cleanup and root release. Unknown ownership cannot become
+absence. Forced failures directly verify observed actors and the actual native
+group stop. An unavailable barrier retains one row and stops a requested second
+repetition even when native cleanup succeeded. Bypassing the guard falsely
+confirmed cleanup and permitted two rows; the control rejected that mutation.
+Exact source was restored after every mutation.
+
+Final focused verification passed 76 tests, seed 1085. Three fresh dev VMs each
+produced one complete row with all 14 checks and cleanup true, one launch and
+native work stopped before cleanup. Recovery was 10–1037 ms; backlog settlement
+103–1085 ms. Dirty-source hashes, base SHA, rows, controls and failed invocations
+are retained in `lab/results/rob-1085-job-preparation-20261005/`. An initial
+wrong-target selector excluded every test and establishes no evidence. The
+subsequent all-file mutation failed 1/9 on fault identity with all other checks
+true. These are preparations, not measurement or a runtime fix.
+
+Limits: this witnesses the focused Mix command group on this host. Arbitrary
+escaped descendants, executor/stub epoch recovery, client/worker death,
+whole-VM restart and the full transport matrix remain unfinished. Final suite,
+review and delivery are recorded on ROB-1085.
+
+Integrated verification passed all 933 checks (11 properties, 922 tests),
+seed 1085, in 251.2 seconds. Guidance 3, compile with warnings as errors,
+format and diff checks passed. The full output is `full-suite.log` in the
+preparation namespace. No registered measurement rows were added.

@@ -99,15 +99,15 @@ timeout, or parser change. Logs: `lab/results/rob-1216-diagnosis-20261005/`.
 Those passing runs remain negative evidence, not a fix.
 
 LAB-5 (ROB-1085) is Building, the one selected executable lab item. The valid
-pilot, recovery fix, transport, handoff and child preparations are delivered.
-The full seeded matrix, native/client/worker/stub/whole-VM families and at least
+pilot, recovery fix, transport, handoff, child and test-job preparations are delivered.
+The full seeded matrix, managed-descendant/client/worker/whole-VM families and at least
 1000 schedules remain. Review and register its expanded method before
 measurement; reuse the durable lab runner and fresh production-intensity VMs.
 The handoff observer/gates/five checkpoints merged in PR #39 at `a4bbef1`
 after ROB-1324's fixture repair. Child preparation merged in PR #41 at
 `1d330c9`, after PR #40's fixture repair. Its original held candidate was
-`2da7ff1`; preserve all earlier failed output. Test-job preparation follows on
-`work/rob-1085-job-recovery`: source-session, actual runner and linked manager
+`2da7ff1`; preserve all earlier failed output. Test-job preparation merged in
+PR #42 at `c6c41df`: source-session, actual runner and linked manager
 death while a real Mix job runs. It checks input/tool/report identities, one
 launch, idempotent replay, honest uncertainty, slot release and actual native
 PID/group settlement before cleanup. Focused 76 and three fresh dev-VM rows
@@ -115,9 +115,20 @@ passed (all 14 checks and cleanup true). Raw evidence and rejected fault/cleanup
 controls remain in `lab/results/rob-1085-job-preparation-20261005/`; note 005 and
 ROB-1085 record review and delivery. Full suite 933 (11 properties, 922 tests),
 seed 1085, passed in 251.2 seconds; guidance 3, compile/format/diff passed.
+Executor/native-stub preparation uses `work/rob-1085-native-recovery`.
+It positively identifies the Exec owner, connected Port, native stub and
+guardian chain before injection, preserves a held/unknown job epoch before
+scoped synthetic acknowledgment, and verifies actual native stop first.
+Focused 83 and two fresh production-default dev-VM rows passed all 18 checks
+and cleanup. Suspended-guardian and premature-loss controls, rejected unsafe
+acknowledgment mutation and the repaired negative-map polling bug remain in
+`lab/results/rob-1085-native-preparation-20261006/`. Note 005 and ROB-1085
+record final suite, review and delivery.
+Integrated native verification passed all 940 checks (11 properties, 929
+tests), seed 1085, in 256.8 seconds; guidance 3 and compile/format/diff passed.
 ROB-1085 records exact review, PR, integrated suite and
 merge evidence. These families are implemented but unmeasured. Next extend the
-remaining native/client/worker/stub/whole-VM families, preserving causal
+remaining managed-descendant/client/worker/whole-VM families, preserving causal
 fault witnesses, per-input receipt/terminal accounting, honest uncertainty,
 slot/acknowledgment and native cleanup checks. The handoff, child and test-job fixtures'
 script/gate PIDs support same-VM recovery only; do not reuse that provider

@@ -567,3 +567,68 @@ Integrated verification passed all 933 checks (11 properties, 922 tests),
 seed 1085, in 251.2 seconds. Guidance 3, compile with warnings as errors,
 format and diff checks passed. The full output is `full-suite.log` in the
 preparation namespace. No registered measurement rows were added.
+
+### Executor and native-stub recovery preparation (2026-10-06)
+
+At base `c6c41df`, extend `job_recovery` with two same-VM checkpoints. This is
+preparation, excluded from registered measurement. `executor_running` kills
+the actual Exec process while its focused command runs; `stub_running` sends
+KILL to the living native stub PID identified by that process's connected
+Port. Capture the real owner/Port/os_pid, old execution token and native
+group-leader/guardian/stub parent chain. Recheck the running job, held callback,
+token, connected Port and actual native PID before one injection. The root and
+coordinator independently monitor the actual process or Port. Native-stub
+death also requires successful scoped kill submission and observed old OS PID
+death. Port DOWN alone cannot prove native work stopped. Stale Port DOWN is
+rejected.
+
+The hypothesis is that executor/stub loss neither repeats the job nor consumes
+inputs twice, preserves indeterminate outcome and holds capacity for an unknown
+execution epoch, then permits scoped acknowledgment after actual native stop.
+Executor death changes process/incarnation; stub death preserves the process
+and incarnation while increasing generation. The old job execution remains
+unchanged. Capture the replacement token/PID/os_pid and durable held/unknown
+job before acknowledgment. The known report and A/B/C inputs require their own
+terminals; interpreting the report does not establish job success.
+
+The focused command group, native PID, old stub and guardian must stop before
+acknowledgment. Public `acknowledge_stopped` applies only to this disposable
+fixture's parent/job ID, after independent OS observations, and leaves the job
+indeterminate while releasing its slot. Replay retains the original execution
+and one physical launch. This does not complete a human/account acceptance gate.
+Recovery remains bounded at 5 seconds, including the held/unknown/native-stop
+observations; backlog, acknowledgment and report finish within 9 seconds.
+
+Failed-flow cleanup may acknowledge only the same known synthetic job after
+actual native/group/guardian stop. It still requires the serialized ownership
+barrier, dead runner, released slot and idle executor/manager before root
+release. Cleanup cannot repair the pre-cleanup input, slot or progress checks.
+Forced failures directly verify source/runner/native/guardian teardown.
+
+A stronger control suspends the positively owned guardian before stub KILL.
+The fault is witnessed but native work remains alive, so pre-cleanup slot must
+remain held/unknown and no acknowledgment may occur. Resume is registered
+before suspension and runs before cleanup. This exposed a harness poll which
+treated a negative native map as readiness; the separate acknowledgment guard
+still blocked release. Both affected polls now require a positive Boolean.
+The corrected control reaches the bounded native-stop timeout. A mutation
+which bypasses both native-stop checks acknowledges early and records a
+released slot while native work lives; the control rejects it. Source is
+restored exactly. All failed assertions and raw control rows remain retained.
+
+Final focused verification passed 83 tests, seed 1085. Two fresh dev VMs,
+explicitly requiring production restart intensity 3, each produced a complete
+row with all 18 checks and cleanup true: recovery 115–117 ms, backlog 215–220 ms,
+one launch, old stub and guardian stopped. Raw rows, source hashes, controls
+and logs are in `lab/results/rob-1085-native-preparation-20261006/`. Positive
+preparations and deliberately suspended-guardian controls are separate and
+add no registered measurement rows. Final suite/review/delivery are on ROB-1085.
+
+Limits: this proves the witnessed focused command group and native parent
+chain on this host. Managed extra/escaped descendants, TCP client/worker
+faults, whole-VM restart and the expanded registered matrix remain pending.
+
+Integrated verification passed all 940 checks (11 properties, 929 tests),
+seed 1085, in 256.8 seconds. Guidance 3, compile with warnings as errors,
+format and diff checks passed. Complete output is `full-suite.log` in the
+native preparation namespace. No registered measurement rows were added.

@@ -23,7 +23,8 @@ defmodule Elara.Lab do
     "concurrent_jobs" => Elara.Lab.Scenarios.ConcurrentJobs,
     "session_crash" => Elara.Lab.Scenarios.SessionCrash,
     "provider_fault" => Elara.Lab.Scenarios.ProviderFault,
-    "session_recovery" => Elara.Lab.Scenarios.SessionRecovery
+    "session_recovery" => Elara.Lab.Scenarios.SessionRecovery,
+    "handoff_recovery" => Elara.Lab.Scenarios.HandoffRecovery
   }
 
   @type context :: %{

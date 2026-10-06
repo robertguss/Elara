@@ -114,8 +114,14 @@ defmodule Elara.Effect.ProductionWriteTest do
              end)
 
     assert :ok = Executor.continue(executor, "job-attempted")
-    assert_receive {:callback_started, attempted_pid}, @lifecycle_wait_ms
-    restart_executor(attempted_pid, executor)
+    assert_receive {:callback_started, worker}, @lifecycle_wait_ms
+    track(context, {:pid, worker})
+    writer = GenServer.whereis(executor)
+    assert {:links, links} = Process.info(worker, :links)
+    assert writer in links
+    worker_ref = Process.monitor(worker)
+    restart_executor(writer, executor)
+    assert_receive {:DOWN, ^worker_ref, :process, ^worker, :killed}, @lifecycle_wait_ms
 
     assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0}} =
              Executor.query(executor, "job-attempted")
@@ -257,8 +263,14 @@ defmodule Elara.Effect.ProductionWriteTest do
                receive do: (:never -> {:ok, "unreachable"})
              end)
 
-    assert_receive {:attempt_recorded, executor_pid}, @lifecycle_wait_ms
-    restart_executor(executor_pid, executor)
+    assert_receive {:attempt_recorded, worker}, @lifecycle_wait_ms
+    track(context, {:pid, worker})
+    writer = GenServer.whereis(executor)
+    assert {:links, links} = Process.info(worker, :links)
+    assert writer in links
+    worker_ref = Process.monitor(worker)
+    restart_executor(writer, executor)
+    assert_receive {:DOWN, ^worker_ref, :process, ^worker, :killed}, @lifecycle_wait_ms
 
     assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0}} =
              Executor.query(executor, job.job_id)

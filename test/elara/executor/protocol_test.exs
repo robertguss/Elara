@@ -321,6 +321,104 @@ defmodule Elara.Effect.ExecutorProtocolTest do
     assert :ok = Executor.close(replacement)
   end
 
+  test "callback worker loss records uncertainty without killing the writer or replaying",
+       context do
+    parent = self()
+    {:ok, mutations} = Agent.start_link(fn -> 0 end)
+    executor = owned_executor(context.path)
+
+    operation = fn ->
+      Agent.update(mutations, &(&1 + 1))
+      send(parent, {:callback_worker, self()})
+
+      receive do
+        :release -> {:ok, "result"}
+      end
+    end
+
+    assert {:accepted, _} = Executor.submit(executor, "lost-worker", digest("a"), operation)
+    assert :ok = Executor.continue(executor, "lost-worker")
+    assert_receive {:callback_worker, worker}, 5_000
+    on_exit(fn -> stop_owned_process(worker) end)
+    ref = Process.monitor(worker)
+    Process.exit(worker, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^worker, :killed}, 5_000
+
+    assert_receive {:elara_effect_executor, "executor-1", "lost-worker",
+                    {:indeterminate, %Record{} = record}},
+                   5_000
+
+    assert Process.alive?(executor)
+    refute worker == executor
+    assert {:indeterminate, "callback worker lost:" <> _} = record.result
+    assert record.admission_count == 1
+    assert record.callback_attempt_count == 1
+    assert record.terminal_count == 1
+    assert record.result_digest != nil
+    assert {:indeterminate, ^record} = Executor.query(executor, "lost-worker")
+
+    assert {:indeterminate, ^record} =
+             Executor.submit(executor, "lost-worker", digest("a"), operation)
+
+    assert {:error, :already_terminal} =
+             Executor.continue(executor, "lost-worker", digest("a"), operation)
+
+    assert Agent.get(mutations, & &1) == 1
+    refute_receive {:callback_worker, _}
+    assert {:accepted, _} = Executor.submit(executor, "next-job", digest("b"), ok_operation())
+    assert :ok = Executor.continue(executor, "next-job")
+
+    assert_receive {:elara_effect_executor, "executor-1", "next-job", {:completed, _}},
+                   5_000
+  end
+
+  test "writer loss kills its callback but does not invent a receipt on reopen", context do
+    parent = self()
+    executor = owned_executor(context.path)
+
+    operation = fn ->
+      send(parent, {:callback_worker, self()})
+
+      receive do
+        :release -> {:ok, "result"}
+      end
+    end
+
+    assert {:accepted, _} = Executor.submit(executor, "lost-writer", digest("a"), operation)
+    assert :ok = Executor.continue(executor, "lost-writer")
+    assert_receive {:callback_worker, worker}, 5_000
+    on_exit(fn -> stop_owned_process(worker) end)
+    refute worker == executor
+    writer_ref = Process.monitor(executor)
+    worker_ref = Process.monitor(worker)
+    Process.exit(executor, :kill)
+    assert_receive {:DOWN, ^writer_ref, :process, ^executor, :killed}, 5_000
+    assert_receive {:DOWN, ^worker_ref, :process, ^worker, :killed}, 5_000
+    refute_receive {:elara_effect_executor, _, "lost-writer", _}
+
+    reopened = owned_executor(context.path)
+
+    assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0, result: nil}} =
+             Executor.query(reopened, "lost-writer")
+
+    assert {:error, :callback_already_attempted} =
+             Executor.continue(reopened, "lost-writer", digest("a"), operation)
+
+    refute_receive {:callback_worker, _}
+  end
+
+  defp owned_executor(path) do
+    executor = start_executor(path)
+    on_exit(fn -> stop_owned_process(executor) end)
+    executor
+  end
+
+  defp stop_owned_process(pid) do
+    ref = Process.monitor(pid)
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^pid, _}, 5_000
+  end
+
   defp start_executor(path, hook \\ fn _point -> :ok end, id \\ "executor-1") do
     {:ok, executor} = Executor.start_link(id: id, path: path, fault_hook: hook)
     Process.unlink(executor)

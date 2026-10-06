@@ -133,7 +133,7 @@ defmodule Elara.Effect.Executor.Server do
 
     with {:ok, %Record{}} <-
            ExecutorLedger.begin_attempt(state.ledger, state.id, job_id, operation_digest) do
-      result = invoke(operation)
+      result = invoke_worker(operation)
       :ok = state.fault_hook.(:after_external_mutation_before_completion_commit)
 
       case ExecutorLedger.finish(state.ledger, state.id, job_id, operation_digest, result) do
@@ -149,6 +149,9 @@ defmodule Elara.Effect.Executor.Server do
       {:error, reason} -> {:stop, {:attempt_persistence_failed, reason}, state}
     end
   end
+
+  @impl true
+  def handle_info({:EXIT, _worker, _reason}, state), do: {:noreply, state}
 
   @impl true
   def terminate(_reason, %State{ledger: ledger}) do
@@ -192,6 +195,42 @@ defmodule Elara.Effect.Executor.Server do
   @partial "it may have partially changed the workspace"
 
   defp response(%Record{state: state} = record), do: {state, record}
+
+  # Keep the writer and its serial callback ordering, but own the callback in a
+  # linked worker. Losing that worker is a causal uncertainty fact; losing the
+  # writer still kills the worker and leaves its attempted receipt unresolved.
+  defp invoke_worker(operation) do
+    previous = Process.flag(:trap_exit, true)
+
+    try do
+      task = Task.async(fn -> invoke(operation) end)
+      await_worker(task)
+    after
+      Process.flag(:trap_exit, previous)
+    end
+  end
+
+  defp await_worker(%Task{ref: ref, pid: worker} = task) do
+    receive do
+      {^ref, result} ->
+        Process.demonitor(ref, [:flush])
+        Process.unlink(worker)
+        result
+
+      {:DOWN, ^ref, :process, ^worker, reason} ->
+        Process.unlink(worker)
+        {:indeterminate, "callback worker lost: #{Exception.format_exit(reason)}; #{@partial}"}
+
+      {:EXIT, ^worker, _reason} ->
+        await_worker(task)
+
+      {:EXIT, _pid, :normal} ->
+        await_worker(task)
+
+      {:EXIT, _pid, reason} ->
+        exit(reason)
+    end
+  end
 
   # The callback has started, so an invalid result or a crash leaves its mutation
   # unknown: record it as indeterminate rather than as an ordinary failure.

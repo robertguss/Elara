@@ -88,6 +88,11 @@ reconciles an unresolved write without blindly retrying it. Custom tools,
 receipt path. The confinement is enforced by the session/declarative-write path,
 not by calling the low-level `Elara.Tools.write/2` helper directly.
 
+Receipt callbacks run in workers linked to the single serial executor writer.
+Worker loss while that writer survives commits an indeterminate terminal;
+writer loss leaves an attempted receipt unresolved and prevents reinvocation.
+This lifetime rule does not prove whether external side effects completed.
+
 ## Custom tools
 
 A tool is a `%Elara.Tool{}` with a JSON Schema and a module/function pair of

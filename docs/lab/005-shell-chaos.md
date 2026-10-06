@@ -288,6 +288,13 @@ Attempt 4 limits:
   (5/15 min) during the run, and one unrelated BEAM in another checkout; see
   `rob-1232-prelaunch.log`.
 
+ROB-1234 correction (2026-10-05): future recovery reports hash the selected
+fault and raw simulator choices without per-run input identities. Repeated
+same-seed executions of all three faults now reproduce the digest despite
+fresh persisted identities. The historical pilot and fix-verification files
+retain their original digests and limits; no measurements were rerun or
+rewritten for this correction.
+
 Next: the predicted finding is a candidate runtime fix. Its scope is an owner
 decision, outside this pilot. The remaining matrix and the at-least-1000
 schedules remain.

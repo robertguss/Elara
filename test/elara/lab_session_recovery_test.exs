@@ -735,7 +735,7 @@ defmodule Elara.Lab.SessionRecoveryTest do
 
     raw = %{"recovery" => [{:rule, 0}, {:rule, 1}], "recovery-reopen" => [{:rule, 0}]}
     witness = witness(:provider_started)
-    expected = Elara.Lab.digest({witness.fault, witness.inputs, raw})
+    expected = Elara.Lab.digest({witness.fault, raw})
 
     result =
       witness
@@ -752,6 +752,26 @@ defmodule Elara.Lab.SessionRecoveryTest do
              "recovery" => [["rule", 0], ["rule", 1]],
              "recovery-reopen" => [["rule", 0]]
            }
+
+    different_choices = Map.put(raw, "recovery", [{:rule, 1}, {:rule, 0}])
+
+    refute Observer.report(witness, %{confirmed: true, choices: different_choices}).choices_digest ==
+             expected
+
+    refute Observer.report(witness(:provider_streaming), %{confirmed: true, choices: raw}).choices_digest ==
+             expected
+  end
+
+  test "same-seed real recovery runs reproduce choices digests across fresh persisted identities" do
+    for fault <- [:provider_started, :provider_streaming, :tool_running] do
+      first = SessionRecovery.run(context(fault))
+      second = SessionRecovery.run(context(fault))
+
+      assert first.complete and second.complete
+      assert first.cleanup.choices == second.cleanup.choices
+      refute first.recovery.receipts["A"].session_id == second.recovery.receipts["A"].session_id
+      assert first.choices_digest == second.choices_digest
+    end
   end
 
   test "provider faults settle A failed and complete B and C; the marker path stays strict" do

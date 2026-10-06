@@ -74,6 +74,10 @@ simulated responses, tool plans, injected errors, and fault schedules. A
 scenario reports these as a `choices_digest`, and rerunning the same seed
 reproduces that digest. A seed does not fix concurrent interleavings or
 timings, so report those as a spread across repetitions, not as exact values.
+Recovery reports hash the selected fault and raw simulator choices; persisted
+input identities remain evidence, outside the digest. Recovery results from
+before ROB-1234 included those per-run identities, so compare their raw choices
+rather than their digests. Historical result files retain that older format.
 
 **Sweeps.** A curve runs each value and seed in its own fresh VM:
 

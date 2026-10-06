@@ -834,3 +834,38 @@ warnings as errors, format and diff checks. Final clean-head production-default
 preparations, exact review and delivery are recorded in ROB-1085. These rows
 are excluded from the >=1000 registered matrix, which
 still requires a reviewed finite schedule plan and measurement.
+
+### Finite matrix infrastructure (2026-10-06)
+
+`Matrix.plan/2` declares 24 checkpoints across seven delivered families:
+session (3), handoff (5), child (3), focused job/native epochs (5), ordinary
+group (3), direct transport (3), and whole VM (2). Fifty round-major repetitions
+give 1200 rows with unique consecutive seeds 1085000–1086199. A separate
+24-row qualification uses 1084900–1084923 and is excluded from measurement.
+This is a finite set of checkpoints, not an exhaustive fault cross-product.
+
+`MatrixRunner` launches one fresh externally owned peer per row with two BEAM
+schedulers and observed production supervisor intensity 3/period 5. Source,
+dependency BEAM, loaded-module and native hashes are frozen in a registration.
+Peers verify them before application admission and after shutdown. The peer
+runs from the pinned repository; HOME, TMPDIR, sessions and fixtures live under
+the disposable row root. The registered launcher invokes no repository compiler;
+the focused Mix command remains the job family's declared fixture workload.
+The scenario gets a 60-second outer deadline; VM exit and stub settlement have
+separate bounded cleanup waits. A row root is never overwritten or reused.
+
+Raw peer output, boot/observed/finished reports, controller Port/OS witnesses and
+the final row record are retained. Failed scenario checks already retain their
+fixture through `Lab`; unconfirmed cleanup retains its original root. The
+controller requires exact row identity, every declared check, clean source,
+the fixed settings, causal fault evidence, a matched owned launcher and physical
+outer cleanup. A witnessed false outcome stays eligible and is counted as a
+failure. Missing provenance/causal evidence or unconfirmed cleanup stops the
+matrix. Earlier preparations, controls and the qualification are never pooled
+into the measurement. Existing family recovery/backlog bounds remain unchanged.
+
+Preparation and mutation logs are in
+`lab/results/rob-1085-matrix-preparation-20261006/`. A deliberately disabled
+outer cleanup fails actual OS-stop controls; independent fixture cleanup remains
+registered. The final clean-head checks, review, delivery and immutable
+registration are recorded on ROB-1085. No 1200-row measurement is claimed here.

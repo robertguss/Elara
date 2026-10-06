@@ -26,7 +26,8 @@ defmodule Elara.Exec do
       :termination,
       :bytes_total,
       :bytes_sent,
-      :elapsed_ms
+      :elapsed_ms,
+      output_capped: false
     ]
 
     @type termination :: :exited | :cancelled | :timed_out | :truncated
@@ -37,7 +38,8 @@ defmodule Elara.Exec do
             termination: termination(),
             bytes_total: non_neg_integer(),
             bytes_sent: non_neg_integer(),
-            elapsed_ms: non_neg_integer()
+            elapsed_ms: non_neg_integer(),
+            output_capped: boolean()
           }
   end
 
@@ -74,8 +76,8 @@ defmodule Elara.Exec do
     binary = Keyword.get_lazy(opts, :binary, &binary_path/0)
 
     case open_stub(binary) do
-      {:ok, port, os_pid, buffer} ->
-        {:ok, initial_state(binary, port, os_pid, buffer)}
+      {:ok, port, os_pid, buffer, policies} ->
+        {:ok, initial_state(binary, port, os_pid, buffer, policies)}
 
       {:error, reason} ->
         {:stop, {:exec_stub_unavailable, reason}}
@@ -133,7 +135,7 @@ defmodule Elara.Exec do
   end
 
   def handle_call({:run, argv, opts}, _from, %{port: nil} = state) do
-    case validate_run(argv, opts) do
+    case validate_run(argv, opts, state.output_policies) do
       {:ok, _request} ->
         {:reply, {:error, {:not_started, "execution stub is restarting"}}, state}
 
@@ -152,7 +154,7 @@ defmodule Elara.Exec do
   end
 
   defp start_command(argv, opts, from, state) do
-    case validate_run(argv, opts) do
+    case validate_run(argv, opts, state.output_policies) do
       {:ok, request} ->
         id = job_id(state.generation)
         owner = elem(from, 0)
@@ -165,7 +167,13 @@ defmodule Elara.Exec do
           phase: :submitted,
           chunks: [],
           bytes_seen: 0,
-          max_bytes: request.max_bytes
+          max_bytes: request.max_bytes,
+          output_policy: request.output_policy,
+          head_limit:
+            if(request.output_policy == :head_tail,
+              do: div(request.max_bytes, 2),
+              else: request.max_bytes
+            )
         }
 
         jobs = Map.put(state.jobs, id, job)
@@ -181,6 +189,11 @@ defmodule Elara.Exec do
           "max_bytes" => request.max_bytes,
           "timeout_ms" => request.timeout_ms
         }
+
+        command =
+          if request.output_policy == :head_tail,
+            do: Map.put(command, "output_policy", "head_tail"),
+            else: command
 
         if send_command(state.port, command) do
           {:noreply, state}
@@ -234,8 +247,9 @@ defmodule Elara.Exec do
 
   def handle_info(:restart_stub, %{port: nil} = state) do
     case open_stub(state.binary) do
-      {:ok, port, os_pid, buffer} ->
-        {:noreply, %{state | port: port, os_pid: os_pid, buffer: buffer}}
+      {:ok, port, os_pid, buffer, policies} ->
+        {:noreply,
+         %{state | port: port, os_pid: os_pid, buffer: buffer, output_policies: policies}}
 
       {:error, _reason} ->
         Process.send_after(self(), :restart_stub, @restart_delay_ms)
@@ -246,7 +260,7 @@ defmodule Elara.Exec do
   def handle_info(:restart_stub, state), do: {:noreply, state}
   def handle_info(_message, state), do: {:noreply, state}
 
-  defp initial_state(binary, port, os_pid, buffer) do
+  defp initial_state(binary, port, os_pid, buffer, policies) do
     %{
       incarnation: Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false),
       binary: binary,
@@ -254,6 +268,7 @@ defmodule Elara.Exec do
       os_pid: os_pid,
       generation: 1,
       buffer: buffer,
+      output_policies: policies,
       jobs: %{},
       monitors: %{}
     }
@@ -262,11 +277,12 @@ defmodule Elara.Exec do
   defp execution_token(state),
     do: %{"incarnation" => state.incarnation, "generation" => state.generation}
 
-  defp validate_run(argv, opts) do
+  defp validate_run(argv, opts, policies) do
     cwd = Keyword.get_lazy(opts, :cwd, &File.cwd!/0)
     env = Keyword.get(opts, :env, %{})
     max_bytes = Keyword.get(opts, :max_bytes, 16_384)
     timeout_ms = Keyword.get(opts, :timeout_ms, 30_000)
+    output_policy = Keyword.get(opts, :output_policy, :truncate)
 
     cond do
       not (is_list(argv) and argv != [] and Enum.all?(argv, &valid_string?/1)) ->
@@ -284,6 +300,12 @@ defmodule Elara.Exec do
       not (is_integer(timeout_ms) and timeout_ms > 0) ->
         {:error, "timeout_ms must be a positive integer"}
 
+      output_policy not in [:truncate, :head_tail] ->
+        {:error, "output_policy must be truncate or head_tail"}
+
+      output_policy == :head_tail and "head_tail" not in policies ->
+        {:error, "execution stub does not support head_tail output"}
+
       true ->
         {:ok,
          %{
@@ -291,7 +313,8 @@ defmodule Elara.Exec do
            cwd: cwd,
            env: Map.new(env),
            max_bytes: max_bytes,
-           timeout_ms: timeout_ms
+           timeout_ms: timeout_ms,
+           output_policy: output_policy
          }}
     end
   end
@@ -351,7 +374,7 @@ defmodule Elara.Exec do
        when is_binary(id) and is_list(bytes) do
     with {:ok, chunk} <- decode_bytes(bytes) do
       update_job(state, id, fn
-        %{phase: :started} = job when job.bytes_seen + byte_size(chunk) <= job.max_bytes ->
+        %{phase: :started} = job when job.bytes_seen + byte_size(chunk) <= job.head_limit ->
           chunks = if job.from, do: [chunk | job.chunks], else: []
           {:ok, %{job | chunks: chunks, bytes_seen: job.bytes_seen + byte_size(chunk)}}
 
@@ -445,8 +468,7 @@ defmodule Elara.Exec do
          true <- valid_counter?(bytes_total),
          true <- valid_counter?(bytes_sent),
          true <- valid_counter?(elapsed_ms),
-         true <- bytes_sent == job.bytes_seen and bytes_sent <= job.max_bytes,
-         true <- valid_total?(bytes_total, bytes_sent, truncated, job.max_bytes) do
+         {:ok, tail, capped} <- output_accounting(event, job, bytes_total, bytes_sent, truncated) do
       termination =
         cond do
           cancelled -> :cancelled
@@ -457,18 +479,43 @@ defmodule Elara.Exec do
 
       {:ok,
        %Result{
-         output: job.chunks |> Enum.reverse() |> IO.iodata_to_binary(),
+         output: IO.iodata_to_binary([Enum.reverse(job.chunks), tail]),
          code: code,
          signal: signal,
          termination: termination,
          bytes_total: bytes_total,
          bytes_sent: bytes_sent,
-         elapsed_ms: elapsed_ms
+         elapsed_ms: elapsed_ms,
+         output_capped: capped
        }}
     else
       _invalid -> {:error, "stub returned inconsistent terminal accounting"}
     end
   end
+
+  defp output_accounting(event, %{output_policy: :head_tail} = job, total, sent, false) do
+    with tail when is_list(tail) <- event["tail"],
+         {:ok, tail} <- decode_bytes(tail),
+         true <- job.bytes_seen == min(total, job.head_limit),
+         true <- byte_size(tail) == min(total - job.bytes_seen, job.max_bytes - job.head_limit),
+         true <- sent == job.bytes_seen + byte_size(tail) and sent <= job.max_bytes,
+         capped when is_boolean(capped) <- event["output_capped"],
+         true <- capped == total > sent do
+      {:ok, tail, capped}
+    else
+      _ -> :error
+    end
+  end
+
+  defp output_accounting(event, %{output_policy: :truncate} = job, total, sent, truncated) do
+    if Map.get(event, "tail", []) == [] and Map.get(event, "output_capped", false) == false and
+         sent == job.bytes_seen and sent <= job.max_bytes and
+         valid_total?(total, sent, truncated, job.max_bytes),
+       do: {:ok, "", truncated},
+       else: :error
+  end
+
+  defp output_accounting(_, _, _, _, _), do: :error
 
   defp valid_exit_identity?(code, signal) do
     (is_integer(code) and code >= 0 and is_nil(signal)) or
@@ -549,9 +596,9 @@ defmodule Elara.Exec do
       ])
 
     case await_ready(port, "") do
-      {:ok, buffer} ->
+      {:ok, buffer, policies} ->
         {:os_pid, os_pid} = Port.info(port, :os_pid)
-        {:ok, port, os_pid, buffer}
+        {:ok, port, os_pid, buffer, policies}
 
       {:error, reason} ->
         close_port(port)
@@ -574,9 +621,14 @@ defmodule Elara.Exec do
                  "ev" => "ready",
                  "protocol" => @protocol_version,
                  "stub_version" => version
-               }}
+               } = ready}
               when is_binary(version) ->
-                {:ok, rest}
+                policies = Map.get(ready, "output_policies", ["truncate"])
+
+                if is_list(policies) and Enum.all?(policies, &is_binary/1) and
+                     "truncate" in policies,
+                   do: {:ok, rest, policies},
+                   else: {:error, "stub returned invalid output capabilities"}
 
               _invalid ->
                 {:error, "stub returned an invalid ready handshake"}

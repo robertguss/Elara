@@ -19,6 +19,7 @@ struct Request {
     env: HashMap<String, String>,
     max_bytes: u64,
     timeout_ms: u64,
+    head_tail: bool,
 }
 
 struct ManagedJob {
@@ -89,7 +90,8 @@ fn manager_loop() -> io::Result<()> {
         &json!({
             "ev": "ready",
             "protocol": PROTOCOL_VERSION,
-            "stub_version": env!("CARGO_PKG_VERSION")
+            "stub_version": env!("CARGO_PKG_VERSION"),
+            "output_policies": ["truncate", "head_tail"]
         }),
     )?;
 
@@ -273,6 +275,13 @@ fn parse_request(line: &[u8]) -> Result<Request, String> {
         .transpose()?
         .unwrap_or(0);
 
+    let head_tail = match object.get("output_policy") {
+        None => false,
+        Some(Value::String(policy)) if policy == "truncate" => false,
+        Some(Value::String(policy)) if policy == "head_tail" => true,
+        _ => return Err("unknown output_policy".to_owned()),
+    };
+
     Ok(Request {
         id,
         op,
@@ -281,6 +290,7 @@ fn parse_request(line: &[u8]) -> Result<Request, String> {
         env,
         max_bytes,
         timeout_ms,
+        head_tail,
     })
 }
 
@@ -477,6 +487,7 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
     let mut trigger = Trigger::None;
     let mut bytes_total = 0_u64;
     let mut bytes_sent = 0_u64;
+    let mut tail = Vec::new();
     let mut output_closed = false;
     let mut status: Option<ExitStatus> = None;
     let mut manager_present = true;
@@ -531,6 +542,8 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
                 &mut trigger,
                 &mut bytes_total,
                 &mut bytes_sent,
+                request.head_tail,
+                &mut tail,
             )?;
         }
 
@@ -564,21 +577,23 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
 
     if manager_present {
         let status = status.expect("loop waits for child status");
-        write_json_fd(
-            event_fd,
-            &json!({
-                "id": request.id,
-                "ev": "exit",
-                "code": status.code(),
-                "signal": status.signal(),
-                "cancelled": trigger == Trigger::Cancelled,
-                "timed_out": trigger == Trigger::TimedOut,
-                "truncated": trigger == Trigger::Truncated,
-                "bytes_total": bytes_total,
-                "bytes_sent": bytes_sent,
-                "elapsed_ms": started.elapsed().as_millis() as u64
-            }),
-        )?;
+        let mut terminal = json!({
+            "id": request.id,
+            "ev": "exit",
+            "code": status.code(),
+            "signal": status.signal(),
+            "cancelled": trigger == Trigger::Cancelled,
+            "timed_out": trigger == Trigger::TimedOut,
+            "truncated": trigger == Trigger::Truncated,
+            "bytes_total": bytes_total,
+            "bytes_sent": bytes_sent + tail.len() as u64,
+            "elapsed_ms": started.elapsed().as_millis() as u64
+        });
+        if request.head_tail {
+            terminal["output_capped"] = json!(bytes_total > bytes_sent + tail.len() as u64);
+            terminal["tail"] = json!(tail);
+        }
+        write_json_fd(event_fd, &terminal)?;
     }
 
     Ok(())
@@ -620,10 +635,15 @@ fn drain_output(
     trigger: &mut Trigger,
     bytes_total: &mut u64,
     bytes_sent: &mut u64,
+    head_tail: bool,
+    tail: &mut Vec<u8>,
 ) -> io::Result<bool> {
     let mut buffer = [0_u8; 8192];
+    let head_limit = if head_tail { max_bytes / 2 } else { max_bytes };
+    let tail_limit = (max_bytes - head_limit) as usize;
 
-    loop {
+    // Return to the control/deadline poll even with a continuously full pipe.
+    for _ in 0..64 {
         let count = unsafe { libc::read(output_fd, buffer.as_mut_ptr().cast(), buffer.len()) };
         if count == 0 {
             return Ok(false);
@@ -641,7 +661,7 @@ fn drain_output(
 
         let count = count as usize;
         *bytes_total += count as u64;
-        let room = max_bytes.saturating_sub(*bytes_sent) as usize;
+        let room = head_limit.saturating_sub(*bytes_sent) as usize;
         let sent = count.min(room);
 
         if sent > 0 {
@@ -657,11 +677,24 @@ fn drain_output(
             *bytes_sent += sent as u64;
         }
 
-        if *bytes_total > max_bytes && *trigger == Trigger::None {
+        if head_tail && tail_limit > 0 {
+            let rest = &buffer[sent..count];
+            if rest.len() >= tail_limit {
+                tail.clear();
+                tail.extend_from_slice(&rest[rest.len() - tail_limit..]);
+            } else {
+                let excess = (tail.len() + rest.len()).saturating_sub(tail_limit);
+                tail.drain(..excess);
+                tail.extend_from_slice(rest);
+            }
+        }
+
+        if !head_tail && *bytes_total > max_bytes && *trigger == Trigger::None {
             *trigger = Trigger::Truncated;
             kill_group(pgid);
         }
     }
+    Ok(true)
 }
 
 fn forward_events(fd: RawFd, stdout: &mut impl Write) -> io::Result<bool> {
@@ -838,6 +871,7 @@ mod tests {
                 env: HashMap::new(),
                 max_bytes: 128,
                 timeout_ms: 1000,
+                head_tail: false,
             };
             guardian_loop(&request, control[0], events[1]).unwrap();
             close_fd(control[0]);
@@ -904,6 +938,19 @@ mod tests {
         assert_eq!(request.env["A"], "B");
         assert_eq!(request.max_bytes, 10);
         assert_eq!(request.timeout_ms, 20);
+        assert!(!request.head_tail);
+    }
+
+    #[test]
+    fn output_policy_is_explicit_and_unknown_values_are_rejected() {
+        let request =
+            parse_request(br#"{"id":"j1","op":"run","output_policy":"head_tail"}"#).unwrap();
+        assert!(request.head_tail);
+        for policy in [json!("other"), json!(null), json!(true), json!(1)] {
+            let bytes =
+                serde_json::to_vec(&json!({"id":"j1","op":"run","output_policy":policy})).unwrap();
+            assert!(parse_request(&bytes).is_err());
+        }
     }
 
     #[test]

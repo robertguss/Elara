@@ -93,6 +93,24 @@ Worker loss while that writer survives commits an indeterminate terminal;
 writer loss leaves an attempted receipt unresolved and prevents reinvocation.
 This lifetime rule does not prove whether external side effects completed.
 
+## Bounded command output
+
+`Elara.Exec.run(argv, cwd: path)` defaults to killing the command at the output
+cap. For a trusted background job, `output_policy: :head_tail` keeps draining
+until exit, deadline or cancellation and retains a bounded prefix and suffix:
+
+```elixir
+Elara.Exec.run(["mix", "test", "test/example_test.exs"],
+  cwd: "/absolute/project", output_policy: :head_tail,
+  max_bytes: 16_384, timeout_ms: 60_000)
+```
+
+The result's `output_capped` flag identifies omitted bytes; head/tail output
+joins two retained parts when capped. `bytes_total` counts drained output and
+`bytes_sent` counts retained bytes, including the terminal suffix. The actual
+exit/deadline/cancellation still determines termination. An older execution
+stub rejects head/tail before submission and remains usable with the default.
+
 ## Custom tools
 
 A tool is a `%Elara.Tool{}` with a JSON Schema and a module/function pair of

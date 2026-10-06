@@ -141,29 +141,37 @@ drivers. All raw `rob-1086-retirement-20261006/` and
 `rob-1086-checkpoints-20261006-a1-*` files remain; regression rows are excluded
 from original LAB-5. Keep TestJobs until LAB-8 supplies a replacement.
 
-ROB-1104 is the sole executable item, under final review on
-`work/rob-1104-receipt-owner-loss` from clean main `eaeb3dd2`.
-Read its selection, plan, verification amendment, frozen registration and
-Results/review/delivery comments in Linear. Candidate runtime `e564b68` moves the
-callback into a linked worker while the same serial ledger writer waits for its
-exact result/DOWN. Worker loss records one indeterminate receipt; writer/VM
-loss retains unresolved attempted evidence, without replay or a restart
-terminalization rule. Seven historical writer-loss checkpoints now prove
-worker-to-writer linkage and kill the same writer, retaining all original
-outcome/causality/no-retry assertions. Premature/released/forced-cleanup and
-unlinked-worker controls distinguish invalid faults and broken ownership.
+ROB-1104 is Done after PR #53 merged at
+`a4f8013da2e5ac6af047e293e53b5cc58d4bf640`, tree-equal to reviewed `d8fc182`.
+Both actual exact-head Socket checks passed. Full 978/focused132 and registered
+27/27 checkpoint rows (461 checks true) have independent receipt/ordered-row/
+ownership/Port/OS/stub and unchanged artifact/pin/no-BEAM proof. Note 007 and
+Linear hold exact review, registration and delivery. Preserve every raw
+`rob-1104-receipt-recovery-20261006/` and `rob-1104-checkpoints-20261006-a1-*`
+file/root. Worker loss records uncertainty while its writer survives;
+writer/VM-loss receipts stay unresolved, without replay or new authority.
 
-Final combined focused 132 and full 978 (11 properties, 967 tests), seed 1104,
-pass at e564b68; full 274.7 s. Fresh registered dev regression 27/27 eligible and
-passed, all 461 checks true, zero failed/ineligible/unconfirmed cleanup. It
-includes the original 24 checkpoints and three explicit receipt transport
-checkpoints, seeds 1104100–1104126. Independent ordered row/receipt/ownership/
-Port/OS/stub readback passes; source/artifact/pin postflight matches and no BEAM
-remains. Note 007 records identities, hashes, limits and the retained failed
-controls. Preserve `lab/results/rob-1104-receipt-recovery-20261006/` and every
-`rob-1104-checkpoints-20261006-a1-*` file/root. Rows are excluded from original
-LAB-5; LAB-3 is not resumed. Final review/push/PR/checks/SHA-pinned merge remain
-until the Linear delivery comment confirms them. Done means merged.
+LAB-8/ROB-1088 is the sole executable item, Building on
+`work/rob-1088-general-jobs` from clean a4f8013. Read selection
+`cd9c5c07-4597-4fed-a7bf-bc92d6a86d85` and plan
+`98647c0a-62f9-4b30-b9d3-541a13b35028` in Linear. Chunk 1 adds explicit native
+head/tail output with pre-admission capability negotiation, retained exact
+counters and deadline/control fairness; default ordinary bash keeps its cap-kill
+policy. Public red 0/5, expanded green21, restored mutation controls and focused
+67 pass; native format/Clippy/seven tests and compile/format/diff pass. Note008
+and `lab/results/rob-1088-general-jobs-20261006/` retain baseline counts, failed
+controls and scope. Integrated suite/review/chunk delivery remain pending. This
+chunk adds99 counted source lines; overall reduction is not established.
+
+After output-policy delivery, generalize TestJobs to trusted Jobs profiles while
+loading v1 records and keeping the test_job alias. Then implement the reviewed
+shared completion/correlation contract and operator server/TUI acknowledgment.
+Preserve admission, immutable single completion, no replay on uncertain owner
+loss, bounded cancellation and capacity through restarts; do not claim complete
+LAB-8 acceptance before final fresh chaos/net-line comparison. Separately
+approved capped real-model acceptance remains an owner gate. Complete all
+independent scripted work before Needs Input and continue other issues. No
+LAB-3 resumption, real model or human TUI gate is authorized by this selection.
 
 LAB-8 also depends on LAB-5; LAB-4/LAB-7 retain their recorded dependencies.
 ROB-1091 is Needs Input for the owner direction checkpoint; other remaining

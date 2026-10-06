@@ -141,21 +141,29 @@ drivers. All raw `rob-1086-retirement-20261006/` and
 `rob-1086-checkpoints-20261006-a1-*` files remain; regression rows are excluded
 from original LAB-5. Keep TestJobs until LAB-8 supplies a replacement.
 
-ROB-1104 is the sole executable item, Building on
+ROB-1104 is the sole executable item, under final review on
 `work/rob-1104-receipt-owner-loss` from clean main `eaeb3dd2`.
-Read its selection/plan and latest verification amendment in Linear. The
-callback moves into a linked worker while the same serial ledger writer waits
-for its exact result/DOWN. Worker loss records one indeterminate receipt;
-writer/VM loss retains unresolved attempted evidence, without replay or a new
-restart-terminalization rule. Seven historical writer-loss checkpoints now
-prove worker-to-writer linkage and kill the same writer, retaining all original
-outcome/causality/no-retry assertions. Focused effect/input/executor 120 passed;
-receipt/default transport plus premature/released/forced-cleanup controls pass.
-Removing the link fails worker-DOWN after writer death; source restored exactly.
-Exit trapping is narrowed to the callback wait; final combined focused
-verification passes 132 checks (seed 1104). Note 007 and `lab/results/rob-1104-receipt-recovery-20261006/` record
-scope and retained red attempts. Final full suite, frozen dev receipt rows,
-independent readback/review and delivery remain. LAB-3 is not resumed.
+Read its selection, plan, verification amendment, frozen registration and
+Results/review/delivery comments in Linear. Candidate runtime `e564b68` moves the
+callback into a linked worker while the same serial ledger writer waits for its
+exact result/DOWN. Worker loss records one indeterminate receipt; writer/VM
+loss retains unresolved attempted evidence, without replay or a restart
+terminalization rule. Seven historical writer-loss checkpoints now prove
+worker-to-writer linkage and kill the same writer, retaining all original
+outcome/causality/no-retry assertions. Premature/released/forced-cleanup and
+unlinked-worker controls distinguish invalid faults and broken ownership.
+
+Final combined focused 132 and full 978 (11 properties, 967 tests), seed 1104,
+pass at e564b68; full 274.7 s. Fresh registered dev regression 27/27 eligible and
+passed, all 461 checks true, zero failed/ineligible/unconfirmed cleanup. It
+includes the original 24 checkpoints and three explicit receipt transport
+checkpoints, seeds 1104100–1104126. Independent ordered row/receipt/ownership/
+Port/OS/stub readback passes; source/artifact/pin postflight matches and no BEAM
+remains. Note 007 records identities, hashes, limits and the retained failed
+controls. Preserve `lab/results/rob-1104-receipt-recovery-20261006/` and every
+`rob-1104-checkpoints-20261006-a1-*` file/root. Rows are excluded from original
+LAB-5; LAB-3 is not resumed. Final review/push/PR/checks/SHA-pinned merge remain
+until the Linear delivery comment confirms them. Done means merged.
 
 LAB-8 also depends on LAB-5; LAB-4/LAB-7 retain their recorded dependencies.
 ROB-1091 is Needs Input for the owner direction checkpoint; other remaining

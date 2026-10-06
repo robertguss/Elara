@@ -38,7 +38,7 @@ one indeterminate terminal, A/B/C completion, one native launch, actual native
 settlement/cleanup, serving worker, and rejected submit/continue replay. SQLite
 observation opens readonly and uses the existing validated record decoder.
 
-## Verification so far
+## Results
 
 The original runtime passes 9/11 Executor checks; the two new controls fail.
 The corrected red run kills the actual callback owner and times out waiting for
@@ -64,7 +64,34 @@ Final combined effect/executor/input/transport verification passes 132 checks
 (seed 1104) after narrowing exit trapping to the callback wait. Compile with
 warnings-as-errors and format/diff checks pass.
 
-Raw logs and reviewed control source:
-`lab/results/rob-1104-receipt-recovery-20261006/`.
-Final integrated suite, frozen fresh dev receipt rows, independent readback,
-review and merged delivery are pending; current status is in Linear.
+The integrated full suite passes 978 (11 properties, 967 tests), seed 1104,
+in 274.7 seconds at clean `e564b68efee97e766bd26d0de7cca5e7b98b4493`.
+Raw red, green, mutation, focused and full-suite logs and control source remain
+in `lab/results/rob-1104-receipt-recovery-20261006/`.
+
+A fresh frozen dev-VM regression executes the original 24 LAB-5 checkpoints
+plus three explicitly configured receipt transport checkpoints once each,
+seeds 1104100–1104126. All 27 rows are eligible/passed; all 461 check values are
+true, with zero outcome failures, ineligible rows or unconfirmed cleanup. The
+receipt rows independently establish accepted/one-attempt/zero-terminal before
+loss, the same live writer and receipt identity with one indeterminate terminal
+after loss, one native launch, completed A/B/C, and rejected replay. Independent
+readback checks every ordered case/seed, source/settings, actual callback/writer
+link, receipt counts and validated digests, observed stubs, Port/OS identities
+and cleanup. Recovery/backlog maxima are 1031/1074 ms on this host; the rows meet
+their declared finite bounds and make no comparative timing claim.
+
+Registration and all adjacent pinned scripts, launch log, independent readback
+and artifact/host postflight records remain under
+`lab/results/rob-1104-checkpoints-20261006-a1-*`; rows are in
+`rob-1104-checkpoints-20261006-a1-rows/`. Registration pins 793 files/361 modules
+at e564b68; manifest SHA256
+`c76c9841486cfbc115bacf9bd3de15613d8f821cdd07f65d3b1aab58965e1fd3`,
+summary SHA256
+`628888608ddf8a9bc1024c29b355d4047ab038f01d929e7ce982de5488e04c62`.
+The launcher exited successfully; postflight source/files/modules and all five
+pins match, and no BEAM VM remains. These finite scripted rows are separate from
+the retained LAB-5 corpus and do not resume LAB-3. Original failed evidence,
+detached descendants, writer/VM loss, disk damage, arbitrary callbacks and real
+models remain outside this surviving-writer result. Current review and merged
+delivery evidence is in ROB-1104 in Linear.

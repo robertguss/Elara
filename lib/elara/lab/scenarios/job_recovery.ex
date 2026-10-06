@@ -638,26 +638,8 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
     }
   end
 
-  defp parent_of(pid) do
-    case System.cmd("ps", ["-p", Integer.to_string(pid), "-o", "ppid="], stderr_to_stdout: true) do
-      {text, 0} ->
-        case Integer.parse(String.trim(text)) do
-          {parent, ""} when parent > 0 -> {:ok, parent}
-          _ -> {:error, :invalid_parent}
-        end
-
-      {_, status} ->
-        {:error, {:parent_probe_failed, status}}
-    end
-  end
-
-  defp os_stopped?(pid) do
-    case process_info(Integer.to_string(pid)) do
-      {:ok, nil} -> true
-      {:ok, %{stat: "Z" <> _}} -> true
-      _ -> false
-    end
-  end
+  defp parent_of(pid), do: Elara.Lab.ProcessProbe.parent(pid)
+  defp os_stopped?(pid), do: Elara.Lab.ProcessProbe.stopped?(pid)
 
   defp native_before(cwd) do
     with {:ok, text} <- File.read(Path.join(cwd, "os_pid")),
@@ -709,47 +691,8 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
 
   defp native_after(_), do: %{stopped: false, error: :no_native_witness}
 
-  defp process_info(pid) do
-    case System.cmd("ps", ["-p", pid, "-o", "pid=,pgid=,stat="], stderr_to_stdout: true) do
-      {"", 1} ->
-        {:ok, nil}
-
-      {text, 0} ->
-        case parse_process(String.trim(text)) do
-          nil -> {:error, :invalid_ps_row}
-          info -> {:ok, info}
-        end
-
-      {_, code} ->
-        {:error, {:ps_failed, code}}
-    end
-  end
-
-  defp group_members(pgid) do
-    case System.cmd("ps", ["-ax", "-o", "pid=,pgid=,stat="], stderr_to_stdout: true) do
-      {text, 0} ->
-        rows = text |> String.split("\n", trim: true) |> Enum.map(&parse_process(String.trim(&1)))
-
-        if Enum.any?(rows, &is_nil/1),
-          do: {:error, :invalid_ps_rows},
-          else: {:ok, Enum.filter(rows, &(&1.pgid == pgid))}
-
-      {_, code} ->
-        {:error, {:ps_failed, code}}
-    end
-  end
-
-  defp parse_process(text) do
-    case String.split(text) do
-      [pid, pgid, stat] ->
-        with {pid, ""} <- Integer.parse(pid),
-             {pgid, ""} <- Integer.parse(pgid),
-             do: %{pid: pid, pgid: pgid, stat: stat}
-
-      _ ->
-        nil
-    end
-  end
+  defp process_info(pid), do: Elara.Lab.ProcessProbe.info(pid)
+  defp group_members(pgid), do: Elara.Lab.ProcessProbe.group(pgid)
 
   defp report(config, result, hook, events, evidence, job, observation, native, launches, cleanup) do
     checkpoint = event(events, :checkpoint)

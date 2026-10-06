@@ -632,3 +632,72 @@ Integrated verification passed all 940 checks (11 properties, 929 tests),
 seed 1085, in 256.8 seconds. Guidance 3, compile with warnings as errors,
 format and diff checks passed. Complete output is `full-suite.log` in the
 native preparation namespace. No registered measurement rows were added.
+
+### Ordinary command-group preparation (2026-10-06)
+
+At base `62cbaace5904d7f33df54e9ebe75809bd6cce290`, `group_recovery` uses
+public `Elara.Exec.run` to start a shell with an ordinary sleep child in the
+assigned native process group. The hypothesis is that caller, executor or
+native-stub death settles the actual command group without repeating execution
+or claiming certainty across an execution epoch change. `owner_running`,
+`executor_running` and `stub_running` are separate checkpoints. This is an
+executor infrastructure family; it creates no accepted session inputs or
+test-job slots and makes no receipt, acknowledgment or report claim.
+
+Before injection, independently read the actual root/child PID, child parent,
+living state, cwd inode/device and assigned group membership. Both PIDs must
+belong to the same group, which must differ from the controller's. Capture the
+Exec process, token, connected Port/os_pid and root/guardian/stub parent chain.
+Recheck ownership, epoch and living caller immediately before one injection.
+The root and coordinator independently monitor the actual process or Port;
+stub injection also records scoped OS kill submission. Premature child loss
+invalidates nomination. Seeds vary the fault delay from 1 to 20 ms; setup has
+a separate 10-second bound and recovery has a 5-second bound from target DOWN.
+
+Recovery observes the root, ordinary child, entire assigned group, guardian,
+caller and public idle executor before cleanup. Caller death retains the same
+settled epoch. Executor death changes process/incarnation; stub death preserves
+the process/incarnation and increases generation. Both changed epochs retain
+unknown settlement even after physical stop. Actual caller Task terminal
+evidence distinguishes killed caller, GenServer call exit and indeterminate
+stub response. A physical launch marker must occur exactly once.
+
+Cleanup closes effect admission, settles the actual Task and bounded executor
+cancellation, then requires native stop and public idle state before stopping
+helpers/coordinator and releasing the root. Failed probes remain unknown.
+Forced failures directly inspect owned native actors after cleanup. Suspending
+the owned guardian before stub death leaves the ordinary child alive: the
+fault is witnessed, but pre-cleanup recovery must fail. Resume is registered
+before suspension and runs before cleanup. A mutation reporting native stop
+without the OS witnesses fails this independent control (6/7 tests passed).
+An unavailable-executor control retains the first root and stops a requested
+second repetition. Bypassing the cleanup settlement guard falsely allows two
+rows and fails that control. Exact source is restored after both mutations.
+
+The earlier BEAM Port-child attempt at local commit `627c5e7` created a separate
+process group, as already documented in `docs/test-jobs.md`. Cancellation
+correctly left the job indeterminate with capacity held. That experiment is
+retained under `lab/results/rob-1085-descendant-preparation-20261006/` and makes
+no ordinary-group or detached-child cleanup claim. The first ExUnit fixture
+root was removed by per-run test cleanup on VM exit; its logs remain. A fresh
+dev diagnostic preserved a raw row and copied retained root. Its subsequent
+metadata call failed, so it is not evidence of successful diagnostic teardown.
+The sleep child later disappeared; no harness kill is claimed for it. Detached
+children remain the existing explicit policy exclusion.
+
+Focused verification passed 90 tests, seed 1085. Ordinary-group source hashes,
+fresh production-default VM rows, controls and copied unavailable-executor
+root are in `lab/results/rob-1085-group-preparation-20261006/`. Preliminary
+rows precede the final typed-owner assertion; `production-reviewed-*` rows
+use final source. Earlier compile and fixture failures are retained separately.
+These preparations add no registered measurement rows. Client/worker/whole-VM
+families and the expanded >=1000 seeded matrix remain unfinished. Final suite,
+review and delivery are recorded on ROB-1085.
+
+Integrated ordinary-group verification passed all 947 checks (11 properties,
+936 tests), seed 1085, in 262.6 seconds. Guidance 3, compile with warnings as
+errors, format and diff checks passed. Three fresh final-source dev VMs with
+restart intensity 3 passed all checks (10 for caller/executor, 11 for stub),
+complete/cleanup true and one launch; recovery was 40–150 ms. The full output
+is `full-suite.log` in the group preparation namespace. No registered
+measurement rows were added.

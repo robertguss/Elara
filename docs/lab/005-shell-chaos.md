@@ -869,3 +869,10 @@ Preparation and mutation logs are in
 outer cleanup fails actual OS-stop controls; independent fixture cleanup remains
 registered. The final clean-head checks, review, delivery and immutable
 registration are recorded on ROB-1085. No 1200-row measurement is claimed here.
+
+The first clean-head preparation was rejected before application admission:
+disposable HOME removes the user's global Git ignores, exposing Finder metadata
+that the controller ignored. Its raw preflight rejection remains retained.
+Repository `.DS_Store` ignores now make that exclusion explicit; artifact source
+checks disable the global excludes file and report their actual source state.
+The preparation does not count as a fault schedule or measurement.

@@ -117,6 +117,10 @@ and native artifacts are pinned. Runtime failures stay reported; missing causal
 or provenance evidence and unconfirmed cleanup stop successors. See ROB-1085's
 matrix plan and note 005 for the method. Preserve
 `lab/results/rob-1085-matrix-preparation-20261006/`, including rejected controls.
+The first clean-head preparation at `3d97efd` rejected before application startup
+because isolated HOME exposed globally ignored Finder metadata. Its raw rejection
+remains; the repository now ignores that metadata explicitly, and artifact checks
+disable global Git excludes so they cannot conceal runtime source.
 
 Next: finish the matrix infrastructure's integrated verification and review,
 then push/PR/merge with passing required checks. Register and read back the exact

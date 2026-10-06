@@ -38,3 +38,6 @@ elara-*.tar
 # Raw lab experiment output; notes in docs/lab/ quote the summaries.
 /lab/results/
 .empryo
+
+# Finder metadata is ignored equally under developer and disposable lab HOME.
+.DS_Store

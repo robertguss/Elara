@@ -24,4 +24,39 @@ defmodule Elara.Lab.ArtifactsTest do
     changed = put_in(snapshot, ["source", "commit"], "other-source")
     refute Artifacts.verify(changed).source_matches
   end
+
+  test "a Git excludes file cannot hide an untracked runtime source from the fingerprint" do
+    root = Path.join(System.tmp_dir!(), "elara-artifacts-#{System.unique_integer([:positive])}")
+    repo = Path.join(root, "repo")
+    File.mkdir_p!(repo)
+    on_exit(fn -> File.rm_rf!(root) end)
+    File.write!(Path.join(repo, "fixture.ex"), "defmodule Fixture do end\n")
+    assert {_, 0} = System.cmd("git", ["init", "-q"], cd: repo)
+    assert {_, 0} = System.cmd("git", ["add", "fixture.ex"], cd: repo)
+
+    assert {_, 0} =
+             System.cmd(
+               "git",
+               [
+                 "-c",
+                 "commit.gpgsign=false",
+                 "-c",
+                 "user.name=Fixture",
+                 "-c",
+                 "user.email=fixture@example.invalid",
+                 "commit",
+                 "-qm",
+                 "fixture"
+               ],
+               cd: repo
+             )
+
+    assert Artifacts.snapshot(repo).source.dirty == false
+    excludes = Path.join(root, "excludes")
+    File.write!(excludes, "untracked-runtime.ex\n")
+    File.write!(Path.join(repo, "untracked-runtime.ex"), "defmodule UntrackedRuntime do end\n")
+    assert {_, 0} = System.cmd("git", ["config", "core.excludesFile", excludes], cd: repo)
+    assert {"", 0} = System.cmd("git", ["status", "--porcelain"], cd: repo)
+    assert Artifacts.snapshot(repo).source.dirty == true
+  end
 end

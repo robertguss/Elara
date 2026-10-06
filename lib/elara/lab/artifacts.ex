@@ -39,13 +39,17 @@ defmodule Elara.Lab.Artifacts do
           source == manifest["source"],
       changed_files: changed,
       changed_modules: Enum.map(modules, & &1["module"]),
-      source_matches: source == manifest["source"]
+      source_matches: source == manifest["source"],
+      source: source
     }
   end
 
   defp source_state(repo) do
     {commit, 0} = System.cmd("git", ["rev-parse", "HEAD"], cd: repo)
-    {status, 0} = System.cmd("git", ["status", "--porcelain"], cd: repo)
+
+    {status, 0} =
+      System.cmd("git", ["-c", "core.excludesFile=/dev/null", "status", "--porcelain"], cd: repo)
+
     %{commit: String.trim(commit), dirty: status != ""}
   end
 

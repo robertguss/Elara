@@ -144,7 +144,10 @@ may be continued; after a callback starts without durable terminal evidence the
 result is `indeterminate`, never retried. The executor ledger (SQLite via
 `exqlite`, schema 2) has three terminal states, `completed | failed |
 indeterminate`: a callback that returns uncertainty, crashes or returns an invalid
-result is recorded as `indeterminate`. Test terminal states with
+result is recorded as `indeterminate`. Callbacks run in linked workers with
+one serial ledger writer. Worker DOWN while the writer survives records an
+indeterminate terminal; writer/VM loss retains unresolved attempted receipts,
+without a startup terminalization rule or callback replay. Test terminal states with
 `ExecutorLedger.is_terminal_state/1`, never a hand-written list. Schema 1 ledgers
 migrate in place. The controller journal sits beside the session JSONL. The
 house rule is

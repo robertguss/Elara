@@ -597,8 +597,13 @@ defmodule Elara.Effect.PatchReconciliationTest do
         )
       end)
 
-    assert_receive {:operation_hook, ^point, ^executor}, @bound_ms
+    assert_receive {:operation_hook, ^point, worker}, @bound_ms
+    on_exit(fn -> if Process.alive?(worker), do: kill_process(worker) end)
+    assert {:links, links} = Process.info(worker, :links)
+    assert executor in links
+    worker_ref = Process.monitor(worker)
     kill_executor(executor)
+    assert_receive {:DOWN, ^worker_ref, :process, ^worker, :killed}, @bound_ms
     _initial = Task.await(task, @bound_ms)
     reopened = start_executor(context.executor_path)
 
@@ -708,6 +713,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
       Executor.start_link(id: id, path: path, fault_hook: hook || no_fault())
 
     Process.unlink(executor)
+    on_exit(fn -> if Process.alive?(executor), do: kill_executor(executor) end)
     executor
   end
 

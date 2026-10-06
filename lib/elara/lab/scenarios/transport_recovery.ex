@@ -4,7 +4,7 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
   alias Elara.Lab.{Gate, InputObserver, Jobs, NativeGroup}
   alias Elara.Lab.Scenarios.SessionRecovery
   alias Elara.Lab.Scenarios.SessionRecovery.{Coordinator, Deadline}
-  alias Elara.Effect.ControllerJournal
+  alias Elara.Effect.{ControllerJournal, Executor, ExecutorLedger, LocalExecutor}
   alias Elara.Executor.{Remote, Request, Router}
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
   alias Elara.Session.{Handoff, Store}
@@ -35,6 +35,7 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
       gate: gate,
       brain: brain,
       cwd: worker,
+      receipt_backend?: context.params["receipt_backend"] == "true",
       schedule: schedule(context.seed, stage)
     }
 
@@ -81,6 +82,15 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
 
     register(config, router, worker, deadline)
 
+    executor =
+      if config.receipt_backend? do
+        call!(config, :effect_executor, deadline, fn ->
+          {:ok, name} = LocalExecutor.open(config.brain, @workspace)
+          Gate.note(config.gate, :effect_executor, %{name: name, pid: GenServer.whereis(name)})
+          name
+        end)
+      end
+
     source =
       call!(config, :start, deadline, fn ->
         {:ok, id} =
@@ -92,6 +102,7 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
             provider: {Elara.Lab.TransportProvider, config},
             tools: [tool("bash")],
             router: router,
+            effect_executor: executor,
             workspace_id: @workspace,
             max_iterations: 3,
             context_limit: 100_000,
@@ -124,7 +135,7 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
 
     network =
       call!(config, :network_owner, deadline, fn ->
-        network(point.details.socket, source_info.pid)
+        network(point.details.socket, source_info.pid, config.receipt_backend?)
       end)
 
     Gate.note(config.gate, :network, network)
@@ -152,7 +163,8 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
           {:ok, [job]} = ControllerJournal.all(shell.effect_journal)
           {:ok, _intent} = ControllerJournal.get(shell.effect_journal, job.job_id)
 
-          unless shell.effect_executor == nil and not shell.effect_executor_explicit? and
+          unless shell.effect_executor == executor and
+                   shell.effect_executor_explicit? == config.receipt_backend? and
                    shell.router == router and
                    job.tool_call_id == "transport-A" and
                    job.tool_name == "bash" and job.workspace_id == @workspace and
@@ -166,8 +178,24 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
                    Map.has_key?(router_state.checkouts, network.owner),
                  do: throw(:wrong_transport_native_owner)
 
+          receipt = if config.receipt_backend?, do: receipt(config, job.job_id)
+
+          if config.receipt_backend? and
+               not match?(
+                 {:ok,
+                  %ExecutorLedger.Record{
+                    state: :accepted,
+                    admission_count: 1,
+                    callback_attempt_count: 1,
+                    terminal_count: 0
+                  }},
+                 receipt
+               ),
+             do: throw(:missing_attempted_receipt)
+
           %{
             job: Map.from_struct(job),
+            receipt: receipt,
             journal: shell.effect_journal,
             active: store.active_input_id,
             view: view,
@@ -209,7 +237,9 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
            handler: point.caller,
            job: point.details.job,
            guardian: point.details.guardian,
-           native: native
+           native: native,
+           executor: executor,
+           writer: network.writer
          }}
       )
 
@@ -219,7 +249,7 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
         call!(config, :eligible, deadline, fn ->
           latest = event(Gate.snapshot(config.gate), :handler_running)
           current = NativeGroup.before(config.cwd)
-          current_net = network(point.details.socket, source_info.pid)
+          current_net = network(point.details.socket, source_info.pid, config.receipt_backend?)
 
           latest != nil and latest.released_at == nil and Process.alive?(target) and
             Enum.all?(
@@ -301,6 +331,52 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
     unless intent == checkpoint.job, do: throw(:changed_transport_intent)
     Gate.note(config.gate, :intent_after, intent)
 
+    if config.receipt_backend? do
+      {:indeterminate, record} =
+        call!(config, :effect_after, down.at + backlog_limit(config), fn ->
+          Executor.query(executor, checkpoint.job.job_id)
+        end)
+
+      {:ok, before} = checkpoint.receipt
+
+      unless record.job_id == before.job_id and
+               record.operation_digest == before.operation_digest and
+               record.executor_id == before.executor_id and
+               record.admission_count == 1 and record.callback_attempt_count == 1 and
+               record.terminal_count == 1 and match?({:indeterminate, _}, record.result) and
+               GenServer.whereis(executor) == checkpoint.network.writer and
+               Process.alive?(checkpoint.network.writer),
+             do: throw(:wrong_uncertain_receipt)
+
+      {:ok, ^record} = receipt(config, record.job_id)
+
+      Gate.note(config.gate, :effect_after, %{
+        record: Map.from_struct(record),
+        writer: checkpoint.network.writer
+      })
+
+      replay =
+        call!(config, :receipt_no_replay, down.at + backlog_limit(config), fn ->
+          operation = fn ->
+            File.write!(Path.join(config.cwd, "replayed"), "unsafe replay")
+            {:ok, "replayed"}
+          end
+
+          submitted = Executor.submit(executor, record.job_id, record.operation_digest, operation)
+
+          continued =
+            Executor.continue(executor, record.job_id, record.operation_digest, operation)
+
+          %{
+            same_terminal: submitted == {:indeterminate, record},
+            continue_rejected: continued == {:error, :already_terminal},
+            marker_absent: not File.exists?(Path.join(config.cwd, "replayed"))
+          }
+        end)
+
+      Gate.note(config.gate, :receipt_no_replay, replay)
+    end
+
     serving_worker =
       if Process.alive?(worker),
         do: worker,
@@ -366,7 +442,7 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
     end)
   end
 
-  defp network(socket, source) do
+  defp network(socket, source, receipt_backend?) do
     {:ok, local} = :inet.sockname(socket)
     {:ok, peer} = :inet.peername(socket)
 
@@ -389,9 +465,24 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
         _ -> false
       end)
 
-    unless is_pid(owner) and owned and {:process, owner} in monitors and
-             shell.effect_executor == nil and not shell.effect_executor_explicit?,
-           do: throw(:wrong_tcp_client_owner)
+    writer = if receipt_backend?, do: GenServer.whereis(shell.effect_executor)
+
+    links =
+      case Process.info(owner, :links) do
+        {:links, links} -> links
+        _ -> []
+      end
+
+    valid_owner =
+      if receipt_backend?,
+        do:
+          shell.effect_executor_explicit? and is_pid(writer) and writer != owner and
+            writer in links and Registry.keys(Elara.EffectExecutors, writer) != [],
+        else:
+          owned and {:process, owner} in monitors and shell.effect_executor == nil and
+            not shell.effect_executor_explicit?
+
+    unless is_pid(owner) and valid_owner, do: throw(:wrong_tcp_client_owner)
 
     %{
       socket: client,
@@ -399,6 +490,8 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
       local: peer,
       peer: local,
       server_socket: socket,
+      writer: writer,
+      callback_linked_to_writer: writer in links,
       source_tool_owned: owned,
       source_monitored: {:process, owner} in monitors
     }
@@ -497,15 +590,31 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
           end),
         else: {:ok, :not_started}
 
+    executor = details(events, :effect_executor)
+
+    executor_stop =
+      if executor do
+        call(config, :stop_effect_executor, 1_000, fn ->
+          case GenServer.whereis(executor.name) do
+            nil -> :ok
+            pid -> DynamicSupervisor.terminate_child(Elara.EffectExecutorSup, pid)
+          end
+        end)
+      else
+        {:ok, :not_started}
+      end
+
     sessions = SessionRecovery.cleanup(config.co, config.brain, log, true)
 
     Map.merge(sessions, %{
       confirmed:
         sessions.confirmed and gates and physical == {:ok, true} and
-          source_stop in [{:ok, :ok}, {:ok, :not_started}],
+          source_stop in [{:ok, :ok}, {:ok, :not_started}] and
+          executor_stop in [{:ok, :ok}, {:ok, :not_started}],
       gates_settled: gates,
       native_settlement: physical,
-      source_stop: source_stop
+      source_stop: source_stop,
+      executor_stop: executor_stop
     })
   end
 
@@ -589,6 +698,30 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
       backlog_bounded: is_integer(backlog_ms) and backlog_ms <= backlog_limit(config)
     }
 
+    checks =
+      if config.receipt_backend? do
+        after_receipt = details(events, :effect_after)
+        replay = details(events, :receipt_no_replay)
+
+        Map.merge(checks, %{
+          receipt_identity_preserved:
+            after_receipt != nil and checkpoint != nil and
+              after_receipt.record.job_id == checkpoint.job.job_id and
+              after_receipt.record.operation_digest == checkpoint.job.operation_digest,
+          receipt_indeterminate:
+            after_receipt != nil and after_receipt.record.state == :indeterminate and
+              after_receipt.record.terminal_count == 1,
+          writer_survived:
+            after_receipt != nil and checkpoint != nil and
+              after_receipt.writer == checkpoint.network.writer,
+          callback_linked_to_writer:
+            checkpoint != nil and checkpoint.network.callback_linked_to_writer,
+          no_receipt_replay: replay != nil and Enum.all?(Map.values(replay), & &1)
+        })
+      else
+        checks
+      end
+
     %{
       complete:
         result == {:ok, :ok} and fault and death and view != nil and cleanup.confirmed and
@@ -602,8 +735,15 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
       observation: view,
       mutation: recovered && recovered.details.mutation,
       intent: intent,
-      route: :direct_tool_task,
-      receipt_backend: false,
+      route: if(config.receipt_backend?, do: :receipt_callback_worker, else: :direct_tool_task),
+      receipt_backend: config.receipt_backend?,
+      receipt_before:
+        case checkpoint && checkpoint.receipt do
+          {:ok, record} -> Map.from_struct(record)
+          _ -> nil
+        end,
+      receipt_after: details(events, :effect_after),
+      receipt_no_replay: details(events, :receipt_no_replay),
       native: %{before: details(events, :native), after: after_native},
       launches: launches,
       recovery_ms: recovery_ms,
@@ -617,6 +757,25 @@ defmodule Elara.Lab.Scenarios.TransportRecovery do
       cleanup: cleanup,
       cleanup_confirmed: cleanup.confirmed
     }
+  end
+
+  # Read the live ledger without acquiring write authority or changing its
+  # schema/settings. The existing decoder still checks record and result digests.
+  defp receipt(config, job_id) do
+    %{name: {:via, Registry, {Elara.EffectExecutors, id}}} =
+      details(Gate.snapshot(config.gate), :effect_executor)
+
+    path = LocalExecutor.ledger_path(config.brain, id)
+    {:ok, db} = Exqlite.Sqlite3.open(path, mode: :readonly)
+
+    try do
+      ExecutorLedger.query(
+        %ExecutorLedger{db: db, path: path, configuration: %{mode: :readonly}},
+        job_id
+      )
+    after
+      Exqlite.Sqlite3.close(db)
+    end
   end
 
   defp details(events, point) do

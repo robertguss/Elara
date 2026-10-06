@@ -638,6 +638,11 @@ starts, `mix elara.chat --continue` reconciles those records. It returns a
 recorded terminal result without rewriting, continues only accepted work whose
 callback never started, and reports `indeterminate` rather than retrying after a
 callback started without durable terminal evidence.
+The executor runs each callback in a linked worker while keeping one serial
+ledger writer. If the callback worker stops while that writer survives, it
+records an indeterminate terminal and never invokes the job again. Losing the
+writer still leaves an attempted receipt unresolved; restarting or observing
+workspace bytes does not manufacture a terminal result.
 
 Each turn allows 12 model iterations by default. Each tool has a 30-second
 timeout. Shell output is capped at 16 KiB in the execution stub, and the session

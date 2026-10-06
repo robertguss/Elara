@@ -237,12 +237,17 @@ defmodule Elara.TestFixtures.OpaqueShellTest do
     await_file(context.primary)
     File.touch!(context.allow_exit)
 
-    assert_receive {:operation_hook, :after_shell_exit_before_callback_return, ^executor},
+    assert_receive {:operation_hook, :after_shell_exit_before_callback_return, worker},
                    @bound_ms
 
+    on_exit(fn -> if Process.alive?(worker), do: kill_process(worker) end)
+    assert {:links, links} = Process.info(worker, :links)
+    assert executor in links
+    worker_ref = Process.monitor(worker)
     assert await_process_state(pid, :terminated) == :terminated
 
     kill_executor(executor)
+    assert_receive {:DOWN, ^worker_ref, :process, ^worker, :killed}, @bound_ms
     _initial = Task.await(task, @bound_ms)
     reopened = start_executor(context.executor_path)
 
@@ -695,6 +700,7 @@ defmodule Elara.TestFixtures.OpaqueShellTest do
       Executor.start_link(id: id, path: path, fault_hook: hook || no_fault())
 
     Process.unlink(executor)
+    on_exit(fn -> if Process.alive?(executor), do: kill_executor(executor) end)
     executor
   end
 

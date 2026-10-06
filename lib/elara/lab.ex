@@ -25,7 +25,8 @@ defmodule Elara.Lab do
     "provider_fault" => Elara.Lab.Scenarios.ProviderFault,
     "session_recovery" => Elara.Lab.Scenarios.SessionRecovery,
     "handoff_recovery" => Elara.Lab.Scenarios.HandoffRecovery,
-    "child_recovery" => Elara.Lab.Scenarios.ChildRecovery
+    "child_recovery" => Elara.Lab.Scenarios.ChildRecovery,
+    "job_recovery" => Elara.Lab.Scenarios.JobRecovery
   }
 
   @type context :: %{

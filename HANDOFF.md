@@ -1,4 +1,4 @@
-# Handoff — autonomous implementation, 2026-10-05
+# Handoff — autonomous implementation, 2026-10-06
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
 is the sole planning and status source. Read the
@@ -99,19 +99,27 @@ timeout, or parser change. Logs: `lab/results/rob-1216-diagnosis-20261005/`.
 Those passing runs remain negative evidence, not a fix.
 
 LAB-5 (ROB-1085) is Building, the one selected executable lab item. The valid
-pilot, recovery fix, and transport preparation are delivered; the
-children/handoff/jobs/client/worker/stub/whole-VM/process-group matrix and at
-least 1000 schedules remain. Review and register its expanded method before
+pilot, recovery fix, transport, handoff and child preparations are delivered.
+The full seeded matrix, native/client/worker/stub/whole-VM families and at least
+1000 schedules remain. Review and register its expanded method before
 measurement; reuse the durable lab runner and fresh production-intensity VMs.
 The handoff observer/gates/five checkpoints merged in PR #39 at `a4bbef1`
-after ROB-1324's fixture repair. The child family follows on
-`work/rob-1085-child-recovery`, rebased after PR #40's fixture repair. Its
-original held candidate was `2da7ff1`; preserve all earlier failed output.
+after ROB-1324's fixture repair. Child preparation merged in PR #41 at
+`1d330c9`, after PR #40's fixture repair. Its original held candidate was
+`2da7ff1`; preserve all earlier failed output. Test-job preparation follows on
+`work/rob-1085-job-recovery`: source-session, actual runner and linked manager
+death while a real Mix job runs. It checks input/tool/report identities, one
+launch, idempotent replay, honest uncertainty, slot release and actual native
+PID/group settlement before cleanup. Focused 76 and three fresh dev-VM rows
+passed (all 14 checks and cleanup true). Raw evidence and rejected fault/cleanup
+controls remain in `lab/results/rob-1085-job-preparation-20261005/`; note 005 and
+ROB-1085 record review and delivery. Full suite 933 (11 properties, 922 tests),
+seed 1085, passed in 251.2 seconds; guidance 3, compile/format/diff passed.
 ROB-1085 records exact review, PR, integrated suite and
-merge evidence. Both families are implemented but unmeasured. Next extend the
-remaining test-job/native/client/worker/stub/whole-VM families, preserving causal
+merge evidence. These families are implemented but unmeasured. Next extend the
+remaining native/client/worker/stub/whole-VM families, preserving causal
 fault witnesses, per-input receipt/terminal accounting, honest uncertainty,
-slot/acknowledgment and native cleanup checks. The handoff and child fixtures'
+slot/acknowledgment and native cleanup checks. The handoff, child and test-job fixtures'
 script/gate PIDs support same-VM recovery only; do not reuse that provider
 configuration for whole-VM restart. Keep every preparation separate from the
 eventual registered matrix and preserve its source provenance.
@@ -180,8 +188,8 @@ No tests, compiles, or source edits while a measurement launcher is running.
   writes; historical `[driver]` and `[lead]` prefixes identify earlier records.
 - CI has Socket checks and does not run mix test; distinguish local tests from
   CI evidence.
-- Known unresolved intermittent failures include attachment/sampler census
-  and ROB-1216 SSE. ROB-1233 and ROB-1254 have demonstrated fixture fixes;
+- Known unresolved intermittent failures include attachment/sampler census.
+  ROB-1216, ROB-1233 and ROB-1254 have demonstrated fixture fixes;
   consult their delivery records. Preserve failure
   logs and baseline comparisons rather than treating reruns as proof of a fix.
 - Use `pgrep -x beam.smp`, then ps and lsof cwd checks to identify a process.

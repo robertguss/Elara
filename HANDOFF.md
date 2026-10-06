@@ -69,7 +69,8 @@ remove retained evidence without a specific owner decision. Done means merged.
   `lab/results/rob-1085-child-preparation-20261005/`. See note 005 and ROB-1085
   for final suite, review and delivery. The first full suite passed 920/922;
   ROB-1216's two loopback helper timeouts were repaired separately in PR #40.
-  The integrated suite and exact delivery are recorded in ROB-1085. These are
+  The unchanged lab code then passed all 924 integrated full-suite checks,
+  seed 1085. Exact review and delivery are recorded in ROB-1085. These are
   preparations.
 
 Delivered changes have reviewed diffs, clean format/diff checks, both Socket
@@ -80,9 +81,8 @@ CI has Socket checks and does not run mix test; local test evidence is separate.
 ## Current diagnosis and queue
 
 ROB-1216 is Done after PR #40 merged at `5448d84`. Its fixture repair follows
-two retained
-2-second loopback helper timeouts in the child candidate's full suite, seed
-1085 (920/922). The missing assertion/stack/seed evidence is now available.
+two retained 2-second loopback helper timeouts in the child candidate's full
+suite, seed 1085 (920/922). The missing assertion/stack/seed evidence is now available.
 The fixture repair uses a bounded 10-second wait and keeps the runtime/parser
 and all response assertions unchanged. Public JSON and fragmented-SSE controls
 delayed 2100 ms both fail at the old limit; all 11 provider tests pass with the

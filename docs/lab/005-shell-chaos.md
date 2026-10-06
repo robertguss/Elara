@@ -484,3 +484,10 @@ in 244.2 seconds, seed 1085. Both failures are the 2-second loopback provider
 fixture timeouts tracked by ROB-1216; no child preparation assertion failed.
 The complete original output is `full-suite.log`. This candidate is held for
 the separately tracked investigation and subsequent integrated verification.
+
+After ROB-1216's independently reviewed fixture repair merged in PR #40 at
+`5448d84`, the unchanged child lab code was rebased and all four preparation
+source hashes matched. Integrated verification at candidate `d1473e3` passed
+924 (11 properties, 913 tests), seed 1085, in 275.4 seconds. Full output is
+`full-suite-integrated.log`; the earlier failures and controls remain retained.
+This adds no registered measurement rows. Exact reviewed delivery is in Linear.

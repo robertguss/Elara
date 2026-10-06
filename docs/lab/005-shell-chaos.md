@@ -877,3 +877,54 @@ that the controller ignored. Its raw preflight rejection remains retained.
 Repository `.DS_Store` ignores now make that exclusion explicit; artifact source
 checks disable the global excludes file and report their actual source state.
 The preparation does not count as a fault schedule or measurement.
+
+### Registered finite matrix result (2026-10-06)
+
+The one registered measurement completed at source
+`15e000c15321a545d087ed85255d209c50f1cfd4`: **1200/1200 eligible and passed**,
+50 rows at each of 24 checkpoints, round-major seeds 1085000–1086199.
+All 20,350 recorded check values are true; there are zero outcome failures,
+ineligible rows or unconfirmed cleanups. The separate 24-row qualification
+passed and is excluded, as are every earlier pilot, preparation and control.
+No failing measurement row requires minimization or a runtime fix.
+
+Independent readback matches every row/cell/seed to the frozen registration,
+clean source, two schedulers, actual intensity 3/period 5, owned Port/os_pid,
+exit 0/Port DOWN/OS stop and the observed native stub generations. Registration
+and source/compiled/native hashes still match after the run. The maximum outer
+row duration is 2366 ms. Recovery and backlog observations below are milliseconds;
+percentiles describe this finite corpus and do not estimate a population.
+
+| Family | Rows | Recovery p50 / p95 / max | Backlog p50 / p95 / max |
+| --- | ---: | ---: | ---: |
+| Session | 150 | 16 / 17 / 28 | 105 / 106 / 116 |
+| Handoff | 250 | 134 / 196 / 229 | 136 / 198 / 233 |
+| Child | 150 | 13 / 16 / 18 | 97 / 242 / 280 |
+| Focused job/native epochs | 250 | 107 / 1051 / 1127 | 227 / 1103 / 1178 |
+| Ordinary command group | 150 | 47 / 152 / 157 | Not applicable |
+| Direct transport | 150 | 88 / 138 / 150 | 89 / 138 / 150 |
+| Whole VM | 100 | 34 / 36 / 57 | 47 / 68 / 70 |
+
+Every recorded family bound passed. This supports the registered safety and
+progress hypotheses at these checkpoints with simulated/scripted providers and
+ordinary owned native groups. It does not extend to arbitrary fault positions,
+disk damage, detached descendants, real-model behavior or owner TUI acceptance.
+The optional explicit receipt-client barrier remains the separate ROB-1104
+finding; physical cleanup creates no generic receipt or replay authority.
+
+Raw evidence is retained in
+`lab/results/rob-1085-matrix-measurement-20261006-a1/`, including every peer log,
+boot/observed/finished/record file, copied registration, per-case summary and
+independent readback with per-record hashes. The registration manifest SHA256 is
+`bbe689027c60ed364d43f54c7c6cbc3d6aed32bf27e94e038fd0694a74640a41`;
+measurement summary SHA256
+`f92e30959ce5c3a33cccad4e4612957e530755517c9e2b22a6cc7a6c81efdc20`.
+The launcher, generator, their hashes, qualification, postflight artifact check
+and host observations remain in adjacent `rob-1085-matrix-*-20261006-a1` files.
+Linear holds the final registration, admission decision, review and delivery.
+
+The host was Apple M3 Max/96 GiB, OTP 29/Elixir 1.20.4, on AC power, with no BEAM
+in the pre-registration process check. An unrelated Phoenix VM was identified
+outside Elara at postflight; its start time during the run was not measured.
+Timing is host-specific, with incidental activity, and is not a controlled
+throughput comparison. LAB-3's measurement pause and host protocol remain.

@@ -98,119 +98,57 @@ one full suite passed 888 (seed 183979), at source `4a9c0ad`. No assertion,
 timeout, or parser change. Logs: `lab/results/rob-1216-diagnosis-20261005/`.
 Those passing runs remain negative evidence, not a fix.
 
-LAB-5 (ROB-1085) is Building, the one selected executable lab item. The valid
-pilot, recovery fix, transport, handoff, child and test-job preparations are delivered.
-The full seeded matrix, client/worker/whole-VM families and at least
-1000 schedules remain. Review and register its expanded method before
-measurement; reuse the durable lab runner and fresh production-intensity VMs.
-The handoff observer/gates/five checkpoints merged in PR #39 at `a4bbef1`
-after ROB-1324's fixture repair. Child preparation merged in PR #41 at
-`1d330c9`, after PR #40's fixture repair. Its original held candidate was
-`2da7ff1`; preserve all earlier failed output. Test-job preparation merged in
-PR #42 at `c6c41df`: source-session, actual runner and linked manager
-death while a real Mix job runs. It checks input/tool/report identities, one
-launch, idempotent replay, honest uncertainty, slot release and actual native
-PID/group settlement before cleanup. Focused 76 and three fresh dev-VM rows
-passed (all 14 checks and cleanup true). Raw evidence and rejected fault/cleanup
-controls remain in `lab/results/rob-1085-job-preparation-20261005/`; note 005 and
-ROB-1085 record review and delivery. Full suite 933 (11 properties, 922 tests),
-seed 1085, passed in 251.2 seconds; guidance 3, compile/format/diff passed.
-Executor/native-stub preparation merged in PR #43 at `62cbaac`.
-It positively identifies the Exec owner, connected Port, native stub and
-guardian chain before injection, preserves a held/unknown job epoch before
-scoped synthetic acknowledgment, and verifies actual native stop first.
-Focused 83 and two fresh production-default dev-VM rows passed all 18 checks
-and cleanup. Suspended-guardian and premature-loss controls, rejected unsafe
-acknowledgment mutation and the repaired negative-map polling bug remain in
-`lab/results/rob-1085-native-preparation-20261006/`. Note 005 and ROB-1085
-record final suite, review and delivery.
-Integrated native verification passed all 940 checks (11 properties, 929
-tests), seed 1085, in 256.8 seconds; guidance 3 and compile/format/diff passed.
-ROB-1085 records exact review, PR, integrated suite and
-merge evidence. These families are implemented but unmeasured.
-Ordinary command-group preparation merged in PR #44 at `b1ce5c5`, from
-`work/rob-1085-group-recovery` based on `62cbaac`. Public Exec launches a shell-owned child in its assigned group;
-actual caller/executor/stub faults require independent PID/cwd/parent/group
-and Port/guardian witnesses, typed caller terminals and physical cleanup.
-Changed epochs remain unknown; this family creates no session inputs or job
-slots. Focused 90 passed, seed 1085. Held-guardian and unavailable-executor
-controls reject false native stop and false cleanup confirmation; exact source
-is restored. Raw evidence is in `lab/results/rob-1085-group-preparation-20261006/`.
-The earlier separate-group Port-child experiment is preserved locally at
-`627c5e7` and in the descendant preparation namespace. It exercises the documented
-detached-child exclusion and does not justify changing that policy. Note 005
-records the retained-root and failed diagnostic boundaries. Final suite,
-source hashes, review and delivery are on ROB-1085.
-Integrated verification passed all 947 checks (11 properties, 936 tests),
-seed 1085, in 262.6 seconds; guidance 3 and compile/format/diff passed. Three
-fresh final-source dev VMs with production restart intensity 3 passed every
-check, complete/cleanup true and one launch; recovery was 40–150 ms. These
-are preparations, excluded from the registered matrix.
-Direct transport recovery is implemented on `work/rob-1085-transport-recovery`,
-rebased onto main `445e0df`. It covers actual source TCP-owning tool Task, held
-handler and worker faults through public remote bash, with paired endpoints,
-source Task/monitor/router ownership and native group witnesses. Durable input
-and controller intent survive with one indeterminate mutation result, one
-physical launch and own terminal for A/B/C. Original candidate `d501a4c` is
-retained at `archive/rob-1085-transport-held-d501a4c`. Its focused 99 and three
-13-check production-default VM preparations passed; its 952/953 integrated
-suite (seed 1085, 284.5 s) is preserved, not overwritten. The combined tree's
-verification/review/delivery are on ROB-1085 and note 005. The combined tree
-passed full 954 (11 properties, 943 tests; seed 1085; 262.4 s), with all seven
-transport runtime/test hashes unchanged by rebase. Preserve
-`full-suite-rebased.log` separately from the original failure. Wrong-role and
-unavailable-settlement controls, failed logs and copied roots remain in
-`lab/results/rob-1085-transport-recovery-preparation-20261006/`.
+LAB-5 (ROB-1085) is Building, the sole selected executable lab item. All seven
+finite recovery families are delivered through PR #47; main `ae763174cb3e54d8b2713c864b8e21be37b15d48`
+matches reviewed whole-VM head `078c5b93a40857f275aa21941248a710d6838ecb`.
+The final whole-VM tree passed focused 39, VM 6 and full 960 (11 properties,
+949 tests; seed 1085; 270.7 seconds), compile/format/diff and both exact-head
+Socket checks. Two clean-head production-default controllers/peers pass all
+23 checks, complete/cleanup true; provider recovery/backlog 35/81 ms and mutation
+29/57 ms. Source, fault, durable identity, uncertainty, physical stop and cleanup
+are separate claims. Every preparation is excluded from the registered matrix.
 
-ROB-1325's separate retained-ledger fixture repair merged in PR #45 at
-`445e0df`. The collector-backed delayed control reproduces the old assertion;
-four mailbox observer attempts were invalid and remain classified. The repair
-holds actual provider Tasks, registers release before assertions and requires
-normal DOWN/public writer settlement, including forced assertion failure.
-Concurrency 44, final writer controls 2 and full 948 (11 properties, 937 tests;
-seed 1085; 265.1 s), compile/format/diff and final source hashes passed. Killing
-providers instead of releasing them fails both tests. Preserve
-`lab/results/rob-1325-verification-20261006/`; Linear records exact review and
-delivery. No registered measurement was launched; LAB-3's gates remain.
+The `work/rob-1085-chaos-matrix` candidate adds finite planning, artifact
+fingerprints, a production-intensity peer and a bounded external launcher. The
+proposed measurement is 24 checkpoints x 50 round-major repetitions = 1200 rows,
+with unique seeds 1085000–1086199. A separate 24-case qualification uses
+1084900–1084923. Each row gets a fresh BEAM with two schedulers; source, compiled
+and native artifacts are pinned. Runtime failures stay reported; missing causal
+or provenance evidence and unconfirmed cleanup stop successors. See ROB-1085's
+matrix plan and note 005 for the method. Preserve
+`lab/results/rob-1085-matrix-preparation-20261006/`, including rejected controls.
+The first clean-head preparation at `3d97efd` rejected before application startup
+because isolated HOME exposed globally ignored Finder metadata. Its raw rejection
+remains; the repository now ignores that metadata explicitly, and artifact checks
+disable global Git excludes so they cannot conceal runtime source.
 
-The optional explicit LocalExecutor receipt client is separate: its death leaves
-an accepted one-attempt record; A terminates indeterminate while B/C stay queued
-behind the nonterminal effect barrier. ROB-1104 tracks the preserved diagnostic
-and uncertainty/writer boundaries. The original root is copied under
-`receipt-client-retained-copy/`; read-only SQLite after VM exit confirms the
-matching accepted record, one callback attempt and zero terminals. The
-readback artifact is disk evidence, not a live query. No generic receipt acknowledgment or callback
-replay is authorized by physical native cleanup.
-Whole-VM preparation on `work/rob-1085-vm-recovery`, based on `83f21ea`, adds
-an externally owned BEAM and PID-free peer. Its provider/native-mutation
-checkpoints witness actual Port/os_pid, BEAM image/cwd/parent chain, callback
-Task, native ownership, eligible SIGKILL/exit 137 and physical stop before
-cleanup. Public fresh-VM reopen fails A honestly, exposes queued B/C, then
-resumes their own bounded terminals without request/mutation replay. Read-only
-SQLite preserves exact durable intent; a missing live journal is not receipt
-authority. Focused 39 and final VM 6 pass; negative OS-target, owner-death and
-missing-owner controls fail the wrong implementations. Raw evidence and copied
-roots remain in `lab/results/rob-1085-vm-preparation-20261006/`. Note 005 and
-ROB-1085 hold method, final verification, review and delivery. The frozen tree
-passed full 960 (11 properties, 949 tests), seed 1085, in 270.7 seconds,
-compile/format/diff and runtime hashes. Consult Linear for final clean-head dev
-preparations, review/CI and merge status before proceeding.
+Read ROB-1085 and PR #48 for the current verification, review and merge status;
+complete delivery if still pending. After merge, register and read back the exact
+source, artifacts, namespaces and launcher before qualification or
+measurement. Do not use preparations as matrix rows, rerun the registered
+corpus toward green, or launch an old registration against newer source.
+No registered matrix has run. LAB-5 is unfinished until its full acceptance is
+delivered; the autonomous goal continues after it.
 
-After delivery, review/register the finite expanded >=1000 schedule matrix on
-`work/rob-1085-chaos-matrix` before measurement. Keep all preparations excluded
-and preserve source provenance. Same-VM provider/gate PIDs remain unsuitable
-for restart; the external peer serves the declared whole-VM cases. Optional
-receipt-backend uncertainty remains ROB-1104. LAB-5 stays Building until its
-full acceptance is delivered; the autonomous goal continues.
-LAB-6/LAB-8 depend on LAB-5; Coordinator judging/map-reduce removal was already
-decided by ROB-1095. LAB-4/LAB-7 retain their research dependencies.
+ROB-1324/1325's independent fixture fixes and transport/handoff/child/job/native/
+group/VM preparations are delivered. Their exact reviews, failures, CI, merges
+and retained raw namespaces are on Linear and in note 005. The optional explicit
+LocalExecutor receipt-client finding remains ROB-1104: accepted, one callback
+attempt, zero terminals, A indeterminate and B/C queued behind the nonterminal
+barrier. Read-only post-VM SQLite matches its original job ID/digest; it is disk
+evidence, not live executor authority. Never replay or invent acknowledgment
+from physical native cleanup. The separate-group Port-child preparation remains
+at local `627c5e7` and its retained namespace; detached descendants are the
+existing documented policy exclusion.
 
+LAB-6/LAB-8 depend on LAB-5; LAB-4/LAB-7 retain their recorded dependencies.
+Coordinator judging/map-reduce removal was already decided by ROB-1095.
+ROB-1091 and ROB-1097–1106 need individual scope review under autonomy.
 ROB-1107/1108 are Needs Input for owner hands-on/visual acceptance of implemented
-TUI behavior. ROB-1097–1106 require individual scope review under autonomy.
-LAB-3 remains at its recorded measurement pause, with its unrun final N=500
-profile and strict host protocol below. AC power was present during the current
-checks, but one measured 1-minute load was 23.52, above its required maximum 8;
-no load gate or measurement was launched. Do not stop unrelated workspace work.
+TUI behavior. LAB-3 remains at its recorded measurement pause and strict host
+protocol below. Do not stop unrelated workspace work. During current matrix
+controls an unrelated Phoenix BEAM was identified in the campus-mvp workspace;
+leave it alone and disclose concurrent host activity in the registration.
 
 ## LAB-3 continuation
 

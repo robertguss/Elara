@@ -41,8 +41,13 @@ not 1201 total code lines. Test helper loading adds four lines. The fixtures
 exercise the production Sidecar/Executor/AtomicFile/Exec and preserve every
 historical crash/no-retry/causality contract; they are not production receipt-backed
 edit/bash. Focused effect/executor/input verification passed 113 (seed 1086).
-Project-plugin diagnosis integration follows. TestJobs stays until LAB-8 delivers
-its replacement.
+Project plugin version 4 owns evidence/diagnosis tool definitions; they are
+absent without it. Session uses invocation-bound evidence/provider messages with
+no project-tool name rules. The historical `checkEvidence` persistence DTO and
+validation remain compatible. `cancel_on_interrupt` is a validated boolean,
+default false; explicit read-only tools kill their worker and release the lease
+without committing returned plugin state. Ordinary plugin calls still drain.
+TestJobs stays until LAB-8 delivers its replacement.
 
 ## Verification and limits
 
@@ -50,6 +55,15 @@ The first-chunk baseline passed 24 tests; post-change inheritance, Threads,
 executor, durable-input and effect coverage passed 148 at seed 1086. All seven
 executor caller files are byte-identical to baseline after only the
 `TestExecutor` to `Executor` substitution. Full-suite and final finite-chaos
-regression evidence remain pending and will be recorded as executed in Linear. Original registered
+regression evidence remain pending and will be recorded as executed in Linear.
+The three new roster/absence/renamed-tool controls failed on the old runtime.
+Diagnosis/check/plugin focused coverage passed 33 after migration. Adding boolean
+validation and reload protocol coverage exposed a stale v3 PTY expectation; it
+is updated to v4 without changing any rendered-behavior assertion. Disabling
+explicit cancellation independently failed the original worker-DOWN assertion;
+registered owned-worker teardown passed, and source bytes were restored exactly.
+Read/write/context/provider-result calls from an unrelated caller are rejected;
+existing persistence, usage, late-result, worker-crash and diagnosis PTY checks
+remain acceptance authority. Retain every failed log beside final evidence. Original registered
 measurements, failed controls, raw roots and branches remain retained. No real
 provider calls or human TUI acceptance are implied.

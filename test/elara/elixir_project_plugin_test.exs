@@ -34,7 +34,9 @@ defmodule Elara.ElixirProjectPluginTest do
              "elixir_check",
              "elixir_test",
              "elixir_last_run",
-             "elixir_rerun_last"
+             "elixir_rerun_last",
+             "check_evidence",
+             "diagnose_check"
            ]
 
     ctx = %Ctx{cwd: project}
@@ -142,7 +144,7 @@ defmodule Elara.ElixirProjectPluginTest do
 
     File.cp!(@plugin, plugin)
     assert {:ok, [version2]} = Elara.reload_plugins(session)
-    assert version2.version == "3"
+    assert version2.version == "4"
     assert version2.pid == version1.pid
     assert version2.generation == 2
     assert Elara.transcript(session) == before_history

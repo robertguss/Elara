@@ -14,10 +14,11 @@ defmodule Elara.Plugin do
     @type t :: %__MODULE__{
             name: String.t(),
             description: String.t(),
-            parameters: map()
+            parameters: map(),
+            cancel_on_interrupt: boolean()
           }
 
-    defstruct [:name, :description, :parameters]
+    defstruct [:name, :description, :parameters, cancel_on_interrupt: false]
   end
 
   defmodule Info do

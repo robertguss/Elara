@@ -46,6 +46,50 @@ defmodule Elara.Effect.OpaqueShellTest do
     context
   end
 
+  test "fixture registration and failure cleanup do not require a live descendant", context do
+    File.mkdir_p!(Path.dirname(context.pid_path))
+    gate = Path.join(context.cwd, "fixture/shell/registration-gate")
+    {_, 0} = System.cmd("mkfifo", [gate])
+
+    port =
+      Port.open({:spawn_executable, "/bin/sh"}, [
+        :binary,
+        :exit_status,
+        cd: context.cwd,
+        args: [
+          "-c",
+          "printf '%s\\n' \"$$\" > fixture/shell/pid; read -r release < fixture/shell/registration-gate"
+        ]
+      ])
+
+    {:os_pid, pid} = Port.info(port, :os_pid)
+
+    # Backup teardown is installed before the first fallible wait; the control
+    # below independently proves the registry cleanup without closing the Port.
+    on_exit(fn ->
+      if Port.info(port) do
+        System.cmd("kill", ["-KILL", Integer.to_string(pid)], stderr_to_stdout: true)
+      end
+    end)
+
+    assert await_pid(context.pid_path) == pid
+    assert process_tree(pid) == []
+    refute fixture_process?(String.to_integer(System.pid()))
+
+    assert_raise ExUnit.AssertionError, ~r/forced failure after fixture registration/, fn ->
+      try do
+        register_fixture_processes(context.process_registry, pid)
+        assert MapSet.member?(Agent.get(context.process_registry, & &1), pid)
+        flunk("forced failure after fixture registration")
+      after
+        terminate_fixture_processes(Agent.get(context.process_registry, & &1))
+      end
+    end
+
+    assert await_process_state(pid, :terminated) == :terminated
+    assert_receive {^port, {:exit_status, _}}, @bound_ms
+  end
+
   test "S-NO-FAULT records a causal successful shell receipt", context do
     job = shell_job(context, "s_success")
     journal = start_journal(context.journal_path)
@@ -759,7 +803,7 @@ defmodule Elara.Effect.OpaqueShellTest do
   end
 
   defp register_fixture_processes(registry, root_pid) do
-    await(fn -> process_tree(root_pid) != [] end)
+    Agent.update(registry, &MapSet.put(&1, root_pid))
     Agent.update(registry, &MapSet.union(&1, MapSet.new([root_pid | process_tree(root_pid)])))
   end
 
@@ -790,8 +834,16 @@ defmodule Elara.Effect.OpaqueShellTest do
 
   defp fixture_process?(pid) do
     case File.read("/proc/#{pid}/cmdline") do
-      {:ok, command} -> String.contains?(command, "fixture/shell")
-      {:error, _reason} -> false
+      {:ok, command} ->
+        String.contains?(command, "fixture/shell")
+
+      {:error, _reason} ->
+        case System.cmd("ps", ["-p", Integer.to_string(pid), "-o", "args="],
+               stderr_to_stdout: true
+             ) do
+          {command, 0} -> String.contains?(command, "fixture/shell")
+          _unavailable -> false
+        end
     end
   end
 

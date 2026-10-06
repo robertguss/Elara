@@ -39,8 +39,12 @@ red0/2 turn green1/1 and2/2; focused41 pass. Authority/confirmation mutations
 each fail0/1 and restore; forced cleanup a2 fails0/1 with all four teardown
 witness fields true. Initial wrong-line cleanup preparation is retained/excluded.
 Count129files/49,363lines,+157 this chunk/+988 cumulative; Session2860 unchanged.
-Build/native and full-suite source freeze/review/delivery are next. See note008
-and retained operator-* namespace; no physical or real-model acceptance claim.
+Full1021 (11properties,1010tests),seed1088,308.3s at cleanf248162 passes;
+all240 source/test hashes match postflight. Build/native118/format/Clippy/diff
+pass; postflight0 global/Elara BEAM. Current full evidence/source is frozen at
+f248162cd81cebc28fed3cb78f7e460d707981af. Scoped review/PR delivery next; Linear
+owns latest review/check/merge evidence. See note008 and retained operator-*
+namespace; no physical or real-model acceptance claim.
 
 After that supporting chunk: fresh final LAB-5-style chaos and net-line/special-
 case comparison. Complete all independent scripted work before the separately

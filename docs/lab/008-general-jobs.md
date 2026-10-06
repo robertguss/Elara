@@ -291,10 +291,14 @@ when instrumentation was inserted and selected the preceding passing test;
 no witness existed, so that attempt is excluded rather than cleanup evidence.
 Raw operator-* logs/manifests/scripts remain in the same retained namespace.
 
-The provisional count is129 files/49,363 source/infrastructure lines, +157 this
+The frozen count is129 files/49,363 source/infrastructure lines, +157 this
 chunk/+988 cumulative. The declared count includes native inline tests;
 Elixir test changes add122 lines and raw control Python is77 lines, reported
 separately. Session stays2860 lines. Compile warnings-as-errors, Mix/native
 format, Clippy all-targets warnings-as-errors, native118 and diff checks pass.
-The full suite will be pinned to the source commit before review. Fresh final chaos/net
+The full suite at clean `f248162cd81cebc28fed3cb78f7e460d707981af` passes1021
+(11 properties,1010 tests), seed1088,308.3s. All240 source/test hashes match the
+before-suite freeze afterward. Postflight observes0 global/Elara BEAM; no quiet-
+host or comparative timing claim. Frozen count and postflight manifests retain
+artifact hashes and source boundaries; later readbacks are separate. Fresh final chaos/net
 comparison and separately approved real-model acceptance remain pending.

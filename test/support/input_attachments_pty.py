@@ -170,7 +170,7 @@ try:
     send(b"\x1b[20~")
     send(str(root / "oversize.png").encode())
     send(b"\r")
-    assert visible("Image exceeds 2 MiB", redraw()), "oversize image error remains visible"
+    wait_for(lambda: visible("Image exceeds 2 MiB", redraw()), "oversize image error remains visible")
     send(b"\x1b")
     for layout in ["observatory", "workbench", "ember"]:
         send(b"\x1bOR\x1b[C\r")

@@ -151,30 +151,33 @@ Linear hold exact review, registration and delivery. Preserve every raw
 file/root. Worker loss records uncertainty while its writer survives;
 writer/VM-loss receipts stay unresolved, without replay or new authority.
 
-LAB-8/ROB-1088 is the sole executable item, Building on
-`work/rob-1088-general-jobs` from clean a4f8013. Read selection
-`cd9c5c07-4597-4fed-a7bf-bc92d6a86d85` and plan
-`98647c0a-62f9-4b30-b9d3-541a13b35028` in Linear. Chunk 1 adds explicit native
-head/tail output with pre-admission capability negotiation, retained exact
-counters and deadline/control fairness; default ordinary bash keeps its cap-kill
-policy. Public red 0/5, expanded green21, restored mutation controls and focused
-67 pass; native format/Clippy/seven tests and compile/format/diff pass. Note008
-and `lab/results/rob-1088-general-jobs-20261006/` retain baseline counts, failed
-controls and scope. Full integrated999 (11 properties,988 tests), seed1088,282.5s passes at clean
-`404ce86`; postflight has no BEAM/fixture process and hashes all logs. Immutable
-review/chunk delivery evidence is in Linear; this supporting chunk does not
-complete LAB-8 acceptance. It adds99 counted source lines; overall reduction
-is not established.
+LAB-8/ROB-1088 is the sole executable item, Building. Read selection
+`cd9c5c07-4597-4fed-a7bf-bc92d6a86d85`, phased plan
+`98647c0a-62f9-4b30-b9d3-541a13b35028` and exact profiles design/review
+`921d3edc-4d99-4f3f-8117-422188c5ad3f` in Linear. Chunk1 merged in PR#54 at
+`a25cac453c5da3cd038795e42214749be97c9a58`, tree-equal to reviewed d486cd8;
+full999/focused67/native7 and both exact-head Socket checks passed. It adds99
+counted source lines, with no overall reduction claim. Note008 and raw
+`lab/results/rob-1088-general-jobs-20261006/` retain all evidence.
 
-After output-policy delivery, generalize TestJobs to trusted Jobs profiles while
-loading v1 records and keeping the test_job alias. Then implement the reviewed
-shared completion/correlation contract and operator server/TUI acknowledgment.
-Preserve admission, immutable single completion, no replay on uncertain owner
-loss, bounded cancellation and capacity through restarts; do not claim complete
-LAB-8 acceptance before final fresh chaos/net-line comparison. Separately
-approved capped real-model acceptance remains an owner gate. Complete all
-independent scripted work before Needs Input and continue other issues. No
-LAB-3 resumption, real model or human TUI gate is authorized by this selection.
+Current profiles chunk is on `work/rob-1088-job-profiles` from a25cac4.
+Elara.Jobs owns the existing serial manager; TestJobs keeps the original
+supervisor/registered/storage/message/alias boundaries. New v2 records freeze
+trusted profile/argv/limits/correlation before execution. v1 pending completion
+is byte-identical, uncertain execution never replays, optional/frozen source
+fingerprints stay truthful, and small reporting caps preserve recovery text.
+Corrected public red0/2, focused80/29.3s, false-cap negative control and actual
+forced-failure cleanup proof are retained. Earlier rejected fixture/setup runs
+remain classified in note008. Full integrated verification/review/delivery
+are the next steps; do not mistake this supporting chunk for LAB-8 completion.
+
+Then implement the reviewed shared completion/correlation contract and operator
+server/TUI acknowledgment. Preserve durable admission, immutable completion,
+uncertainty/no replay, bounded cancellation and held capacity across restart.
+Complete fresh chaos/net-line comparison and all independent scripted work
+before Needs Input for the separately approved capped real-model owner gate;
+continue other issues. No LAB-3 resumption, real model or human TUI acceptance
+is authorized by this selection.
 
 LAB-8 also depends on LAB-5; LAB-4/LAB-7 retain their recorded dependencies.
 ROB-1091 is Needs Input for the owner direction checkpoint; other remaining

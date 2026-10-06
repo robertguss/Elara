@@ -405,7 +405,14 @@ defmodule Elara.TestJobsTest do
     alias Elara.TestJobs.Record
     {:ok, terminal} = Record.load(status(ctx)["key"])
     key = Record.key(terminal["owner"], "invalid-evidence")
-    valid = Map.merge(terminal, %{"key" => key, "job_id" => "invalid-evidence"})
+
+    valid =
+      Map.merge(terminal, %{
+        "key" => key,
+        "job_id" => "invalid-evidence",
+        "correlation_id" => "job:" <> key
+      })
+
     path = Path.join(Record.root(), key <> ".json")
     on_exit(fn -> File.rm(path) end)
     assert :ok = Record.save(valid)

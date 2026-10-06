@@ -83,3 +83,52 @@ verification log. Immutable review/chunk delivery evidence is in Linear.
 Profiles, correlated wake, UI acknowledgment, final chaos/net-line comparison
 and the separately approved real-model gate remain in ROB-1088; this supporting
 chunk does not complete LAB-8 acceptance.
+
+## Chunk 2 — Trusted profiles and durable compatibility
+
+`Elara.Jobs` owns the existing serial manager. The thin `Elara.TestJobs` entry
+keeps its supervisor child ID, registered name, storage root, four-part admission
+message and original alias tool schema. The new job tool selects a trusted
+profile and JSON arguments. Fixed mix_test and owner-configured declarations
+freeze argv/limits before prepared/execution writes and the parked runner's
+dispatch. Duplicate or invalid declarations reject startup; invalid argument
+or callback results reject admission before a record/effect. Both tools use
+one capacity/delivery writer. Optional source fingerprints are explicit; the
+active entry holds its admitted callback, and mismatched scopes compare unknown.
+Invalid fingerprint evidence is a source error, without fabricating a pass claim.
+
+New records use v2 and retain profile/arguments/argv/limits/policy, optional
+fingerprint declaration, output cap flag and an owner/job-key correlation ID.
+v1 lifecycle/counter/terminal validation remains. Pending v1 completion bodies
+and source identities remain byte identical across acceptance retry, and old
+running records become indeterminate without replay. Native v2 output validates
+against its own cap/policy and exact gap flag. Review found and fixed a small-cap
+recovery defect: not-started/indeterminate explanatory text needs its own 20,000
+byte bound, separate from retained process output.
+
+Corrected public red 0/2 establishes v1 admission and early cap termination.
+The first red retains its unused-alias/early cleanup limitation. New fixture
+cleanup registers ownership before admission, remembers every actual execution
+lease even after manager bookkeeping retires, waits for runner DOWN and same-
+epoch native settlement, and observes the native OS process before removal.
+The existing record-codec fixture now derives correlation ID with its new job
+ID; its original outcome/lifecycle/counter assertions are unchanged.
+
+Preparations remain retained: first green18/19 exposed that fixture identity;
+green23/25 had a message-field and startup-link fixture error; green27/28 had
+an invalid assumption that failed startup always emits EXIT; startup rejection
+now runs in a bounded, monitored fixture owner. Green28 omitted the lab test
+because its path was wrong; corrected green38 includes all nine job recovery
+checks. Final focused80 passes, seed1088, in29.3s: profiles13, legacy jobs17,
+job recovery9 and Exec/output/executor41. Gap-validation removal fails exactly
+the false-cap assertion (0/1). A forced assertion after actual native admission
+fails only the intended assertion (0/1) while a retained witness confirms one
+settled lease, stopped native PID and removed root. Its first attempt selected
+no test after instrumentation shifted line numbers, and remains excluded. Both
+source files are restored byte exact. No original lab corpus or model is used.
+
+Raw source/control/readback and all logs remain in the existing ROB-1088
+namespace. Full integrated verification, immutable review and delivery follow.
+Correlated wake, operator server/TUI acknowledgment, fresh chaos/net-line
+comparison and the separately approved real-model acceptance remain pending;
+this profile chunk does not complete LAB-8.

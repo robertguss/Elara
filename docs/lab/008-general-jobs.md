@@ -128,7 +128,20 @@ no test after instrumentation shifted line numbers, and remains excluded. Both
 source files are restored byte exact. No original lab corpus or model is used.
 
 Raw source/control/readback and all logs remain in the existing ROB-1088
-namespace. Full integrated verification, immutable review and delivery follow.
+namespace. Full integrated1012 (11 properties,1001 tests) passes, seed1088,
+285.6 seconds at clean `36a3a7a2cc56c73ee1595284fcdd1806fbb7baf7`.
+Postflight hashes every profile log and confirms no BEAM/profile fixture process.
+Compile warnings-as-errors and format/diff pass. Final review/delivery follow in
+Linear; the final handoff/note update changes no runtime or test source.
+
+The count manifest has128 source/infrastructure files and48,740 lines: +266
+for profiles, +365 cumulative LAB-8 versus48,375 baseline. A first counting
+preparation used the wrong TUI examples directory spelling and included52
+excluded lines equally at all three revisions. The retained corrected manifest
+matches the original baseline exactly; both deltas are unchanged. The current
+increase is negative evidence for the reduction hypothesis. New profile tests
+are564 lines, and the old codec fixture changes9 lines; tests and retained raw
+orchestration stay separately reported and never hide infrastructure growth.
 Correlated wake, operator server/TUI acknowledgment, fresh chaos/net-line
 comparison and the separately approved real-model acceptance remain pending;
 this profile chunk does not complete LAB-8.

@@ -168,8 +168,12 @@ is byte-identical, uncertain execution never replays, optional/frozen source
 fingerprints stay truthful, and small reporting caps preserve recovery text.
 Corrected public red0/2, focused80/29.3s, false-cap negative control and actual
 forced-failure cleanup proof are retained. Earlier rejected fixture/setup runs
-remain classified in note008. Full integrated verification/review/delivery
-are the next steps; do not mistake this supporting chunk for LAB-8 completion.
+remain classified in note008. Full1012 (11 properties,1001 tests), seed1088,
+285.6s passes on clean36a3a7a; compile/format/diff and postflight(no BEAM/profile
+fixture) pass. Count manifest128 files/48,740 lines: profiles+266, cumulative
+LAB-8+365; no reduction claim. Immutable review/delivery follow in Linear.
+This handoff/note update changes no runtime/test source. Do not mistake this
+supporting chunk for LAB-8 completion.
 
 Then implement the reviewed shared completion/correlation contract and operator
 server/TUI acknowledgment. Preserve durable admission, immutable completion,

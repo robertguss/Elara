@@ -588,6 +588,8 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Coordinator do
   def record_hook_return(pid), do: bounded_call(pid, :hook_returned, 1_000)
   def observe_target(pid, target), do: bounded_call(pid, {:observe_target, target}, 1_000)
 
+  def observe_port(pid, port), do: bounded_call(pid, {:observe_port, port}, 1_000)
+
   def set_expected_target(pid, target),
     do: bounded_call(pid, {:expected_target, target}, 1_000)
 
@@ -701,6 +703,23 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Coordinator do
     end
   end
 
+  def handle_call({:observe_port, port}, _from, state) do
+    if is_port(port) and Port.info(port) != nil do
+      installed = Jobs.now()
+
+      {:reply, :ok,
+       %{
+         state
+         | target: port,
+           monitor: :erlang.monitor(:port, port),
+           monitor_installed_at: installed,
+           arrived_at: installed
+       }}
+    else
+      {:reply, {:error, :missing_target}, state}
+    end
+  end
+
   def handle_call({:expected_target, target}, _from, state),
     do: {:reply, :ok, %{state | expected_target: target}}
 
@@ -797,6 +816,12 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Coordinator do
     {:noreply, %{state | down: %{target: target, reason: reason, at: Jobs.now()}}}
   end
 
+  def handle_info({:DOWN, ref, :port, target, reason}, %{monitor: ref, target: target} = state) do
+    {:noreply, %{state | down: %{target: target, reason: reason, at: Jobs.now()}}}
+  end
+
+  def handle_info({:DOWN, _ref, :port, _target, _reason}, state), do: {:noreply, state}
+
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state),
     do: {:noreply, %{state | helpers: List.delete(state.helpers, pid)}}
 
@@ -857,6 +882,7 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Coordinator do
 
   defp public_state(state), do: Map.drop(state, [:arrival_from, :monitor])
   defp encode_pid(pid) when is_pid(pid), do: inspect(pid)
+  defp encode_pid(port) when is_port(port), do: inspect(port)
   defp encode_pid(_), do: nil
 
   defp bounded_call(pid, request, timeout) do

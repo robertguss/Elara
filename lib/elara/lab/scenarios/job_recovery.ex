@@ -9,7 +9,8 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
   alias Elara.Session.{Handoff, Store}
   alias Elara.TestJobs
 
-  @stages ~w(session_running runner_running manager_running)
+  @epoch_stages ~w(executor_running stub_running)
+  @stages ~w(session_running runner_running manager_running) ++ @epoch_stages
   @key {__MODULE__, :fixture}
   @job "focused"
   @setup_ms 10_000
@@ -134,7 +135,18 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
     runner = job["execution"]["pid"] |> String.to_charlist() |> :erlang.list_to_pid()
     manager = Process.whereis(TestJobs)
     native = call!(config, :native_before, deadline, fn -> native_before(cwd) end)
+
+    epoch =
+      if schedule.stage in @epoch_stages,
+        do: call!(config, :epoch_before, deadline, fn -> epoch_before(job, native) end)
+
+    native =
+      if epoch,
+        do: Map.merge(native, %{guardian: epoch.guardian, stub: epoch.os_pid}),
+        else: native
+
     Gate.note(gate, :native_before, native)
+    if epoch, do: Gate.note(gate, :epoch_before, epoch)
     unless native.alive and native.owned, do: throw({:native_not_owned, native})
     unless job["status"] == "running" and Process.alive?(runner), do: throw(:job_not_running)
 
@@ -181,6 +193,7 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
           Enum.member?(elem(monitors, 1), {:process, point.caller}),
       manager: manager,
       runner: runner,
+      epoch: epoch,
       manager_owns_runner:
         match?({:links, _}, manager_links) and runner in elem(manager_links, 1),
       job: job,
@@ -195,6 +208,8 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
         "session_running" -> parent_pid
         "runner_running" -> runner
         "manager_running" -> manager
+        "executor_running" -> epoch.pid
+        "stub_running" -> epoch.port
       end
 
     context.hook.(
@@ -205,7 +220,8 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
          point: :provider_waiting,
          session_pid: parent_pid,
          runner_pid: runner,
-         native: native
+         native: native,
+         stub_os_pid: epoch && epoch.os_pid
        }}
     )
 
@@ -227,17 +243,56 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
            do: throw(:job_ended_before_injection)
 
     Gate.note(gate, :eligible, %{execution: current_job["execution"], native: current_native})
-    :ok = Coordinator.observe_target(co, target)
-    ref = Process.monitor(target)
+
+    if epoch do
+      current_epoch = call!(config, :current_epoch, deadline, &Elara.Exec.token/0)
+
+      unless current_epoch == epoch.token and
+               Port.info(epoch.port, :connected) == {:connected, epoch.pid},
+             do: throw(:epoch_ended_before_injection)
+    end
+
+    kind = if is_port(target), do: :port, else: :process
+
+    :ok =
+      if kind == :port,
+        do: Coordinator.observe_port(co, target),
+        else: Coordinator.observe_target(co, target)
+
+    ref = :erlang.monitor(kind, target)
 
     try do
-      if not Process.alive?(target), do: throw(:premature_target_death)
-      Gate.note(gate, :injected, %{target: target, ref: ref, monitor_installed_at: Jobs.now()})
-      Process.exit(target, :kill)
+      if not target_alive?(target), do: throw(:premature_target_death)
+
+      if kind == :port do
+        {:ok, stub} = process_info(Integer.to_string(epoch.os_pid))
+
+        unless is_map(stub) and not String.starts_with?(stub.stat, "Z"),
+          do: throw(:native_stub_down_before_injection)
+
+        Gate.note(gate, :stub_eligible, stub)
+      end
+
+      Gate.note(gate, :injected, %{
+        target: target,
+        kind: kind,
+        ref: ref,
+        monitor_installed_at: Jobs.now()
+      })
+
+      if kind == :port do
+        {_, status} =
+          System.cmd("kill", ["-KILL", Integer.to_string(epoch.os_pid)], stderr_to_stdout: true)
+
+        unless status == 0, do: throw(:stub_kill_failed)
+        Gate.note(gate, :native_kill_submitted, %{pid: epoch.os_pid})
+      else
+        Process.exit(target, :kill)
+      end
 
       receive do
-        {:DOWN, ^ref, :process, ^target, reason} ->
-          Gate.note(gate, :target_down, %{target: target, ref: ref, reason: reason})
+        {:DOWN, ^ref, ^kind, ^target, reason} ->
+          Gate.note(gate, :target_down, %{target: target, kind: kind, ref: ref, reason: reason})
       after
         @recovery_ms -> throw(:target_down_timeout)
       end
@@ -304,7 +359,46 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
              do: view
       end)
 
+      unless epoch, do: Gate.note(gate, :recovered)
+    end
+
+    if epoch do
+      held =
+        poll!(config, :held_unknown_epoch, origin + @recovery_ms, fn ->
+          with {:ok, record} <- Jobs.record(parent, @job),
+               true <-
+                 record["status"] == "indeterminate" and record["slot"] == "held" and
+                   record["settlement"] == "unknown",
+               true <- Elara.Exec.token() != epoch.token,
+               true <-
+                 match?(%{stopped: true, stub_stopped: true}, native_after(%{details: native})),
+               do: record
+        end)
+
+      Gate.note(gate, :epoch_held, held)
+
+      after_epoch =
+        call!(config, :epoch_after, origin + @recovery_ms, fn ->
+          %{
+            pid: Process.whereis(Elara.Exec),
+            token: Elara.Exec.token(),
+            status: Elara.Exec.status()
+          }
+        end)
+
+      Gate.note(gate, :epoch_after, after_epoch)
       Gate.note(gate, :recovered)
+      context.hook.({:before_ack, %{parent: parent, job_id: @job, native: native}})
+
+      unless match?(%{stopped: true, stub_stopped: true}, native_after(%{details: native})),
+        do: throw(:native_running_before_ack)
+
+      ack =
+        call!(config, :acknowledge_stopped, origin + @backlog_ms, fn ->
+          TestJobs.acknowledge_stopped(parent, @job)
+        end)
+
+      Gate.note(gate, :acknowledged, %{parent: parent, job_id: @job, view: ack})
     end
 
     poll!(config, :settled, origin + @backlog_ms, fn ->
@@ -313,7 +407,7 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
            true <- record["status"] in ["passed", "indeterminate"],
            {:ok, view} <- observe(config, Gate.snapshot(gate)),
            true <- view.all_terminal,
-           %{stopped: true} <- native_after(%{details: native}),
+           true <- native_after(%{details: native}).stopped,
            true <- not Process.alive?(runner),
            do: view
     end)
@@ -460,18 +554,28 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
           false
       end
 
-    settled =
+    group =
+      if match?(%{details: %{pgid: _}}, native),
+        do: native_after(native).stopped,
+        else: job in [{:error, :enoent}, {:error, :no_parent}]
+
+    if stopped and group and config.schedule.stage in @epoch_stages do
       case job do
+        {:ok, %{"status" => "indeterminate", "slot" => "held"}} ->
+          TestJobs.acknowledge_stopped(parent, @job)
+
+        _ ->
+          :ok
+      end
+    end
+
+    settled =
+      case disk_job(parent) do
         {:ok, record} -> record["slot"] == "released" and not alive_runner?(record)
         {:error, :enoent} -> true
         {:error, :no_parent} -> true
         _ -> false
       end
-
-    group =
-      if match?(%{details: %{pgid: _}}, native),
-        do: native_after(native).stopped,
-        else: job in [{:error, :enoent}, {:error, :no_parent}]
 
     exec = Elara.Exec.status()
     manager = :sys.get_state(TestJobs)
@@ -496,6 +600,64 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
     do: Process.alive?(pid |> String.to_charlist() |> :erlang.list_to_pid())
 
   defp alive_runner?(_), do: false
+
+  defp target_alive?(target) when is_port(target), do: Port.info(target) != nil
+  defp target_alive?(target), do: Process.alive?(target)
+
+  defp epoch_before(job, native) do
+    pid = Process.whereis(Elara.Exec)
+    status = Elara.Exec.status()
+    token = Elara.Exec.token()
+    {:links, links} = Process.info(pid, :links)
+
+    port =
+      Enum.find(links, fn link ->
+        is_port(link) and Port.info(link, :os_pid) == {:os_pid, status.os_pid}
+      end)
+
+    {:ok, leader} = process_info(Integer.to_string(native.pgid))
+    {:ok, guardian} = parent_of(leader.pid)
+    {:ok, manager} = parent_of(guardian)
+    {:ok, guardian_info} = process_info(Integer.to_string(guardian))
+
+    unless status.jobs == 1 and token == job["execution"]["token"] and is_port(port) and
+             Port.info(port, :connected) == {:connected, pid} and manager == status.os_pid and
+             is_map(guardian_info) and not String.starts_with?(guardian_info.stat, "Z"),
+           do: throw(:unwitnessed_native_owner)
+
+    %{
+      pid: pid,
+      port: port,
+      os_pid: status.os_pid,
+      token: token,
+      guardian: guardian,
+      port_connected: Port.info(port, :connected),
+      port_os_pid: Port.info(port, :os_pid),
+      guardian_parent: manager,
+      leader_parent: guardian
+    }
+  end
+
+  defp parent_of(pid) do
+    case System.cmd("ps", ["-p", Integer.to_string(pid), "-o", "ppid="], stderr_to_stdout: true) do
+      {text, 0} ->
+        case Integer.parse(String.trim(text)) do
+          {parent, ""} when parent > 0 -> {:ok, parent}
+          _ -> {:error, :invalid_parent}
+        end
+
+      {_, status} ->
+        {:error, {:parent_probe_failed, status}}
+    end
+  end
+
+  defp os_stopped?(pid) do
+    case process_info(Integer.to_string(pid)) do
+      {:ok, nil} -> true
+      {:ok, %{stat: "Z" <> _}} -> true
+      _ -> false
+    end
+  end
 
   defp native_before(cwd) do
     with {:ok, text} <- File.read(Path.join(cwd, "os_pid")),
@@ -526,13 +688,17 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
     end
   end
 
-  defp native_after(%{details: %{pgid: pgid, pid: pid}}) do
+  defp native_after(%{details: %{pgid: pgid, pid: pid} = witness}) do
     with {:ok, members} <- group_members(pgid),
          {:ok, process} <- process_info(Integer.to_string(pid)) do
+      guardian = not Map.has_key?(witness, :guardian) or os_stopped?(witness.guardian)
+
       %{
         stopped:
           Enum.all?(members, &String.starts_with?(&1.stat, "Z")) and
-            (process == nil or String.starts_with?(process.stat, "Z")),
+            (process == nil or String.starts_with?(process.stat, "Z")) and guardian,
+        guardian_stopped: guardian,
+        stub_stopped: Map.has_key?(witness, :stub) and os_stopped?(witness.stub),
         members: members,
         process: process
       }
@@ -624,10 +790,13 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
         "session_running" -> parent && parent.details.pid
         "runner_running" -> checkpoint && checkpoint.details.runner
         "manager_running" -> checkpoint && checkpoint.details.manager
+        "executor_running" -> checkpoint && checkpoint.details.epoch.pid
+        "stub_running" -> checkpoint && checkpoint.details.epoch.port
       end
 
     eligible = event(events, :eligible)
     native_before = event(events, :native_before)
+    stub_eligible = event(events, :stub_eligible)
 
     fault =
       checkpoint != nil and injection != nil and point != nil and
@@ -643,14 +812,27 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
         checkpoint.details.calls == ["job-A"] and checkpoint.details.returned == ["job-A"] and
         length(checkpoint.details.queued_ids) == 2 and
         checkpoint.details.job["status"] == "running" and
+        (config.schedule.stage != "stub_running" or
+           (stub_eligible != nil and stub_eligible.at <= injection.at and
+              stub_eligible.details.pid == checkpoint.details.epoch.os_pid and
+              not String.starts_with?(stub_eligible.details.stat, "Z"))) and
         (point.released_at == nil or point.released_at >= injection.at) and
         point.at <= injection.at and checkpoint.at <= injection.at and
         Enum.count(events, &(&1.point == :injected)) == 1
 
+    port_death = config.schedule.stage == "stub_running"
+    native_kill = event(events, :native_kill_submitted)
+
     death =
       injection != nil and down != nil and evidence.death.matched and
-        evidence.death.reason == :killed and
-        down.details.reason == :killed and down.details.ref == injection.details.ref and
+        if(port_death,
+          do:
+            native_kill != nil and native_kill.details.pid == checkpoint.details.epoch.os_pid and
+              Map.get(physical, :stub_stopped, false) and down.details.kind == :port and
+              evidence.death.reason == down.details.reason,
+          else: evidence.death.reason == :killed and down.details.reason == :killed
+        ) and
+        down.details.ref == injection.details.ref and
         down.details.target == injection.details.target and
         evidence.death.target == inspect(injection.details.target) and
         evidence.ordering.monitor_installed_at <= injection.at and
@@ -660,6 +842,10 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
       if config.schedule.stage == "session_running", do: "passed", else: "indeterminate"
 
     expected_a = if config.schedule.stage == "session_running", do: :failed, else: :completed
+    epoch = event(events, :epoch_before)
+    held = event(events, :epoch_held)
+    acknowledged = event(events, :acknowledged)
+    after_epoch = event(events, :epoch_after)
 
     checks = %{
       fault_witnessed: fault == true,
@@ -685,6 +871,44 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
       backlog_bounded: is_integer(backlog) and backlog <= @backlog_ms
     }
 
+    checks =
+      if config.schedule.stage in @epoch_stages do
+        Map.merge(checks, %{
+          epoch_changed:
+            epoch != nil and after_epoch != nil and held != nil and
+              after_epoch.details.token != epoch.details.token and
+              after_epoch.details.status.os_pid != epoch.details.os_pid and
+              held.details["execution"] == checkpoint.details.job["execution"] and
+              if(port_death,
+                do:
+                  after_epoch.details.pid == epoch.details.pid and
+                    after_epoch.details.token["incarnation"] == epoch.details.token["incarnation"] and
+                    after_epoch.details.token["generation"] > epoch.details.token["generation"],
+                else:
+                  after_epoch.details.pid != epoch.details.pid and
+                    after_epoch.details.token["incarnation"] != epoch.details.token["incarnation"]
+              ),
+          held_before_ack:
+            held != nil and held.details["status"] == "indeterminate" and
+              held.details["slot"] == "held" and held.details["settlement"] == "unknown" and
+              acknowledged != nil and held.at <= acknowledged.at,
+          acknowledgment_scoped:
+            acknowledged != nil and record != nil and parent != nil and
+              acknowledged.details.parent == parent.details.id and
+              acknowledged.details.job_id == @job and
+              acknowledged.details.view["key"] == record["key"] and
+              acknowledged.details.view["status"] == "indeterminate" and
+              acknowledged.details.view["slot"] == "released",
+          uncertainty_preserved:
+            record != nil and record["status"] == "indeterminate" and
+              record["settlement"] == "operator_confirmed" and
+              Map.get(physical, :guardian_stopped, false) and
+              Map.get(physical, :stub_stopped, false)
+        })
+      else
+        checks
+      end
+
     %{
       checks: checks,
       complete:
@@ -704,6 +928,12 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
       observation_error: if(view, do: nil, else: observation),
       job: record,
       job_error: if(record, do: nil, else: job),
+      epoch: %{
+        before: epoch && epoch.details,
+        after: after_epoch && after_epoch.details,
+        held: held && held.details,
+        acknowledged: acknowledged && acknowledged.details
+      },
       launches: count,
       native: %{
         before: event(events, :native_before) && event(events, :native_before).details,

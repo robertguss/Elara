@@ -3,7 +3,7 @@ defmodule Elara.RoadmapTest do
 
   @root Path.expand("../..", __DIR__)
   @project "https://linear.app/robert-guss/project/elara-7ee4b27c1215"
-  @handoff "https://linear.app/robert-guss/document/current-handoff-lab-3-attribution-and-continuation-569eb39fa4cd"
+  @handoff "https://linear.app/robert-guss/document/current-handoff-autonomous-implementation-569eb39fa4cd"
 
   test "current planning guidance points to the same Linear project" do
     for path <- [

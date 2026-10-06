@@ -141,8 +141,30 @@ head/tail jobs successful or stop their process. Native output remains bounded;
 not-started/indeterminate diagnostics have a separate text bound. A missing or
 unavailable source fingerprint, or comparing different source scopes, reports
 `"unknown"`. Admission and callback fingerprints remain fixed for the run.
-Completion currently uses the durable inbox; the shared correlated wait
-contract is a subsequent LAB-8 phase.
+Completions use the durable inbox and one correlated wait path:
+
+```elixir
+Elara.Completion.wait(session_id, "job", "test-1")
+Elara.Completion.wait(parent_id, "thread", child_id)
+Elara.Threads.Communication.wait(parent_id, child_id) # includes thread status
+```
+
+These observer calls return `{:ok, response}` without consuming the input. The
+model-facing `completion_wait` tool takes `source` and `job_id` or `thread_id`;
+`thread_wait` aliases the thread path. Only the executing session's live tool
+claim consumes its report, atomically with the saved ToolResult. Results carry
+`awaited`, `already_consumed`, `correlation`, `input_id`, receipt state/error and
+an explicitly bounded untrusted preview. Cancelled input returns an error;
+failed processing keeps its original receipt. Repeated observations do not
+replay work. Own-job and direct-related-thread checks remain authoritative.
+
+There is no ordinary tool execution deadline on a completion wait. Interrupt
+cancels waiting without cancelling the job; caller/target/transport loss retires
+subscriptions. VM loss never replays uncertain execution. Thread identity uses
+the logical source and active User entry ID; handoff carries that occurrence,
+and new input gets another ID. Missing legacy outer correlation can be added
+to an identical retained input; bodies, evidence and typed agent provenance
+remain unchanged. Conflicting correlation rejects rather than replacing it.
 
 ## Custom tools
 

@@ -124,6 +124,12 @@ defmodule Elara.ContextTest do
     assert evidence =~ "Original goal"
     assert {:ok, original} = Handoff.store(source)
     assert length(Store.history(original)) == 2
+    assert {:ok, successor} = Handoff.store(h["id"])
+    correlation = Elara.Completion.thread_correlation(original)
+    assert Elara.Completion.thread_correlation(successor) == correlation
+    assert {:ok, reopened} = Store.open(successor.path)
+    assert Elara.Completion.thread_correlation(reopened) == correlation
+    assert {:error, :unrelated_thread} = Elara.Threads.Communication.wait(h["id"], source)
   end
 
   test "handoff and persisted resume retain plugin selection without activating new files", %{

@@ -10,7 +10,9 @@ defmodule Elara.JobsProfileTest do
     File.mkdir_p!(Path.join(root, "test"))
     previous = Application.get_env(:elara, :sessions_root)
     previous_profiles = Application.get_env(:elara, :job_profiles)
-    {:ok, resources} = Agent.start(fn -> %{session: nil, provider: nil, executions: %{}} end)
+
+    {:ok, resources} =
+      Agent.start(fn -> %{session: nil, provider: nil, executions: %{}, callers: []} end)
 
     on_exit(fn ->
       try do
@@ -44,13 +46,19 @@ defmodule Elara.JobsProfileTest do
         end
       after
         Supervisor.terminate_child(Elara.Supervisor, TestJobs)
-        %{session: session, provider: provider} = Agent.get(resources, & &1)
+        %{session: session, provider: provider, callers: callers} = Agent.get(resources, & &1)
 
         if session do
           case Elara.session_pid(session) do
             {:ok, pid} -> GenServer.stop(pid)
             _ -> :ok
           end
+        end
+
+        for pid <- callers do
+          ref = Process.monitor(pid)
+          if Process.alive?(pid), do: Process.exit(pid, :kill)
+          assert_receive {:DOWN, ^ref, :process, ^pid, _}, 5_000
         end
 
         if is_pid(provider) and Process.alive?(provider), do: Agent.stop(provider)
@@ -123,7 +131,7 @@ defmodule Elara.JobsProfileTest do
         home: root,
         plugins: [],
         skill_paths: [],
-        inputs_paused: true,
+        pause_inputs: true,
         provider: {Elara.Provider.Scripted, provider}
       )
 
@@ -135,6 +143,70 @@ defmodule Elara.JobsProfileTest do
       session: session,
       ctx: %Tool.Ctx{cwd: root, session_id: session, tool_name: "test_job"}
     }
+  end
+
+  test "an awaited job continues the model once and atomically consumes its inbox evidence",
+       ctx do
+    assert {:ok, json} = general(ctx, "start", "probe", %{"mode" => "pass"})
+    job = JSON.decode!(json)
+    eventually(fn -> File.exists?(Path.join(ctx.root, "started")) end)
+    provider = Agent.get(ctx.resources, & &1.provider)
+
+    Agent.update(provider, fn _ ->
+      [
+        {:ok,
+         %Elara.Message.Assistant{
+           tool_calls: [
+             %Elara.Message.ToolCall{
+               id: "await-one",
+               name: "completion_wait",
+               args: {:ok, %{"source" => "job", "job_id" => "profiled"}}
+             }
+           ]
+         }},
+        {:ok, %Elara.Message.Assistant{text: "awaited exactly once"}}
+      ]
+    end)
+
+    assert :ok = Elara.resume_inputs(ctx.session)
+
+    task =
+      Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
+        Elara.ask(ctx.session, "await the held job")
+      end)
+
+    Agent.update(ctx.resources, &%{&1 | callers: [task.pid | &1.callers]})
+    assert Task.yield(task, 100) == nil
+    File.touch!(Path.join(ctx.root, "release"))
+    assert {:ok, "awaited exactly once"} = Task.await(task, 10_000)
+    eventually(fn -> general_status(ctx)["delivery"] == "accepted" end)
+    {:ok, pid} = Elara.session_pid(ctx.session)
+    store = GenServer.call(pid, :thread_store)
+    assert [%{state: :consumed, correlation: correlation}] = store.inbox
+    assert correlation == %{"source" => "job", "id" => job["correlation_id"]}
+    assert store.agent_wake_count == 0
+
+    result =
+      Enum.find(
+        Elara.Session.Store.history(store),
+        &match?(%Elara.Message.ToolResult{call_id: "await-one"}, &1)
+      )
+
+    assert {:ok, output} = result.outcome
+    response = JSON.decode!(output)
+    assert response["awaited"] == true
+    assert response["correlation"] == correlation
+    assert response["input_id"] == hd(store.inbox).id
+    assert response["evidence"]["text"] =~ "Job completion evidence"
+    assert {:ok, reopened} = Elara.Session.Store.open(store.path)
+    assert reopened.inbox == store.inbox
+    assert Elara.Session.Store.history(reopened) == Elara.Session.Store.history(store)
+
+    assert Enum.count(Elara.Session.Store.history(store), &match?(%Elara.Message.Assistant{}, &1)) ==
+             2
+
+    assert Agent.get(provider, & &1) == []
+    assert File.read!(Path.join(ctx.root, "completed")) == "1"
   end
 
   test "legacy alias durably freezes the mix_test profile before execution", ctx do
@@ -339,6 +411,64 @@ defmodule Elara.JobsProfileTest do
     refute File.exists?(Path.join(ctx.root, "started"))
     assert {:ok, retained} = Record.load(record["key"])
     assert retained == Map.put(record, "delivery", "accepted")
+
+    store = GenServer.call(pid, :thread_store)
+    [entry] = store.inbox
+    old_entry = Map.delete(entry, :correlation)
+    GenServer.stop(pid)
+    assert {:ok, _} = Elara.Session.Store.put_inbox(store, [old_entry], true)
+    provider = Agent.get(ctx.resources, & &1.provider)
+
+    assert {:ok, session} =
+             Elara.start_session(
+               resume: store.path,
+               cwd: ctx.root,
+               provider: {Elara.Provider.Scripted, provider},
+               plugins: [],
+               home: ctx.root,
+               skill_paths: [],
+               max_tool_output_bytes: 64,
+               pause_inputs: true
+             )
+
+    assert session == ctx.session
+    assert {:ok, response} = Elara.Completion.wait(session, "job", "profiled")
+    assert response["awaited"] == true
+    assert response["correlation"] == %{"source" => "job", "id" => "job:" <> record["key"]}
+    {:ok, resumed} = Elara.session_pid(session)
+    [upgraded] = GenServer.call(resumed, :thread_store).inbox
+    assert Map.delete(upgraded, :correlation) == old_entry
+    assert upgraded.user == user
+    assert Agent.get(provider, & &1) == []
+
+    Agent.update(provider, fn _ ->
+      [
+        {:ok,
+         %Elara.Message.Assistant{
+           tool_calls: [
+             %Elara.Message.ToolCall{
+               id: "too-small",
+               name: "completion_wait",
+               args: {:ok, %{"source" => "job", "job_id" => "profiled"}}
+             }
+           ]
+         }},
+        {:ok, %Elara.Message.Assistant{text: "receipt too large; retained"}}
+      ]
+    end)
+
+    assert {:ok, "receipt too large; retained"} = Elara.ask(session, "wait with a tiny limit")
+    assert GenServer.call(resumed, :thread_store).inbox == [upgraded]
+
+    result =
+      Enum.find(
+        Elara.transcript(session),
+        &match?(%Elara.Message.ToolResult{call_id: "too-small"}, &1)
+      )
+
+    assert {:error, reason} = result.outcome
+    assert reason =~ "completion receipt exceeds tool output limit"
+    refute File.exists?(Path.join(ctx.root, "started"))
   end
 
   test "v1 uncertain execution recovers as indeterminate without replay", ctx do

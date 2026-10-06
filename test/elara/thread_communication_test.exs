@@ -68,6 +68,290 @@ defmodule Elara.ThreadCommunicationTest do
     Enum.reject(store.inbox, &(&1.id == "assignment"))
   end
 
+  test "thread alias and generic waits consume one correlated turn without a second wake", %{
+    parent: parent
+  } do
+    {child, child_model} = child(parent)
+    {:ok, before} = Comm.thread_store(child)
+    first_correlation = Elara.Completion.thread_correlation(before)
+    first = ask_owned(parent, "wait for child")
+    assert_receive {:model, parent_model, _}, 2_000
+
+    answer(parent_model, "", [
+      %Message.ToolCall{
+        id: "wait-child",
+        name: "thread_wait",
+        args: {:ok, %{"thread_id" => child}}
+      }
+    ])
+
+    await(fn -> map_size(:sys.get_state(Comm).waiters) == 1 end)
+    answer(child_model, "child result")
+    assert_receive {:model, continuation, request}, 2_000
+    assert_wait_receipt(request, "wait-child", first_correlation)
+    assert [%{state: :consumed, correlation: ^first_correlation}] = inbox(parent)
+    answer(continuation, "parent finished")
+    assert {:ok, "parent finished"} = Task.await(first)
+    refute_receive {:model, _, _}, 30
+
+    assert {:ok, _} = Comm.send_message(parent, child, "next-turn", "do the next turn")
+    assert_receive {:model, next_child, _}, 2_000
+    {:ok, next_store} = Comm.thread_store(child)
+    next_correlation = Elara.Completion.thread_correlation(next_store)
+    refute next_correlation == first_correlation
+    assert {:ok, reopened} = Elara.Session.Store.open(next_store.path)
+    assert Elara.Completion.thread_correlation(reopened) == next_correlation
+    second = ask_owned(parent, "await the next child turn")
+    assert_receive {:model, next_parent, _}, 2_000
+
+    answer(next_parent, "", [
+      %Message.ToolCall{
+        id: "wait-second",
+        name: "completion_wait",
+        args: {:ok, %{"source" => "thread", "thread_id" => child}}
+      }
+    ])
+
+    await(fn -> map_size(:sys.get_state(Comm).waiters) == 1 end)
+    {other_child, other_model} = child(parent)
+    {:ok, other_store} = Comm.thread_store(other_child)
+    unrelated = Elara.Completion.thread_correlation(other_store)
+    answer(other_model, "unrelated child completion")
+    await(fn -> length(inbox(parent)) == 2 end)
+    assert Task.yield(second, 100) == nil
+    assert List.last(inbox(parent)).correlation == unrelated
+    assert List.last(inbox(parent)).state in [:queued, :accepted]
+    answer(next_child, "second child result")
+    assert_receive {:model, second_continuation, request}, 2_000
+    assert_wait_receipt(request, "wait-second", next_correlation)
+    assert [%{state: :consumed}, pending, %{state: :consumed}] = inbox(parent)
+    assert pending.state in [:queued, :accepted]
+
+    assert Enum.map(inbox(parent), & &1.correlation) == [
+             first_correlation,
+             unrelated,
+             next_correlation
+           ]
+
+    {:ok, parent_store} = Comm.thread_store(parent)
+    assert parent_store.agent_wake_count == 0
+    answer(second_continuation, "finished again")
+    assert {:ok, "finished again"} = Task.await(second)
+    refute_receive {:model, _, _}, 30
+  end
+
+  defp ask_owned(parent, text) do
+    task_owned(fn -> Elara.ask(parent, text) end)
+  end
+
+  defp task_owned(fun) do
+    task = Task.Supervisor.async_nolink(Elara.TaskSup, fun)
+
+    on_exit(fn ->
+      ref = Process.monitor(task.pid)
+      if Process.alive?(task.pid), do: Process.exit(task.pid, :kill)
+      assert_receive {:DOWN, ^ref, :process, _, _}, 5_000
+    end)
+
+    task
+  end
+
+  defp assert_wait_receipt(request, id, correlation) do
+    result = Enum.find(request.messages, &match?(%Message.ToolResult{call_id: ^id}, &1))
+    assert {:ok, json} = result.outcome
+    response = JSON.decode!(json)
+    assert response["awaited"] == true
+    assert response["correlation"] == correlation
+    assert response["phase"] == "completed"
+    assert response["preview_only"] == true
+  end
+
+  test "transport loss releases an observer wait and later completion stays pending", %{
+    parent: parent
+  } do
+    {child, model} = child(parent)
+    {:ok, source} = Comm.thread_store(child)
+    correlation = Elara.Completion.thread_correlation(source)
+    task = task_owned(fn -> Comm.wait(parent, child) end)
+    {:ok, receiver} = Elara.session_pid(parent)
+
+    await(fn ->
+      map_size(:sys.get_state(Comm).waiters) == 1 and
+        map_size(:sys.get_state(receiver).completion_waiters) == 1
+    end)
+
+    :ok = Supervisor.terminate_child(Elara.Supervisor, Comm)
+    assert {:error, :completion_transport_disconnected_no_replay} = Task.await(task, 2_000)
+    assert :sys.get_state(receiver).completion_waiters == %{}
+    {:ok, _} = Supervisor.restart_child(Elara.Supervisor, Comm)
+    answer(model, "retained after transport loss")
+    await(fn -> length(inbox(parent)) == 1 end)
+    [original] = inbox(parent)
+    assert original.state in [:queued, :accepted]
+    assert original.correlation == correlation
+
+    assert {:ok, %{"awaited" => true, "already_consumed" => false}} = Comm.wait(parent, child)
+    assert inbox(parent) == [original]
+    refute_receive {:model, _, _}, 30
+    :ok = Elara.resume_inputs(parent)
+    assert_receive {:model, continued, request}, 2_000
+    assert List.last(request.messages).text =~ "awaited=false"
+    assert List.last(request.messages).text =~ JSON.encode!(correlation)
+    answer(continued, "processed unrelated completion")
+    await(fn -> Elara.status(parent).phase == :idle end)
+    assert [%{state: :consumed, user: user}] = inbox(parent)
+    assert user == original.user
+    {:ok, store} = Comm.thread_store(parent)
+    assert store.agent_wake_count == 1
+  end
+
+  test "a child can await its active parent without a synchronous actor cycle", %{parent: parent} do
+    {child, child_model} = child(parent)
+    task = ask_owned(parent, "finish parent work")
+    assert_receive {:model, parent_model, _}, 2_000
+    {:ok, parent_store} = Comm.thread_store(parent)
+    correlation = Elara.Completion.thread_correlation(parent_store)
+
+    answer(child_model, "", [
+      %Message.ToolCall{
+        id: "wait-parent",
+        name: "completion_wait",
+        args: {:ok, %{"source" => "thread", "thread_id" => parent}}
+      }
+    ])
+
+    await(fn -> map_size(:sys.get_state(Comm).waiters) == 1 end)
+    answer(parent_model, "parent evidence")
+    assert {:ok, "parent evidence"} = Task.await(task, 2_000)
+    assert_receive {:model, continued, request}, 2_000
+    result = Enum.find(request.messages, &match?(%Message.ToolResult{call_id: "wait-parent"}, &1))
+    assert {:ok, json} = result.outcome
+    assert %{"awaited" => true, "correlation" => ^correlation} = JSON.decode!(json)
+    assert [%{state: :consumed, correlation: ^correlation}] = inbox(child)
+    answer(continued, "child finished")
+    await(fn -> Elara.status(child).phase == :idle end)
+    assert map_size(:sys.get_state(Comm).waiters) == 0
+    original = inbox(child)
+    assert {:ok, response} = Comm.wait(child, parent)
+    assert response["awaited"] == true
+    assert response["already_consumed"] == true
+    assert response["correlation"] == correlation
+    assert inbox(child) == original
+    refute_receive {:model, _, _}, 30
+  end
+
+  test "legacy report artifacts upgrade metadata without changing retained bodies", %{
+    parent: parent,
+    root: root
+  } do
+    {child, model} = child(parent)
+    answer(model, "legacy retained evidence")
+    await(fn -> length(inbox(parent)) == 1 end)
+    [original] = inbox(parent)
+    {:ok, receiver_store} = Comm.thread_store(parent)
+    {:ok, receiver} = Elara.session_pid(parent)
+    :ok = Supervisor.terminate_child(Elara.Supervisor, Comm)
+    GenServer.stop(receiver)
+
+    paths = Path.wildcard(Path.join([root, "sessions", "_thread_messages", "**", "*.json"]))
+    assert length(paths) == 2
+
+    for path <- paths do
+      old = path |> File.read!() |> JSON.decode!() |> Map.delete("correlation")
+      File.write!(path, JSON.encode!(old))
+    end
+
+    [artifact] = Enum.filter(paths, &(Path.basename(Path.dirname(&1)) == "completions"))
+    bytes = File.read!(artifact)
+    legacy = Map.delete(original, :correlation)
+    assert {:ok, _} = Elara.Session.Store.put_inbox(receiver_store, [legacy], true)
+    {:ok, _} = Supervisor.restart_child(Elara.Supervisor, Comm)
+
+    assert {:ok, ^parent} =
+             Elara.start_session(
+               resume: receiver_store.path,
+               cwd: root,
+               provider: {Controlled, self()},
+               pause_inputs: true
+             )
+
+    await(fn ->
+      case inbox(parent) do
+        [%{correlation: correlation}] -> correlation == original.correlation
+        _ -> false
+      end
+    end)
+
+    [upgraded] = inbox(parent)
+    assert Map.delete(upgraded, :correlation) == legacy
+    assert File.read!(artifact) == bytes
+    assert {:ok, response} = Comm.wait(parent, child)
+    assert response["correlation"] == original.correlation
+    assert inbox(parent) == [upgraded]
+    refute_receive {:model, _, _}, 30
+  end
+
+  test "an awaited child handoff retains its original turn correlation", %{root: root} do
+    File.write!(Path.join(root, "small.txt"), "small evidence")
+
+    {:ok, parent} =
+      Elara.start_session(
+        cwd: root,
+        provider: {Controlled, self()},
+        pause_inputs: true,
+        context_limit: 100_000,
+        max_tool_output_bytes: 1024,
+        plugins: [],
+        home: root,
+        skill_paths: []
+      )
+
+    {child, child_model} = child(parent)
+    {:ok, source} = Comm.thread_store(child)
+    correlation = Elara.Completion.thread_correlation(source)
+    task = ask_owned(parent, "wait through child handoff")
+    assert_receive {:model, parent_model, _}, 2_000
+
+    answer(parent_model, "", [
+      %Message.ToolCall{
+        id: "handoff-wait",
+        name: "thread_wait",
+        args: {:ok, %{"thread_id" => child}}
+      }
+    ])
+
+    await(fn -> map_size(:sys.get_state(Comm).waiters) == 1 end)
+
+    answer(child_model, String.duplicate("x", 60_000), [
+      %Message.ToolCall{
+        id: "read-before-handoff",
+        name: "read",
+        args: {:ok, %{"path" => "small.txt"}}
+      }
+    ])
+
+    assert_receive {:model, successor_model, _}, 3_000
+    successor = Elara.Session.Handoff.owner(child)
+    refute successor == child
+    {:ok, successor_store} = Comm.thread_store(successor)
+    assert Elara.Completion.thread_correlation(successor_store) == correlation
+    assert Task.yield(task, 30) == nil
+    answer(successor_model, "completed after handoff")
+    assert_receive {:model, continued, request}, 3_000
+    assert_wait_receipt(request, "handoff-wait", correlation)
+
+    result =
+      Enum.find(request.messages, &match?(%Message.ToolResult{call_id: "handoff-wait"}, &1))
+
+    assert {:ok, json} = result.outcome
+    assert byte_size(json) <= 1024
+    assert JSON.decode!(json)["status_details_omitted"] == true
+    assert [%{state: :consumed, correlation: ^correlation}] = inbox(parent)
+    answer(continued, "parent done")
+    assert {:ok, "parent done"} = Task.await(task, 2_000)
+    refute_receive {:model, _, _}, 30
+  end
+
   test "stable identities deduplicate reordered retries, reject conflicting/foreign/empty sends",
        %{parent: parent, root: root} do
     {child, model} = child(parent)
@@ -247,7 +531,7 @@ defmodule Elara.ThreadCommunicationTest do
     assert_receive {:model, resumed, _}, 2000
     answer(resumed, "wait finished")
     await(fn -> Elara.status(parent).phase == :idle end)
-    {next_child, _} = child(parent)
+    {next_child, next_model} = child(parent)
     :ok = Elara.ask_async(parent, "wait then stop")
     assert_receive {:model, model, _}, 2000
 
@@ -265,6 +549,15 @@ defmodule Elara.ThreadCommunicationTest do
     await(fn ->
       Elara.status(parent).phase == :idle and map_size(:sys.get_state(Comm).waiters) == 0
     end)
+
+    {:ok, receiver} = Elara.session_pid(parent)
+    await(fn -> :sys.get_state(receiver).completion_waiters == %{} end)
+    answer(next_model, "completion after interrupted wait")
+    await(fn -> length(inbox(parent)) == 2 end)
+    assert List.last(inbox(parent)).state in [:queued, :accepted]
+    {:ok, store} = Comm.thread_store(parent)
+    assert store.inputs_paused
+    refute_receive {:model, _, _}, 30
   end
 
   test "existing child accepts follow-up without authority escalation after owner takeover", %{
@@ -400,7 +693,7 @@ defmodule Elara.ThreadCommunicationTest do
 
   test "wait settles when the target process stops without a completion event", %{parent: parent} do
     {child, _} = child(parent)
-    task = Task.async(fn -> Comm.wait(parent, child) end)
+    task = task_owned(fn -> Comm.wait(parent, child) end)
     await(fn -> map_size(:sys.get_state(Comm).waiters) == 1 end)
     {:ok, pid} = Elara.session_pid(child)
     GenServer.stop(pid)

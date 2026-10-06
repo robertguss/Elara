@@ -145,3 +145,115 @@ orchestration stay separately reported and never hide infrastructure growth.
 Correlated wake, operator server/TUI acknowledgment, fresh chaos/net-line
 comparison and the separately approved real-model acceptance remain pending;
 this profile chunk does not complete LAB-8.
+
+
+## Chunk 3 — One correlated inbox wait
+
+`completion_wait` waits on an owned job or direct related thread through the
+existing Session inbox. `thread_wait` uses the same cancellable untimed Task
+boundary; research children retain both entries when the parent grants them.
+There is no new actor, ledger or dependency. Correlation is optional strict
+outer report metadata with exactly source (`job` or `thread`) and bounded ID.
+A thread uses its logical source and active-branch User entry ID; only handoff
+needs an optional header carrying that occurrence. A new User clears the
+carried value, and branch revision uses the current ancestry. Header reopening
+retains it. Job IDs use the existing owner/job key, including v1 bodies.
+
+Successful live tool claims consume only their matching still-pending input,
+with the ToolResult in the same atomic store write. Abort/crash/stale results
+cannot consume it. External observers do not consume. Cancelled input returns
+an error; previously failed processing retains its receipt/error. Optional
+preview and thread status details shrink before JSON encoding to fit the tool
+limit; if identity metadata cannot fit, the tool errors and retains the input.
+A 1,024-byte handoff regression first exposed mid-JSON Core truncation; its
+repaired receipt stays valid and bounded. Full status remains available from
+the observer API, and full original evidence stays retained.
+
+Explicit receipts carry awaited=true, correlation, full input ID, receipt state
+and an untrusted preview. Automatic provider context carries awaited=false and
+correlation without changing saved User bodies or agent provenance. Other
+arrivals remain subject to the existing serial drain, pause, receipt barriers
+and eight-wake budget. One awaited input cannot trigger a second report wake.
+Monitored caller/target/transport loss retires subscriptions without replay.
+The existing transport stages immutable evidence before asynchronous completion
+notification and dispatch; it does not synchronously call back into a source
+publishing its completion. Running and already-finished parents can supply
+requested evidence to their direct child. Same logical-thread waits reject.
+
+Legacy artifacts derive absent correlation from their immutable source leaf's
+User ancestry, never from a later current turn. Identical legacy transport and
+inbox entries can gain outer metadata; conflicting typed values never replace
+one another. Original artifact bytes, bodies, evidence and receipt identities
+remain unchanged. V1 accepted inbox evidence can gain correlation on an explicit
+wait without rerunning its job. Tiny-limit failure preserves that pending input.
+
+Focused134 checks pass, seed1088,78.1s: held native job/atomic reopen, two thread
+turns and unrelated completion, parent-direction wait, real child handoff,
+legacy artifact/v1 body compatibility, strict codec/branch identity, cancelled
+and failed receipts, caller/target/transport loss, pause/budget, original child
+ownership, input recovery and finite job recovery. Compile warnings-as-errors,
+format and diff checks pass. The first full suite at68b0356 passes1019/1020
+(11/11 properties,1008/1009 tests;seed1088,316.1s). The tiny children
+concurrency regression retained its directory because reports were staged but
+not yet admitted:33 staged,13 accepted/delivered,0 pending; reports_settled
+was false while actor/transport checks passed. The shared completion cast had
+omitted the original immediate flush_reports admission call. Restoring that
+one line makes the exact public regression pass1/1 (43excluded,7.0s). Scheduling
+:flush alone only delivers admitted reports. No assertion or timing was weakened.
+Raw failure and repair logs remain retained. The broader repair check then
+passed60/61 (90.2s), failing the existing delayed-admission settlement test.
+That test also reproduced0/1 alone. A temporary local trace observed783 receipt
+reads for27 admitted reports and transport_quiescent=false. The upgrade scan
+revisited already typed transports on every queued completion, unnecessarily
+reading recipient receipts. Restoring the typed-transport admission skip keeps
+legacy metadata upgrades and avoids those background reads. On repaired source
+86a5c3321c9b8135395388439b807eb71a06643b, both public regressions and all17
+communication checks pass19/19 (42excluded,10.1s). The same diagnostic trace now
+observes24 receipt reads for24 admitted reports, transport_quiescent=true and
+1/1 pass (43excluded,2.9s). Report counts differ between runs; these are diagnostic
+regressions, not pooled or registered measurements. The temporary fixture is
+restored byte-exact, and compile warnings-as-errors/format/diff pass. A fresh
+frozen full suite atc430c1e passes1019/1020 (11/11 properties,1008/1009 tests;
+seed1088,306.6s). Completion/settlement checks pass; the sole failure is the
+existing attachment PTY oversize-error observation. ROB-1331's independent
+fixture PR#56 merges ate096868: reuse its existing8s wait for the same actual
+visible error. A1.2s owned rendering delay fails old0/1 and passes new1/1; ordinary
+product1/1 and both teardown witnesses pass. Integrated main changes only that
+fixture among240 frozen source/test hashes; no completion/runtime change.
+Full at clean6b00b962838bdb9f0169e8961286712e9ecdc868 passes1020
+(11properties,1009tests;seed1088,318.2s), exit0. Postflight verifies every one
+of240 frozen source/test hashes, a clean tree. Subsequent ownership audit finds one unrelated WTS VM and
+no Elara BEAM; it is left running. Raw completion-*
+artifacts and their hashes remain retained in completion-postflight.json.
+Temporary trace instrumentation adds15 test-only lines and is fully restored;
+raw Python controls231 lines are separately counted. This is supporting
+verification, not final LAB-8 chaos/model acceptance. The final handoff URL
+and its durable-pointer test constant change after the cloud document rename;
+the three guidance checks cover that metadata update. A final review then
+updates job/test_job instruction strings that previously demanded ending the
+turn after start: both now describe completion_wait or ending the turn. The
+focused job/legacy/context46 pass (27.8s), and compile warnings-as-errors/format/
+diff pass. Execution logic remains the full-tested source; real-model prompt
+behavior remains separately approval-gated. No source line count changes.
+
+Removing claimed consumption fails its sole executed held-job check (0/1).
+Removing transport dependency retirement fails its sole executed loss check
+(0/1). The transport control's two teardown-witness attempts did not save their
+witness; no teardown claim is accepted from them. A separate actual failure
+with native execution and an owned completion waiter admitted fails only the
+forced assertion (0/1), with a saved witness proving one stopped caller, one
+settled execution lease, native OS stop and root removal. All temporary source
+mutations restore byte-exact. A first script-generation syntax error happened
+before mutation; early test setup/assertion and header reopen failures remain
+retained as preparations. No original lab corpus or real model is reused.
+
+`completion-source-counts.json` independently reproduces the baseline and prior
+profile manifests:129 files/49,206 source/infrastructure lines, +466 this chunk,
++831 cumulative versus48,375 baseline. Session grows203 lines; one named
+thread_wait execution branch becomes one shared wait branch. Test changes add548
+net lines, and retained raw Python control orchestration is231 lines, separately
+reported. Two count preparations assumed the wrong manifest schema and produced
+no count; excluded. The increase is negative evidence for the reduction
+hypothesis. Operator acknowledgment, fresh final chaos/comparison and the
+separately approved real-model acceptance remain pending. This supporting chunk
+does not complete LAB-8.

@@ -76,7 +76,8 @@ defmodule Elara.Tool do
       Elara.Skills.tool(),
       Elara.Threads.tool(),
       Elara.TestJobs.tool(),
-      Elara.Jobs.tool()
+      Elara.Jobs.tool(),
+      Elara.Completion.tool()
     ] ++ Elara.Threads.Communication.tools()
   end
 

@@ -2,7 +2,7 @@
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
 is the sole planning and status source. Read the
-[current handoff](https://linear.app/robert-guss/document/current-handoff-lab-3-attribution-and-continuation-569eb39fa4cd)
+[current handoff](https://linear.app/robert-guss/document/current-handoff-autonomous-implementation-569eb39fa4cd)
 and current issue descriptions/comments for plans, review, Results and delivery.
 
 ## Working arrangement and goal
@@ -18,32 +18,60 @@ or delete retained evidence without a specific owner decision.
 
 ## Current work
 
-LAB-8/ROB-1088 remains Building, the sole executable lab. Output/profile chunks
-PR#54/#55 are merged; shared completion is preserved on
-work/rob-1088-correlated-completion atc430c1e5346e008dfd0ac9ccc7dd4f5542c824f2.
-Runtime repair86a5c33 restores immediate admission and skips already typed
-transports while preserving legacy upgrades. Focused134 at68b0356 and repaired
-19/19 public checks pass; count129 files/49,206 lines, +466 this chunk/+831
-cumulative, negative reduction evidence. Fulla2 passed1019/1020: completion
-checks passed, but the attachment PTY oversize-error visibility test failed.
+LAB-8/ROB-1088 is Building, the sole executable item. Output policy PR#54 merged
+at a25cac4; profiles/v2/v1 compatibility PR#55 merged at
+3024e6b90ecc2ee25b303534631b63e529428d36, tree-equal to reviewed2724c91. Both
+exact-head Socket checks passed; full1012/focused80 passed. Linear delivery
+01c22510-e7bb-4769-9db5-b8fdd4d50555 records that supporting chunk. Automation's
+partial-PR Done state was corrected to Building.
 
-ROB-1331 is the current technical prerequisite on
-work/rob-1331-attachment-error-wait from3024e6b. Reuse the existing eight-second
-wait_for for the actual visible oversize error; one fixture line changes.
-An owned1.2-second PTY pause fails the old fixed redraw0/1 and passes the repair
-1/1; both witnesses confirm child reap, stopped timer, closed master/observer.
-Temporary diagnostic source is restored; ordinary product1/1 (10.2s), Python
-syntax and diff checks pass. Raw attachment-* and completion-*
-logs/control snapshots remain in lab/results/rob-1088-general-jobs-20261006/.
-Linear holds exact review/delivery; do not infer full completion acceptance.
+The correlated wait chunk is on work/rob-1088-correlated-completion from3024e6b.
+Read exact plan fa66bc1b-81f4-4121-b67b-21ac80cc030d and occurrence decision
+f5e89127-af9a-45fa-9dcc-72d1a66140dc in ROB-1088. Reuse Session inbox/atomic Store
+and existing thread transport: one completion_wait/tool boundary, thread_wait
+alias, per-turn User identity carried through handoff, strict optional metadata,
+owned atomic consumption, observer non-consumption, unchanged legacy bodies,
+loss/interrupt cleanup and bounded valid receipt JSON. Research-child wait tools
+remain granted only through the parent's explicit tool set. Note008 describes
+contracts, failures/controls and exclusions; Linear holds current review/delivery.
 
-After delivering this prerequisite, merge main into the preserved unpushed
-completion branch, recheck source identity, run the full suite, review and
-SHA-pin that supporting PR. Keep LAB-8 Building; then operator server/TUI
-acknowledgment, fresh final chaos/net-line comparison and separately approved
-capped real-model gate remain. If that approval is still missing after
-independent work, set Needs Input and continue other actionable issues.
-Do not resume paused LAB-3 or reuse original registered corpus namespaces.
+Focused134 passes, seed1088,78.1s; compile warnings-as-errors and format/diff pass.
+Actual consumption/transport mutations fail their intended checks; native+wait
+forced failure confirms caller/native stop, one settled lease and removed root.
+Transport-only teardown witnesses remain unconfirmed and excluded. Source count
+129 files/49,206 lines: +466 this chunk, cumulativeLAB8+831; Session+203. This is
+negative evidence for reduction. First frozen full suite at68b0356 passed
+1019/1020, with one tiny children report-settlement failure. Restored the omitted
+flush_reports admission call at the shared completion cast; exact regression
+now passes1/1. Broader repair verification caught the existing delayed transport
+settlement regression:60/61, then0/1 alone. A local trace observed783 receipt
+reads/27 reports. Restored skip for already typed transports while preserving
+legacy upgrades; trace24 reads/24 reports, transport quiescent and1/1 pass.
+Both public regressions+17 communication tests pass19/19. Runtime repair source
+86a5c3321c9b8135395388439b807eb71a06643b; compile/format/diff pass. Linear
+comments ee76eca9/6640ac42 and note008 retain failures, repairs and restored
+instrumentation. Second full suite atc430c1e passed1019/1020 (306.6s); completion/settlement
+checks passed, but attachment PTY oversize-error visibility failed. ROB-1331's
+one-line existing bounded wait is merged in PR#56 ate096868, reviewed1bfba2f,
+with both Socket checks and tree equality. Owned delay old0/1/new1/1 plus
+ordinary1/1 and cleanup witnesses pass. Main's fixture fix is integrated here;
+only test/support/input_attachments_pty.py changes among240 frozen source/test
+hashes. Full at clean6b00b96 now passes1020 (11 properties,1009 tests;seed1088,318.2s).
+Postflight verifies all240 frozen source/test hashes, clean tree. Subsequent ownership audit finds one unrelated WTS VM and
+no Elara BEAM; it is left running;
+completion-postflight.json retains raw hashes. Shared-wait PR delivery remains.
+No model or historical corpus was run. The cloud handoff is renamed to
+autonomous implementation; obsolete role setup instructions are removed,
+and repository links/pointer-test constant use its current URL. Final review
+aligns job/test_job tool descriptions with explicit waiting versus ending the
+turn; only two instruction strings change after full6b00b96. Existing job/context
+46 pass (27.8s), compile warnings-as-errors/format/diff pass; no new model claim.
+
+After this chunk: operator server/TUI acknowledgment, fresh final LAB-5-style
+chaos and net-line/special-case comparison. Complete all independent scripted
+work before the separately approved capped real-model acceptance gate; if still
+unapproved, put LAB-8 in Needs Input and continue other actionable issues.
+Linear contains the queue and genuine owner gates. Do not resume paused LAB-3.
 
 ## Retained evidence and continuation boundaries
 

@@ -500,7 +500,8 @@ model inbox. Those acknowledgements survive reattachment and thread switching
 within the TUI process; a new TUI process may show the notifications again.
 Reading, listing, reattaching and resnapshotting never generate model turns.
 
-Models can use `thread_send`, `thread_read`, `thread_status`, and `thread_wait`.
+Models can use `thread_send`, `thread_read`, `thread_status`, and `thread_wait`,
+or `completion_wait` with `source: "thread"` and `thread_id`.
 Send requires a related direct parent/child ID, a stable `message_id`, and
 nonempty text (maximum 64 KiB). Retry the same ID/content after uncertain
 acceptance: different content conflicts, and accepted order is authoritative,
@@ -532,10 +533,20 @@ automatically interrupts them. Idle live parents can wake, but stopped/paused
 inputs remain paused, including a stop made before any inbox entry exists.
 Offline recipients retain pending delivery until explicitly opened/resumed.
 
-`thread_wait` is a cancellable event wait, not repeated model polling or a
-second execution loop. It has no ordinary tool deadline; explicit interrupt or
-target process loss settles it. A VM restart interrupts waiting rather than
-replaying uncertain tools. The report still follows the separate inbox path.
+`completion_wait` also waits for an owned job with `source: "job"` and `job_id`.
+`thread_wait` is an alias of its related-thread path. Both wait on the retained
+inbox completion without model polling or an ordinary tool deadline. A live
+model wait saves its ToolResult and consumes the matching input atomically, so
+that report cannot trigger a second turn. An external API observer reads the
+completion without consuming it. Results include `awaited`, `already_consumed`,
+correlation, input receipt state and a bounded untrusted preview; original
+evidence remains available. Automatically delivered reports are marked
+`awaited=false` in provider context. New thread turns have distinct identities;
+handoffs carry the same identity. Legacy bodies and agent provenance remain
+unchanged. Cancelled input returns an error; previously failed processing
+retains its receipt and error. Interrupt cancels waiting without cancelling a
+job. Caller, target or transport loss retires subscriptions; VM restart never
+replays uncertain tools.
 Eight consecutive automatic agent/report turns exhaust a durable wake budget;
 F12 then `r`, `/resume-inputs`, or a new owner submission resets it. Empty sends
 are rejected, report responses do not generate ancestor reports, pending

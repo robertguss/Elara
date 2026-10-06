@@ -6,7 +6,7 @@ decisions, parked ideas, and completion there, not in a repository queue.
 
 - [Research agenda and operating rules](https://linear.app/robert-guss/document/direction-research-agenda-and-operating-rules-4281a3150a0e)
 - [Historical inventory and migration record](https://linear.app/robert-guss/document/historical-inventory-and-migration-reconciliation-c30963eda745)
-- [Current handoff](https://linear.app/robert-guss/document/current-handoff-lab-3-attribution-and-continuation-569eb39fa4cd)
+- [Current handoff](https://linear.app/robert-guss/document/current-handoff-autonomous-implementation-569eb39fa4cd)
 
 Experiment registrations, methods, and results remain in `docs/lab/`.
 Raw measurement evidence stays under `lab/results/`, outside Git. Moving

@@ -146,8 +146,11 @@ application/code-path absence is checked separately. Project-plugin diagnosis
 is being delivered: project-plugin definitions, invocation-bound generic
 evidence/provider access, opt-in cancellation and compatible evidence DTOs.
 The original cancellation/persistence/usage/PTY assertions remain; absence and
-renamed-tool controls reproduced the old defects. Final full/finite-chaos
-acceptance remains pending.
+renamed-tool controls reproduced the old defects. Full suite passed 970
+(11 properties, 959 tests; seed 1086; 274.4 s) at runtime `d6bd527`.
+Post-suite discovery correction adds only the two fixture paths to the existing
+ignore filter; driver/helper paths and bytes remain unchanged. Targeted loading
+checks passed 116 and full discovery found exactly 970 tests. Final finite-chaos regression remains pending.
 LAB-6 stays active until all acceptance is merged. Keep TestJobs until LAB-8
 supplies a replacement, and preserve all LAB-5 corpora. Do not resume LAB-3.
 

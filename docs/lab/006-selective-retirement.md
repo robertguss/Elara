@@ -54,8 +54,13 @@ TestJobs stays until LAB-8 delivers its replacement.
 The first-chunk baseline passed 24 tests; post-change inheritance, Threads,
 executor, durable-input and effect coverage passed 148 at seed 1086. All seven
 executor caller files are byte-identical to baseline after only the
-`TestExecutor` to `Executor` substitution. Full-suite and final finite-chaos
-regression evidence remain pending and will be recorded as executed in Linear.
+`TestExecutor` to `Executor` substitution. Full suite passed 970 (11 properties, 959 tests), seed 1086, in 274.4 seconds
+at runtime revision `d6bd527`. Final finite-chaos regression remains pending.
+Mix 1.20 scans both `.ex`/`.exs`; a retained filename-only attempt still warned.
+The final correction keeps the original fixture paths/bytes and adds their two
+precise paths to the existing test-discovery ignore rule. Explicit test_helper
+loading stays unchanged; final effect/input/executor/guidance 116 passed and
+full discovery excluded exactly 970 tests without fixture warnings.
 The three new roster/absence/renamed-tool controls failed on the old runtime.
 Diagnosis/check/plugin focused coverage passed 33 after migration. Adding boolean
 validation and reload protocol coverage exposed a stale v3 PTY expectation; it

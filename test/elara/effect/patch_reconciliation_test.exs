@@ -7,7 +7,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
   alias Elara.Effect.Job
   alias Elara.Effect.LiteralPatch
   alias Elara.Effect.LiteralPatch.{Observation, Result}
-  alias Elara.Effect.TestExecutor
+  alias Elara.Effect.Executor
 
   @bound_ms 2_000
   @manifest_path Path.expand("../../fixtures/effect/reconciliation.json", __DIR__)
@@ -287,10 +287,10 @@ defmodule Elara.Effect.PatchReconciliationTest do
 
     assert_receive {:sidecar_hook, :after_accept_observation_before_continue, task_pid}, @bound_ms
     assert task_pid == task.pid
-    assert {:accepted, accepted} = TestExecutor.query(executor, job.job_id)
+    assert {:accepted, accepted} = Executor.query(executor, job.job_id)
 
     assert {:accepted, ^accepted} =
-             TestExecutor.submit(executor, job.job_id, job.operation_digest, fn ->
+             Executor.submit(executor, job.job_id, job.operation_digest, fn ->
                raise "same-digest replay invoked callback"
              end)
 
@@ -311,7 +311,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
       refute changed.operation_digest == job.operation_digest
 
       assert {:error, :digest_conflict} =
-               TestExecutor.submit(executor, job.job_id, changed.operation_digest, fn ->
+               Executor.submit(executor, job.job_id, changed.operation_digest, fn ->
                  raise "conflicting-digest callback invoked"
                end)
     end
@@ -319,11 +319,11 @@ defmodule Elara.Effect.PatchReconciliationTest do
     replacement = start_executor(context.executor_path, no_fault(), "executor-2")
 
     assert {:error, :wrong_executor} =
-             TestExecutor.submit(replacement, job.job_id, job.operation_digest, fn ->
+             Executor.submit(replacement, job.job_id, job.operation_digest, fn ->
                raise "replacement-owner callback invoked"
              end)
 
-    assert :ok = TestExecutor.close(replacement)
+    assert :ok = Executor.close(replacement)
     send(task.pid, {:continue, :after_accept_observation_before_continue})
     assert_completed(Task.await(task, @bound_ms), executor, job)
     close(executor, journal)
@@ -391,7 +391,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
     completed = LiteralPatch.execute(executor, journal, job, context.cwd)
     assert_completed(completed, executor, job)
     expected_outcome = completed.outcome
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
     delete_executor_ledger(context.executor_path)
 
     assert %Result{
@@ -662,7 +662,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
              executor_record: %Record{} = completed
            } = result
 
-    assert {:completed, ^completed} = TestExecutor.query(executor, job.job_id)
+    assert {:completed, ^completed} = Executor.query(executor, job.job_id)
     assert completed.operation_digest == job.operation_digest
 
     assert {completed.admission_count, completed.callback_attempt_count, completed.terminal_count} ==
@@ -705,7 +705,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
 
   defp start_executor(path, hook \\ nil, id \\ "executor-1") do
     {:ok, executor} =
-      TestExecutor.start_link(id: id, path: path, fault_hook: hook || no_fault())
+      Executor.start_link(id: id, path: path, fault_hook: hook || no_fault())
 
     Process.unlink(executor)
     executor
@@ -815,7 +815,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
   end
 
   defp close(executor, journal) do
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
     assert :ok = ControllerJournal.close(journal)
   end
 

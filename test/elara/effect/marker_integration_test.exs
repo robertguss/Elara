@@ -5,7 +5,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
   alias Elara.Effect.ControllerJournal.Observation
   alias Elara.Effect.ExecutorLedger
   alias Elara.Effect.ExecutorLedger.Record
-  alias Elara.Effect.TestExecutor
+  alias Elara.Effect.Executor
   alias Elara.Message
   alias Elara.Message.{ToolCall, ToolResult}
   alias Elara.Session.Store
@@ -67,7 +67,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
     assert observation.result_persisted?
     assert %Record{} = observation.executor_record
 
-    assert {:completed, %Record{} = completed} = TestExecutor.query(executor, job.job_id)
+    assert {:completed, %Record{} = completed} = Executor.query(executor, job.job_id)
     assert completed == observation.executor_record
     assert completed.admission_count == 1
     assert completed.callback_attempt_count == 1
@@ -101,24 +101,24 @@ defmodule Elara.Effect.MarkerIntegrationTest do
            }
 
     assert {:completed, ^completed} =
-             TestExecutor.submit(executor, job.job_id, job.operation_digest, fn ->
+             Executor.submit(executor, job.job_id, job.operation_digest, fn ->
                raise "duplicate submit invoked callback"
              end)
 
-    assert {:completed, ^completed} = TestExecutor.query(executor, job.job_id)
+    assert {:completed, ^completed} = Executor.query(executor, job.job_id)
     assert marker_records(context.marker_path) == [marker]
 
     conflicting_digest =
       String.duplicate(if(String.starts_with?(job.operation_digest, "a"), do: "b", else: "a"), 64)
 
     assert {:error, :digest_conflict} =
-             TestExecutor.submit(executor, job.job_id, conflicting_digest, fn ->
+             Executor.submit(executor, job.job_id, conflicting_digest, fn ->
                raise "conflicting submit invoked callback"
              end)
 
     assert marker_records(context.marker_path) == [marker]
     stop_session(session)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "controller restart after intent commit submits the same identity once", context do
@@ -137,7 +137,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
 
     assert_receive {:controller_hook, :after_intent_commit_before_dispatch, _journal}, 1_000
     {job, nil} = controller_evidence(context.journal_path)
-    assert :unknown = TestExecutor.query(executor, job.job_id)
+    assert :unknown = Executor.query(executor, job.job_id)
     store_path = newest_store_path(context.cwd)
     kill_session(session)
 
@@ -149,7 +149,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
 
     assert [marker] = marker_records(context.marker_path)
     assert marker["job_id"] == job.job_id
-    assert {:completed, %Record{} = completed} = TestExecutor.query(executor, job.job_id)
+    assert {:completed, %Record{} = completed} = Executor.query(executor, job.job_id)
 
     assert {completed.admission_count, completed.callback_attempt_count, completed.terminal_count} ==
              {1, 1, 1}
@@ -158,7 +158,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
              observation(context.journal_path, job.job_id)
 
     stop_session(recovered)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "controller terminal observation commits before the session result", context do
@@ -202,7 +202,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
              observation(context.journal_path, job.job_id)
 
     stop_session(session)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "lost acceptance reply recovers accepted evidence without failover or resubmission",
@@ -226,7 +226,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
     send(executor, {:continue, :after_accept_commit_before_accept_reply})
 
     assert {:accepted, %Record{callback_attempt_count: 0}} =
-             TestExecutor.query(executor, job.job_id)
+             Executor.query(executor, job.job_id)
 
     recovered =
       start_marker_session(context, executor, script([]), fn _point -> :ok end, store_path)
@@ -237,10 +237,10 @@ defmodule Elara.Effect.MarkerIntegrationTest do
     assert [_marker] = marker_records(context.marker_path)
 
     assert {:completed, %Record{admission_count: 1, callback_attempt_count: 1}} =
-             TestExecutor.query(executor, job.job_id)
+             Executor.query(executor, job.job_id)
 
     stop_session(recovered)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "lost completion reply recovers terminal evidence without invoking the marker again",
@@ -270,7 +270,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
     store_path = newest_store_path(context.cwd)
     kill_session(session)
     send(executor, {:continue, :after_completion_commit_before_completion_reply})
-    assert {:completed, completed} = TestExecutor.query(executor, job.job_id)
+    assert {:completed, completed} = Executor.query(executor, job.job_id)
 
     recovered =
       start_marker_session(context, executor, script([]), fn _point -> :ok end, store_path)
@@ -284,7 +284,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
              observation(context.journal_path, job.job_id)
 
     stop_session(recovered)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "attempt proof without terminal evidence becomes one honest indeterminate result",
@@ -318,7 +318,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
     reopened = start_executor(context.executor_path)
 
     assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0}} =
-             TestExecutor.query(reopened, job.job_id)
+             Executor.query(reopened, job.job_id)
 
     recovered =
       start_marker_session(context, reopened, script([]), fn _point -> :ok end, store_path)
@@ -332,14 +332,14 @@ defmodule Elara.Effect.MarkerIntegrationTest do
     assert message =~ "action=do_not_retry_or_fail_over"
     assert length(marker_records(context.marker_path)) == 1
 
-    assert {:accepted, attempted} = TestExecutor.query(reopened, job.job_id)
+    assert {:accepted, attempted} = Executor.query(reopened, job.job_id)
     assert ExecutorLedger.last_proven_fact(attempted) == :callback_invoked
 
     assert %Observation{result_persisted?: true, executor_record: ^attempted} =
              observation(context.journal_path, job.job_id)
 
     stop_session(recovered)
-    assert :ok = TestExecutor.close(reopened)
+    assert :ok = Executor.close(reopened)
   end
 
   test "nonmutating tools retain the direct path when the sidecar is configured", context do
@@ -379,7 +379,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
     assert :ok = ControllerJournal.close(journal)
 
     stop_session(session)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   defp start_marker_session(
@@ -447,7 +447,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
   end
 
   defp start_executor(path, hook \\ fn _point -> :ok end) do
-    {:ok, executor} = TestExecutor.start_link(id: "executor-1", path: path, fault_hook: hook)
+    {:ok, executor} = Executor.start_link(id: "executor-1", path: path, fault_hook: hook)
     Process.unlink(executor)
     executor
   end

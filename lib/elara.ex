@@ -170,16 +170,6 @@ defmodule Elara do
   @spec workers() :: [map()]
   def workers, do: Elara.Executor.Router.workers()
 
-  @spec start_coordinator(session_ref(), keyword()) :: {:ok, pid()} | {:error, term()}
-  def start_coordinator(parent, opts) when is_pid(parent) or is_binary(parent) do
-    with {:ok, _pid} <- session_pid(parent) do
-      DynamicSupervisor.start_child(
-        Elara.CoordinatorSup,
-        {Elara.Coordinator, Keyword.put(opts, :parent, parent)}
-      )
-    end
-  end
-
   @spec plugins(session_ref()) :: [Plugin.Info.t()]
   def plugins(session) when is_pid(session) or is_binary(session) do
     call(session, :plugins)

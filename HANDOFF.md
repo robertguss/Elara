@@ -98,9 +98,9 @@ one full suite passed 888 (seed 183979), at source `4a9c0ad`. No assertion,
 timeout, or parser change. Logs: `lab/results/rob-1216-diagnosis-20261005/`.
 Those passing runs remain negative evidence, not a fix.
 
-LAB-5 (ROB-1085) has completed its registered runtime experiment; consult Linear
-for the Results PR's review/merge status before marking Done or selecting its
-successor. Matrix infrastructure merged in PR #48 at
+LAB-5 (ROB-1085) is Done after Results PR #49 merged at `fa482cdf`.
+Its registered runtime experiment and Results are delivered. Matrix
+infrastructure merged in PR #48 at
 `15e000c15321a545d087ed85255d209c50f1cfd4`, with tree equality to reviewed head
 `f704752`. Full 971 (11 properties, 960 tests; seed 1085; 272.5 s), focused 14,
 compile/format/diff and final-head Socket checks passed. The final handoff-only
@@ -130,11 +130,18 @@ claims; detached descendants, disk damage, arbitrary positions, real models
 and human acceptance remain excluded. An unrelated Phoenix VM was observed at
 postflight outside Elara; leave it alone. Timing is host-specific.
 
-Current Results work is on `work/rob-1085-chaos-results`. Deliver the reviewed
-note/HANDOFF/Linear Results through PR and merge if pending, then select LAB-6
-under the standing autonomy, recording the decision in Linear. Its acceptance
-requires retaining recovery/fault coverage while retiring old surfaces; the
-Coordinator judging/map-reduce removal decision is already resolved by ROB-1095.
+LAB-6 (ROB-1086) is selected as the sole executable lab item. Work is on
+`work/rob-1086-selective-retirement`; read its staged plan and latest review in
+Linear before continuing. The first chunk removes Coordinator/Engine/API and
+migrates every TestExecutor caller to production Executor with assertions intact.
+Focused inheritance/Threads/executor/input/effect verification passed 148
+(seed 1086); caller migrations preserve all other bytes. The separate
+instruction/skill inheritance test uses public Threads. Note 006
+records the deliberately removed batch contracts and four Coordinator tests.
+LiteralPatch/OpaqueShell runtime retirement and project-plugin diagnosis follow;
+LAB-6 stays active until all acceptance is merged. Keep TestJobs until LAB-8
+supplies a replacement, and preserve all LAB-5 corpora. Do not resume LAB-3.
+
 LAB-8 also depends on LAB-5; LAB-4/LAB-7 retain their recorded dependencies.
 ROB-1091 and ROB-1097–1106 need individual scope review under autonomy. The goal
 continues while actionable work remains.

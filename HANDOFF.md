@@ -98,57 +98,60 @@ one full suite passed 888 (seed 183979), at source `4a9c0ad`. No assertion,
 timeout, or parser change. Logs: `lab/results/rob-1216-diagnosis-20261005/`.
 Those passing runs remain negative evidence, not a fix.
 
-LAB-5 (ROB-1085) is Building, the sole selected executable lab item. All seven
-finite recovery families are delivered through PR #47; main `ae763174cb3e54d8b2713c864b8e21be37b15d48`
-matches reviewed whole-VM head `078c5b93a40857f275aa21941248a710d6838ecb`.
-The final whole-VM tree passed focused 39, VM 6 and full 960 (11 properties,
-949 tests; seed 1085; 270.7 seconds), compile/format/diff and both exact-head
-Socket checks. Two clean-head production-default controllers/peers pass all
-23 checks, complete/cleanup true; provider recovery/backlog 35/81 ms and mutation
-29/57 ms. Source, fault, durable identity, uncertainty, physical stop and cleanup
-are separate claims. Every preparation is excluded from the registered matrix.
+LAB-5 (ROB-1085) has completed its registered runtime experiment; consult Linear
+for the Results PR's review/merge status before marking Done or selecting its
+successor. Matrix infrastructure merged in PR #48 at
+`15e000c15321a545d087ed85255d209c50f1cfd4`, with tree equality to reviewed head
+`f704752`. Full 971 (11 properties, 960 tests; seed 1085; 272.5 s), focused 14,
+compile/format/diff and final-head Socket checks passed. The final handoff-only
+wording change preserved all seven runtime/test hashes. All seven finite
+recovery families through PR #47 are delivered; their reviews and controls
+remain in Linear and note 005.
 
-The `work/rob-1085-chaos-matrix` candidate adds finite planning, artifact
-fingerprints, a production-intensity peer and a bounded external launcher. The
-proposed measurement is 24 checkpoints x 50 round-major repetitions = 1200 rows,
-with unique seeds 1085000–1086199. A separate 24-case qualification uses
-1084900–1084923. Each row gets a fresh BEAM with two schedulers; source, compiled
-and native artifacts are pinned. Runtime failures stay reported; missing causal
-or provenance evidence and unconfirmed cleanup stop successors. See ROB-1085's
-matrix plan and note 005 for the method. Preserve
-`lab/results/rob-1085-matrix-preparation-20261006/`, including rejected controls.
-The first clean-head preparation at `3d97efd` rejected before application startup
-because isolated HOME exposed globally ignored Finder metadata. Its raw rejection
-remains; the repository now ignores that metadata explicitly, and artifact checks
-disable global Git excludes so they cannot conceal runtime source.
+The one registered measurement at `15e000c` completed: 1200/1200 eligible/passed,
+50 at each of 24 checkpoints, seeds 1085000–1086199; every one of 20,350 recorded
+check values true. Zero outcome failures, ineligible rows or unconfirmed cleanup.
+Independent readback matches every identity, source/settings, Port/OS witness
+and observed stub list. Recovery/backlog maxima 1127/1178 ms; all declared bounds
+pass. Registration/artifact/source hashes match after the run. The excluded
+24-row qualification passed; every earlier pilot/preparation/control stays
+excluded. No failing measurement row needs minimization or a runtime fix.
 
-Read ROB-1085 and PR #48 for the current verification, review and merge status;
-complete delivery if still pending. After merge, register and read back the exact
-source, artifacts, namespaces and launcher before qualification or
-measurement. Do not use preparations as matrix rows, rerun the registered
-corpus toward green, or launch an old registration against newer source.
-No registered matrix has run. LAB-5 is unfinished until its full acceptance is
-delivered; the autonomous goal continues after it.
+Preserve `lab/results/rob-1085-matrix-measurement-20261006-a1/` and every adjacent
+`rob-1085-matrix-*-20261006-a1` registration/launcher/qualification/postflight
+file, plus every earlier raw namespace. Manifest SHA256
+`bbe689027c60ed364d43f54c7c6cbc3d6aed32bf27e94e038fd0694a74640a41`;
+measurement summary SHA256
+`f92e30959ce5c3a33cccad4e4612957e530755517c9e2b22a6cc7a6c81efdc20`.
+The registered launcher has exited. Never rerun/reuse its namespace or pool
+other rows into the corpus. The source may now change for reviewed Results
+and subsequent work. Measurements are finite scripted-provider/owned-group
+claims; detached descendants, disk damage, arbitrary positions, real models
+and human acceptance remain excluded. An unrelated Phoenix VM was observed at
+postflight outside Elara; leave it alone. Timing is host-specific.
 
-ROB-1324/1325's independent fixture fixes and transport/handoff/child/job/native/
-group/VM preparations are delivered. Their exact reviews, failures, CI, merges
-and retained raw namespaces are on Linear and in note 005. The optional explicit
-LocalExecutor receipt-client finding remains ROB-1104: accepted, one callback
-attempt, zero terminals, A indeterminate and B/C queued behind the nonterminal
-barrier. Read-only post-VM SQLite matches its original job ID/digest; it is disk
-evidence, not live executor authority. Never replay or invent acknowledgment
-from physical native cleanup. The separate-group Port-child preparation remains
-at local `627c5e7` and its retained namespace; detached descendants are the
-existing documented policy exclusion.
+Current Results work is on `work/rob-1085-chaos-results`. Deliver the reviewed
+note/HANDOFF/Linear Results through PR and merge if pending, then select LAB-6
+under the standing autonomy, recording the decision in Linear. Its acceptance
+requires retaining recovery/fault coverage while retiring old surfaces; the
+Coordinator judging/map-reduce removal decision is already resolved by ROB-1095.
+LAB-8 also depends on LAB-5; LAB-4/LAB-7 retain their recorded dependencies.
+ROB-1091 and ROB-1097–1106 need individual scope review under autonomy. The goal
+continues while actionable work remains.
 
-LAB-6/LAB-8 depend on LAB-5; LAB-4/LAB-7 retain their recorded dependencies.
-Coordinator judging/map-reduce removal was already decided by ROB-1095.
-ROB-1091 and ROB-1097–1106 need individual scope review under autonomy.
-ROB-1107/1108 are Needs Input for owner hands-on/visual acceptance of implemented
-TUI behavior. LAB-3 remains at its recorded measurement pause and strict host
-protocol below. Do not stop unrelated workspace work. During current matrix
-controls an unrelated Phoenix BEAM was identified in the campus-mvp workspace;
-leave it alone and disclose concurrent host activity in the registration.
+ROB-1104 retains the optional explicit receipt-client finding: accepted, one
+callback attempt, zero terminals, A indeterminate and B/C queued behind the
+nonterminal barrier. Read-only post-VM SQLite matches job ID/digest; physical
+native cleanup creates no causal terminal or generic acknowledgment authority.
+The separate-group Port-child preparation remains at local `627c5e7` and its
+retained namespace; detached descendants are the existing policy exclusion.
+ROB-1324/1325 fixture repairs and all other delivered evidence are recorded in
+Linear. Preserve every original failed log, copied root and local branch.
+
+ROB-1107/1108 are Needs Input for owner hands-on/visual TUI acceptance. LAB-3
+remains at its recorded measurement pause and strict host protocol below.
+Do not stop unrelated workspace work or resume an old launcher against new
+source. The registered LAB-5 experiment did not resume LAB-3.
 
 ## LAB-3 continuation
 

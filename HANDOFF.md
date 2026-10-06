@@ -42,10 +42,17 @@ remove retained evidence without a specific owner decision. Done means merged.
   controls and a forced-failure cleanup check are retained in
   `lab/results/rob-1085-transport-20261005/`. Full suite 894 passed, seed 1085.
   PR and merge evidence are in ROB-1085; this is not full matrix acceptance.
+- ROB-1324 repairs the production-write fixture's 100 ms lifecycle wait with
+  an explicit 5-second bound and one ordered cleanup owner. A delayed valid
+  provider reproduces the old failure; the fixed wait passes. A forced-failure
+  witness confirms all four tracked actors stop before directory removal.
+  Effect suite 100 and full suite 894 passed, seed 1085. Raw controls, including
+  the rejected first cleanup ordering, remain in
+  `lab/results/rob-1324-verification-20261005/`; Linear records PR/merge evidence.
 
-Each implementation had a reviewed diff, clean format/diff checks, both Socket
-checks, and verified squash-merge tree equality. Current main includes all
-three fixes. No historical lab results or registered measurements were changed.
+Delivered changes have reviewed diffs, clean format/diff checks, both Socket
+checks, and verified squash-merge tree equality in their Linear records.
+No historical lab results or registered measurements were changed.
 CI has Socket checks and does not run mix test; local test evidence is separate.
 
 ## Current diagnosis and queue
@@ -62,6 +69,11 @@ pilot, recovery fix, and transport preparation are delivered; the
 children/handoff/jobs/client/worker/stub/whole-VM/process-group matrix and at
 least 1000 schedules remain. Review and register its expanded method before
 measurement; reuse the durable lab runner and fresh production-intensity VMs.
+The handoff observer/gates/five checkpoints are held at local candidate
+`149b6a5` on `work/rob-1085-expanded-recovery-matrix`. Focused 38 and five fresh
+dev-VM preparations passed, but its full suite exposed ROB-1324. After that
+repair merges, integrate the candidate and complete full-suite/delivery checks.
+The candidate and its preparation rows are not registered matrix measurements.
 LAB-6/LAB-8 depend on LAB-5; Coordinator judging/map-reduce removal was already
 decided by ROB-1095. LAB-4/LAB-7 retain their research dependencies.
 

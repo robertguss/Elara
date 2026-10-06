@@ -8,6 +8,7 @@ defmodule Elara.Effect.ProductionWriteTest do
   alias Elara.Session.Store
 
   @workspace_id "production-write-test"
+  @lifecycle_wait_ms 5_000
 
   setup do
     root =
@@ -15,10 +16,22 @@ defmodule Elara.Effect.ProductionWriteTest do
 
     cwd = Path.join(root, "workspace")
     File.mkdir_p!(cwd)
-    on_exit(fn -> File.rm_rf!(root) end)
+    {:ok, resources} = Agent.start(fn -> [] end)
+
+    # One owner fixes teardown order on every path, including failed waits.
+    # Track each resource before its first fallible lifecycle assertion.
+    on_exit(fn ->
+      owned = Agent.get(resources, & &1)
+      Enum.each(owned, &stop_resource/1)
+      settled = await_dead(owned, System.monotonic_time(:millisecond) + 1_000)
+      Agent.stop(resources)
+      assert settled, "fixture actors still alive in #{root}: #{inspect(owned)}"
+      File.rm_rf!(root)
+    end)
 
     %{
       cwd: cwd,
+      resources: resources,
       journal_path: Path.join(root, "controller.sqlite3"),
       target: Path.join(cwd, "nested/output.txt")
     }
@@ -58,7 +71,7 @@ defmodule Elara.Effect.ProductionWriteTest do
     assert %Record{state: :completed, callback_attempt_count: 1, terminal_count: 1} =
              observation.executor_record
 
-    executor = local_executor(context.cwd)
+    executor = local_executor(context)
     executor_record = observation.executor_record
     assert {:completed, ^executor_record} = Executor.query(executor, job.job_id)
 
@@ -68,7 +81,7 @@ defmodule Elara.Effect.ProductionWriteTest do
 
   test "the local executor reopens terminal and attempted state and rejects digest changes",
        context do
-    executor = local_executor(context.cwd)
+    executor = local_executor(context)
     digest = digest("operation-a")
 
     assert {:accepted, %Record{callback_attempt_count: 0}} =
@@ -77,7 +90,8 @@ defmodule Elara.Effect.ProductionWriteTest do
     assert :ok = Executor.continue(executor, "job-terminal")
 
     assert_receive {:elara_effect_executor, _id, "job-terminal",
-                    {:completed, %Record{result: {:ok, "complete"}}}}
+                    {:completed, %Record{result: {:ok, "complete"}}}},
+                   @lifecycle_wait_ms
 
     first_pid = GenServer.whereis(executor)
     restart_executor(first_pid, executor)
@@ -100,7 +114,7 @@ defmodule Elara.Effect.ProductionWriteTest do
              end)
 
     assert :ok = Executor.continue(executor, "job-attempted")
-    assert_receive {:callback_started, attempted_pid}
+    assert_receive {:callback_started, attempted_pid}, @lifecycle_wait_ms
     restart_executor(attempted_pid, executor)
 
     assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0}} =
@@ -120,7 +134,7 @@ defmodule Elara.Effect.ProductionWriteTest do
 
     hook = fn
       :after_completion_reply_before_session_result_persist = point ->
-        block(parent, point)
+        block(context, parent, point)
 
       _point ->
         :ok
@@ -131,9 +145,11 @@ defmodule Elara.Effect.ProductionWriteTest do
                effect_fault_hook: hook
              )
 
-    ask_unlinked(session)
+    ask_unlinked(context, session)
 
-    assert_receive {:blocked, :after_completion_reply_before_session_result_persist, effect_task}
+    assert_receive {:blocked, :after_completion_reply_before_session_result_persist, effect_task},
+                   @lifecycle_wait_ms
+
     assert File.read!(context.target) == "terminal"
     before = File.stat!(context.target)
     session_path = newest_session_path(context.cwd)
@@ -157,7 +173,7 @@ defmodule Elara.Effect.ProductionWriteTest do
     assert observation.result_persisted?
     assert observation.executor_record.state == :completed
 
-    executor = local_executor(context.cwd)
+    executor = local_executor(context)
     stop_session(resumed)
     stop_local_executor(executor)
   end
@@ -168,7 +184,7 @@ defmodule Elara.Effect.ProductionWriteTest do
     parent = self()
 
     hook = fn
-      :after_accept_observation_before_continue = point -> block(parent, point)
+      :after_accept_observation_before_continue = point -> block(context, parent, point)
       _point -> :ok
     end
 
@@ -177,15 +193,18 @@ defmodule Elara.Effect.ProductionWriteTest do
                effect_fault_hook: hook
              )
 
-    ask_unlinked(session)
-    assert_receive {:blocked, :after_accept_observation_before_continue, effect_task}
+    ask_unlinked(context, session)
+
+    assert_receive {:blocked, :after_accept_observation_before_continue, effect_task},
+                   @lifecycle_wait_ms
+
     session_path = newest_session_path(context.cwd)
     kill_session(session)
     Process.exit(effect_task, :kill)
 
     {job, observation} = controller_evidence(context.journal_path)
     assert observation.executor_record.callback_attempt_count == 0
-    executor = local_executor(context.cwd)
+    executor = local_executor(context)
     assert {:accepted, %Record{callback_attempt_count: 0}} = Executor.query(executor, job.job_id)
 
     assert {:ok, resumed} = start_session(context, script([]), resume: session_path)
@@ -210,7 +229,7 @@ defmodule Elara.Effect.ProductionWriteTest do
     parent = self()
 
     hook = fn
-      :after_accept_observation_before_continue = point -> block(parent, point)
+      :after_accept_observation_before_continue = point -> block(context, parent, point)
       _point -> :ok
     end
 
@@ -219,14 +238,17 @@ defmodule Elara.Effect.ProductionWriteTest do
                effect_fault_hook: hook
              )
 
-    ask_unlinked(session)
-    assert_receive {:blocked, :after_accept_observation_before_continue, effect_task}
+    ask_unlinked(context, session)
+
+    assert_receive {:blocked, :after_accept_observation_before_continue, effect_task},
+                   @lifecycle_wait_ms
+
     session_path = newest_session_path(context.cwd)
     kill_session(session)
     Process.exit(effect_task, :kill)
 
     {job, _observation} = controller_evidence(context.journal_path)
-    executor = local_executor(context.cwd)
+    executor = local_executor(context)
     parent = self()
 
     assert :ok =
@@ -235,7 +257,7 @@ defmodule Elara.Effect.ProductionWriteTest do
                receive do: (:never -> {:ok, "unreachable"})
              end)
 
-    assert_receive {:attempt_recorded, executor_pid}
+    assert_receive {:attempt_recorded, executor_pid}, @lifecycle_wait_ms
     restart_executor(executor_pid, executor)
 
     assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0}} =
@@ -282,7 +304,7 @@ defmodule Elara.Effect.ProductionWriteTest do
     assert job.tool_name == "edit"
     assert observation == nil
 
-    executor = local_executor(context.cwd)
+    executor = local_executor(context)
     assert :unknown = Executor.query(executor, job.job_id)
 
     stop_session(session)
@@ -290,19 +312,33 @@ defmodule Elara.Effect.ProductionWriteTest do
   end
 
   defp start_session(context, provider, opts) do
-    Elara.start_session(
-      [
-        provider: provider,
-        plugins: [],
-        cwd: context.cwd,
-        workspace_id: @workspace_id,
-        effect_journal_path: context.journal_path
-      ] ++ opts
-    )
+    local_executor(context)
+
+    result =
+      Elara.start_session(
+        [
+          provider: provider,
+          plugins: [],
+          cwd: context.cwd,
+          workspace_id: @workspace_id,
+          effect_journal_path: context.journal_path
+        ] ++ opts
+      )
+
+    case result do
+      {:ok, session} ->
+        track(context, {:session, session})
+
+      _ ->
+        :ok
+    end
+
+    result
   end
 
-  defp local_executor(cwd) do
-    {:ok, executor} = LocalExecutor.open(cwd, @workspace_id)
+  defp local_executor(context) do
+    {:ok, executor} = LocalExecutor.open(context.cwd, @workspace_id)
+    track(context, {:executor, executor})
     executor
   end
 
@@ -316,7 +352,7 @@ defmodule Elara.Effect.ProductionWriteTest do
   defp restart_executor(pid, executor) do
     monitor = Process.monitor(pid)
     Process.exit(pid, :kill)
-    assert_receive {:DOWN, ^monitor, :process, ^pid, :killed}
+    assert_receive {:DOWN, ^monitor, :process, ^pid, :killed}, @lifecycle_wait_ms
     wait_for_executor(executor, pid, 100)
   end
 
@@ -356,22 +392,27 @@ defmodule Elara.Effect.ProductionWriteTest do
     {Elara.Provider.Scripted, agent}
   end
 
-  defp ask_unlinked(session) do
+  defp ask_unlinked(context, session) do
     parent = self()
 
-    spawn(fn ->
-      result =
-        try do
-          Elara.ask(session, "write it")
-        catch
-          :exit, reason -> {:exit, reason}
-        end
+    caller =
+      spawn(fn ->
+        result =
+          try do
+            Elara.ask(session, "write it")
+          catch
+            :exit, reason -> {:exit, reason}
+          end
 
-      send(parent, {:ask_result, result})
-    end)
+        send(parent, {:ask_result, result})
+      end)
+
+    track(context, {:pid, caller})
+    caller
   end
 
-  defp block(parent, point) do
+  defp block(context, parent, point) do
+    track(context, {:pid, self()})
     send(parent, {:blocked, point, self()})
 
     receive do
@@ -388,12 +429,48 @@ defmodule Elara.Effect.ProductionWriteTest do
     {:ok, pid} = Elara.session_pid(session)
     monitor = Process.monitor(pid)
     Process.exit(pid, :kill)
-    assert_receive {:DOWN, ^monitor, :process, ^pid, :killed}
+    assert_receive {:DOWN, ^monitor, :process, ^pid, :killed}, @lifecycle_wait_ms
   end
 
   defp stop_session(session) do
-    {:ok, pid} = Elara.session_pid(session)
-    GenServer.stop(pid)
+    case Elara.session_pid(session) do
+      {:ok, pid} -> GenServer.stop(pid, :normal, 1_000)
+      _ -> :ok
+    end
+  end
+
+  defp track(context, resource),
+    do: Agent.update(context.resources, &Enum.uniq([resource | &1]))
+
+  defp stop_resource(resource) do
+    case resource do
+      {:pid, pid} -> Process.exit(pid, :kill)
+      {:executor, executor} -> stop_local_executor(executor)
+      {:session, session} -> stop_session(session)
+    end
+  catch
+    :exit, _ -> :ok
+  end
+
+  defp await_dead(resources, deadline) do
+    settled =
+      Enum.all?(resources, fn
+        {:pid, pid} -> not Process.alive?(pid)
+        {:executor, executor} -> GenServer.whereis(executor) == nil
+        {:session, session} -> not match?({:ok, _}, Elara.session_pid(session))
+      end)
+
+    cond do
+      settled ->
+        true
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        false
+
+      true ->
+        Process.sleep(10)
+        await_dead(resources, deadline)
+    end
   end
 
   defp digest(value), do: :crypto.hash(:sha256, value) |> Base.encode16(case: :lower)

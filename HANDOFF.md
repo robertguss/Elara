@@ -1,4 +1,4 @@
-# Handoff — ROB-1234 recovery digest, 2026-10-05
+# Handoff — ROB-1254 child lifecycle fixture, 2026-10-05
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
 is the sole planning and status source. The
@@ -21,16 +21,23 @@ the digest fix does not launch a measurement or consume its remaining rerun.
 
 ## Repository and verification
 
-ROB-1234 is selected on `work/rob-1234-reproducible-recovery-digest` from main
-`4ec59de`. Its Linear issue holds the execution plan, review, and delivery
-record. Recovery reports now hash the fault and raw simulator choices, omitting
-per-run identities from the digest while preserving identity validation and
-evidence. The same-seed real-run regression failed on the old code; the full
-recovery file then passed 31 tests (seed 98431), including fresh runs of all
-three faults. Compile with warnings as errors, formatting, and diff checks
-passed. The diff review confirms the reporting-only scope: recovery behavior,
-registration, bounds, and retained result files are unchanged. Check Linear
-and Git for merged delivery before treating this issue as Done.
+ROB-1234 merged in PR #33 at `5e23f19`. Its Results hold the verification and
+review evidence: 31 recovery tests, a failing same-seed public regression before
+the fix, and clean compile/format/diff checks. The digest omits run identities;
+identity checks, historical evidence, recovery behavior, and bounds are intact.
+
+ROB-1254 is selected on `work/rob-1254-deterministic-child-lifecycle` from that
+main. Its Linear issue holds the execution plan, review, and delivery record.
+A 650 ms observation delay reproduced the old idle-phase failure (seed 344403).
+The fixture now holds the coding provider request behind an explicit barrier
+through sibling failure and parent exit; only the test's answer releases it.
+The delayed barrier case passed (seed 816515). A forced failure before release
+proved on-exit termination of the held task (seed 708390); that temporary
+assertion is removed. Logs are retained under
+`lab/results/rob-1254-verification-20261005/`. Production source is unchanged.
+The full suite passed 887 tests (seed 670644); formatting and diff checks passed.
+Diff review confirms test-only synchronization with stronger lifecycle checks,
+bounded cleanup, and no production change. Check Linear for confirmed merge.
 
 Historical audit verification follows for provenance.
 
@@ -69,10 +76,11 @@ findings remain open despite this passing suite.
   ROB-1091. LAB-6 (ROB-1086) and LAB-8 (ROB-1088) need LAB-5; ROB-1095's
   deliberate Coordinator removal decision is made. LAB-7 (ROB-1087) needs
   LAB-4 and LAB-6.
-- ROB-1097–1106 remain parked. ROB-1107/1108 cover deferred hands-on acceptance
-  of existing TUI implementation.
-- ROB-1234 is the current delivery item; ROB-1254 is the next independent
-  candidate. ROB-1216, ROB-1233, and ROB-1254 remain unresolved findings.
+- ROB-1097–1106 need individual scope review under the autonomous goal; their
+  former parked status alone does not block selection. ROB-1107/1108 are Needs
+  Input for the owner's hands-on/visual acceptance of existing TUI code.
+- ROB-1254 is the current delivery item; ROB-1233 is the next independent
+  candidate. ROB-1216 and ROB-1233 remain unresolved findings.
   A passing run does not establish that an intermittent is fixed.
 
 LAB-3 closure is an owner decision. Keep at most one executable lab item and

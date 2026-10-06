@@ -123,28 +123,52 @@ defmodule Elara.ThreadsTest do
   test "coding worktree excludes dirty parent; failure and parent exit leave sibling running", %{
     cwd: cwd
   } do
-    replies = [
+    {:ok, parent} =
+      Elara.start_session(
+        cwd: cwd,
+        provider: {Elara.ThreadsTest.GatedProvider, self()},
+        pause_inputs: true
+      )
+
+    File.write!(Path.join(cwd, "parent-only.txt"), "uncommitted")
+    {:ok, coding} = Threads.start_child(parent, "Implement isolated change", coding: true)
+    assert coding["cwd"] != cwd
+    refute File.exists?(Path.join(coding["cwd"], "parent-only.txt"))
+    assert coding["base_revision"] == git(cwd, ["rev-parse", "HEAD"])
+
+    send(next_request(), {
+      :reply,
       answer(nil, [
         %ToolCall{
           id: "write-child",
           name: "write",
           args: {:ok, %{"path" => "file.txt", "content" => "child\n"}}
         }
-      ]),
-      {:stream, [{:sleep, 500}], answer("coding finished")},
-      {:error, %Elara.Provider.Error{kind: :bad_response, message: "sibling failure"}}
-    ]
+      ])
+    })
 
-    {parent, _} = parent(cwd, replies)
-    File.write!(Path.join(cwd, "parent-only.txt"), "uncommitted")
-    {:ok, coding} = Threads.start_child(parent, "Implement isolated change", coding: true)
-    assert coding["cwd"] != cwd
-    refute File.exists?(Path.join(coding["cwd"], "parent-only.txt"))
-    assert coding["base_revision"] == git(cwd, ["rev-parse", "HEAD"])
+    coding_task = next_request()
+
+    on_exit(fn ->
+      cleanup_monitor = Process.monitor(coding_task)
+      if Process.alive?(coding_task), do: Process.exit(coding_task, :kill)
+      assert_receive {:DOWN, ^cleanup_monitor, :process, ^coding_task, _}, 5_000
+    end)
+
+    monitor = Process.monitor(coding_task)
     await(fn -> File.read!(Path.join(coding["cwd"], "file.txt")) == "child\n" end)
+    # Exceed the old 500 ms budget before sibling setup; the barrier holds the child.
+    Process.sleep(650)
     {:ok, research} = Threads.start_child(parent, "Research failure")
+
+    send(next_request(), {
+      :reply,
+      {:error, %Elara.Provider.Error{kind: :bad_response, message: "sibling failure"}}
+    })
+
     finished(parent, research["id"])
     assert Elara.status(coding["id"]).phase != :idle
+    assert Process.alive?(coding_task)
     assert Elara.child_config(research["id"]).allowed_capabilities == ["filesystem:read"]
 
     assert Enum.map(Elara.child_config(research["id"]).tools, & &1.name) |> Enum.sort() == [
@@ -157,7 +181,12 @@ defmodule Elara.ThreadsTest do
            ]
 
     stop(parent)
+    assert Elara.status(coding["id"]).phase != :idle
+    assert Process.alive?(coding_task)
+    refute_receive {:DOWN, ^monitor, :process, ^coding_task, _}, 0
+    send(coding_task, {:answer, "coding finished"})
     finished(parent, coding["id"])
+    assert_receive {:DOWN, ^monitor, :process, ^coding_task, :normal}
     assert List.last(Elara.transcript(coding["id"])).text == "coding finished"
     assert File.read!(Path.join(cwd, "file.txt")) == "base\n"
     assert File.read!(Path.join(cwd, "parent-only.txt")) == "uncommitted"
@@ -322,6 +351,12 @@ defmodule Elara.ThreadsTest do
       send(test, {:provider_request, self()})
 
       receive do
+        {:reply, {:ok, message}} ->
+          {:ok, message, test}
+
+        {:reply, {:error, error}} ->
+          {:error, error, test}
+
         {:answer, text} ->
           {:ok, message} = Elara.Message.assistant(text, [])
           {:ok, message, test}

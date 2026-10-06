@@ -7,6 +7,16 @@ Plugins add stateful tools to an Elara session. On startup, Elara discovers
 > inside the Elara VM with the same filesystem, network, and operating-system
 > access as Elara. They are not a sandbox or a package-security boundary.
 
+Review source before approving it. From the Elara checkout, run
+`mix elara.trust /absolute/path/to/workspace` (or omit the path for this
+checkout). The command lists discovered file paths and SHA256 digests and asks
+for explicit approval; Enter, decline and EOF save nothing. Approvals live
+outside repositories in `~/.elara/plugin-trust/`. Startup and reload check the
+exact already-read bytes before parsing, compilation or callbacks. Changed
+or newly added files require approval again. Failed reload keeps the active
+revision. Remove a file's approval entry to revoke future loads; currently
+running code keeps its existing authority until the session stops.
+
 ## Create a plugin
 
 Each plugin file must define exactly one module implementing `Elara.Plugin`:
@@ -60,13 +70,14 @@ Tool names must be unique across built-ins and all plugins. A plugin file may
 not define nested modules. Use `__MODULE__` rather than the source module's
 literal name for self-references inside the plugin.
 
-Start a chat after creating the file, or explicitly reload an existing session
+Approve the file, then start a chat or explicitly reload an existing session
 as described below. The plugin tool is then available to the model alongside
 `read`, `write`, `edit`, and `bash`.
 
 ## Reload without restarting chat
 
-Add or edit a plugin file, wait for the current turn to finish, and enter this
+Add or edit a plugin file, approve its new bytes with `mix elara.trust WORKSPACE`,
+wait for the current turn to finish, and enter this
 command in the Rust TUI:
 
 ```text
@@ -116,16 +127,21 @@ the recorded status. Asking for `elixir_last_run` does not change that state.
 
 To exercise live capability addition in a disposable Mix project:
 
+Set the same random `ELARA_SERVER_TOKEN` (32–512 bytes) in both terminals
+before starting the gateway and client; see [gateway setup](detached-and-remote.md).
+
 1. From the Elara checkout, run `iex -S mix`. Start a session before adding a
    plugin with `{:ok, id} = Elara.start_session(cwd: "/absolute/path/to/project")`
    and a server in that same VM with `Elara.Server.start(port: 4048)`. In another
    terminal in the Elara checkout, attach with `mix elara.tui SESSION_ID`, using
    the returned ID. Keep IEx running during the exercise.
 2. Copy `test/support/fixtures/elixir_project_v1.exs` from this repository into
-   that project's `.elara/plugins/elixir_project.exs`, then `/plugins reload`.
+   that project's `.elara/plugins/elixir_project.exs`, approve it with
+   `mix elara.trust PROJECT`, then `/plugins reload`.
 3. Ask Elara to run a failing test with `elixir_test` and a file or `path:line`
    target, then fix the project code.
-4. Replace that plugin with the repository's current version and `/plugins reload`.
+4. Replace that plugin with the repository's current version, approve the new
+   bytes, and `/plugins reload`.
 5. Ask for `elixir_last_run`, then `elixir_rerun_last`. The new tool uses the
    target and run count retained from version 1 in the same session/process.
 6. Introduce a syntax error in the plugin and try `/plugins reload`. The error
@@ -167,6 +183,12 @@ module. Migration should transform state only, without external side effects.
 ## Select plugins through the API
 
 Discovery is the default. To choose files explicitly or disable plugins:
+
+Explicit path selection still requires source approval. Trusted application
+code may snapshot chosen paths with `Elara.Plugin.Trust.snapshot/1` and pass
+the reviewed snapshot to `Elara.Plugin.Trust.approve/1`; taking a snapshot alone
+does not approve or execute anything. A subsequent source edit cannot gain
+approval from an earlier snapshot.
 
 ```elixir
 {:ok, selected} =

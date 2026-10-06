@@ -1,0 +1,12 @@
+{
+  "pid": 7508,
+  "command": [
+    "mix",
+    "test",
+    "--seed",
+    "1105"
+  ],
+  "cwd": "/Users/robertguss/Projects/startups/Elara",
+  "started_utc": "2026-10-06T16:49:01.989194+00:00",
+  "source": "7a0281942db46cb75c845001a1c1c278b28ca0f3"
+}

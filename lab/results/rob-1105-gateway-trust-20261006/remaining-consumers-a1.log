@@ -1,0 +1,29 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Compiling 2 files (.ex)
+Running ExUnit with seed: 1105, max_cases: 28
+
+....Reconnect auth passed: same session, create and retry both authenticated
+cleanup={"native_stopped": true, "proxy_thread_stopped": true, "listener_closed": true, "peer_sockets_closed": true}
+
+cleanup={"native_stopped": true, "proxy_thread_stopped": true, "listener_closed": true, "peer_sockets_closed": true}
+....
+
+  1) test renamed project tools retain evidence and provider accounting without shell name rules (Elara.CheckDiagnosisSessionTest)
+     test/elara/check_diagnosis_session_test.exs:89
+     ** (MatchError) no match of right hand side value:
+
+         {:error,
+          {:plugin_load_failed,
+           "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-52089-651475272/diagnosis-session-3460/renamed_plugin.exs",
+           :plugin_trust_required}}
+
+     code: {session, script, _} = session(cwd, false, plugins: [plugin])
+     stacktrace:
+       test/elara/check_diagnosis_session_test.exs:401: Elara.CheckDiagnosisSessionTest.session/3
+       test/elara/check_diagnosis_session_test.exs:101: (test)
+
+..........................
+Finished in 30.5 seconds (0.00s async, 30.5s sync)
+
+Result: 34/35 passed
+Failed: 1 test

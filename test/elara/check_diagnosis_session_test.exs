@@ -98,6 +98,8 @@ defmodule Elara.CheckDiagnosisSessionTest do
       |> String.replace("\"diagnose_check\"", "\"project_diagnosis\"")
 
     File.write!(plugin, source)
+    {:ok, snapshot} = Elara.Plugin.Trust.snapshot([plugin])
+    :ok = Elara.Plugin.Trust.approve(snapshot)
     {session, script, _} = session(cwd, false, plugins: [plugin])
 
     assert {:error, output} =

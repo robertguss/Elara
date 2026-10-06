@@ -1,0 +1,25 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Compiling 1 file (.ex)
+Running ExUnit with seed: 1105, max_cases: 28
+Excluding tags: [:test]
+Including tags: [location: {"test/elara/gateway_trust_test.exs", 171}]
+
+   Compiling elara-tui v0.1.0 (/Users/robertguss/Projects/startups/Elara/native/elara-tui)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.09s
+
+
+  1) test actual native client authenticates new, list and repeated attachments without exposing the token (Elara.GatewayTrustTest)
+     test/elara/gateway_trust_test.exs:171
+     ** (MatchError) no match of right hand side value:
+
+         {"elara-tui: attach failed: authentication_failed\n", 1}
+
+     code: {created, 0} = System.cmd(binary, base ++ ["--", "new"], options)
+     stacktrace:
+       test/elara/gateway_trust_test.exs:183: (test)
+
+
+Finished in 1.2 seconds (0.00s async, 1.2s sync)
+
+Result: 0/1 passed, 4 excluded
+Failed: 1 test

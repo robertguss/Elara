@@ -538,6 +538,7 @@ defmodule Elara.ThreadsTest do
   end
 
   defp request(socket, request) do
+    request = Map.put(request, "token", System.fetch_env!("ELARA_SERVER_TOKEN"))
     :ok = :gen_tcp.send(socket, Elara.Protocol.encode(Map.put(request, "version", 2)))
     response(socket)
   end

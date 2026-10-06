@@ -360,3 +360,9 @@ not pool rows with LAB-5's original1200, establish comparative performance or
 prove every schedule. Separately approved capped real-model awaited-completion
 acceptance remains pending; overall LAB-8 must remain incomplete until that gate
 is resolved. The net-reduction hypothesis is refuted by the measured increase.
+
+Final scripted PR#59 merged at77591c02a659c0fcda495331d5469a377251d559,
+2026-10-06T15:38:37Z; main tree-equal to reviewed7ca63a3 after both actual
+exact-head Socket checks passed. Self-review2d2d74e9 and deliveryee7513fa retain
+source/full/registration/results boundaries. Overall LAB8 is Needs Input for
+the separately approved real-model gate, with no executable lab remaining.

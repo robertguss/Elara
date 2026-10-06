@@ -68,6 +68,7 @@ defmodule Elara.ProviderLegacyStreamTest do
         socket,
         Elara.Protocol.encode(%{
           "version" => 2,
+          "token" => System.fetch_env!("ELARA_SERVER_TOKEN"),
           "command" => "attach",
           "session_id" => session,
           "mode" => "observe"

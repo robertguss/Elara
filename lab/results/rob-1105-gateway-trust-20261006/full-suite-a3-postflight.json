@@ -1,0 +1,19 @@
+{
+  "source": "7a0281942db46cb75c845001a1c1c278b28ca0f3",
+  "source_hashes_matched": 244,
+  "native_hashes_matched": 3,
+  "processes_by_name": {
+    "beam.smp": [
+      "16073"
+    ],
+    "elara-tui": [],
+    "exec-stub": []
+  },
+  "working_tree_clean": true,
+  "time_utc": "2026-10-06T16:54:48.226707+00:00",
+  "test_summaries": [
+    "Finished in 297.4 seconds (5.1s async, 292.2s sync)",
+    "Result: 1035 passed (11 properties, 1024 tests)"
+  ],
+  "source_manifest_sha256": "7ecf68f829c0084c594e6b42467df8b1511d9208072efc5647c53b38fc28d1dc"
+}

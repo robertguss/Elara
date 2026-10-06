@@ -1,0 +1,100 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+Running ExUnit with seed: 1105, max_cases: 28
+
+    warning: incompatible types given to Kernel.=~/2:
+
+        left =~ right
+
+    given types:
+
+        -dynamic(non_empty_list(term()))-, binary()
+
+    but expected one of:
+
+        #1
+        binary(), binary()
+
+        #2
+        binary(), %Regex{}
+
+    where "left" (context ExUnit.Assertions) was given the type:
+
+        # type: dynamic(non_empty_list(term()))
+        # from: test/elara/gateway_trust_test.exs:43
+        left = Elara.Protocol.encode(response)
+
+    where "right" (context ExUnit.Assertions) was given the type:
+
+        # type: binary()
+        # from: test/elara/gateway_trust_test.exs:43
+        right = "gateway-fixture-gateway-fixture-gateway-fixture-"
+
+    type warning found at:
+    │
+ 43 │       refute Protocol.encode(response) =~ @token
+    │                                        ~
+    │
+    └─ test/elara/gateway_trust_test.exs:43:40: Elara.GatewayTrustTest."test authentication precedes every first-request operation in both versions"/1
+
+    warning: Elara.Plugin.Trust.snapshot/1 is undefined (module Elara.Plugin.Trust is not available or is yet to be defined)
+    │
+ 81 │     assert {:ok, snapshot} = Trust.snapshot([path])
+    │                                    ~
+    │
+    └─ test/elara/gateway_trust_test.exs:81:36: Elara.GatewayTrustTest."test unapproved and changed plugin bytes cannot execute during compilation"/1
+    └─ test/elara/gateway_trust_test.exs:92:35: Elara.GatewayTrustTest."test unapproved and changed plugin bytes cannot execute during compilation"/1
+
+    warning: Elara.Plugin.Trust.approve/1 is undefined (module Elara.Plugin.Trust is not available or is yet to be defined)
+    │
+ 82 │     assert :ok = Trust.approve(snapshot)
+    │                        ~
+    │
+    └─ test/elara/gateway_trust_test.exs:82:24: Elara.GatewayTrustTest."test unapproved and changed plugin bytes cannot execute during compilation"/1
+    └─ test/elara/gateway_trust_test.exs:90:24: Elara.GatewayTrustTest."test unapproved and changed plugin bytes cannot execute during compilation"/1
+    └─ test/elara/gateway_trust_test.exs:93:24: Elara.GatewayTrustTest."test unapproved and changed plugin bytes cannot execute during compilation"/1
+
+
+
+  1) test invalid configured credentials prevent the listener from starting (Elara.GatewayTrustTest)
+     test/elara/gateway_trust_test.exs:53
+     Assertion with == failed
+     code:  assert result == {:error, :server_token_required}
+     left:  {:ok, #PID<0.284.0>}
+     right: {:error, :server_token_required}
+     stacktrace:
+       test/elara/gateway_trust_test.exs:60: anonymous fn/2 in Elara.GatewayTrustTest."test invalid configured credentials prevent the listener from starting"/1
+       (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/elara/gateway_trust_test.exs:54: (test)
+
+
+
+  2) test authentication precedes every first-request operation in both versions (Elara.GatewayTrustTest)
+     test/elara/gateway_trust_test.exs:33
+     Assertion with == failed
+     code:  assert response["error"] == "authentication_failed"
+     left:  "unsupported_version"
+     right: "authentication_failed"
+     stacktrace:
+       test/elara/gateway_trust_test.exs:42: anonymous fn/6 in Elara.GatewayTrustTest."test authentication precedes every first-request operation in both versions"/1
+       (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/elara/gateway_trust_test.exs:37: (test)
+
+
+
+  3) test unapproved and changed plugin bytes cannot execute during compilation (Elara.GatewayTrustTest)
+     test/elara/gateway_trust_test.exs:64
+     Expected false or nil, got true
+     code: refute File.exists?(witness)
+     arguments:
+
+         # 1
+         "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-38015-931056094/gateway-trust-10626/compiled"
+
+     stacktrace:
+       test/elara/gateway_trust_test.exs:79: (test)
+
+
+Finished in 0.1 seconds (0.00s async, 0.1s sync)
+
+Result: 0/3 passed
+Failed: 3 tests

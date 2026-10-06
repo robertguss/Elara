@@ -52,6 +52,11 @@ turn. `Elara.transcript/1` returns the current message path.
 Public session calls use stable string IDs. `Elara.session_pid/1` resolves an ID
 only when code needs to monitor or explicitly stop the underlying process.
 
+Repository plugins require explicit approval of their exact source bytes,
+including when selected through `plugins:`. See [plugin trust](plugins.md).
+`Elara.Server.start/1` and `start_link/1` require `token:` (32–512 bytes) or
+`ELARA_SERVER_TOKEN`; clients include that token on their first request.
+
 ## Session options
 
 `Elara.start_session/1` accepts:

@@ -84,7 +84,7 @@ defmodule Elara.PluginTest do
 
     state_pattern = if state == :integer, do: "count", else: "state"
 
-    File.write!(
+    write_plugin(
       path,
       """
       defmodule #{module} do
@@ -121,6 +121,12 @@ defmodule Elara.PluginTest do
     )
   end
 
+  defp write_plugin(path, source) do
+    File.write!(path, source)
+    {:ok, snapshot} = Elara.Plugin.Trust.snapshot([path])
+    :ok = Elara.Plugin.Trust.approve(snapshot)
+  end
+
   defp tool_outcomes(session) do
     session
     |> Elara.transcript()
@@ -154,7 +160,7 @@ defmodule Elara.PluginTest do
         "description: \"Increment a counter.\", cancel_on_interrupt: \"yes\","
       )
 
-    File.write!(path, source)
+    write_plugin(path, source)
     assert {:error, :invalid_plugin_tool} = Loader.load(path)
   end
 
@@ -227,7 +233,7 @@ defmodule Elara.PluginTest do
     assert {:ok, "first done"} = Elara.ask(session, "first")
     [before] = Elara.plugins(session)
 
-    File.write!(path, "defmodule Broken do")
+    write_plugin(path, "defmodule Broken do")
 
     assert {:error, {:plugin_reload_failed, ^path, {:parse_error, _reason}}} =
              Elara.reload_plugins(session)
@@ -294,7 +300,7 @@ defmodule Elara.PluginTest do
     added = Path.join(directory, "a-new.exs")
     broken = Path.join(directory, "z-broken.exs")
     write_counter(added, module_name(), "1", id: "added", tool_name: "added")
-    File.write!(broken, "defmodule Broken do")
+    write_plugin(broken, "defmodule Broken do")
 
     assert {:error, {:plugin_reload_failed, ^broken, {:parse_error, _}}} =
              Elara.reload_plugins(session)
@@ -351,7 +357,7 @@ defmodule Elara.PluginTest do
       end)
 
     write_counter(path, module_name(), "2")
-    File.write!(other_path, "defmodule Broken do")
+    write_plugin(other_path, "defmodule Broken do")
 
     assert {:error, {:plugin_reload_failed, ^other_path, {:parse_error, _reason}}} =
              Elara.reload_plugins(session)
@@ -403,7 +409,7 @@ defmodule Elara.PluginTest do
         "def migrate(_state, _metadata), do: {:error, :nope}"
       )
 
-    File.write!(path, failed)
+    write_plugin(path, failed)
 
     assert {:error, {:plugin_reload_failed, ^path, {:migration_failed, :nope}}} =
              Elara.reload_plugins(session)
@@ -501,7 +507,7 @@ defmodule Elara.PluginTest do
 
     assert_receive :coordinator_ready
 
-    File.write!(
+    write_plugin(
       path,
       """
       defmodule #{module} do
@@ -645,7 +651,7 @@ defmodule Elara.PluginTest do
       |> String.replace("version: \"1\"", "version: \"2\"")
       |> String.replace("name: \"counter\"", "name: \"read\"")
 
-    File.write!(path, conflicting)
+    write_plugin(path, conflicting)
 
     assert {:error, {:plugin_reload_failed, ^path, "duplicate tool name: read"}} =
              Elara.reload_plugins(session)
@@ -673,7 +679,7 @@ defmodule Elara.PluginTest do
   end
 
   test "a rejected multi-module plugin remains rejected on subsequent loads", %{path: path} do
-    File.write!(
+    write_plugin(
       path,
       """
       defmodule #{module_name()} do

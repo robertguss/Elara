@@ -383,7 +383,10 @@ defmodule Elara.AttachmentTest do
     assert hd(hd(Elara.transcript(session)).attachments)["content"] == "corrected"
   end
 
-  defp send_rpc(socket, request), do: :gen_tcp.send(socket, Elara.Protocol.encode(request))
+  defp send_rpc(socket, request) do
+    request = Map.put(request, :token, System.fetch_env!("ELARA_SERVER_TOKEN"))
+    :gen_tcp.send(socket, Elara.Protocol.encode(request))
+  end
 
   defp receive_rpc(socket) do
     {:ok, line} = :gen_tcp.recv(socket, 0, 2_000)

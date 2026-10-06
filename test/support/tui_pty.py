@@ -18,7 +18,7 @@ import time
 binary, server_port, session = sys.argv[1:]
 observer = socket.create_connection(("127.0.0.1", int(server_port)), timeout=5)
 reader = observer.makefile("rb")
-observer.sendall((json.dumps({"version": 2, "command": "attach", "session_id": session,
+observer.sendall((json.dumps({"version": 2, "command": "attach", "token": os.environ["ELARA_SERVER_TOKEN"], "session_id": session,
                               "mode": "observe", "cursor": 0,
                               "extensions": ["input_queue_v1"]}) + "\n").encode())
 assert json.loads(reader.readline())["type"] == "attached"

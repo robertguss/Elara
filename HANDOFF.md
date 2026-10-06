@@ -18,43 +18,67 @@ or delete retained evidence without a specific owner decision.
 
 ## Current work
 
-LAB-8/ROB-1088 is In Review, sole executable lab. Supporting output,
-profiles, shared completion and operator chunks PR#54/#55/#57/#58 are merged.
-Main b001c3831a298bd9b7a10af25b0df9e6ad1f71ce equals reviewed92e0470;
-operator actual exact-head Socket checks passed. Deliveryd4e39bfc/review69a263a8
-retain full1021 at frozenf248162, focused41/native118/pointer3, source240-hash
-readback, authority/confirmation controls and forced cleanup a2. Operator count
-129/49,363,+157 phase/+988 cumulative, negative reduction evidence. ROB-1331
-is Done/PR#56. See note008 and retained operator-* artifacts.
+ROB-1105 — Gateway authentication and repository-plugin trust prompt is
+Building on work/rob-1105-gateway-trust, based on main77591c0. Runtime/source
+commit7a0281942db46cb75c845001a1c1c278b28ca0f3 is accepted locally; final
+metadata review/PR/exact-head Socket checks/merge remain. Selectionf490dd77,
+planba30ce99, corrections142cb172, freezee8d2b75c. Do not mark Done before merge.
+Gateway validates a UTF8 32–512-byte token before listen and authenticates first
+request before create/attach/list. Shared native and lab observer connections
+send it on connect/reopen; embedded TUI generates32 random bytes if absent.
+Shared Exec Port.open removes token inheritance into ordinary child commands.
+Loader checks exact already-read source before parse/compile/callback/cache;
+explicit mix elara.trust [WORKSPACE] prompts and stores approval outside repos.
+Changed/new files need approval. No new actor/dependency, sandbox or automatic
+reconnect. Protocol1 remains unsupported after authentication.
 
-Current branch work/rob-1088-final-chaos from b001c38; exact final-phase plan
-in commentdc1a9002-91cd-4e6e-97f9-1cb90a4c3cb0. JobRecovery now selects genuine
-Jobs tool/run with api:job and mix_test arguments; absent option keeps legacy
-workload. Its existing gate records actual tool identity; Matrix requires this
-evidence for general rows. Invalid API rejects before resources. Public red0/5
-and missing-Matrix-evidence red0/1 turn green focused24, including forced native
-failures through both APIs. Compile/format/diff pass. Count129/49,387,+24 phase/
-+1,012 cumulative; Session2860 unchanged. Full1030 (11properties,1019tests),
-seed1088,304.9s passes at clean aa78b730f8b47ed552262797d9efccefad3c7adb;
-all240 before-suite hashes match postflight,0 global/Elara BEAM. Frozen compiled
-registration430f832d pins measurement81dc682 (same source/test bytes as aa78b73).
-It records364 compiled modules/836 artifacts and529 required checks.
+Full-a3:1035 passed (11 properties/1024 tests), seed1105,297.4s at clean7a02819.
+Before/after244 tracked runtime/test/config/infrastructure hashes and3 test
+native artifacts match; manifest SHA7ecf68f829c0084c594e6b42467df8b1511d9208072efc5647c53b38fc28d1dc.
+Scope does not claim every compiled BEAM identity. Preflight global BEAM0.
+Initial postflight saw one transient BEAM16073; gone before ownership check,
+so origin unknown and no process was stopped. Recorded test PID7508 is dead;
+fresh readback global BEAM0, native clients/exec stubs0. Actual native reconnect
+and forced failure prove own proxy/thread/listener/peer sockets stopped.
+Native118/fmt/Clippy, focused56 plus corrected consumers130 (116.5s), compile
+warnings-as-errors/format pass. Source/docs diff check excludes retained raw logs;
+unrestricted check flags only raw trailing blank lines, preserved verbatim.
+Five wrong implementations each fail0/1 (auth ignored/equal-length bypass,
+trust ignored/implicit consent/native header omission), exact bytes restored.
+Temporary trust root/synthetic credentials/explicit fixture approvals isolate
+checks from developer state. No account-backed or physical-terminal acceptance.
 
-Fresh finite regression namespace lab/results/rob-1088-final-chaos-20261006-a1/:
-24 original checkpoints,3 receipt transport,5 general job API,32 distinct seeds
-1088700–1088731. Existing MatrixRunner, S2 peers, supervisor3/5, causal/OS/cleanup
-checks. Launcher exited0:32 recorded/eligible/passed,544 checks all true, five
-general-api proofs true, no ineligible/unconfirmed cleanup. Canonical artifact
-verification exits0; final240 hashes match and global BEAM count0. Raw results
-and postflight retained. Registration SHA27fe958a; summary SHAf78d7d53.
-Keep this finite regression separate from original LAB-5 registered measurement;
-no comparative timing/quiet-host/universal-proof claim. Scripted acceptance and
-line comparison complete; final self-review/PR/checks/merge next.
+Retain all raw rob-1105-gateway-trust-20261006/ evidence. First preflight aborted
+on a running VM; claimed freeze withdrawn33ff39b7, a1 mistakenly started then
+terminated, no Result summary, unqualified/excluded. Qualified a2 at3b6ca9a
+completed1009/1035,312.6s,exit2, all244/3 hashes matched, clean/global BEAM0.
+Shared lab observer lacked auth (18 concurrency failures); five older raw socket
+fixture modules, context plugin approvals and token inheritance caused remainder.
+Corrected shared boundaries and fixtures, then consumers130 and full-a3 passed.
+Older red/focused/reconnect preparations stay retained/excluded; first reconnect
+incorrectly expected automatic retry, corrected test exercises explicit /open
+of the same session after a real transport drop.
 
-After final scripted review/delivery, separately approved capped real-model
-awaited-completion acceptance remains. If approval absent, Needs Input and
-continue independent backlog. LAB-4/LAB-7 still depend on paused LAB-3 and owner
-direction. Do not resume that pause or any human/account gate automatically.
+LAB-8/ROB-1088 is Needs Input. All scripted chunks PR#54/#55/#57/#58/#59 are
+merged. Final merge77591c02a659c0fcda495331d5469a377251d559 equals reviewed
+7ca63a33624a3eebcb6e3864c3bfbf12d338de42 after both actual exact-head Socket
+checks passed. Review2d2d74e9/deliveryee7513fa retain exact boundaries.
+Full1030 at clean aa78b73, focused24, compile/format/diff pass; frozen checkpoint
+measurement81dc682 has identical240 source/test hashes. Fresh32-cell regression
+records32 eligible/passed and544 true checks, five actual general Jobs API
+proofs, no ineligible/unconfirmed cleanup. Canonical artifact verification exits0;
+final240 hashes match and global BEAM0. Registration430f832d/364 modules/836
+artifacts/529 required checks; namespace rob-1088-final-chaos-20261006-a1.
+Registration SHA27fe958a; summary SHAf78d7d53. Keep separate from original1200;
+no comparative timing/quiet-host/universal-proof claim. Count129/49,387,+1,012
+cumulative versus48,375; Session2860 versus2657. Net reduction is refuted.
+
+Remaining LAB8 gate: separately approved capped real-model awaited-completion
+acceptance. No provider/model/call-token cap approval exists. Keep Needs Input
+until owner approves that run or explicitly revises acceptance; continue
+independent backlog. No executable lab remains. LAB-4/LAB-7 still depend on
+paused LAB-3 and owner direction. Do not resume that pause or automatically
+complete physical/account gates. ROB-1331 is Done/PR#56.
 Linear owns latest queue/status/review/check/merge evidence.
 
 ## Retained evidence and continuation boundaries

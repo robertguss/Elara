@@ -1,0 +1,146 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Compiling 4 files (.ex)
+Running ExUnit with seed: 1105, max_cases: 28
+
+.....................................................
+12:46:09.062 [error] Task #PID<0.1348.0> started from #PID<0.1342.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.1344.0>, {:ask, "retain this goal"}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<29.79993579/0 in Elara.ContextTest."test crash at prepared retains one successor and one logical continuation"/1>
+    Args: []
+...................................warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-98635-548146567/elara-lab-concurrency-42-98635-899201a9b1873da2; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:402: anonymous fn/1 in Elara.Lab.ConcurrencyTest."test forced retained-ledger assertion failure still releases the actual provider tasks"/1
+  test/elara/lab_concurrency_test.exs:462: Elara.Lab.ConcurrencyTest.with_stalled_provider/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  (ex_unit 1.20.4) lib/ex_unit/capture_log.ex:127: ExUnit.CaptureLog.with_log/2
+  (ex_unit 1.20.4) lib/ex_unit/capture_log.ex:89: ExUnit.CaptureLog.capture_log/2
+  test/elara/lab_concurrency_test.exs:399: Elara.Lab.ConcurrencyTest."test forced retained-ledger assertion failure still releases the actual provider tasks"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+....warning: lab scenario concurrency raised; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-98635-548146567/elara-lab-concurrency-1-98635-ce5e532c0972bc0f; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:144: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_concurrency_test.exs:704: Elara.Lab.ConcurrencyTest."test the scenario refuses the real provider"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-98635-548146567/elara-lab-concurrency-42-98635-938ec84dcf719a18; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:534: Elara.Lab.ConcurrencyTest."test a changed execution epoch leaves cleanup unconfirmed"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-98635-548146567/elara-lab-concurrency-42-98635-7eab3105fabb2e77; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:382: anonymous fn/1 in Elara.Lab.ConcurrencyTest."test a provider task outliving shutdown keeps the ledger it writes; cohort stays unknown"/1
+  test/elara/lab_concurrency_test.exs:462: Elara.Lab.ConcurrencyTest.with_stalled_provider/2
+  (ex_unit 1.20.4) lib/ex_unit/capture_log.ex:127: ExUnit.CaptureLog.with_log/2
+  (ex_unit 1.20.4) lib/ex_unit/capture_log.ex:89: ExUnit.CaptureLog.capture_log/2
+  test/elara/lab_concurrency_test.exs:380: Elara.Lab.ConcurrencyTest."test a provider task outliving shutdown keeps the ledger it writes; cohort stays unknown"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.....warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-98635-548146567/elara-lab-concurrency-42-98635-e0d15cce98df4402; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:646: Elara.Lab.ConcurrencyTest."test reports the transport cannot accept keep the run retained"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+..warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-98635-548146567/elara-lab-concurrency-42-98635-30060223b635c05c; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:657: Elara.Lab.ConcurrencyTest."test watchers die with their users when a run stops inside turn 1"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.............warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-98635-548146567/elara-lab-concurrency-42-98635-833189b01d4177ae; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:364: Elara.Lab.ConcurrencyTest."test a task outliving the shutdown deadline leaves cleanup unconfirmed and the root retained"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+..........warning: lab scenario concurrency raised; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-98635-548146567/elara-lab-concurrency-1-98635-f17c4c2a8952f0f2; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:144: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_concurrency_test.exs:519: Elara.Lab.ConcurrencyTest."test the scenario refuses to start while Elara.Exec runs a job"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.warning: lab scenario concurrency raised; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-98635-548146567/elara-lab-concurrency-1-98635-856c2c6dcda5bdae; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:144: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  test/elara/lab_concurrency_test.exs:504: Elara.Lab.ConcurrencyTest."test a setup failure still restores scheduler timing and destroys the trace session"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...
+Finished in 116.5 seconds (0.5s async, 116.0s sync)
+
+Result: 130 passed

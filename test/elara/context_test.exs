@@ -142,6 +142,8 @@ defmodule Elara.ContextTest do
       File.mkdir_p!(Path.join(cwd, ".elara/plugins"))
       selected = Path.join(cwd, "selected.exs")
       File.write!(selected, plugin_source)
+      {:ok, approval} = Elara.Plugin.Trust.snapshot([selected])
+      :ok = Elara.Plugin.Trust.approve(approval)
 
       plugin_options =
         case selection do
@@ -196,6 +198,8 @@ defmodule Elara.ContextTest do
       GenServer.stop(pid)
       assert {:ok, ^successor} = Elara.start_session(resume: store.path, provider: provider)
       assert Enum.map(Elara.plugins(successor), & &1.id) == before_ids
+      {:ok, approval} = Elara.Plugin.Trust.snapshot(Elara.Plugin.discover(cwd))
+      :ok = Elara.Plugin.Trust.approve(approval)
       assert {:ok, plugins} = Elara.reload_plugins(successor)
       expected = if selection == :auto, do: before_ids ++ ["handoff_project"], else: before_ids
       assert Enum.map(plugins, & &1.id) == expected

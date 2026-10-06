@@ -9,6 +9,11 @@ ExUnit.start(exclude: exclude)
 Code.require_file("support/fixtures/literal_patch.exs", __DIR__)
 Code.require_file("support/fixtures/opaque_shell.exs", __DIR__)
 
+# The suite explicitly approves its own checked-in repository source only in
+# runtime.exs's temporary trust root. New trust tests use separate unapproved files.
+{:ok, repository_plugins} = Elara.Plugin.Trust.snapshot(Elara.Plugin.discover(File.cwd!()))
+:ok = Elara.Plugin.Trust.approve(repository_plugins)
+
 ExUnit.after_suite(fn _result ->
   File.rm_rf!(Application.fetch_env!(:elara, :test_run_dir))
 end)

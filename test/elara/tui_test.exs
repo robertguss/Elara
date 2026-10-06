@@ -99,7 +99,14 @@ defmodule Elara.TuiTest do
   end
 
   test "mix task starts an embedded server for new and reuses an existing server", context do
-    env_names = ["ELARA_API_KEY", "ELARA_PROVIDER", "ELARA_SERVER_PORT", "ELARA_TUI_STATE_DIR"]
+    env_names = [
+      "ELARA_API_KEY",
+      "ELARA_PROVIDER",
+      "ELARA_SERVER_PORT",
+      "ELARA_SERVER_TOKEN",
+      "ELARA_TUI_STATE_DIR"
+    ]
+
     previous_env = Map.new(env_names, &{&1, System.get_env(&1)})
 
     on_exit(fn ->
@@ -115,8 +122,14 @@ defmodule Elara.TuiTest do
     System.delete_env("ELARA_PROVIDER")
     System.put_env("ELARA_SERVER_PORT", Integer.to_string(embedded_port))
     System.put_env("ELARA_TUI_STATE_DIR", context.state_dir)
+    System.delete_env("ELARA_SERVER_TOKEN")
 
     assert :ok = Mix.Tasks.Elara.Tui.run(["new", "--headless"])
+
+    assert {:ok, token} =
+             Base.url_decode64(System.fetch_env!("ELARA_SERVER_TOKEN"), padding: false)
+
+    assert byte_size(token) == 32
     embedded = Process.whereis(Elara.Server)
     assert is_pid(embedded)
     assert Elara.Server.port(embedded) == embedded_port

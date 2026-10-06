@@ -18,7 +18,7 @@ reader = observer.makefile("rb")
 
 
 def request(command):
-    observer.sendall((json.dumps(dict(version=2, **command)) + "\n").encode())
+    observer.sendall((json.dumps(dict(version=2, token=os.environ["ELARA_SERVER_TOKEN"], **command)) + "\n").encode())
     while True:
         frame = json.loads(reader.readline())
         if frame["type"] != "patch":
@@ -76,7 +76,7 @@ def children():
 def child_messages():
     child = next(c for c in children() if c["coding"])
     with socket.create_connection(("127.0.0.1", int(port)), timeout=5) as sock:
-        sock.sendall((json.dumps(dict(version=2, command="attach", session_id=child["id"], mode="observe")) + "\n").encode())
+        sock.sendall((json.dumps(dict(version=2, token=os.environ["ELARA_SERVER_TOKEN"], command="attach", session_id=child["id"], mode="observe")) + "\n").encode())
         with sock.makefile("rb") as stream:
             return json.loads(stream.readline())["snapshot"]["messages"]
 

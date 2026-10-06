@@ -1,0 +1,83 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Compiling 3 files (.ex)
+Running ExUnit with seed: 1105, max_cases: 28
+
+............ ✳ elara   ~/Projects/startups/Elara                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara      │ ember / ember · Thinking expanded · F1 help │       ~/Projects/startups/Elara
+summary session=xLYoWyo-t49dBW46Jo6hfg incarnation=PduUFQsR6rR18oSG saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+ ✳ elara   ~/Projects/startups/Elara                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara      │ ember / ember · Thinking expanded · F1 help │       ~/Projects/startups/Elara
+ embedded · exits with TUI · control · connected · head 0 · idle · outcome - · fWBQZI2R-kIzPzC-K5_2y
+summary session=fWBQZI2R-kIzPzC-K5_2yA incarnation=EgmsLKPxO8GiaT6i saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+ ✳ elara   ~/Projects/startups/Elara                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara      │ ember / ember · Thinking expanded · F1 help │       ~/Projects/startups/Elara
+summary session=ri7AByWEpIxhK4lZt6xsmg incarnation=24g3MokPzvOrTsHB saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+.....
+Finished in 39.9 seconds (0.00s async, 39.9s sync)
+
+Result: 17 passed

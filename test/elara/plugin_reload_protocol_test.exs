@@ -26,6 +26,17 @@ defmodule Elara.PluginReloadProtocolTest do
       File.rm_rf!(dir)
     end)
 
+    # The PTY copies these exact known fixture bytes into this path after startup.
+    {:ok, [approval]} =
+      Elara.Plugin.Trust.snapshot([
+        Path.expand("../../.elara/plugins/elixir_project.exs", __DIR__)
+      ])
+
+    :ok =
+      Elara.Plugin.Trust.approve([
+        %{approval | path: Path.join(dir, ".elara/plugins/elixir_project.exs")}
+      ])
+
     {output, status} =
       System.cmd(
         "python3",
@@ -82,6 +93,7 @@ defmodule Elara.PluginReloadProtocolTest do
 
     plugin = Path.join(dir, ".elara/plugins/project.exs")
     File.cp!(Path.expand("../../.elara/plugins/elixir_project.exs", __DIR__), plugin)
+    approve(plugin)
     assert request(controller, %{"command" => "session_reload"})["type"] == "snapshot"
     assert Elara.plugins(session) == []
 
@@ -90,7 +102,7 @@ defmodule Elara.PluginReloadProtocolTest do
 
     [active] = Elara.plugins(session)
     File.write!(plugin, "defmodule Broken do")
-    assert request(controller, command)["error"] =~ "plugin_reload_failed"
+    assert request(controller, command)["error"] =~ "needs approval"
     assert Elara.plugins(session) == [active]
   end
 
@@ -101,6 +113,7 @@ defmodule Elara.PluginReloadProtocolTest do
     path = Path.join(dir, "slow.exs")
     original = File.read!(Path.expand("../../.elara/plugins/elixir_project.exs", __DIR__))
     File.write!(path, original)
+    approve(path)
     {:ok, agent} = Agent.start_link(fn -> [] end)
     provider = {Elara.Provider.Scripted, agent}
 
@@ -133,6 +146,7 @@ defmodule Elara.PluginReloadProtocolTest do
       )
 
     File.write!(path, revised)
+    approve(path)
 
     assert %{"type" => "plugins_reloaded", "plugins" => [%{"generation" => 2}]} =
              request(
@@ -162,9 +176,23 @@ defmodule Elara.PluginReloadProtocolTest do
   end
 
   defp request(socket, command, timeout \\ 5_000) do
-    :ok = :gen_tcp.send(socket, Elara.Protocol.encode(Map.put(command, "version", 2)))
+    :ok =
+      :gen_tcp.send(
+        socket,
+        Elara.Protocol.encode(
+          command
+          |> Map.put("version", 2)
+          |> Map.put_new("token", System.fetch_env!("ELARA_SERVER_TOKEN"))
+        )
+      )
+
     {:ok, line} = :gen_tcp.recv(socket, 0, timeout)
     {:ok, message} = Elara.Protocol.decode(line)
     message
+  end
+
+  defp approve(path) do
+    {:ok, snapshot} = Elara.Plugin.Trust.snapshot([path])
+    :ok = Elara.Plugin.Trust.approve(snapshot)
   end
 end

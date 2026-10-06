@@ -21,6 +21,17 @@ for that command, so exiting the TUI also ends its live sessions.
 For turns to continue after the TUI exits and for later live reattachment, start
 a long-lived server in one terminal:
 
+Set `ELARA_SERVER_TOKEN` to a random shared token of 32–512 bytes in the
+server terminal and every client terminal. For example, generate one with
+`openssl rand -hex 32` and place the same value in each terminal's environment.
+Keep it private. The server refuses to listen without it; new, list, attach
+and reconnect requests all authenticate before session operations. The
+embedded Mix TUI generates a token automatically when none is configured.
+Direct protocol clients send it as `token` on the first request; unsupported
+protocol versions remain unsupported after authentication.
+
+Elara's execution stub strips this token from ordinary child-command environments.
+
 ```bash
 mix elara.server
 ```

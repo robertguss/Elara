@@ -181,12 +181,27 @@ and uncertainty/writer boundaries. The original root is copied under
 matching accepted record, one callback attempt and zero terminals. The
 readback artifact is disk evidence, not a live query. No generic receipt acknowledgment or callback
 replay is authorized by physical native cleanup.
-Next extend whole-VM recovery, preserving causal fault witnesses, per-input
-receipt/terminal accounting, honest uncertainty, slot/acknowledgment and native
-cleanup checks. Existing handoff, child, test-job and transport provider/gate
-PIDs support same-VM recovery only; do not reuse that provider configuration
-after whole-VM restart. Keep every preparation separate from the eventual
-registered matrix and preserve its source provenance.
+Whole-VM preparation on `work/rob-1085-vm-recovery`, based on `83f21ea`, adds
+an externally owned BEAM and PID-free peer. Its provider/native-mutation
+checkpoints witness actual Port/os_pid, BEAM image/cwd/parent chain, callback
+Task, native ownership, eligible SIGKILL/exit 137 and physical stop before
+cleanup. Public fresh-VM reopen fails A honestly, exposes queued B/C, then
+resumes their own bounded terminals without request/mutation replay. Read-only
+SQLite preserves exact durable intent; a missing live journal is not receipt
+authority. Focused 39 and final VM 6 pass; negative OS-target, owner-death and
+missing-owner controls fail the wrong implementations. Raw evidence and copied
+roots remain in `lab/results/rob-1085-vm-preparation-20261006/`. Note 005 and
+ROB-1085 hold method, final verification, review and delivery. The frozen tree
+passed full 960 (11 properties, 949 tests), seed 1085, in 270.7 seconds,
+compile/format/diff and runtime hashes. Consult Linear for final clean-head dev
+preparations, review/CI and merge status before proceeding.
+
+After delivery, review/register the finite expanded >=1000 schedule matrix on
+`work/rob-1085-chaos-matrix` before measurement. Keep all preparations excluded
+and preserve source provenance. Same-VM provider/gate PIDs remain unsuitable
+for restart; the external peer serves the declared whole-VM cases. Optional
+receipt-backend uncertainty remains ROB-1104. LAB-5 stays Building until its
+full acceptance is delivered; the autonomous goal continues.
 LAB-6/LAB-8 depend on LAB-5; Coordinator judging/map-reduce removal was already
 decided by ROB-1095. LAB-4/LAB-7 retain their research dependencies.
 

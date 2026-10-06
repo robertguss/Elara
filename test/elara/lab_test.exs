@@ -84,7 +84,8 @@ defmodule Elara.LabTest do
                "session_crash",
                "session_recovery",
                "smoke",
-               "transport_recovery"
+               "transport_recovery",
+               "vm_recovery"
              ]}} =
              Elara.Lab.run("nope", seed: 1)
   end

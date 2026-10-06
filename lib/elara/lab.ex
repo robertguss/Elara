@@ -28,7 +28,8 @@ defmodule Elara.Lab do
     "child_recovery" => Elara.Lab.Scenarios.ChildRecovery,
     "job_recovery" => Elara.Lab.Scenarios.JobRecovery,
     "group_recovery" => Elara.Lab.Scenarios.GroupRecovery,
-    "transport_recovery" => Elara.Lab.Scenarios.TransportRecovery
+    "transport_recovery" => Elara.Lab.Scenarios.TransportRecovery,
+    "vm_recovery" => Elara.Lab.Scenarios.VMRecovery
   }
 
   @type context :: %{

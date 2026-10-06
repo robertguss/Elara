@@ -788,3 +788,49 @@ records the method and copied ledger hash. This is durable disk evidence,
 not a live Executor.query; the old report timed out before its later query.
 No receipt state was changed. Final clean-head preparations and exact review,
 CI and merge evidence are on ROB-1085.
+
+### External whole-VM preparation (2026-10-06)
+
+Base `83f21ea`; `vm_recovery` declares `provider_running` and
+`mutation_running`. A reusable external-VM owner launches the peer through an
+actual Port, registers its controller monitor before launch, and refuses PID
+kills after its Port exits. The peer uses only path/mode/stage/work provider
+configuration and production supervisor intensity 3/period 5, read from the
+actual initialization flags. The controller independently matches Port/os_pid,
+BEAM image, cwd inode/device and bounded parent chain through observed
+`erl_child_setup` to itself. For a mutation it also witnesses the connected
+Exec/native guardian/root/child/group chain. A fresh nonce probes the actual
+source callback Task immediately before one external SIGKILL; released points
+and premature loss are ineligible. Exit status 137, actual Port DOWN and OS
+stop are required. The ordinary group, guardian and old stub stop before
+controller cleanup. Detached descendants and disk damage remain excluded.
+
+A is consumed with its own exact User; B/C have durable queued receipts. Public
+reopen in a new BEAM preserves all identities, fails A with a durable restart
+receipt and exposes B/C paused through input_status. After public resume, B/C
+must have their own declared terminals; no request or mutation is replayed.
+Recovery includes reopen, disk observation and public status reads within
+5000 ms. Backlog is two inputs with seeded order and 1–20 ms simulated work,
+bounded by 5000 + 2*work_ms. The provider-only case has no native launch; the
+mutation case has one physical launch and one indeterminate bash result.
+The default direct route has no receipt backend. The replacement's live
+journal can be absent while the original intent remains durable: an independent
+read-only SQLite comparison matches exact job/digest/arguments before fault
+and after progress. This does not create live executor authority.
+
+Raw rows, source copies, logs and copied failed/retained roots are under
+`lab/results/rob-1085-vm-preparation-20261006/`. Preserve the initial missing
+scenario, direct-parent, nil-journal and live-journal comparison failures.
+The first diagnostic copy hook tried to copy an already removed successful
+root and failed; its provider-failure copy remains. It is not a mutation row.
+Focused 39 passed; final VM tests 6 passed, seed 1085. Killing the stub instead
+of the VM fails both positive cases (3/5); disabling controller-death handling
+fails its control (0/1), with independent fixture cleanup. Missing serialized
+VM ownership retains one row/root and stops n=2 even after independently
+observed OS stop; bypassing that predicate falsely permits two confirmed rows
+and fails the control. All mutations are restored. The frozen tree passed
+full 960 (11 properties, 949 tests), seed 1085, in 270.7 seconds, compile with
+warnings as errors, format and diff checks. Final clean-head production-default
+preparations, exact review and delivery are recorded in ROB-1085. These rows
+are excluded from the >=1000 registered matrix, which
+still requires a reviewed finite schedule plan and measurement.

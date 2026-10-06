@@ -771,3 +771,20 @@ synchronization repair is selected in Linear before transport delivery.
 Focused verification passed 99; the three fresh dev-VM rows require production
 restart intensity 3 and pass all 13 checks, complete/cleanup true, one launch:
 recovery 75–116 ms, backlog 81–117 ms. These are preparations only.
+
+ROB-1325's separate fixture synchronization repair merged in PR #45 at
+`445e0df`, after concurrency 44 and full 948 passed. Original transport candidate
+`d501a4c` is retained at `archive/rob-1085-transport-held-d501a4c`. Resolving the rebase conflict changed
+only continuation text; all seven transport runtime/test hashes match the
+original final-source manifest. The combined transport tree passed all 954
+checks (11 properties, 943 tests), seed 1085, in 262.4 seconds. Its output is
+`full-suite-rebased.log`; the original 952/953 log is preserved unchanged.
+
+The original receipt diagnostic root was copied to
+`receipt-client-retained-copy/`. Read-only SQLite inspection after VM exit
+matches the raw checkpoint's job ID and operation digest: accepted, one
+admission, one callback attempt, zero terminals. `receipt-ledger-readback.json`
+records the method and copied ledger hash. This is durable disk evidence,
+not a live Executor.query; the old report timed out before its later query.
+No receipt state was changed. Final clean-head preparations and exact review,
+CI and merge evidence are on ROB-1085.

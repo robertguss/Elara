@@ -155,7 +155,10 @@ physical launch and own terminal for A/B/C. Original candidate `d501a4c` is
 retained at `archive/rob-1085-transport-held-d501a4c`. Its focused 99 and three
 13-check production-default VM preparations passed; its 952/953 integrated
 suite (seed 1085, 284.5 s) is preserved, not overwritten. The combined tree's
-verification/review/delivery are on ROB-1085 and note 005. Wrong-role and
+verification/review/delivery are on ROB-1085 and note 005. The combined tree
+passed full 954 (11 properties, 943 tests; seed 1085; 262.4 s), with all seven
+transport runtime/test hashes unchanged by rebase. Preserve
+`full-suite-rebased.log` separately from the original failure. Wrong-role and
 unavailable-settlement controls, failed logs and copied roots remain in
 `lab/results/rob-1085-transport-recovery-preparation-20261006/`.
 
@@ -173,7 +176,10 @@ delivery. No registered measurement was launched; LAB-3's gates remain.
 The optional explicit LocalExecutor receipt client is separate: its death leaves
 an accepted one-attempt record; A terminates indeterminate while B/C stay queued
 behind the nonterminal effect barrier. ROB-1104 tracks the preserved diagnostic
-and uncertainty/writer boundaries. No generic receipt acknowledgment or callback
+and uncertainty/writer boundaries. The original root is copied under
+`receipt-client-retained-copy/`; read-only SQLite after VM exit confirms the
+matching accepted record, one callback attempt and zero terminals. The
+readback artifact is disk evidence, not a live query. No generic receipt acknowledgment or callback
 replay is authorized by physical native cleanup.
 Next extend whole-VM recovery, preserving causal fault witnesses, per-input
 receipt/terminal accounting, honest uncertainty, slot/acknowledgment and native

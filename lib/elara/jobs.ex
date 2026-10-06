@@ -15,7 +15,7 @@ defmodule Elara.Jobs do
     %Tool{
       name: "job",
       description:
-        "Start, inspect or cancel one declared local job. Use a stable job_id; start requires a configured profile and its arguments. The mix_test profile accepts target test/*_test.exs[:line]. End the turn after starting; completion arrives through the inbox. Inspect status before treating earlier results as current.",
+        "Start, inspect or cancel one declared local job. Use a stable job_id; start requires a configured profile and its arguments. The mix_test profile accepts target test/*_test.exs[:line]. After starting, use completion_wait for this job or end the turn; completion arrives through the inbox. Inspect status before treating earlier results as current.",
       parameters: %{
         "type" => "object",
         "properties" => %{

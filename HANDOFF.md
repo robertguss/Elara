@@ -62,7 +62,10 @@ no Elara BEAM; it is left running;
 completion-postflight.json retains raw hashes. Shared-wait PR delivery remains.
 No model or historical corpus was run. The cloud handoff is renamed to
 autonomous implementation; obsolete role setup instructions are removed,
-and repository links/pointer-test constant use its current URL.
+and repository links/pointer-test constant use its current URL. Final review
+aligns job/test_job tool descriptions with explicit waiting versus ending the
+turn; only two instruction strings change after full6b00b96. Existing job/context
+46 pass (27.8s), compile warnings-as-errors/format/diff pass; no new model claim.
 
 After this chunk: operator server/TUI acknowledgment, fresh final LAB-5-style
 chaos and net-line/special-case comparison. Complete all independent scripted

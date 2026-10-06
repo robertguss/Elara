@@ -36,8 +36,11 @@ On completion, inspect the same identity with
 ID retrieves the earlier job; use a new ID for an intentional test rerun.
 Tool results and completion evidence appear in ordinary session history/TUI.
 
-The job outlives the initiating tool call. After start, finish the current turn
-and wait for the completion inbox input. No model calls are needed to poll.
+The job outlives the initiating tool call. After start, use `completion_wait`
+with `{"source":"job","job_id":"parser-check-1"}` to await and consume its
+matching completion in the current turn, or finish the turn and let the inbox
+wake it later. No model calls are needed to poll. External observer waits retain
+the input; a successful model wait consumes it with its ToolResult.
 Other sessions remain usable. Cancelling requests process-group termination
 through the existing Rust stub and retains its terminal response. Cancellation
 races may finish normally; missing terminal evidence is indeterminate.

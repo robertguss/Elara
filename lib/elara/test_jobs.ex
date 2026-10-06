@@ -10,7 +10,7 @@ defmodule Elara.TestJobs do
     %Tool{
       name: "test_job",
       description:
-        "Start, inspect or cancel one local focused Mix test job. Use a stable job_id; start requires target test/*_test.exs[:line]. After starting, end this turn: completion arrives through the inbox without polling. Interrupt pauses delivery; cancel requests termination. Inspect status before treating earlier results as current.",
+        "Start, inspect or cancel one local focused Mix test job. Use a stable job_id; start requires target test/*_test.exs[:line]. After starting, use completion_wait for this job or end the turn: completion arrives through the inbox without polling. Interrupt pauses delivery; cancel requests termination. Inspect status before treating earlier results as current.",
       parameters: %{
         "type" => "object",
         "properties" => %{

@@ -229,7 +229,12 @@ Temporary trace instrumentation adds15 test-only lines and is fully restored;
 raw Python controls231 lines are separately counted. This is supporting
 verification, not final LAB-8 chaos/model acceptance. The final handoff URL
 and its durable-pointer test constant change after the cloud document rename;
-the three guidance checks cover that metadata update. Runtime remains unchanged.
+the three guidance checks cover that metadata update. A final review then
+updates job/test_job instruction strings that previously demanded ending the
+turn after start: both now describe completion_wait or ending the turn. The
+focused job/legacy/context46 pass (27.8s), and compile warnings-as-errors/format/
+diff pass. Execution logic remains the full-tested source; real-model prompt
+behavior remains separately approval-gated. No source line count changes.
 
 Removing claimed consumption fails its sole executed held-job check (0/1).
 Removing transport dependency retirement fails its sole executed loss check

@@ -1,0 +1,20 @@
+{
+  "source": "aa78b730f8b47ed552262797d9efccefad3c7adb",
+  "at_utc": "2026-10-06T15:10:04.183400+00:00",
+  "source_test_hashes_matched": 240,
+  "changed_files": [],
+  "full_exit_code": 0,
+  "full_result": "1030 passed (11 properties, 1019 tests)",
+  "full_seconds": 304.9,
+  "global_beam_count": 0,
+  "elara_beam_count": 0,
+  "beams": [],
+  "files": {
+    "checkpoints.exs": "6e314ed3130e50a63c22fb4e0a564eaf8a93cfaf73d6fcb9042d511b58a79f2d",
+    "frozen-source-aa78b73.json": "a83322bf8f6de2f14fc3218daf63eef76a917719bd512b9559c0a95362a8dabb",
+    "full-suite-a1.log": "13bccb63bd8c6027edddf67fa021d014b8729d572468ad7c712b3a083f07b9ca",
+    "source-counts-aa78b73.json": "b8138cb4fa4c9109f242d27c272ebfda1c06cf99e949c037de2c69a3fc7a9c1c",
+    "source-counts-worktree.json": "61f4350a0cab0c7813d3bd1c0c312d5b63f9c83ce6fd3bcc5933f25793e82ee3"
+  },
+  "scope": "full-suite source/artifacts at postflight; later metadata, registration, checkpoint results and readbacks are separate; no quiet-host or timing comparison"
+}

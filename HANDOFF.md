@@ -34,8 +34,10 @@ workload. Its existing gate records actual tool identity; Matrix requires this
 evidence for general rows. Invalid API rejects before resources. Public red0/5
 and missing-Matrix-evidence red0/1 turn green focused24, including forced native
 failures through both APIs. Compile/format/diff pass. Count129/49,387,+24 phase/
-+1,012 cumulative; Session2860 unchanged. Source commit/full suite and frozen
-registration are next, not yet a final acceptance claim.
++1,012 cumulative; Session2860 unchanged. Full1030 (11properties,1019tests),
+seed1088,304.9s passes at clean aa78b730f8b47ed552262797d9efccefad3c7adb;
+all240 before-suite hashes match postflight,0 global/Elara BEAM. Frozen compiled
+registration/launch next; no final acceptance or comparative timing claim.
 
 Fresh finite regression namespace lab/results/rob-1088-final-chaos-20261006-a1/:
 24 original checkpoints,3 receipt transport,5 general job API,32 distinct seeds

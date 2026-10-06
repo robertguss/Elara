@@ -320,8 +320,12 @@ before fixture resources. No new scenario engine, provider, profile or actor.
 The new five API checks first fail0/5; missing-Matrix-evidence check fails0/1.
 Focused recovery/Matrix24 pass (13.3s), including forced preparation failures
 through legacy and general APIs with actual actor/group stop assertions.
-Compile warnings-as-errors, format and diff checks pass. Full suite and source
-freeze are next. Raw preparations/controls remain retained.
+Compile warnings-as-errors, format and diff checks pass. Full1030 (11properties,
+1019tests),seed1088,304.9s passes at clean aa78b730f8b47ed552262797d9efccefad3c7adb.
+All240 source/test hashes match the before-suite freeze; postflight0 global/
+Elara BEAM. Raw preparations/controls and exact source/count/postflight artifacts
+remain retained. Compiled registration and launch are next; no comparative
+timing or quiet-host claim.
 
 Plan dc1a9002 declares one fresh finite32-cell regression: original24 checkpoints,
 3 receipt transport checkpoints and5 general-job admission loss checkpoints,

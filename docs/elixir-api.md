@@ -111,6 +111,39 @@ joins two retained parts when capped. `bytes_total` counts drained output and
 exit/deadline/cancellation still determines termination. An older execution
 stub rejects head/tail before submission and remains usable with the default.
 
+## Durable local jobs
+
+The built-in `job` tool and `Elara.Jobs.run/2` start, inspect or cancel a declared
+local job in a persistent session's workspace. `start` takes a stable `job_id`,
+`profile` and JSON `arguments`; status/cancel need only action and job ID.
+The built-in `mix_test` profile takes `%{"target" => "test/example_test.exs"}`,
+uses `mix test` with a 60-second deadline and 16,384-byte head/tail reporting.
+The existing `test_job` tool remains an alias with its original target argument.
+Both entries share identity, capacity, durable records and completion delivery.
+
+Trusted owner configuration can add `%Elara.Jobs.Profile{}` declarations through
+`:elara, :job_profiles` or the manager's `profiles:` start option. Each supplies
+`name`, `validate`, `argv`, `timeout_ms`, `max_bytes`, `output_policy` and optional
+`fingerprint`. Validation/argv callbacks take `(cwd, arguments)`; validation
+returns `:ok` or `{:error, reason}`, and argv returns strings without NUL bytes.
+An optional fingerprint callback takes cwd and returns
+`%{"sha256" => digest, "files" => count, "scope" => scope}` or an error map.
+These callbacks are trusted local code and should only validate/build argv or
+read source evidence. Tool arguments cannot register executable declarations.
+Invalid declarations or duplicate names, including `mix_test`, prevent startup.
+
+New v2 records freeze the profile, arguments, argv, deadline, reporting policy
+and correlation ID before dispatch. Duplicate starts return the same record;
+a different profile or arguments with the same owner/job ID conflict. v1
+records retain their original completion payload and never replay uncertain
+execution. Command/runner loss is indeterminate; an output cap does not make
+head/tail jobs successful or stop their process. Native output remains bounded;
+not-started/indeterminate diagnostics have a separate text bound. A missing or
+unavailable source fingerprint, or comparing different source scopes, reports
+`"unknown"`. Admission and callback fingerprints remain fixed for the run.
+Completion currently uses the durable inbox; the shared correlated wait
+contract is a subsequent LAB-8 phase.
+
 ## Custom tools
 
 A tool is a `%Elara.Tool{}` with a JSON Schema and a module/function pair of

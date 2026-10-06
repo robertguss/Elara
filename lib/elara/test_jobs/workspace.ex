@@ -46,6 +46,8 @@ defmodule Elara.TestJobs.Workspace do
     reason -> %{"error" => Atom.to_string(reason)}
   end
 
-  def changed(%{"sha256" => first}, %{"sha256" => last}), do: first != last
+  def changed(%{"sha256" => first, "scope" => scope}, %{"sha256" => last, "scope" => scope}),
+    do: first != last
+
   def changed(_, _), do: "unknown"
 end

@@ -9,6 +9,8 @@ defmodule Elara.Worker.Server do
 
   @protocol_version 2
 
+  # lifecycle_hook is a trusted, local lab option. It cannot be supplied by a
+  # protocol request and defaults to a no-op on the ordinary worker path.
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     case Keyword.get(opts, :name) do
@@ -35,7 +37,14 @@ defmodule Elara.Worker.Server do
     case :gen_tcp.listen(port, listen_opts) do
       {:ok, listen} ->
         {:ok, actual_port} = :inet.port(listen)
-        config = %{token: token, capabilities: capabilities, workspaces: workspaces}
+
+        config = %{
+          token: token,
+          capabilities: capabilities,
+          workspaces: workspaces,
+          lifecycle_hook: Keyword.get(opts, :lifecycle_hook, &no_lifecycle_hook/2)
+        }
+
         acceptor = spawn_link(fn -> accept_loop(listen, config) end)
 
         {:ok,
@@ -89,8 +98,11 @@ defmodule Elara.Worker.Server do
     case Elara.Protocol.recv_line(socket, 30_000) do
       {:ok, line} ->
         case decode_request(line, config) do
-          {:ok, request, cwd, tool} -> run_request(socket, request, cwd, tool)
-          {:error, reason} -> :gen_tcp.send(socket, encode_error(reason))
+          {:ok, request, cwd, tool} ->
+            run_request(socket, request, cwd, tool, config.lifecycle_hook)
+
+          {:error, reason} ->
+            :gen_tcp.send(socket, encode_error(reason))
         end
 
       {:error, _reason} ->
@@ -102,23 +114,31 @@ defmodule Elara.Worker.Server do
 
   @partial "it may have partially changed the workspace"
 
-  defp run_request(socket, request, cwd, tool) do
+  defp run_request(socket, request, cwd, tool, lifecycle_hook) do
     parent = self()
     job = spawn_link(fn -> send(parent, {:job_result, self(), invoke(request, cwd, tool)}) end)
-    :ok = :inet.setopts(socket, active: :once)
+    guardian = guard_job(parent, job)
+    lifecycle_hook.(:before_socket_monitor, %{socket: socket, job: job, guardian: guardian})
 
+    case :inet.setopts(socket, active: :once) do
+      :ok -> await_job(socket, request, tool, job, lifecycle_hook)
+      {:error, _reason} -> stop_job(job, lifecycle_hook)
+    end
+  end
+
+  defp await_job(socket, request, tool, job, lifecycle_hook) do
     receive do
       {:job_result, ^job, outcome} ->
         :gen_tcp.send(socket, encode_result(outcome))
 
       {:tcp_closed, ^socket} ->
-        stop_job(job)
+        stop_job(job, lifecycle_hook)
 
       {:tcp_error, ^socket, _reason} ->
-        stop_job(job)
+        stop_job(job, lifecycle_hook)
     after
       max(request.deadline_ms - System.system_time(:millisecond), 0) ->
-        stop_job(job)
+        stop_job(job, lifecycle_hook)
 
         # A killed mutating job may already have changed the workspace.
         if tool.mutating do
@@ -132,13 +152,29 @@ defmodule Elara.Worker.Server do
     end
   end
 
-  # The job is linked so it dies with this handler (and the worker). A deliberate
-  # kill at a deadline or disconnect unlinks first, so it cannot propagate back up
-  # through the handler, acceptor and worker.
-  defp stop_job(job) do
+  # Keep ownership through the unlink/kill interval even if the handler dies.
+  # This monitor is independent of the handler's links and retires with the job.
+  defp guard_job(handler, job) do
+    spawn(fn ->
+      handler_ref = Process.monitor(handler)
+      job_ref = Process.monitor(job)
+
+      receive do
+        {:DOWN, ^handler_ref, :process, ^handler, _reason} -> Process.exit(job, :kill)
+        {:DOWN, ^job_ref, :process, ^job, _reason} -> :ok
+      end
+    end)
+  end
+
+  # Unlink a deliberate kill so it cannot propagate to the worker. The guardian
+  # still owns cleanup if this handler dies before it can send the kill.
+  defp stop_job(job, lifecycle_hook) do
     Process.unlink(job)
+    lifecycle_hook.(:job_unlinked, %{job: job})
     Process.exit(job, :kill)
   end
+
+  defp no_lifecycle_hook(_point, _details), do: :ok
 
   defp decode_request(line, config) do
     with {:ok, %{"version" => @protocol_version, "token" => token, "request" => encoded}} <-

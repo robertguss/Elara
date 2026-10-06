@@ -295,6 +295,49 @@ fresh persisted identities. The historical pilot and fix-verification files
 retain their original digests and limits; no measurements were rerun or
 rewritten for this correction.
 
-Next: the predicted finding is a candidate runtime fix. Its scope is an owner
-decision, outside this pilot. The remaining matrix and the at-least-1000
-schedules remain.
+The predicted finding was fixed and separately verified by ROB-1235 above.
+The remaining matrix and the at-least-1000 schedules remain. The owner selected
+autonomous implementation on 2026-10-05; the active agent may choose and review
+technical work, while retained measurement registrations and evidence still
+govern scientific claims.
+
+### Transport preparation (2026-10-05)
+
+These are deterministic regression controls, not additional pilot rows or the
+registered full matrix. Base `8e0f628`; raw output is retained under
+`lab/results/rob-1085-transport-20261005/`.
+
+The worker's unlink/kill interval had a reproducible ownership gap. With only
+trusted local lifecycle hooks added, a real TCP disconnect held the handler
+after unlink; killing that handler left the job alive through the 3-second
+DOWN deadline (`worker-red.log`). An independent monitor now kills the job on
+handler death and retires on job death. Links still propagate abrupt worker
+loss; deliberate cancellation still unlinks before killing, preserving worker
+availability. Four public TCP/Exec regressions check the gap, worker death,
+normal completion, monitor retirement, and disappearance of witnessed native
+shell descendants.
+
+Peer FIN alone passed on this host and did not establish the reported socket
+setup failure. The deterministic error-path control witnesses that FIN, then
+explicitly closes the passive socket before active setup. Restoring the old
+match raises on `{:error, :einval}` and kills the worker; the serving assertion
+fails (`socket-match-control.log`). Handling the setup error as cancellation
+keeps the worker available. The lifecycle hooks come only from trusted local
+start options, never request data, and ordinarily do nothing.
+
+The protocol deadline code was already correct. A sustained-fragment test
+witnesses multiple received chunks and sends continuing past its 200 ms
+deadline. A second test starts with a buffered partial line at zero remaining
+time. Removing the post-fragment deadline check makes the buffered case
+incorrectly complete (`omit-deadline-control.log`). Renewing the deadline per
+chunk stretches the sustained case to 3194 ms, failing its <1000 ms bound
+(`renew-deadline-control.log`). Both mutations were removed; no protocol
+runtime change is delivered.
+
+The nine lifecycle/deadline tests and the full suite of 894 (11 properties,
+883 tests) passed at seed 1085. A forced failure before
+fault release triggered owned-process and native-fixture cleanup with only the
+intentional assertion failure (`cleanup-failure-control.log`). Full output is
+`full-suite.log`; delivery evidence is recorded in ROB-1085. These checks do not establish
+production-intensity VM recovery, input receipt safety across the remaining
+matrix, or the required seeded measurement.

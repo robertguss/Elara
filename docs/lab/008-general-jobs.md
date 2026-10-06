@@ -324,8 +324,7 @@ Compile warnings-as-errors, format and diff checks pass. Full1030 (11properties,
 1019tests),seed1088,304.9s passes at clean aa78b730f8b47ed552262797d9efccefad3c7adb.
 All240 source/test hashes match the before-suite freeze; postflight0 global/
 Elara BEAM. Raw preparations/controls and exact source/count/postflight artifacts
-remain retained. Compiled registration and launch are next; no comparative
-timing or quiet-host claim.
+remain retained. No comparative timing or quiet-host claim.
 
 Plan dc1a9002 declares one fresh finite32-cell regression: original24 checkpoints,
 3 receipt transport checkpoints and5 general-job admission loss checkpoints,
@@ -343,5 +342,21 @@ compatibility/runtime/infrastructure additions remain included. Session stays
 The baseline named thread_wait execution branch now shares one branch with
 completion_wait; compatibility aliases remain rather than counting their
 removal as a win. The total increase refutes the net-reduction hypothesis.
-Final frozen regression/results and separately approved capped real-model
-awaited-completion acceptance remain pending.
+Registration430f832d was posted before launch at frozen measurement source
+81dc6826013fe858c0cf02c844555aaf5358ebab (source/test bytes equal full-tested aa78b73).
+It records364 compiled module identities/836 artifacts and529 required checks.
+Registration SHA25627fe958afd68abcdf427fd4559e432c751bfad23b0ec34e355c687815268f9f8;
+driver SHA2566e314ed3130e50a63c22fb4e0a564eaf8a93cfaf73d6fcb9042d511b58a79f2d.
+The launcher actually exited0:32 recorded/32 eligible/32 passed,544 reported
+checks all true, all five general-api proofs true, no ineligible or unconfirmed
+cleanup rows. Each row matches the registered identity/parameters/source pin.
+Canonical compiled/native artifact verification afterward exits0; all240
+source/test hashes still match and global BEAM count is0. Raw rows, registration,
+host conditions, logs, summary and hash postflight are retained in the fresh
+namespace. Summary SHA256f78d7d53127b1e0baae64a6441c11f8d4641996d792119e91b2d9d7088bcf1bf.
+
+This completes the finite scripted regression and net-line comparison. It does
+not pool rows with LAB-5's original1200, establish comparative performance or
+prove every schedule. Separately approved capped real-model awaited-completion
+acceptance remains pending; overall LAB-8 must remain incomplete until that gate
+is resolved. The net-reduction hypothesis is refuted by the measured increase.

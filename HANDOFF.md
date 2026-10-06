@@ -18,7 +18,7 @@ or delete retained evidence without a specific owner decision.
 
 ## Current work
 
-LAB-8/ROB-1088 remains Building, sole executable lab. Supporting output,
+LAB-8/ROB-1088 is In Review, sole executable lab. Supporting output,
 profiles, shared completion and operator chunks PR#54/#55/#57/#58 are merged.
 Main b001c3831a298bd9b7a10af25b0df9e6ad1f71ce equals reviewed92e0470;
 operator actual exact-head Socket checks passed. Deliveryd4e39bfc/review69a263a8
@@ -37,14 +37,19 @@ failures through both APIs. Compile/format/diff pass. Count129/49,387,+24 phase/
 +1,012 cumulative; Session2860 unchanged. Full1030 (11properties,1019tests),
 seed1088,304.9s passes at clean aa78b730f8b47ed552262797d9efccefad3c7adb;
 all240 before-suite hashes match postflight,0 global/Elara BEAM. Frozen compiled
-registration/launch next; no final acceptance or comparative timing claim.
+registration430f832d pins measurement81dc682 (same source/test bytes as aa78b73).
+It records364 compiled modules/836 artifacts and529 required checks.
 
 Fresh finite regression namespace lab/results/rob-1088-final-chaos-20261006-a1/:
 24 original checkpoints,3 receipt transport,5 general job API,32 distinct seeds
 1088700–1088731. Existing MatrixRunner, S2 peers, supervisor3/5, causal/OS/cleanup
-checks; stop on failed/ineligible/unconfirmed cleanup. Register exact source/
-compiled/native artifacts before launch. Do not edit source, compile or test
-while launcher runs. Keep separate from original LAB-5 registered measurement.
+checks. Launcher exited0:32 recorded/eligible/passed,544 checks all true, five
+general-api proofs true, no ineligible/unconfirmed cleanup. Canonical artifact
+verification exits0; final240 hashes match and global BEAM count0. Raw results
+and postflight retained. Registration SHA27fe958a; summary SHAf78d7d53.
+Keep this finite regression separate from original LAB-5 registered measurement;
+no comparative timing/quiet-host/universal-proof claim. Scripted acceptance and
+line comparison complete; final self-review/PR/checks/merge next.
 
 After final scripted review/delivery, separately approved capped real-model
 awaited-completion acceptance remains. If approval absent, Needs Input and

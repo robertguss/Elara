@@ -1,0 +1,24 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s
+Running ExUnit with seed: 1088, max_cases: 28
+Excluding tags: [:test]
+Including tags: [location: {"test/elara/jobs_profile_test.exs", 493}]
+
+
+
+  1) test v2 operator job inspection is owner scoped and stopped acknowledgment requires controller confirmation (Elara.JobsProfileTest)
+     test/elara/jobs_profile_test.exs:491
+     match (=) failed
+     The following variables were pinned:
+       retained = %{"cancel_requested" => false, "cwd" => "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-44745-825072082/elara-profile-962", "delivery" => "accepted", "job_id" => "profiled", "key" => "e9a46549b6a431246bcc9ff0939bef176e4d821d487b7de28ecf0bd09ab1ab16", "output" => "job owner restarted without terminal evidence; command not retried", "owner" => "gXZ-xoTm8_3cBism5ZjlXA", "settlement" => "unknown", "slot" => "held", "source_before" => %{"files" => 3, "scope" => "mix.exs,mix.lock,lib/**,config/**,test/**", "sha256" => "4c378499e0d0ca5e5114ad94cfc8f09dd33b587b2fdbe4c57bed16a23b7b8dcf"}, "source_changed_now" => false, "status" => "indeterminate", "target" => "test/job_test.exs", "version" => 1}
+     code:  assert %{"type" => "job_result", "version" => 2, "result" => ^retained} =
+              job_request(observer, inspect_job)
+     left:  %{"type" => "job_result", "version" => 2, "result" => ^retained}
+     right: %{"error" => "invalid_command", "type" => "error", "version" => 2}
+     stacktrace:
+       test/elara/jobs_profile_test.exs:530: (test)
+
+
+Finished in 1.4 seconds (0.00s async, 1.4s sync)
+
+Result: 0/1 passed, 14 excluded
+Failed: 1 test

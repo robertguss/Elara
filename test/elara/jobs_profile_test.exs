@@ -488,6 +488,128 @@ defmodule Elara.JobsProfileTest do
     refute File.exists?(Path.join(ctx.root, "started"))
   end
 
+  test "v2 operator job inspection is owner scoped and stopped acknowledgment requires controller confirmation",
+       ctx do
+    assert :ok = Record.save(v1_record(ctx, "running"))
+    restart_manager()
+    assert {:ok, _} = legacy(ctx, "start")
+    eventually(fn -> status(ctx)["delivery"] == "accepted" end)
+    retained = status(ctx)
+    {:ok, owner} = Elara.session_pid(ctx.session)
+    inbox = GenServer.call(owner, :thread_store).inbox
+    assert length(inbox) == 1
+
+    provider = {Elara.Provider.Scripted, Agent.get(ctx.resources, & &1.provider)}
+
+    {:ok, foreign} =
+      Elara.start_session(
+        cwd: ctx.root,
+        home: ctx.root,
+        plugins: [],
+        skill_paths: [],
+        pause_inputs: true,
+        provider: provider
+      )
+
+    on_exit(fn ->
+      case Elara.session_pid(foreign) do
+        {:ok, pid} -> GenServer.stop(pid)
+        _ -> :ok
+      end
+    end)
+
+    {:ok, server} = Elara.Server.start(port: 0, provider: provider)
+    on_exit(fn -> if Process.alive?(server), do: GenServer.stop(server) end)
+    port = Elara.Server.port(server)
+    controller = job_socket(port, ctx.session, "control")
+    observer = job_socket(port, ctx.session, "observe")
+    outsider = job_socket(port, foreign, "observe")
+    inspect_job = %{"version" => 2, "command" => "job_status", "job_id" => "profiled"}
+    acknowledge = %{inspect_job | "command" => "job_acknowledge_stopped"}
+
+    assert %{"type" => "job_result", "version" => 2, "result" => ^retained} =
+             job_request(observer, inspect_job)
+
+    assert %{"type" => "session_error"} =
+             job_request(outsider, Map.put(inspect_job, "session_id", ctx.session))
+
+    assert %{"type" => "session_error", "error" => "not_controller"} =
+             job_request(observer, Map.put(acknowledge, "confirm_stopped", true))
+
+    for request <- [
+          acknowledge | Enum.map([false, "true", 1], &Map.put(acknowledge, "confirm_stopped", &1))
+        ] do
+      assert %{"type" => "session_error", "error" => "stopped_confirmation_required"} =
+               job_request(controller, request)
+    end
+
+    for id <- [nil, "", 1, String.duplicate("x", 129)],
+        request <- [inspect_job, Map.put(acknowledge, "confirm_stopped", true)] do
+      assert %{"type" => "session_error", "error" => "invalid_job_id"} =
+               job_request(controller, Map.put(request, "job_id", id))
+    end
+
+    assert %{"type" => "session_error", "error" => "not_indeterminate_or_still_running"} =
+             job_request(
+               controller,
+               Map.merge(acknowledge, %{"job_id" => "missing", "confirm_stopped" => true})
+             )
+
+    assert status(ctx) == retained
+
+    assert %{"type" => "job_result", "version" => 2, "result" => released} =
+             job_request(
+               controller,
+               Map.merge(acknowledge, %{
+                 "confirm_stopped" => true,
+                 "session_id" => foreign,
+                 "force" => true,
+                 "settlement" => "settled"
+               })
+             )
+
+    assert released["slot"] == "released"
+    assert released["settlement"] == "operator_confirmed"
+
+    assert Map.drop(released, ["slot", "settlement"]) ==
+             Map.drop(retained, ["slot", "settlement"])
+
+    assert {:ok, json} = legacy(ctx, "start")
+    assert JSON.decode!(json) == released
+    assert GenServer.call(owner, :thread_store).inbox == inbox
+    assert {:ok, reopened} = Elara.Session.Store.open(GenServer.call(owner, :thread_store).path)
+    assert reopened.inbox == inbox
+    refute File.exists?(Path.join(ctx.root, "started"))
+  end
+
+  defp job_socket(port, session, mode) do
+    {:ok, socket} =
+      :gen_tcp.connect(
+        {127, 0, 0, 1},
+        port,
+        [:binary, packet: :line, packet_size: 16 * 1_024 * 1_024, active: false],
+        2_000
+      )
+
+    on_exit(fn -> :gen_tcp.close(socket) end)
+
+    assert %{"type" => "attached", "version" => 2} =
+             job_request(socket, %{
+               "version" => 2,
+               "command" => "attach",
+               "session_id" => session,
+               "mode" => mode
+             })
+
+    socket
+  end
+
+  defp job_request(socket, request) do
+    assert :ok = :gen_tcp.send(socket, Elara.Protocol.encode(request))
+    assert {:ok, line} = :gen_tcp.recv(socket, 0, 2_000)
+    JSON.decode!(line)
+  end
+
   test "v2 records reject false cap, limits, profile and source evidence", ctx do
     assert {:ok, _} = general(ctx, "start", "probe", %{"mode" => "pass"})
     eventually(fn -> File.exists?(Path.join(ctx.root, "started")) end)

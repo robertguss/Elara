@@ -1,0 +1,35 @@
+   Compiling elara-tui v0.1.0 (/Users/robertguss/Projects/startups/Elara/native/elara-tui)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.55s
+     Running unittests src/lib.rs (native/elara-tui/target/debug/deps/elara_tui-271dfa8307c0d199)
+
+running 2 tests
+test sessions::tests::job_results_render_retained_uncertainty_and_acknowledgment_in_every_layout ... FAILED
+test sessions::tests::job_actions_preserve_opaque_ids_and_require_controller_confirmation ... FAILED
+
+failures:
+
+---- sessions::tests::job_results_render_retained_uncertainty_and_acknowledgment_in_every_layout stdout ----
+
+thread 'sessions::tests::job_results_render_retained_uncertainty_and_acknowledgment_in_every_layout' (1647311) panicked at src/sessions.rs:828:17:
+assertion failed: reply(&mut current,
+    &json!({"type":"job_result","version":2,"result":{
+                    "job_id":"λ-job", "status":"indeterminate", "slot":slot,
+                    "settlement":settlement, "output":"untrusted\u{1b}[31m"
+                }}))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- sessions::tests::job_actions_preserve_opaque_ids_and_require_controller_confirmation stdout ----
+
+thread 'sessions::tests::job_actions_preserve_opaque_ids_and_require_controller_confirmation' (1647310) panicked at src/sessions.rs:784:17:
+assertion `left == right` failed
+  left: Some(None)
+ right: Some(Session(Object {"command": String("job_status"), "job_id": String("plain job λ"), "version": Number(2)}))
+
+
+failures:
+    sessions::tests::job_actions_preserve_opaque_ids_and_require_controller_confirmation
+    sessions::tests::job_results_render_retained_uncertainty_and_acknowledgment_in_every_layout
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 98 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

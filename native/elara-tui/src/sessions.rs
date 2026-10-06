@@ -96,7 +96,7 @@ pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
             }
             true
         }
-        Some("child_result") if frame["version"] == 2 => {
+        Some("child_result" | "job_result") if frame["version"] == 2 => {
             model.session_detail = Some(pretty(&frame["result"]));
             model.session_detail_scroll = 0;
             true
@@ -400,6 +400,28 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
     let argument = words.next().unwrap_or("").trim();
     let control = model.mode == "control";
     let result = match name {
+        "job" | "ack-job-stopped" if name == "job" || control => {
+            let id = if argument.starts_with('"') {
+                serde_json::from_str::<String>(argument).ok()
+            } else {
+                Some(argument.to_owned())
+            };
+            let Some(id) = id.filter(|id| !id.is_empty() && id.len() <= 128) else {
+                model.notice = Some(format!(
+                    "Use /{name} JOB_ID (or a JSON string for exact whitespace)"
+                ));
+                return Some(InputAction::None);
+            };
+            let mut request = json!({
+                "version":2,
+                "command":if name == "job" { "job_status" } else { "job_acknowledge_stopped" },
+                "job_id":id
+            });
+            if name == "ack-job-stopped" {
+                request["confirm_stopped"] = json!(true);
+            }
+            InputAction::Session(request)
+        }
         "delegate" | "delegate-fork" if control => {
             let Some((mode, assignment)) = argument.split_once(' ') else {
                 model.notice = Some("Use /delegate coding|research TASK".into());
@@ -758,6 +780,94 @@ mod tests {
         assert_eq!(palette_command(&mut invalid), Some(InputAction::None));
         assert_eq!(invalid.editor.text(), "/ack-child child digest [call]");
         assert!(invalid.notice.unwrap().contains("JSON_STRING_ARRAY"));
+    }
+
+    #[test]
+    fn job_actions_preserve_opaque_ids_and_require_controller_confirmation() {
+        for (mode, action, command) in [
+            ("control", "job", "job_status"),
+            ("observe", "job", "job_status"),
+            ("control", "ack-job-stopped", "job_acknowledge_stopped"),
+        ] {
+            for id in [
+                "plain job λ".to_owned(),
+                "x".repeat(128),
+                " λ opaque, id \t".to_owned(),
+            ] {
+                let mut current = model(mode);
+                current.editor.insert(&format!(
+                    "/{action} {}",
+                    serde_json::to_string(&id).unwrap()
+                ));
+                let mut request = json!({"version":2,"command":command,"job_id":id});
+                if action == "ack-job-stopped" {
+                    request["confirm_stopped"] = json!(true);
+                }
+                assert_eq!(
+                    palette_command(&mut current),
+                    Some(InputAction::Session(request))
+                );
+                assert!(current.editor.text().is_empty());
+            }
+        }
+        let mut observer = model("observe");
+        observer.editor.insert("/ack-job-stopped job");
+        assert_eq!(palette_command(&mut observer), Some(InputAction::None));
+        assert!(observer.notice.unwrap().contains("read-only"));
+        assert_eq!(observer.editor.text(), "/ack-job-stopped job");
+        for action in ["job", "ack-job-stopped"] {
+            for argument in [
+                "".to_owned(),
+                "\"\"".to_owned(),
+                "\"broken".to_owned(),
+                "λ".repeat(65),
+            ] {
+                let mut current = model("control");
+                let draft = format!("/{action} {argument}");
+                current.editor.insert(&draft);
+                assert_eq!(palette_command(&mut current), Some(InputAction::None));
+                assert_eq!(current.editor.text(), draft);
+                assert!(current.notice.unwrap().contains("JOB_ID"));
+            }
+        }
+        let mut current = model("observe");
+        current.editor.insert("/job plain job λ");
+        assert_eq!(
+            palette_command(&mut current),
+            Some(InputAction::Session(
+                json!({"version":2,"command":"job_status","job_id":"plain job λ"})
+            ))
+        );
+    }
+
+    #[test]
+    fn job_results_render_retained_uncertainty_and_acknowledgment_in_every_layout() {
+        for layout in crate::appearance::ViewLayout::ALL {
+            for (slot, settlement) in [("held", "unknown"), ("released", "operator_confirmed")] {
+                let mut current = model("observe");
+                current.appearance.layout = *layout;
+                current.session_detail_scroll = 9;
+                assert!(reply(
+                    &mut current,
+                    &json!({"type":"job_result","version":2,"result":{
+                        "job_id":"λ-job", "status":"indeterminate", "slot":slot,
+                        "settlement":settlement, "output":"untrusted\u{1b}[31m"
+                    }})
+                ));
+                assert_eq!(current.session_detail_scroll, 0);
+                let frame = crate::render_frame(&current, 120, 40).unwrap();
+                for text in [
+                    "Inspection",
+                    "λ-job",
+                    "indeterminate",
+                    slot,
+                    settlement,
+                    "untrusted\\u001b[31m",
+                ] {
+                    assert!(frame.contains(text), "missing {text}: {frame}");
+                }
+            }
+        }
     }
 
     #[test]

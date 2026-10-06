@@ -1,0 +1,46 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+Compiling 2 files (.ex)
+Running ExUnit with seed: 1088, max_cases: 28
+Excluding tags: [:test]
+Including tags: [location: {"test/elara/jobs_profile_test.exs", 493}]
+
+
+
+  1) test v2 operator job inspection is owner scoped and stopped acknowledgment requires controller confirmation (Elara.JobsProfileTest)
+     test/elara/jobs_profile_test.exs:491
+     match (=) failed
+     code:  assert %{"type" => "session_error", "error" => "not_controller"} =
+              job_request(observer, Map.put(acknowledge, "confirm_stopped", true))
+     left:  %{"type" => "session_error", "error" => "not_controller"}
+     right: %{
+              "result" => %{
+                "cancel_requested" => false,
+                "cwd" => "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-48549-9252076/elara-profile-1155",
+                "delivery" => "accepted",
+                "job_id" => "profiled",
+                "key" => "45df06ddd5693c7313de25d7d17a51452f3601806242d33d53481d95f8e31b8e",
+                "output" => "job owner restarted without terminal evidence; command not retried",
+                "owner" => "W81lhb0aP9Q7rJ-wAIMdyw",
+                "settlement" => "operator_confirmed",
+                "slot" => "released",
+                "source_before" => %{
+                  "files" => 3,
+                  "scope" => "mix.exs,mix.lock,lib/**,config/**,test/**",
+                  "sha256" => "4c378499e0d0ca5e5114ad94cfc8f09dd33b587b2fdbe4c57bed16a23b7b8dcf"
+                },
+                "source_changed_now" => false,
+                "status" => "indeterminate",
+                "target" => "test/job_test.exs",
+                "version" => 1
+              },
+              "type" => "job_result",
+              "version" => 2
+            }
+     stacktrace:
+       test/elara/jobs_profile_test.exs:536: (test)
+
+
+Finished in 1.4 seconds (0.00s async, 1.4s sync)
+
+Result: 0/1 passed, 14 excluded
+Failed: 1 test

@@ -1,0 +1,10 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+Compiling 2 files (.ex)
+Running ExUnit with seed: 1088, max_cases: 28
+Excluding tags: [:test]
+Including tags: [location: {"test/elara/jobs_profile_test.exs", 493}]
+
+.
+Finished in 1.4 seconds (0.00s async, 1.4s sync)
+
+Result: 1 passed, 14 excluded

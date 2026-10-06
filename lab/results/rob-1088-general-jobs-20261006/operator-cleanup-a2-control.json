@@ -1,0 +1,20 @@
+{
+  "mode": "cleanup",
+  "selected_line": 502,
+  "exit_code": 2,
+  "source_hashes": {
+    "lib/elara/server.ex": "3d6824f61b24ae3e0d316fd93ac378765addfbac56bf384ece80e2b2e5ce4efa",
+    "test/elara/jobs_profile_test.exs": "296e9a17fd0a8a4e35e434e7bf7e30c7af47a33160f7e599b2b1e54868f19eeb"
+  },
+  "restored_hashes": {
+    "lib/elara/server.ex": "3d6824f61b24ae3e0d316fd93ac378765addfbac56bf384ece80e2b2e5ce4efa",
+    "test/elara/jobs_profile_test.exs": "cb12d60189989f2489bc1b4628184836aaf411704f05da0678824b3c58c73474"
+  },
+  "byte_exact_restored": true,
+  "cleanup": {
+    "root_removed": true,
+    "server_stopped": true,
+    "foreign_stopped": true,
+    "sockets_closed": true
+  }
+}

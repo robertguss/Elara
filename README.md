@@ -533,6 +533,14 @@ automatically interrupts them. Idle live parents can wake, but stopped/paused
 inputs remain paused, including a stop made before any inbox entry exists.
 Offline recipients retain pending delivery until explicitly opened/resumed.
 
+The TUI's `/job JOB_ID` opens its retained evidence in Inspection. A controller
+can use `/ack-job-stopped JOB_ID` after confirming that the command and its
+descendants have stopped. This releases held capacity for an indeterminate job;
+it preserves the uncertain result and original completion, and never retries
+the command. Known pending execution still rejects acknowledgment. Observers
+can inspect but cannot acknowledge. Use a JSON string for an opaque ID with
+exact whitespace, for example `/job " opaque id "`.
+
 `completion_wait` also waits for an owned job with `source: "job"` and `job_id`.
 `thread_wait` is an alias of its related-thread path. Both wait on the retained
 inbox completion without model polling or an ordinary tool deadline. A live

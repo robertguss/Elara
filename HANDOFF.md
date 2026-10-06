@@ -18,60 +18,39 @@ or delete retained evidence without a specific owner decision.
 
 ## Current work
 
-LAB-8/ROB-1088 is Building, the sole executable item. Output policy PR#54 merged
-at a25cac4; profiles/v2/v1 compatibility PR#55 merged at
-3024e6b90ecc2ee25b303534631b63e529428d36, tree-equal to reviewed2724c91. Both
-exact-head Socket checks passed; full1012/focused80 passed. Linear delivery
-01c22510-e7bb-4769-9db5-b8fdd4d50555 records that supporting chunk. Automation's
-partial-PR Done state was corrected to Building.
+LAB-8/ROB-1088 remains Building, the sole executable lab. Supporting output,
+profile and shared-completion chunks PR#54/#55/#57 are merged. Current main
+508d96b98a17b39ab26bb3501ad42296b4549515 equals reviewed finald8c3d0f; both
+actual exact-head Socket checks passed. Delivery60c5e50e and reviews234888bc/
+e71e154c in Linear retain exact evidence. Full1020 at frozen6b00b96; repaired19,
+initial focused134, final job instruction46 and pointer3 passed. Source count
+129files/49,206lines,+466 shared wait/+831 cumulative, negative reduction
+result. ROB-1331's PTY fixture prerequisite is Done/PR#56/e096868. Note008 and
+raw rob-1088-general-jobs-20261006/ retain failures, repairs, mutations, source
+and readbacks. The cloud handoff uses the autonomous title/current URL; obsolete
+role setup instructions are removed, historical evidence links preserved.
 
-The correlated wait chunk is on work/rob-1088-correlated-completion from3024e6b.
-Read exact plan fa66bc1b-81f4-4121-b67b-21ac80cc030d and occurrence decision
-f5e89127-af9a-45fa-9dcc-72d1a66140dc in ROB-1088. Reuse Session inbox/atomic Store
-and existing thread transport: one completion_wait/tool boundary, thread_wait
-alias, per-turn User identity carried through handoff, strict optional metadata,
-owned atomic consumption, observer non-consumption, unchanged legacy bodies,
-loss/interrupt cleanup and bounded valid receipt JSON. Research-child wait tools
-remain granted only through the parent's explicit tool set. Note008 describes
-contracts, failures/controls and exclusions; Linear holds current review/delivery.
+Current branch work/rob-1088-job-acknowledgment starts from508d96b. Read exact
+operator plan0bb4ff60-03e3-4120-a0a6-e29173faf8a5 in ROB-1088. Implementation now
+reuses Jobs status/acknowledge_stopped: owner-scoped v2 status, controller-only
+explicit confirmation, bounded IDs, retained indeterminate result/no replay.
+TUI /job and /ack-job-stopped reuse Inspection. Public baseline red0/1/native
+red0/2 turn green1/1 and2/2; focused41 pass. Authority/confirmation mutations
+each fail0/1 and restore; forced cleanup a2 fails0/1 with all four teardown
+witness fields true. Initial wrong-line cleanup preparation is retained/excluded.
+Count129files/49,363lines,+157 this chunk/+988 cumulative; Session2860 unchanged.
+Full1021 (11properties,1010tests),seed1088,308.3s at cleanf248162 passes;
+all240 source/test hashes match postflight. Build/native118/format/Clippy/diff
+pass; postflight0 global/Elara BEAM. Current full evidence/source is frozen at
+f248162cd81cebc28fed3cb78f7e460d707981af. Scoped review/PR delivery next; Linear
+owns latest review/check/merge evidence. See note008 and retained operator-*
+namespace; no physical or real-model acceptance claim.
 
-Focused134 passes, seed1088,78.1s; compile warnings-as-errors and format/diff pass.
-Actual consumption/transport mutations fail their intended checks; native+wait
-forced failure confirms caller/native stop, one settled lease and removed root.
-Transport-only teardown witnesses remain unconfirmed and excluded. Source count
-129 files/49,206 lines: +466 this chunk, cumulativeLAB8+831; Session+203. This is
-negative evidence for reduction. First frozen full suite at68b0356 passed
-1019/1020, with one tiny children report-settlement failure. Restored the omitted
-flush_reports admission call at the shared completion cast; exact regression
-now passes1/1. Broader repair verification caught the existing delayed transport
-settlement regression:60/61, then0/1 alone. A local trace observed783 receipt
-reads/27 reports. Restored skip for already typed transports while preserving
-legacy upgrades; trace24 reads/24 reports, transport quiescent and1/1 pass.
-Both public regressions+17 communication tests pass19/19. Runtime repair source
-86a5c3321c9b8135395388439b807eb71a06643b; compile/format/diff pass. Linear
-comments ee76eca9/6640ac42 and note008 retain failures, repairs and restored
-instrumentation. Second full suite atc430c1e passed1019/1020 (306.6s); completion/settlement
-checks passed, but attachment PTY oversize-error visibility failed. ROB-1331's
-one-line existing bounded wait is merged in PR#56 ate096868, reviewed1bfba2f,
-with both Socket checks and tree equality. Owned delay old0/1/new1/1 plus
-ordinary1/1 and cleanup witnesses pass. Main's fixture fix is integrated here;
-only test/support/input_attachments_pty.py changes among240 frozen source/test
-hashes. Full at clean6b00b96 now passes1020 (11 properties,1009 tests;seed1088,318.2s).
-Postflight verifies all240 frozen source/test hashes, clean tree. Subsequent ownership audit finds one unrelated WTS VM and
-no Elara BEAM; it is left running;
-completion-postflight.json retains raw hashes. Shared-wait PR delivery remains.
-No model or historical corpus was run. The cloud handoff is renamed to
-autonomous implementation; obsolete role setup instructions are removed,
-and repository links/pointer-test constant use its current URL. Final review
-aligns job/test_job tool descriptions with explicit waiting versus ending the
-turn; only two instruction strings change after full6b00b96. Existing job/context
-46 pass (27.8s), compile warnings-as-errors/format/diff pass; no new model claim.
-
-After this chunk: operator server/TUI acknowledgment, fresh final LAB-5-style
-chaos and net-line/special-case comparison. Complete all independent scripted
-work before the separately approved capped real-model acceptance gate; if still
-unapproved, put LAB-8 in Needs Input and continue other actionable issues.
-Linear contains the queue and genuine owner gates. Do not resume paused LAB-3.
+After that supporting chunk: fresh final LAB-5-style chaos and net-line/special-
+case comparison. Complete all independent scripted work before the separately
+approved capped real-model acceptance gate; if still unapproved, put LAB-8 in
+Needs Input and continue other actionable issues. Linear owns queue/status.
+Do not resume paused LAB-3 or reuse original registered corpus namespaces.
 
 ## Retained evidence and continuation boundaries
 

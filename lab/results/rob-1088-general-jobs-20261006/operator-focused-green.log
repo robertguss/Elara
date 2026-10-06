@@ -1,0 +1,16 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 1088, max_cases: 28
+
+...............
+10:19:11.834 [error] Task #PID<0.592.0> started from Elara.TestJobs terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["mix", "test", "test/job_test.exs"], [cwd: "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-50069-379110664/elara-test-job-13826", timeout_ms: 60000, max_bytes: 16384, output_policy: :head_tail, expected_token: %{"generation" => 1, "incarnation" => "DlsWJ-g0EmWrY8_w-nuOIQ"}]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<9.28342840/0 in Elara.Jobs.start_job/7>
+    Args: []
+..........................
+Finished in 19.8 seconds (0.00s async, 19.8s sync)
+
+Result: 41 passed

@@ -72,6 +72,12 @@ pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
         "interrupt this session and descendants",
         true,
     ),
+    ("job", "JOB_ID: inspect retained job evidence", false),
+    (
+        "ack-job-stopped",
+        "JOB_ID: confirm command and descendants stopped; release capacity",
+        true,
+    ),
     ("queue", "inspect/cancel pending input", false),
     ("steer", "prioritize this draft at a safe boundary", true),
     ("resume-inputs", "resume a paused queue", true),

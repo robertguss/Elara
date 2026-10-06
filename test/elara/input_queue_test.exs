@@ -116,6 +116,58 @@ defmodule Elara.InputQueueTest do
     refute Enum.any?(Elara.materialized_view(session)["messages"], &(&1["text"] == "queued"))
   end
 
+  test "legacy completion retries gain correlation without rewriting evidence or accepting conflicts" do
+    error = %Error{kind: :bad_response, message: "completion processing failed"}
+    session = session([{:error, error}])
+    on_exit(fn -> stop(session) end)
+    :ok = Elara.interrupt(session)
+    original = attrs("completion", "original evidence", :report)
+    correlation = %{"source" => "job", "id" => "job:owner/job"}
+    assert {:ok, legacy} = Elara.submit_input(session, original)
+    typed = Map.put(original, :correlation, correlation)
+    assert {:ok, upgraded} = Elara.submit_input(session, typed)
+    assert Map.delete(upgraded, :correlation) == legacy
+    assert {:ok, ^upgraded} = Elara.submit_input(session, original)
+    assert {:ok, ^upgraded} = Elara.submit_input(session, typed)
+
+    assert {:error, :submission_conflict} =
+             Elara.submit_input(session, put_in(typed, [:correlation, "id"], "another"))
+
+    assert {:error, :invalid_input} =
+             Elara.submit_input(session, Map.put(typed, :kind, :normal))
+
+    assert {:error, :invalid_input} =
+             Elara.submit_input(session, Map.put(typed, :correlation, %{"source" => "job"}))
+
+    {:ok, attached} = Elara.attach(session, :observe)
+
+    assert [%{"correlation" => ^correlation, "state" => state}] =
+             attached.snapshot["inbox"]["entries"]
+
+    assert state in ["queued", "accepted"]
+
+    assert Elara.transcript(session) == []
+    assert {:ok, %{state: :cancelled}} = Elara.cancel_input(session, "completion")
+    {:ok, pid} = Elara.session_pid(session)
+
+    assert {:error, :completion_input_cancelled} =
+             GenServer.call(pid, {:await_completion, correlation})
+
+    failed_correlation = %{"source" => "job", "id" => "job:owner/failed"}
+    failed = attrs("failed-completion", "retained failed processing", :report)
+
+    assert {:ok, _} =
+             Elara.submit_input(session, Map.put(failed, :correlation, failed_correlation))
+
+    :ok = Elara.resume_inputs(session)
+    receipt = await_state(session, "failed-completion", :failed)
+    assert {:ok, response} = GenServer.call(pid, {:await_completion, failed_correlation})
+    assert response["already_consumed"] == true
+    assert response["input_state"] == "failed"
+    assert response["input_error"] =~ "completion processing failed"
+    assert {:ok, ^receipt} = Elara.input_status(session, "failed-completion")
+  end
+
   test "provider errors produce a failed durable receipt and do not redeliver" do
     error = %Error{kind: :bad_response, message: "provider broke"}
     session = session([{:error, error}])

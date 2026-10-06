@@ -241,6 +241,7 @@ defmodule Elara.Session.Handoff do
         parent_session: shell.id,
         provider_settings: shell.store.provider_settings,
         name: shell.store.name,
+        completion_occurrence: Elara.Completion.occurrence(shell.store),
         inputs_paused: true,
         inbox: [entry | queued],
         agent_wake_count: shell.store.agent_wake_count,

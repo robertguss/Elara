@@ -103,6 +103,71 @@ defmodule Elara.Session.StoreTest do
     end
   end
 
+  test "completion metadata is optional, strict, durable and scoped to the active branch", %{
+    cwd: cwd
+  } do
+    {:ok, first} = Store.append(Store.new(cwd), Message.user("first turn"))
+    first_occurrence = first.leaf
+    {:ok, done} = Store.append(first, %Message.Assistant{text: "first result"})
+    {:ok, later} = Store.append(done, Message.user("later branch"))
+    assert Elara.Completion.occurrence(later) == later.leaf
+    {:ok, previous, _} = Store.move_before_user(later, later.leaf)
+    assert Elara.Completion.occurrence(previous) == first_occurrence
+
+    entry = %{
+      id: "report",
+      session_id: previous.id,
+      sender_id: "source",
+      kind: :report,
+      state: :queued,
+      user: Message.user("retained original"),
+      created_at: 1,
+      error: nil
+    }
+
+    assert {:ok, legacy} = Store.put_inbox(previous, [entry], true)
+    assert {:ok, reopened} = Store.open(legacy.path)
+    assert reopened.inbox == [entry]
+    correlation = %{"source" => "job", "id" => "job:owner/job"}
+    typed = Map.put(entry, :correlation, correlation)
+
+    assert {:ok, saved} =
+             Store.put_inbox(%{legacy | completion_occurrence: "carried-origin"}, [typed], true)
+
+    assert {:ok, reopened} = Store.open(saved.path)
+    assert reopened.inbox == [typed]
+    assert Elara.Completion.occurrence(reopened) == "carried-origin"
+    [header | lines] = File.read!(saved.path) |> String.split("\n", trim: true)
+    header = JSON.decode!(header)
+
+    invalid = [
+      %{},
+      [],
+      %{"source" => "owner", "id" => "id"},
+      %{"source" => "job", "id" => 1},
+      %{"source" => "job", "id" => ""},
+      %{"source" => "job", "id" => String.duplicate("x", 257)},
+      %{"source" => "job", "id" => "zero\0byte"},
+      Map.put(correlation, "authority", "owner")
+    ]
+
+    for value <- invalid do
+      changed = put_in(header, ["inbox", "entries", Access.at(0), "correlation"], value)
+      File.write!(saved.path, Enum.join([JSON.encode!(changed) | lines], "\n") <> "\n")
+      assert {:error, :bad_header} = Store.open(saved.path)
+    end
+
+    for occurrence <- ["", 1, String.duplicate("x", 129), "zero\0byte"] do
+      changed = Map.put(header, "completionOccurrence", occurrence)
+      File.write!(saved.path, Enum.join([JSON.encode!(changed) | lines], "\n") <> "\n")
+      assert {:error, :bad_header} = Store.open(saved.path)
+    end
+
+    changed = put_in(header, ["inbox", "entries", Access.at(0), "kind"], "normal")
+    File.write!(saved.path, Enum.join([JSON.encode!(changed) | lines], "\n") <> "\n")
+    assert {:error, :bad_header} = Store.open(saved.path)
+  end
+
   test "assistant provider state persists across reopen without changing legacy wire shape", %{
     cwd: cwd
   } do

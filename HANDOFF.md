@@ -3,264 +3,72 @@
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
 is the sole planning and status source. Read the
 [current handoff](https://linear.app/robert-guss/document/current-handoff-lab-3-attribution-and-continuation-569eb39fa4cd)
-and current issue descriptions/comments for plans, review, results, and delivery.
+and current issue descriptions/comments for plans, review, Results and delivery.
 
-## Working arrangement and active goal
+## Working arrangement and goal
 
-The owner retired the previous role workflow and instructed the active agent to
-do all work here. Follow AGENTS.md and CLAUDE.md. No external skill, separate
-agent roles, routing script, or pane tooling is required.
+The active agent performs planning, implementation, review, verification,
+commits and delivery in this chat under AGENTS.md and CLAUDE.md. No separate
+role workflow, routing script or pane tooling applies. The owner's active goal
+is every actionable Linear issue: select and decide autonomously, move genuine
+owner questions to Needs Input, and continue independent work. Historical parked
+wording alone does not block selection. Keep one executable lab item. Done
+requires merge and complete issue acceptance. Do not force-push, deploy, release
+or delete retained evidence without a specific owner decision.
 
-The active goal is to implement every actionable Linear issue, choose work and
-technical decisions autonomously, put genuine owner questions in Needs Input,
-and continue other work. The goal remains active while actionable work remains.
-Historical parked/unselected wording alone does not require owner permission.
-Keep at most one executable lab item. Do not force-push, deploy, release, or
-remove retained evidence without a specific owner decision. Done means merged.
+## Current work
 
-## Delivered and verified
+LAB-8/ROB-1088 is Building, the sole executable item. Output policy PR#54 merged
+at a25cac4; profiles/v2/v1 compatibility PR#55 merged at
+3024e6b90ecc2ee25b303534631b63e529428d36, tree-equal to reviewed2724c91. Both
+exact-head Socket checks passed; full1012/focused80 passed. Linear delivery
+01c22510-e7bb-4769-9db5-b8fdd4d50555 records that supporting chunk. Automation's
+partial-PR Done state was corrected to Building.
 
-- The 46-issue accuracy audit and guidance retirement merged in PR #32 at
-  `4ec59de`. Its [record](https://linear.app/robert-guss/document/issue-accuracy-audit-2026-10-05-8070f2f9117f)
-  is a dated snapshot; later issue Results supersede its queue counts.
-- ROB-1234 merged in PR #33 at `5e23f19`: recovery digests omit run identities
-  while identity validation and evidence remain intact. A public same-seed
-  regression failed before the fix; 31 recovery tests passed afterward.
-- ROB-1254 merged in PR #34 at `4b8d4d9`: explicit provider synchronization
-  replaces the timed child fixture. Delayed observation reproduced the old
-  failure; the barrier and forced-failure cleanup controls passed. Full suite
-  887 passed, seed 670644. Logs: `lab/results/rob-1254-verification-20261005/`.
-- ROB-1233 merged in PR #35 at `4a9c0ad`: register the owned fixture root before
-  optional descendant sampling; verify command ownership on macOS. Independent
-  red controls prove registration and cleanup defects; 22 OpaqueShell, 100
-  effect, and 8 Exec integration tests passed. Logs:
-  `lab/results/rob-1233-verification-20261005/`.
-- LAB-5 transport preparation protects a worker job through the handler's
-  unlink/kill interval and handles closed socket setup by cancelling the job.
-  Four TCP/Exec lifecycle tests and two new deadline regressions cover real
-  process cleanup, monitor retirement, and buffered/sustained fragments. Red
-  controls and a forced-failure cleanup check are retained in
-  `lab/results/rob-1085-transport-20261005/`. Full suite 894 passed, seed 1085.
-  PR and merge evidence are in ROB-1085; this is not full matrix acceptance.
-- ROB-1324 repairs the production-write fixture's 100 ms lifecycle wait with
-  an explicit 5-second bound and one ordered cleanup owner. A delayed valid
-  provider reproduces the old failure; the fixed wait passes. A forced-failure
-  witness confirms all four tracked actors stop before directory removal.
-  Effect suite 100 and full suite 894 passed, seed 1085. Raw controls, including
-  the rejected first cleanup ordering, remain in
-  `lab/results/rob-1324-verification-20261005/`; Linear records PR/merge evidence.
-- LAB-5 handoff preparation adds a read-only input observer, monitored lifecycle
-  gates, and five public handoff crash checkpoints. It follows finished
-  successors, distinguishes interruption/failed/paused from completion, and
-  rejects unexpected inputs and stale receipt/event evidence. Provider and
-  marker work must be admitted before effects; cleanup closes admission first.
-  Focused verification passed 38, seed 1085; five fresh dev-VM preparations
-  passed all 21 checks. The integrated full suite passed 914, seed 1085.
-  Controls and exact source hashes are in
-  `lab/results/rob-1085-expanded-preparation-20261005/`; see note 005 and
-  ROB-1085 for final review, suite, and delivery evidence. These are preparations.
-- LAB-5 child preparation covers parent delegation and child provider/marker
-  crashes through the public child lifecycle in a disposable Git fixture.
-  It checks durable input/tool identities, automatic reports, one child,
-  capacity release and exact acknowledgment before integration. Focused 46
-  and three fresh dev-VM rows passed (all 16 checks and cleanup true).
-  Released-callback, premature-death, forced-failure and unavailable-barrier
-  controls are retained, including a rejected barrier-ownership mutation, in
-  `lab/results/rob-1085-child-preparation-20261005/`. See note 005 and ROB-1085
-  for final suite, review and delivery. The first full suite passed 920/922;
-  ROB-1216's two loopback helper timeouts were repaired separately in PR #40.
-  The unchanged lab code then passed all 924 integrated full-suite checks,
-  seed 1085. Exact review and delivery are recorded in ROB-1085. These are
-  preparations.
+The correlated wait chunk is on work/rob-1088-correlated-completion from3024e6b.
+Read exact plan fa66bc1b-81f4-4121-b67b-21ac80cc030d and occurrence decision
+f5e89127-af9a-45fa-9dcc-72d1a66140dc in ROB-1088. Reuse Session inbox/atomic Store
+and existing thread transport: one completion_wait/tool boundary, thread_wait
+alias, per-turn User identity carried through handoff, strict optional metadata,
+owned atomic consumption, observer non-consumption, unchanged legacy bodies,
+loss/interrupt cleanup and bounded valid receipt JSON. Research-child wait tools
+remain granted only through the parent's explicit tool set. Note008 describes
+contracts, failures/controls and exclusions; Linear holds current review/delivery.
 
-Delivered changes have reviewed diffs, clean format/diff checks, both Socket
-checks, and verified squash-merge tree equality in their Linear records.
-No historical lab results or registered measurements were changed.
-CI has Socket checks and does not run mix test; local test evidence is separate.
+Focused134 passes, seed1088,78.1s; compile warnings-as-errors and format/diff pass.
+Actual consumption/transport mutations fail their intended checks; native+wait
+forced failure confirms caller/native stop, one settled lease and removed root.
+Transport-only teardown witnesses remain unconfirmed and excluded. Source count
+129 files/49,201 lines: +461 this chunk, cumulativeLAB8+826; Session+203. This is
+negative evidence for reduction. Full-suite/source-freeze and PR delivery are
+pending. No model or historical registered corpus was run.
 
-## Current diagnosis and queue
+After this chunk: operator server/TUI acknowledgment, fresh final LAB-5-style
+chaos and net-line/special-case comparison. Complete all independent scripted
+work before the separately approved capped real-model acceptance gate; if still
+unapproved, put LAB-8 in Needs Input and continue other actionable issues.
+Linear contains the queue and genuine owner gates. Do not resume paused LAB-3.
 
-ROB-1216 is Done after PR #40 merged at `5448d84`. Its fixture repair follows
-two retained 2-second loopback helper timeouts in the child candidate's full
-suite, seed 1085 (920/922). The missing assertion/stack/seed evidence is now available.
-The fixture repair uses a bounded 10-second wait and keeps the runtime/parser
-and all response assertions unchanged. Public JSON and fragmented-SSE controls
-delayed 2100 ms both fail at the old limit; all 11 provider tests pass with the
-repair. Raw red/green and final verification output is retained under
-`lab/results/rob-1216-verification-20261005/`; Linear records exact review and
-delivery. Full suite 916 passed (11 properties, 905 tests), seed 1085, in
-263.2 seconds; compile/format/diff checks pass. Historical host scheduling was
-not causally measured.
+## Retained evidence and continuation boundaries
 
-The earlier bounded diagnosis did not reproduce SSE failure. The provider file
-passed its initial execution plus 20 repetitions (189 test executions), then
-one full suite passed 888 (seed 183979), at source `4a9c0ad`. No assertion,
-timeout, or parser change. Logs: `lab/results/rob-1216-diagnosis-20261005/`.
-Those passing runs remain negative evidence, not a fix.
+LAB-5 (ROB-1085), LAB-6 (ROB-1086) and receipts ROB-1104 are Done. Their final
+merge/review/registration evidence is in Linear and notes005/006/007. LAB-5's
+one registered measurement at15e000c is1200/1200 eligible/passed,50×24,
+20,350 checks true, seeds1085000–1086199. Preserve its registration,
+qualification, launcher, measurement and postflight namespaces. Never rerun
+or reuse that namespace, pool other rows into it or relabel regressions as the
+original measurement. Manifest bbe689027c60ed364d43f54c7c6cbc3d6aed32bf27e94e038fd0694a74640a41;
+summary f92e30959ce5c3a33cccad4e4612957e530755517c9e2b22a6cc7a6c81efdc20.
 
-LAB-5 (ROB-1085) is Done after Results PR #49 merged at `fa482cdf`.
-Its registered runtime experiment and Results are delivered. Matrix
-infrastructure merged in PR #48 at
-`15e000c15321a545d087ed85255d209c50f1cfd4`, with tree equality to reviewed head
-`f704752`. Full 971 (11 properties, 960 tests; seed 1085; 272.5 s), focused 14,
-compile/format/diff and final-head Socket checks passed. The final handoff-only
-wording change preserved all seven runtime/test hashes. All seven finite
-recovery families through PR #47 are delivered; their reviews and controls
-remain in Linear and note 005.
+Preserve every raw namespace under lab/results/, including excluded pilots,
+failed controls and later LAB-6/ROB-1104/LAB-8 regressions. Keep original
+LAB-5 descendant branch627c5e7 unpushed/failing, historical/archive local branches
+and stash@{0} (WIP oncc6e778). See Linear for exact retained paths/source pins.
+No source edits, compiles or tests while a measurement launcher is running.
 
-The one registered measurement at `15e000c` completed: 1200/1200 eligible/passed,
-50 at each of 24 checkpoints, seeds 1085000–1086199; every one of 20,350 recorded
-check values true. Zero outcome failures, ineligible rows or unconfirmed cleanup.
-Independent readback matches every identity, source/settings, Port/OS witness
-and observed stub list. Recovery/backlog maxima 1127/1178 ms; all declared bounds
-pass. Registration/artifact/source hashes match after the run. The excluded
-24-row qualification passed; every earlier pilot/preparation/control stays
-excluded. No failing measurement row needs minimization or a runtime fix.
-
-Preserve `lab/results/rob-1085-matrix-measurement-20261006-a1/` and every adjacent
-`rob-1085-matrix-*-20261006-a1` registration/launcher/qualification/postflight
-file, plus every earlier raw namespace. Manifest SHA256
-`bbe689027c60ed364d43f54c7c6cbc3d6aed32bf27e94e038fd0694a74640a41`;
-measurement summary SHA256
-`f92e30959ce5c3a33cccad4e4612957e530755517c9e2b22a6cc7a6c81efdc20`.
-The registered launcher has exited. Never rerun/reuse its namespace or pool
-other rows into the corpus. The source may now change for reviewed Results
-and subsequent work. Measurements are finite scripted-provider/owned-group
-claims; detached descendants, disk damage, arbitrary positions, real models
-and human acceptance remain excluded. An unrelated Phoenix VM was observed at
-postflight outside Elara; leave it alone. Timing is host-specific.
-
-LAB-6 (ROB-1086) is Done after PRs #50/#51/#52, final main `eaeb3dd2`,
-tree-equal to reviewed `3674227`. Both actual exact-head Socket checks passed.
-Full runtime 970, final focused 116/discovery equality, and registered
-24-checkpoint/407-check finite regression passed with independent ownership,
-ordered-row and artifact readback. Note 006 has source identities/hashes and
-explicitly removed Coordinator contracts. Cumulative net 1156 fewer source
-lines; 2198 legacy runtime lines retired includes 1201 relocated historical test
-drivers. All raw `rob-1086-retirement-20261006/` and
-`rob-1086-checkpoints-20261006-a1-*` files remain; regression rows are excluded
-from original LAB-5. Keep TestJobs until LAB-8 supplies a replacement.
-
-ROB-1104 is Done after PR #53 merged at
-`a4f8013da2e5ac6af047e293e53b5cc58d4bf640`, tree-equal to reviewed `d8fc182`.
-Both actual exact-head Socket checks passed. Full 978/focused132 and registered
-27/27 checkpoint rows (461 checks true) have independent receipt/ordered-row/
-ownership/Port/OS/stub and unchanged artifact/pin/no-BEAM proof. Note 007 and
-Linear hold exact review, registration and delivery. Preserve every raw
-`rob-1104-receipt-recovery-20261006/` and `rob-1104-checkpoints-20261006-a1-*`
-file/root. Worker loss records uncertainty while its writer survives;
-writer/VM-loss receipts stay unresolved, without replay or new authority.
-
-LAB-8/ROB-1088 is the sole executable item, Building. Read selection
-`cd9c5c07-4597-4fed-a7bf-bc92d6a86d85`, phased plan
-`98647c0a-62f9-4b30-b9d3-541a13b35028` and exact profiles design/review
-`921d3edc-4d99-4f3f-8117-422188c5ad3f` in Linear. Chunk1 merged in PR#54 at
-`a25cac453c5da3cd038795e42214749be97c9a58`, tree-equal to reviewed d486cd8;
-full999/focused67/native7 and both exact-head Socket checks passed. It adds99
-counted source lines, with no overall reduction claim. Note008 and raw
-`lab/results/rob-1088-general-jobs-20261006/` retain all evidence.
-
-Current profiles chunk is on `work/rob-1088-job-profiles` from a25cac4.
-Elara.Jobs owns the existing serial manager; TestJobs keeps the original
-supervisor/registered/storage/message/alias boundaries. New v2 records freeze
-trusted profile/argv/limits/correlation before execution. v1 pending completion
-is byte-identical, uncertain execution never replays, optional/frozen source
-fingerprints stay truthful, and small reporting caps preserve recovery text.
-Corrected public red0/2, focused80/29.3s, false-cap negative control and actual
-forced-failure cleanup proof are retained. Earlier rejected fixture/setup runs
-remain classified in note008. Full1012 (11 properties,1001 tests), seed1088,
-285.6s passes on clean36a3a7a; compile/format/diff and postflight(no BEAM/profile
-fixture) pass. Count manifest128 files/48,740 lines: profiles+266, cumulative
-LAB-8+365; no reduction claim. Immutable review/delivery follow in Linear.
-This handoff/note update changes no runtime/test source. Do not mistake this
-supporting chunk for LAB-8 completion.
-
-Then implement the reviewed shared completion/correlation contract and operator
-server/TUI acknowledgment. Preserve durable admission, immutable completion,
-uncertainty/no replay, bounded cancellation and held capacity across restart.
-Complete fresh chaos/net-line comparison and all independent scripted work
-before Needs Input for the separately approved capped real-model owner gate;
-continue other issues. No LAB-3 resumption, real model or human TUI acceptance
-is authorized by this selection.
-
-LAB-8 also depends on LAB-5; LAB-4/LAB-7 retain their recorded dependencies.
-ROB-1091 is Needs Input for the owner direction checkpoint; other remaining
-ROB-1097–1106 scopes are reviewed individually under autonomy. The goal
-continues while actionable work remains.
-
-ROB-1104 retains the optional explicit receipt-client finding: accepted, one
-callback attempt, zero terminals, A indeterminate and B/C queued behind the
-nonterminal barrier. Read-only post-VM SQLite matches job ID/digest; physical
-native cleanup creates no causal terminal or generic acknowledgment authority.
-The separate-group Port-child preparation remains at local `627c5e7` and its
-retained namespace; detached descendants are the existing policy exclusion.
-ROB-1324/1325 fixture repairs and all other delivered evidence are recorded in
-Linear. Preserve every original failed log, copied root and local branch.
-
-ROB-1107/1108 are Needs Input for owner hands-on/visual TUI acceptance. LAB-3
-remains at its recorded measurement pause and strict host protocol below.
-Do not stop unrelated workspace work or resume an old launcher against new
-source. The registered LAB-5 experiment did not resume LAB-3.
-
-## LAB-3 continuation
-
-Read ROB-1083's description and the 2026-10-03 brief and pause comments,
-ROB-1255's completion comment, note 003's registration and attribution tables,
-and docs/lab/README.md's census comparability rule.
-
-The census fix reads SessionSup's links minus its parent, avoiding a mailbox
-call behind serialized session initialization. It includes a child still in
-init. A census with queued starts is not comparable with earlier runs at that
-N; N=10's SessionSup state was not recorded. The fix has not yet been verified
-by the final N=500 measurement.
-
-Retained launcher state:
-- `lab/results/concurrency/run-rerun2.sh` and `fixture-rerun2.sh` belong to
-  attempt 1. It stopped at preflight on battery, before compile, gate, or sweep.
-  Never rerun or overwrite these files or their two logs.
-- `run-rerun2-a2.sh` and `fixture-rerun2-a2.sh` are the reviewed, unrun copy.
-  Their recorded hashes start `0dd1c056` and `0fc379fe`.
-  The `lab3-profile-n500-rerun2-a2-*` output namespace was empty at the audit.
-- The launcher still pins `8568f34`; it must not be run as-is against a later
-  revision. Before measurement resumption, review its revision/provenance checks
-  and amend the brief on ROB-1083. The old amendment allowed only HANDOFF.md to
-  differ. This audit also changes AGENTS.md, which is a runtime prompt input:
-  do not silently broaden that allowance or assume an identical workload.
-  Choose and document a measurement revision that respects the registration.
-- Confirm AC power, clean pinned source, no Elara BEAM, and the approved load
-  gate: two 1-minute readings at most 8, 60 seconds apart, within 120 minutes.
-  The charger stays connected. The watchdog deadline is 40 minutes.
-- Once the sweep starts there is no retry, including a watchdog kill.
-  A further pre-sweep stop needs a recorded disposition and fresh namespace.
-- Phase C reports the result's eligibility, provenance, diagnostics,
-  `settlement.killed_sessions`, and `leftover_sessions` beside the originals.
-  Invalid profiles stay unranked and leave LAB-3 unfinished.
-
-Cleanup still computes a deadline before a SessionSup `which_children` call;
-a backlog can exhaust that deadline and lead to kills. It is an unresolved
-measurement limitation, outside this audit.
-
-## Evidence and operational notes
-
-Preserve all of `lab/results/`, particularly concurrency, concurrency-diag,
-session_recovery, rob-1085-smoke, and rob-1235. ROB-1092's decision is retain
-as-is. ROB-1093's historical and archive branches remain retained; delivered
-work branches have been removed. Leave `stash@{0}` (WIP on `cc6e778`) alone.
-
-At the audit's pre-test process check no `beam.smp` was running. Recheck before
-future experiments. Do not stop unrelated workspace processes.
-No tests, compiles, or source edits while a measurement launcher is running.
-
-- Use explicit Bash for launchers and capture PIPESTATUS immediately; macOS
-  Bash is 3.2. Quote heredocs. Re-derive source line numbers.
-- Use the connected Linear tools. Read current descriptions and comments before
-  writes; historical `[driver]` and `[lead]` prefixes identify earlier records.
-- CI has Socket checks and does not run mix test; distinguish local tests from
-  CI evidence.
-- Known unresolved intermittent failures include attachment/sampler census.
-  ROB-1216, ROB-1233 and ROB-1254 have demonstrated fixture fixes;
-  consult their delivery records. Preserve failure
-  logs and baseline comparisons rather than treating reruns as proof of a fix.
-- Use `pgrep -x beam.smp`, then ps and lsof cwd checks to identify a process.
-  Broad pattern searches can self-match prompt text.
-- Cite the result's `host.commit`; squash merges change commit identifiers.
+Recheck process ownership before experiments; never stop unrelated processes.
+Use pgrep -x beam.smp, then ps/lsof cwd evidence. Explicit Bash launchers must
+capture PIPESTATUS immediately; macOS Bash is3.2. Re-derive selection line numbers.
+CI runs Socket checks, not mix test; distinguish local evidence. Source IDs in
+results are host.commit; squash merges change commit IDs. Preserve intermittent
+failure logs and baseline evidence; a rerun alone does not prove a fix.

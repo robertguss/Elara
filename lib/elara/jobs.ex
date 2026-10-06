@@ -520,6 +520,7 @@ defmodule Elara.Jobs do
              id: "test-job:" <> record["key"],
              sender_id: "test-job:" <> record["key"],
              kind: :report,
+             correlation: %{"source" => "job", "id" => "job:" <> record["key"]},
              user: user
            }) do
         {:ok, _} -> :accepted

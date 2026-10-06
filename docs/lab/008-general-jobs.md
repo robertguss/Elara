@@ -145,3 +145,73 @@ orchestration stay separately reported and never hide infrastructure growth.
 Correlated wake, operator server/TUI acknowledgment, fresh chaos/net-line
 comparison and the separately approved real-model acceptance remain pending;
 this profile chunk does not complete LAB-8.
+
+
+## Chunk 3 — One correlated inbox wait
+
+`completion_wait` waits on an owned job or direct related thread through the
+existing Session inbox. `thread_wait` uses the same cancellable untimed Task
+boundary; research children retain both entries when the parent grants them.
+There is no new actor, ledger or dependency. Correlation is optional strict
+outer report metadata with exactly source (`job` or `thread`) and bounded ID.
+A thread uses its logical source and active-branch User entry ID; only handoff
+needs an optional header carrying that occurrence. A new User clears the
+carried value, and branch revision uses the current ancestry. Header reopening
+retains it. Job IDs use the existing owner/job key, including v1 bodies.
+
+Successful live tool claims consume only their matching still-pending input,
+with the ToolResult in the same atomic store write. Abort/crash/stale results
+cannot consume it. External observers do not consume. Cancelled input returns
+an error; previously failed processing retains its receipt/error. Optional
+preview and thread status details shrink before JSON encoding to fit the tool
+limit; if identity metadata cannot fit, the tool errors and retains the input.
+A 1,024-byte handoff regression first exposed mid-JSON Core truncation; its
+repaired receipt stays valid and bounded. Full status remains available from
+the observer API, and full original evidence stays retained.
+
+Explicit receipts carry awaited=true, correlation, full input ID, receipt state
+and an untrusted preview. Automatic provider context carries awaited=false and
+correlation without changing saved User bodies or agent provenance. Other
+arrivals remain subject to the existing serial drain, pause, receipt barriers
+and eight-wake budget. One awaited input cannot trigger a second report wake.
+Monitored caller/target/transport loss retires subscriptions without replay.
+The existing transport stages immutable evidence before asynchronous completion
+notification and dispatch; it does not synchronously call back into a source
+publishing its completion. Running and already-finished parents can supply
+requested evidence to their direct child. Same logical-thread waits reject.
+
+Legacy artifacts derive absent correlation from their immutable source leaf's
+User ancestry, never from a later current turn. Identical legacy transport and
+inbox entries can gain outer metadata; conflicting typed values never replace
+one another. Original artifact bytes, bodies, evidence and receipt identities
+remain unchanged. V1 accepted inbox evidence can gain correlation on an explicit
+wait without rerunning its job. Tiny-limit failure preserves that pending input.
+
+Focused134 checks pass, seed1088,78.1s: held native job/atomic reopen, two thread
+turns and unrelated completion, parent-direction wait, real child handoff,
+legacy artifact/v1 body compatibility, strict codec/branch identity, cancelled
+and failed receipts, caller/target/transport loss, pause/budget, original child
+ownership, input recovery and finite job recovery. Compile warnings-as-errors,
+format and diff checks pass. Full suite is pending the source freeze.
+
+Removing claimed consumption fails its sole executed held-job check (0/1).
+Removing transport dependency retirement fails its sole executed loss check
+(0/1). The transport control's two teardown-witness attempts did not save their
+witness; no teardown claim is accepted from them. A separate actual failure
+with native execution and an owned completion waiter admitted fails only the
+forced assertion (0/1), with a saved witness proving one stopped caller, one
+settled execution lease, native OS stop and root removal. All temporary source
+mutations restore byte-exact. A first script-generation syntax error happened
+before mutation; early test setup/assertion and header reopen failures remain
+retained as preparations. No original lab corpus or real model is reused.
+
+`completion-source-counts.json` independently reproduces the baseline and prior
+profile manifests:129 files/49,201 source/infrastructure lines, +461 this chunk,
++826 cumulative versus48,375 baseline. Session grows203 lines; one named
+thread_wait execution branch becomes one shared wait branch. Test changes add548
+net lines, and retained raw Python control orchestration is231 lines, separately
+reported. Two count preparations assumed the wrong manifest schema and produced
+no count; excluded. The increase is negative evidence for the reduction
+hypothesis. Operator acknowledgment, fresh final chaos/comparison and the
+separately approved real-model acceptance remain pending. This supporting chunk
+does not complete LAB-8.

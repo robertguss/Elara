@@ -172,6 +172,7 @@ defmodule Elara.ThreadsTest do
     assert Elara.child_config(research["id"]).allowed_capabilities == ["filesystem:read"]
 
     assert Enum.map(Elara.child_config(research["id"]).tools, & &1.name) |> Enum.sort() == [
+             "completion_wait",
              "read",
              "skill",
              "thread_read",
@@ -587,7 +588,8 @@ defmodule Elara.ThreadsTest do
     assert %{"child_limit" => 4, "sessions" => [%{"id" => ^id, "tools" => tools}]} =
              request(observer, %{"command" => "child_list"})
 
-    assert Enum.sort(tools) == ~w(read skill thread_read thread_send thread_status thread_wait)
+    assert Enum.sort(tools) ==
+             ~w(completion_wait read skill thread_read thread_send thread_status thread_wait)
 
     assert %{
              "type" => "session_error",

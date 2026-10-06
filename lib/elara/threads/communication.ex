@@ -11,16 +11,24 @@ defmodule Elara.Threads.Communication do
 
   def status(sender, recipient), do: GenServer.call(__MODULE__, {:status, sender, recipient})
 
-  def wait(sender, recipient),
-    do: GenServer.call(__MODULE__, {:wait, sender, recipient}, :infinity)
+  def wait(sender, recipient) do
+    with {:ok, response} <- Elara.Completion.wait(sender, "thread", recipient),
+         {:ok, status} <- status(sender, recipient),
+         do: {:ok, Map.merge(status, response)}
+  end
+
+  def subscribe_completion(sender, recipient),
+    do: GenServer.call(__MODULE__, {:subscribe_completion, sender, recipient}, :infinity)
 
   def lifecycle(store, {:turn_ended, outcome, _}), do: lifecycle(store, {:turn_ended, outcome})
 
   def lifecycle(store, {:turn_ended, outcome}) do
     # Stage evidence before notifying another actor. A transport restart cannot lose it.
     report(store, outcome)
-    if Process.whereis(__MODULE__), do: GenServer.cast(__MODULE__, {:completed, store.id})
+    if Process.whereis(__MODULE__), do: GenServer.cast(__MODULE__, {:completed, store, outcome})
     :ok
+  catch
+    :exit, _ -> :ok
   end
 
   def lifecycle(_, _), do: :ok
@@ -36,7 +44,7 @@ defmodule Elara.Threads.Communication do
           {"thread_status",
            "Inspect direct parent/child lifecycle and durable delivery receipts.", ["thread_id"]},
           {"thread_wait",
-           "Yield until a related thread finishes, without model polling. Interrupt cancels waiting. Completion reports use the inbox separately; do not send empty acknowledgements.",
+           "Wait for one related-thread completion through the correlated inbox, without model polling. The wait consumes that report once. Interrupt cancels waiting; do not send empty acknowledgements.",
            ["thread_id"]}
         ] do
       %Elara.Tool{
@@ -55,7 +63,7 @@ defmodule Elara.Threads.Communication do
           },
           "required" => required
         },
-        run: {__MODULE__, :run},
+        run: {if(name == "thread_wait", do: Elara.Completion, else: __MODULE__), :run},
         capabilities: [],
         placement: :local,
         mutating: name == "thread_send"
@@ -247,37 +255,82 @@ defmodule Elara.Threads.Communication do
   def handle_call({:status, sender, recipient}, _from, state),
     do: {:reply, status_view(sender, recipient), state}
 
-  def handle_call({:wait, sender, recipient}, {pid, _} = from, state) do
-    case status_view(sender, recipient) do
-      {:ok, %{phase: phase}} = result
-      when phase in ["completed", "failed", "interrupted", "idle"] ->
-        {:reply, result, state}
+  def handle_call({:subscribe_completion, sender, recipient}, {caller, _}, state) do
+    with true <-
+           Elara.Session.Handoff.logical_id(sender) != Elara.Session.Handoff.logical_id(recipient) and
+             Threads.related?(sender, recipient),
+         true <- Process.alive?(caller),
+         {:ok, status} <- status_view(sender, recipient),
+         {:ok, store} <- thread_store(Elara.Session.Handoff.owner(recipient)) do
+      correlation = Elara.Completion.thread_correlation(store)
+      leaf = Enum.find(store.entries, &(&1.id == store.leaf))
 
-      {:ok, %{phase: "unavailable"}} ->
-        {:reply, {:error, :thread_unavailable}, state}
+      terminal =
+        case {status.phase, leaf} do
+          {phase,
+           %Store.Entry{message: %Message.Assistant{tool_calls: [], interrupted: false} = message}}
+          when phase in ["idle", "completed"] ->
+            {:completed, message.text}
 
-      {:ok, _} when sender != recipient ->
-        case Elara.session_pid(Elara.Session.Handoff.owner(recipient)) do
-          {:ok, target_pid} ->
-            ref = Process.monitor(pid)
-            target_ref = Process.monitor(target_pid)
-            {:noreply, put_in(state.waiters[ref], {from, sender, recipient, target_ref})}
+          {phase, _} when phase in ["failed", "interrupted"] ->
+            String.to_existing_atom(phase)
 
           _ ->
-            {:reply, {:error, :thread_unavailable}, state}
+            nil
         end
 
-      error ->
-        {:reply, error, state}
+      cond do
+        status.phase == "idle" and is_nil(terminal) ->
+          {:reply, {:idle, status}, state}
+
+        status.phase == "unavailable" or is_nil(correlation) ->
+          {:reply, {:error, :thread_unavailable}, state}
+
+        terminal ->
+          report(store, terminal, sender)
+          send(self(), :flush)
+          {:reply, {:ok, correlation, self()}, state}
+
+        status.phase == "completed" ->
+          {:reply, {:error, :thread_unavailable}, state}
+
+        true ->
+          {:ok, target} = Elara.session_pid(Elara.Session.Handoff.owner(recipient))
+          ref = Process.monitor(caller)
+
+          waiter = %{
+            sender: sender,
+            target: recipient,
+            correlation: correlation,
+            target_ref: Process.monitor(target)
+          }
+
+          {:reply, {:ok, correlation, self()}, put_in(state.waiters[ref], waiter)}
+      end
+    else
+      false -> {:reply, {:error, :unrelated_thread}, state}
+      {:error, _} = error -> {:reply, error, state}
     end
   end
 
   @impl true
-  def handle_cast({:completed, id}, state) do
-    flush_reports()
-    state = wake(state, id)
+  def handle_cast({:completed, store, outcome}, state) do
+    correlation = Elara.Completion.thread_correlation(store)
+
+    waiters =
+      Enum.reduce(state.waiters, %{}, fn {ref, waiter}, acc ->
+        if waiter.correlation == correlation do
+          report(store, outcome, waiter.sender)
+          Process.demonitor(ref, [:flush])
+          Process.demonitor(waiter.target_ref, [:flush])
+          acc
+        else
+          Map.put(acc, ref, waiter)
+        end
+      end)
+
     send(self(), :flush)
-    {:noreply, state}
+    {:noreply, %{state | waiters: waiters}}
   end
 
   @impl true
@@ -310,42 +363,44 @@ defmodule Elara.Threads.Communication do
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, ref, :process, _, _}, state) do
+  def handle_info({:DOWN, ref, :process, stopped, _}, state) do
     waiters =
-      Enum.reduce(state.waiters, %{}, fn {caller_ref, {from, _, _, target_ref}} = item, acc ->
-        if ref in [caller_ref, target_ref] do
-          Process.demonitor(caller_ref, [:flush])
-          Process.demonitor(target_ref, [:flush])
+      Enum.reduce(state.waiters, %{}, fn {caller_ref, waiter}, acc ->
+        cond do
+          ref == caller_ref ->
+            Process.demonitor(waiter.target_ref, [:flush])
+            acc
 
-          if ref == target_ref,
-            do: GenServer.reply(from, {:error, :thread_disconnected_no_replay})
+          ref == waiter.target_ref ->
+            owner = Elara.Session.Handoff.owner(waiter.target)
 
-          acc
-        else
-          Map.put(acc, elem(item, 0), elem(item, 1))
+            case Elara.session_pid(owner) do
+              {:ok, target} when owner != waiter.target and target != stopped ->
+                Map.put(acc, caller_ref, %{waiter | target_ref: Process.monitor(target)})
+
+              _ ->
+                Process.demonitor(caller_ref, [:flush])
+
+                case Elara.session_pid(Elara.Session.Handoff.owner(waiter.sender)) do
+                  {:ok, receiver} ->
+                    send(receiver, {:completion_disconnected, waiter.correlation})
+
+                  _ ->
+                    :ok
+                end
+
+                acc
+            end
+
+          true ->
+            Map.put(acc, caller_ref, waiter)
         end
       end)
 
     {:noreply, %{state | waiters: waiters}}
   end
 
-  defp wake(state, id) do
-    waiters =
-      Enum.reduce(state.waiters, %{}, fn {ref, {from, sender, target, target_ref}} = item, acc ->
-        if Elara.Session.Handoff.logical_id(target) == Elara.Session.Handoff.logical_id(id) do
-          Process.demonitor(ref, [:flush])
-          Process.demonitor(target_ref, [:flush])
-          GenServer.reply(from, status_view(sender, target))
-          acc
-        else
-          Map.put(acc, elem(item, 0), elem(item, 1))
-        end
-      end)
-
-    %{state | waiters: waiters}
-  end
-
-  defp report(store, outcome) do
+  defp report(store, outcome, recipient \\ nil) do
     active = Enum.find(store.inbox, &(&1.id == store.active_input_id))
     last_user = store.entries |> Enum.reverse() |> Enum.find(&match?(%Message.User{}, &1.message))
 
@@ -356,9 +411,9 @@ defmodule Elara.Threads.Communication do
 
     original = Enum.find(Elara.Session.Handoff.lineage(store.id), &Threads.managed?/1)
 
-    with false <- !!report_input?,
-         true <- not is_nil(original),
-         {:ok, r} <- Threads.record(original) do
+    with false <- is_nil(recipient) and !!report_input?,
+         true <- not is_nil(recipient) or not is_nil(original),
+         {:ok, r} <- if(is_nil(original), do: {:ok, %{}}, else: Threads.record(original)) do
       result =
         case outcome do
           {:completed, text} -> text
@@ -399,7 +454,7 @@ defmodule Elara.Threads.Communication do
       }
 
       id = "completion:#{store.leaf}"
-      recipient = Elara.Session.Handoff.logical_id(r["parent_id"])
+      recipient = Elara.Session.Handoff.logical_id(recipient || r["parent_id"])
       key = digest({store.id, recipient, id})
       path = Path.join([root(), "completions", key <> ".json"])
 
@@ -409,7 +464,8 @@ defmodule Elara.Threads.Communication do
           "recipient" => recipient,
           "id" => id,
           "text" => result || "No textual result",
-          "evidence" => evidence
+          "evidence" => evidence,
+          "correlation" => Elara.Completion.thread_correlation(store)
         })
       end
     end
@@ -417,13 +473,34 @@ defmodule Elara.Threads.Communication do
 
   defp flush_reports do
     for path <- Path.wildcard(Path.join([root(), "completions", "*.json"])),
-        not File.exists?(Path.join(root(), Path.basename(path))),
         {:ok, r} <- [load(path)] do
-      accept(r["sender"], r["recipient"], r["id"], r["text"], "report", r["evidence"])
+      correlation =
+        r["correlation"] ||
+          with {:ok, store} <- thread_store(r["sender"]),
+               %{"source_message_id" => leaf} <- r["evidence"],
+               %Store.Entry{} <- Enum.find(store.entries, &(&1.id == leaf)) do
+            Elara.Completion.thread_correlation(%{
+              store
+              | leaf: leaf,
+                completion_occurrence: nil
+            })
+          else
+            _ -> nil
+          end
+
+      accept(
+        r["sender"],
+        r["recipient"],
+        r["id"],
+        r["text"],
+        "report",
+        r["evidence"],
+        correlation
+      )
     end
   end
 
-  defp accept(sender, recipient, id, text, kind, evidence) do
+  defp accept(sender, recipient, id, text, kind, evidence, correlation \\ nil) do
     recipient = Elara.Session.Handoff.logical_id(recipient)
     key = digest({sender, recipient, id})
     existing = load(Path.join(root(), key <> ".json"))
@@ -432,9 +509,19 @@ defmodule Elara.Threads.Communication do
       match?({:ok, _}, existing) ->
         {:ok, old} = existing
 
-        if old["text"] == text and old["kind"] == kind,
-          do: {:ok, receipt(old)},
-          else: {:error, :message_id_conflict}
+        previous = old["correlation"]
+
+        if old["text"] == text and old["kind"] == kind and old["evidence"] == evidence and
+             (previous == correlation or is_nil(previous) or is_nil(correlation)) do
+          if is_nil(previous) and not is_nil(correlation) do
+            updated = old |> Map.put("correlation", correlation) |> Map.put("delivery", "pending")
+            with :ok <- save(updated), do: {:ok, receipt(updated)}
+          else
+            {:ok, receipt(old)}
+          end
+        else
+          {:error, :message_id_conflict}
+        end
 
       Enum.count(messages(), &(&1["recipient"] == recipient and &1["delivery"] == "pending")) >=
           64 ->
@@ -453,6 +540,7 @@ defmodule Elara.Threads.Communication do
           "text" => text,
           "kind" => kind,
           "evidence" => evidence,
+          "correlation" => correlation,
           "delivery" => "pending"
         }
 
@@ -499,6 +587,7 @@ defmodule Elara.Threads.Communication do
                   id: "thread:" <> message["key"],
                   sender_id: message["sender"],
                   kind: String.to_existing_atom(message["kind"]),
+                  correlation: message["correlation"],
                   user: user
                 }}
              ) do

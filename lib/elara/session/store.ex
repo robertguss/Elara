@@ -58,6 +58,7 @@ defmodule Elara.Session.Store do
     :parent_session,
     :provider_settings,
     :check_evidence,
+    :completion_occurrence,
     :lock_path,
     :lock_handle,
     context: %{},
@@ -130,6 +131,7 @@ defmodule Elara.Session.Store do
          parent_session: header.parent_session,
          provider_settings: header.provider_settings,
          check_evidence: header.check_evidence,
+         completion_occurrence: header.completion_occurrence,
          context: header.context,
          inbox: header.inbox,
          agent_wake_count: header.agent_wake_count,
@@ -175,7 +177,7 @@ defmodule Elara.Session.Store do
     save(%{store | entries: store.entries ++ entries, leaf: leaf})
   end
 
-  @doc "Atomically persist an inbox change, optionally with a consumed user message."
+  @doc "Atomically persist an inbox change, optionally with its consumed message."
   def put_inbox(%__MODULE__{} = store, inbox, paused, user \\ nil, active_id \\ nil)
       when is_list(inbox) and is_boolean(paused) do
     store = %{store | inbox: inbox, inputs_paused: paused, active_input_id: active_id}
@@ -213,7 +215,12 @@ defmodule Elara.Session.Store do
         {:error, :invalid_entry}
 
       entry ->
-        case save(%{store | leaf: entry.parent_id, check_evidence: nil}) do
+        case save(%{
+               store
+               | leaf: entry.parent_id,
+                 check_evidence: nil,
+                 completion_occurrence: nil
+             }) do
           {:ok, store} -> {:ok, store, entry.message.text}
           error -> error
         end
@@ -617,6 +624,7 @@ defmodule Elara.Session.Store do
     |> put_optional("parentSession", store.parent_session)
     |> put_optional("providerSettings", store.provider_settings)
     |> put_optional("checkEvidence", store.check_evidence)
+    |> put_optional("completionOccurrence", store.completion_occurrence)
     |> put_optional("context", if(store.context != %{}, do: store.context))
     |> put_optional("agentWakeCount", if(store.agent_wake_count > 0, do: store.agent_wake_count))
     |> put_optional(
@@ -643,6 +651,7 @@ defmodule Elara.Session.Store do
       "createdAt" => entry.created_at
     }
     |> put_optional("error", Map.get(entry, :error))
+    |> put_optional("correlation", Map.get(entry, :correlation))
   end
 
   defp put_optional(map, _key, nil), do: map
@@ -658,9 +667,10 @@ defmodule Elara.Session.Store do
     })
   end
 
-  defp path_entries(_store, nil), do: []
+  @doc false
+  def path_entries(_store, nil), do: []
 
-  defp path_entries(store, leaf) do
+  def path_entries(store, leaf) do
     by_id = Map.new(store.entries, &{&1.id, &1})
     walk_entries(by_id, leaf, [])
   end
@@ -735,6 +745,7 @@ defmodule Elara.Session.Store do
         "parentSession",
         "providerSettings",
         "checkEvidence",
+        "completionOccurrence",
         "context",
         "agentWakeCount",
         "inbox"
@@ -770,6 +781,11 @@ defmodule Elara.Session.Store do
              context when is_map(context) <- Map.get(header, "context", %{}),
              check_evidence = Map.get(header, "checkEvidence"),
              true <- is_nil(check_evidence) or Elara.CheckEvidence.valid?(check_evidence),
+             occurrence = Map.get(header, "completionOccurrence"),
+             true <-
+               is_nil(occurrence) or
+                 (is_binary(occurrence) and byte_size(occurrence) in 1..128 and
+                    String.valid?(occurrence) and not String.contains?(occurrence, <<0>>)),
              {:ok, inbox, paused, active_id} <- decode_inbox(Map.get(header, "inbox")),
              true <- Enum.all?(inbox, &(&1.session_id == id)) do
           {:ok,
@@ -782,6 +798,7 @@ defmodule Elara.Session.Store do
              parent_session: Map.get(header, "parentSession"),
              provider_settings: Map.get(header, "providerSettings"),
              check_evidence: check_evidence,
+             completion_occurrence: occurrence,
              context: context,
              inbox: inbox,
              agent_wake_count: count,
@@ -838,11 +855,13 @@ defmodule Elara.Session.Store do
               kind in ["normal", "steer", "agent", "report"] and
               state in ["queued", "accepted", "consumed", "cancelled", "failed"] and
               is_integer(created) do
-    allowed = ~w(id sessionId senderId kind state user createdAt error)
+    allowed = ~w(id sessionId senderId kind state user createdAt error correlation)
 
     with true <- Enum.all?(Map.keys(raw), &(&1 in allowed)),
          {:ok, %User{} = user} <- decode_message(encoded),
-         true <- is_nil(raw["error"]) or is_binary(raw["error"]) do
+         true <- is_nil(raw["error"]) or is_binary(raw["error"]),
+         true <- Elara.Completion.valid_correlation?(raw["correlation"]),
+         true <- is_nil(raw["correlation"]) or kind == "report" do
       entry = %{
         id: id,
         session_id: sid,
@@ -867,6 +886,9 @@ defmodule Elara.Session.Store do
         created_at: created,
         error: raw["error"]
       }
+
+      entry =
+        if raw["correlation"], do: Map.put(entry, :correlation, raw["correlation"]), else: entry
 
       decode_inbox_entries(rest, [entry | acc])
     else

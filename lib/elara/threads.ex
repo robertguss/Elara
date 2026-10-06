@@ -585,7 +585,8 @@ defmodule Elara.Threads do
             Enum.filter(
               config.tools,
               &(&1 in Enum.filter(Elara.Tool.builtins(), fn t ->
-                  t.name in ["read", "skill"] or t.run == {Elara.Threads.Communication, :run}
+                  t.name in ["read", "skill"] or
+                    t.run in [{Elara.Threads.Communication, :run}, {Elara.Completion, :run}]
                 end))
             )
 

@@ -1,4 +1,4 @@
-# Handoff — ROB-1254 child lifecycle fixture, 2026-10-05
+# Handoff — ROB-1233 fixture registration, 2026-10-05
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
 is the sole planning and status source. The
@@ -26,8 +26,8 @@ review evidence: 31 recovery tests, a failing same-seed public regression before
 the fix, and clean compile/format/diff checks. The digest omits run identities;
 identity checks, historical evidence, recovery behavior, and bounds are intact.
 
-ROB-1254 is selected on `work/rob-1254-deterministic-child-lifecycle` from that
-main. Its Linear issue holds the execution plan, review, and delivery record.
+ROB-1254 merged in PR #34 at `4b8d4d9`. Its Linear Results hold the review and
+delivery record.
 A 650 ms observation delay reproduced the old idle-phase failure (seed 344403).
 The fixture now holds the coding provider request behind an explicit barrier
 through sibling failure and parent exit; only the test's answer releases it.
@@ -38,6 +38,19 @@ assertion is removed. Logs are retained under
 The full suite passed 887 tests (seed 670644); formatting and diff checks passed.
 Diff review confirms test-only synchronization with stronger lifecycle checks,
 bounded cleanup, and no production change. Check Linear for confirmed merge.
+
+ROB-1233 is selected on `work/rob-1233-owned-fixture-registration` from that
+main. A childless blocked shell reproduces the old descendant-required
+registration failure (seed 810832). A separate control with registration fixed
+but Linux-only ownership checking proves failed cleanup on macOS (seed 850331).
+The helper now registers the root before optional descendant discovery and
+verifies command ownership with ps when /proc is unavailable. The forced-failure
+regression proves actual root termination, with backup teardown installed before
+waits. OpaqueShell 22 tests (seed 837079) and all effect tests 100 (seed 389333)
+passed. The issue records execution-test verification and delivery; logs are in
+`lab/results/rob-1233-verification-20261005/`. No production source, fixture
+command, or deadline changed. Original host-load causation remains unproven;
+the demonstrated structural defects are fixed.
 
 Historical audit verification follows for provenance.
 
@@ -79,8 +92,10 @@ findings remain open despite this passing suite.
 - ROB-1097–1106 need individual scope review under the autonomous goal; their
   former parked status alone does not block selection. ROB-1107/1108 are Needs
   Input for the owner's hands-on/visual acceptance of existing TUI code.
-- ROB-1254 is the current delivery item; ROB-1233 is the next independent
-  candidate. ROB-1216 and ROB-1233 remain unresolved findings.
+- ROB-1233 is the current delivery item; ROB-1216 is the next independent
+  diagnostic candidate. LAB-5's remaining matrix is actionable under the goal
+  after these independent fixes; LAB-3's measurement remains paused while
+  LAB-5 can be selected separately.
   A passing run does not establish that an intermittent is fixed.
 
 LAB-3 closure is an owner decision. Keep at most one executable lab item and
@@ -142,8 +157,9 @@ No tests, compiles, or source edits while a measurement launcher is running.
   writes; historical `[driver]` and `[lead]` prefixes identify earlier records.
 - CI has Socket checks and does not run mix test; distinguish local tests from
   CI evidence.
-- Known unresolved intermittent failures include attachment/sampler census,
-  ROB-1216 SSE, ROB-1233 OpaqueShell, and ROB-1254 ThreadsTest. Preserve failure
+- Known unresolved intermittent failures include attachment/sampler census
+  and ROB-1216 SSE. ROB-1233 and ROB-1254 have demonstrated fixture fixes;
+  consult their delivery records. Preserve failure
   logs and baseline comparisons rather than treating reruns as proof of a fix.
 - Use `pgrep -x beam.smp`, then ps and lsof cwd checks to identify a process.
   Broad pattern searches can self-match prompt text.

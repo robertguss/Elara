@@ -39,9 +39,19 @@ Focused134 passes, seed1088,78.1s; compile warnings-as-errors and format/diff pa
 Actual consumption/transport mutations fail their intended checks; native+wait
 forced failure confirms caller/native stop, one settled lease and removed root.
 Transport-only teardown witnesses remain unconfirmed and excluded. Source count
-129 files/49,201 lines: +461 this chunk, cumulativeLAB8+826; Session+203. This is
-negative evidence for reduction. Full-suite/source-freeze and PR delivery are
-pending. No model or historical registered corpus was run.
+129 files/49,206 lines: +466 this chunk, cumulativeLAB8+831; Session+203. This is
+negative evidence for reduction. First frozen full suite at68b0356 passed
+1019/1020, with one tiny children report-settlement failure. Restored the omitted
+flush_reports admission call at the shared completion cast; exact regression
+now passes1/1. Broader repair verification caught the existing delayed transport
+settlement regression:60/61, then0/1 alone. A local trace observed783 receipt
+reads/27 reports. Restored skip for already typed transports while preserving
+legacy upgrades; trace24 reads/24 reports, transport quiescent and1/1 pass.
+Both public regressions+17 communication tests pass19/19. Runtime repair source
+86a5c3321c9b8135395388439b807eb71a06643b; compile/format/diff pass. Linear
+comments ee76eca9/6640ac42 and note008 retain failures, repairs and restored
+instrumentation. Fresh frozen full suite and PR delivery remain. No model or
+historical corpus was run.
 
 After this chunk: operator server/TUI acknowledgment, fresh final LAB-5-style
 chaos and net-line/special-case comparison. Complete all independent scripted

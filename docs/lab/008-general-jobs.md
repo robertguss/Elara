@@ -192,7 +192,28 @@ turns and unrelated completion, parent-direction wait, real child handoff,
 legacy artifact/v1 body compatibility, strict codec/branch identity, cancelled
 and failed receipts, caller/target/transport loss, pause/budget, original child
 ownership, input recovery and finite job recovery. Compile warnings-as-errors,
-format and diff checks pass. Full suite is pending the source freeze.
+format and diff checks pass. The first full suite at68b0356 passes1019/1020
+(11/11 properties,1008/1009 tests;seed1088,316.1s). The tiny children
+concurrency regression retained its directory because reports were staged but
+not yet admitted:33 staged,13 accepted/delivered,0 pending; reports_settled
+was false while actor/transport checks passed. The shared completion cast had
+omitted the original immediate flush_reports admission call. Restoring that
+one line makes the exact public regression pass1/1 (43excluded,7.0s). Scheduling
+:flush alone only delivers admitted reports. No assertion or timing was weakened.
+Raw failure and repair logs remain retained. The broader repair check then
+passed60/61 (90.2s), failing the existing delayed-admission settlement test.
+That test also reproduced0/1 alone. A temporary local trace observed783 receipt
+reads for27 admitted reports and transport_quiescent=false. The upgrade scan
+revisited already typed transports on every queued completion, unnecessarily
+reading recipient receipts. Restoring the typed-transport admission skip keeps
+legacy metadata upgrades and avoids those background reads. On repaired source
+86a5c3321c9b8135395388439b807eb71a06643b, both public regressions and all17
+communication checks pass19/19 (42excluded,10.1s). The same diagnostic trace now
+observes24 receipt reads for24 admitted reports, transport_quiescent=true and
+1/1 pass (43excluded,2.9s). Report counts differ between runs; these are diagnostic
+regressions, not pooled or registered measurements. The temporary fixture is
+restored byte-exact, and compile warnings-as-errors/format/diff pass. A fresh
+frozen full suite is pending.
 
 Removing claimed consumption fails its sole executed held-job check (0/1).
 Removing transport dependency retirement fails its sole executed loss check
@@ -206,8 +227,8 @@ before mutation; early test setup/assertion and header reopen failures remain
 retained as preparations. No original lab corpus or real model is reused.
 
 `completion-source-counts.json` independently reproduces the baseline and prior
-profile manifests:129 files/49,201 source/infrastructure lines, +461 this chunk,
-+826 cumulative versus48,375 baseline. Session grows203 lines; one named
+profile manifests:129 files/49,206 source/infrastructure lines, +466 this chunk,
++831 cumulative versus48,375 baseline. Session grows203 lines; one named
 thread_wait execution branch becomes one shared wait branch. Test changes add548
 net lines, and retained raw Python control orchestration is231 lines, separately
 reported. Two count preparations assumed the wrong manifest schema and produced

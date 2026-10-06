@@ -128,8 +128,8 @@ Integrated native verification passed all 940 checks (11 properties, 929
 tests), seed 1085, in 256.8 seconds; guidance 3 and compile/format/diff passed.
 ROB-1085 records exact review, PR, integrated suite and
 merge evidence. These families are implemented but unmeasured.
-Ordinary command-group preparation is implemented on `work/rob-1085-group-recovery`, based
-on `62cbaac`. Public Exec launches a shell-owned child in its assigned group;
+Ordinary command-group preparation merged in PR #44 at `b1ce5c5`, from
+`work/rob-1085-group-recovery` based on `62cbaac`. Public Exec launches a shell-owned child in its assigned group;
 actual caller/executor/stub faults require independent PID/cwd/parent/group
 and Port/guardian witnesses, typed caller terminals and physical cleanup.
 Changed epochs remain unknown; this family creates no session inputs or job
@@ -146,32 +146,41 @@ seed 1085, in 262.6 seconds; guidance 3 and compile/format/diff passed. Three
 fresh final-source dev VMs with production restart intensity 3 passed every
 check, complete/cleanup true and one launch; recovery was 40–150 ms. These
 are preparations, excluded from the registered matrix.
-Transport candidate `d501a4c` is held on `work/rob-1085-transport-recovery`.
-Its focused 99 and three 13-check production-default VM preparations passed,
-but the integrated suite passed 952/953 (seed 1085, 284.5 s): the existing
-concurrency retained-ledger fixture at line 378 observed zero leftover tasks.
-ROB-1325 owns a separate synchronization repair. A collector-backed delayed
-observation reproduces that old timing assumption; the first four mailbox
-observer attempts were invalid and remain retained. The repair holds actual
-provider Tasks, registers release before assertions and checks normal DOWN
-and public writer settlement, including forced assertion failure. Raw source,
-red/green and final verification output are in
-`lab/results/rob-1325-verification-20261006/`; Linear records review/delivery.
-Repair verification passed concurrency 44, both final writer controls and
-all 948 integrated checks (11 properties, 937 tests; seed 1085; 265.1 s).
-Compile with warnings as errors, format and diff checks passed. Killing
-providers instead of releasing them fails both ledger tests; normal DOWN
-is required. Final source hashes are verified. After merge, rebase the
-unpushed held candidate, preserve its failing suite and verify the integrated
-transport tree before delivery. No registered
-measurement was launched, and LAB-3's owner sequencing/host gates remain.
+Direct transport recovery is implemented on `work/rob-1085-transport-recovery`,
+rebased onto main `445e0df`. It covers actual source TCP-owning tool Task, held
+handler and worker faults through public remote bash, with paired endpoints,
+source Task/monitor/router ownership and native group witnesses. Durable input
+and controller intent survive with one indeterminate mutation result, one
+physical launch and own terminal for A/B/C. Original candidate `d501a4c` is
+retained at `archive/rob-1085-transport-held-d501a4c`. Its focused 99 and three
+13-check production-default VM preparations passed; its 952/953 integrated
+suite (seed 1085, 284.5 s) is preserved, not overwritten. The combined tree's
+verification/review/delivery are on ROB-1085 and note 005. Wrong-role and
+unavailable-settlement controls, failed logs and copied roots remain in
+`lab/results/rob-1085-transport-recovery-preparation-20261006/`.
 
-Next extend the remaining client/worker/whole-VM families, preserving causal
-fault witnesses, per-input receipt/terminal accounting, honest uncertainty,
-slot/acknowledgment and native cleanup checks. The handoff, child and test-job fixtures'
-script/gate PIDs support same-VM recovery only; do not reuse that provider
-configuration for whole-VM restart. Keep every preparation separate from the
-eventual registered matrix and preserve its source provenance.
+ROB-1325's separate retained-ledger fixture repair merged in PR #45 at
+`445e0df`. The collector-backed delayed control reproduces the old assertion;
+four mailbox observer attempts were invalid and remain classified. The repair
+holds actual provider Tasks, registers release before assertions and requires
+normal DOWN/public writer settlement, including forced assertion failure.
+Concurrency 44, final writer controls 2 and full 948 (11 properties, 937 tests;
+seed 1085; 265.1 s), compile/format/diff and final source hashes passed. Killing
+providers instead of releasing them fails both tests. Preserve
+`lab/results/rob-1325-verification-20261006/`; Linear records exact review and
+delivery. No registered measurement was launched; LAB-3's gates remain.
+
+The optional explicit LocalExecutor receipt client is separate: its death leaves
+an accepted one-attempt record; A terminates indeterminate while B/C stay queued
+behind the nonterminal effect barrier. ROB-1104 tracks the preserved diagnostic
+and uncertainty/writer boundaries. No generic receipt acknowledgment or callback
+replay is authorized by physical native cleanup.
+Next extend whole-VM recovery, preserving causal fault witnesses, per-input
+receipt/terminal accounting, honest uncertainty, slot/acknowledgment and native
+cleanup checks. Existing handoff, child, test-job and transport provider/gate
+PIDs support same-VM recovery only; do not reuse that provider configuration
+after whole-VM restart. Keep every preparation separate from the eventual
+registered matrix and preserve its source provenance.
 LAB-6/LAB-8 depend on LAB-5; Coordinator judging/map-reduce removal was already
 decided by ROB-1095. LAB-4/LAB-7 retain their research dependencies.
 

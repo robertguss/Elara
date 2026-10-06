@@ -701,3 +701,73 @@ restart intensity 3 passed all checks (10 for caller/executor, 11 for stub),
 complete/cleanup true and one launch; recovery was 40–150 ms. The full output
 is `full-suite.log` in the group preparation namespace. No registered
 measurement rows were added.
+
+### Direct transport recovery preparation (2026-10-06)
+
+At base `b1ce5c511a5338395f76349f0f12b7c6185e9e97`, the hypothesis is that
+death of the actual remote-command client, TCP handler or worker preserves
+accepted input and mutation intent, reports uncertainty without replay and
+settles the witnessed command group. `transport_recovery` has separate
+`client_running`, `handler_running` and `worker_running` checkpoints. It uses
+public sessions, authenticated loopback Worker/Remote execution and a disposable
+brain/worker workspace. The provider emits one declared remote bash call for A;
+B/C have their own fixed terminal responses. Seeds vary queue order and 1–20 ms
+provider/fault work. These are preparations, excluded from measurement.
+
+Before injection, the worker handler is held at its trusted local lifecycle
+hook with one native command already running. Pair actual TCP endpoints and
+connected ownership; the client must be the source's monitored tool Task and
+router checkout. Independently witness the worker job's Exec monitor, native
+root and shell-owned child, parent/cwd/device/group and Port/guardian chain.
+Accepted A must be active with its exact tool call, argument and durable
+controller intent; B/C remain queued without transcript consumption. Recheck
+the living actors, held point, TCP owner and native epoch before one fault.
+Root and coordinator independently monitor the nominated process. Independent
+positive tests check the actual source Task ownership and stage's target role.
+
+Within 5 seconds of target DOWN, A must have its own terminal and exactly one
+indeterminate tool result, the worker handler/job/TCP guardian must be dead,
+and the native group/guardian must be stopped with Exec idle and the same
+settled epoch. B/C must stay durably visible or have their own terminal.
+All three complete within 5 seconds plus two queued inputs times the selected
+per-input work, at most 5040 ms. The intent remains unchanged and physical
+launch marker remains exactly one. An independent public remote read proves
+worker service, replacing the owned worker when its linked lifecycle stopped.
+No generic executor receipt or acknowledgment is claimed for this direct path.
+
+Cleanup closes admission, stops owned workers, requires native/Exec settlement,
+and stops the actual source and all tracked helpers before releasing the root.
+Released handler admission and premature worker loss invalidate nomination.
+Forced failure independently checks every owned BEAM/native actor. Selecting
+the worker for the client stage fails the independent role control (5/6 pass).
+A fresh dev VM with unavailable Exec settlement retains one row/root and stops
+requested repetition 2. Bypassing its cleanup guard falsely permits two rows
+and fails that control. Exact source is restored. The initial ExUnit version
+of this control expected `evidence_dir` instead of the runner's `retained_dir`;
+its KeyError log is retained, and the control now uses disposable dev VMs.
+
+The optional explicit LocalExecutor receipt path is a separate finding. Killing
+its actual TCP-owning callback leaves an accepted record after one attempt.
+A reaches an indeterminate tool result and terminal, but B/C stay queued behind
+the nonterminal receipt barrier even after actual native cleanup. The candidate,
+failed focused output and a fresh dev raw row are preserved, not converted to
+passing direct-path evidence. ROB-1104 tracks receipt recovery with supported
+writer/incarnation boundaries; native stop alone cannot invent a causal receipt
+terminal or authorize callback replay. These same-VM providers contain gate
+PIDs and cannot be reused after whole-VM restart.
+
+Raw rows, controls and source provenance are in
+`lab/results/rob-1085-transport-recovery-preparation-20261006/`. Final focused,
+integrated suite, production-default VM preparation and delivery evidence are
+recorded on ROB-1085. Whole-VM recovery and the registered >=1000 schedule matrix
+remain unfinished.
+
+The initial integrated transport candidate passed 952/953 checks (11/11
+properties, 941/942 tests), seed 1085, in 284.5 seconds. The existing concurrency
+retained-ledger test at line 378 expected a task still alive after a 2500 ms
+provider stall but observed zero. The raw full-suite log remains intact; no
+causal scheduling measurement was retained for that failure. A separate
+synchronization repair is selected in Linear before transport delivery.
+Focused verification passed 99; the three fresh dev-VM rows require production
+restart intensity 3 and pass all 13 checks, complete/cleanup true, one launch:
+recovery 75–116 ms, backlog 81–117 ms. These are preparations only.

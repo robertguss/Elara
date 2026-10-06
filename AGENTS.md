@@ -3,23 +3,20 @@
 ## Delivery and tracking
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
-is the sole current planning and status source. Elara is built with the `crew`
-skill, configured in `CLAUDE.md`: an Opus driver owns Linear, briefs, commits,
-and delivery; a Sonnet builder builds each step test-first and leaves changes
-uncommitted; a Fable oracle reviews the plans, diffs, and handoffs that Jev
-routes to it, and the driver reviews the rest.
+is the sole current planning and status source. The active agent owns issue
+review, planning, implementation, verification, commits, and delivery in the
+current session. No separate driver, builder, or oracle workflow is required.
 
 Ready means explicitly authorized, not merely unblocked. The owner has granted
-the driver autonomy over queue order and selection: the driver may select the
-next item and release it to Ready, recording the decision in a `[driver]`
-comment on the issue. Keep at most one executable lab item, and none while
+the active agent autonomy over queue order and selection: the agent may select the
+next item and release it to Ready, recording the decision in an issue
+comment. Keep at most one executable lab item, and none while
 paused. Each issue is delivered on an issue branch `work/rob-<n>-<slug>`,
-pushed, PR'd, and merged after review sign-off (the oracle's, or the driver's
-where Jev routes the review to it) and passing CI under the owner's standing
-authorization. Done means
+pushed, PR'd, and merged after review and passing required checks under the
+owner's standing authorization. Done means
 merged. Do not force-push, deploy, release, or delete evidence without a
-specific owner decision. At each chunk end, the driver rewrites `HANDOFF.md` for
-the fresh crew, pointing at Linear for queue, status, and review
+specific owner decision. At each chunk end, the active agent rewrites
+`HANDOFF.md` for the next session, pointing at Linear for queue, status, and review
 evidence. Repository tests only check the durable pointers.
 
 ## Cursor Cloud specific instructions

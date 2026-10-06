@@ -157,9 +157,8 @@ max 4 concurrent children per VM, delegation depth 3. `Threads.related?/2` is
 the canonical authority for `thread_send`/`thread_read` — text and supplied
 workspace paths never grant access, and sender identity comes from execution
 context, never tool arguments. The Communication actor never calls a model.
-`Elara.Coordinator` is the older bounded batch orchestration, separate from
-this. It also provides candidate judging and map/reduce, which Threads lacks;
-LAB-6 decides whether to rebuild or drop them before removing it.
+Coordinator batch patterns, candidate judging and map/reduce were retired under
+ROB-1095/LAB-6. Threads has no automatic judging or reduction contract.
 
 **Handoff (`lib/elara/session/handoff.ex`, `session/context.ex`).**
 `Context.budget/2` is a conservative pre-request byte estimate (independent of

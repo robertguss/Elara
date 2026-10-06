@@ -232,12 +232,16 @@ defmodule Elara.InstructionsTest do
     assert {:ok, "missing"} = Elara.ask(missing, "Run the prerequisite")
   end
 
-  test "coordinator children resolve guidance and configured skills without copying parent context",
+  test "thread children resolve guidance and configured skills without copying parent context",
        ctx do
     directory = make_skill(ctx, "using-fixtures", "CHILD BODY")
 
     parent =
-      session(ctx, [], skill_paths: [Path.relative_to(directory, ctx.cwd)], system: "CUSTOM BASE")
+      session(ctx, [],
+        skill_paths: [Path.relative_to(directory, ctx.cwd)],
+        system: "CUSTOM BASE",
+        pause_inputs: true
+      )
 
     assert Elara.child_config(parent).skill_options[:skill_paths] == [directory]
 
@@ -255,15 +259,31 @@ defmodule Elara.InstructionsTest do
         ]
       end)
 
-    {:ok, coordinator} =
-      Elara.start_coordinator(parent, provider_factory: fn _ -> {InspectProvider, agent} end)
+    {:ok, child} =
+      Elara.Threads.start_child(parent, "Inspect",
+        provider: {InspectProvider, agent},
+        pause_inputs: true
+      )
 
-    on_exit(fn -> if Process.alive?(coordinator), do: GenServer.stop(coordinator) end)
+    on_exit(fn ->
+      case Elara.session_pid(child["id"]) do
+        {:ok, pid} -> GenServer.stop(pid)
+        _ -> :ok
+      end
+    end)
 
-    assert {:ok, run} =
-             Elara.Coordinator.run(coordinator, :parallel, [%{id: "child", prompt: "Inspect"}])
+    :ok = Elara.resume_inputs(child["id"])
 
-    assert [%{answer: "child done"}] = run.results
+    assert Enum.find_value(1..500, fn _ ->
+             case List.last(Elara.transcript(child["id"])) do
+               %Assistant{text: "child done"} ->
+                 true
+
+               _ ->
+                 Process.sleep(10)
+                 false
+             end
+           end)
   end
 
   defp session(ctx, checks, opts \\ []) do

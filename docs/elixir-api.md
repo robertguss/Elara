@@ -177,46 +177,24 @@ Replay invokes the pure session core only; it does not call the provider or run
 tools. Pass `step: &OtherCore.step/2` to compare another implementation, or an
 `inject:` map to insert, replace, or drop facts during replay.
 
-## Coordinate child sessions
+## Delegate child sessions
 
-Coordinators run bounded child sessions without adding their transcripts to the
-parent:
+Use the durable Threads lifecycle to delegate an assignment:
 
 ```elixir
-{:ok, coordinator} =
-  Elara.start_coordinator(session,
-    max_concurrency: 3,
-    token_budget: 20_000,
-    time_budget_ms: 120_000
-  )
-
-{:ok, run} =
-  Elara.Coordinator.run(
-    coordinator,
-    :candidates,
-    [
-      %{id: "a", role: :coding, prompt: "Implement candidate A"},
-      %{id: "b", role: :coding, prompt: "Implement candidate B"}
-    ],
-    judge: %{
-      id: "judge",
-      role: :judge,
-      prompt: "Return the winning candidate ID."
-    }
-  )
+{:ok, child} = Elara.Threads.start_child(session, "Inspect the failing test")
+Elara.Threads.list(session)
 ```
 
-Supported patterns are `:parallel`, `:specialists`, `:candidates` with a
-`judge:`, and `:map_reduce` with a `reducer:`. Child specs require `id:` and
-`prompt:`; `role:` defaults to `:general`. Coding roles receive detached git
-worktrees, so the parent `cwd` must be a Git checkout. Invalid specs return
-`{:error, {:invalid_child_spec, reason}}` without crashing the coordinator;
-`reason` is `:id_required`, `:prompt_required`, or `:map_required`.
+Pass `coding: true` for a managed Git branch/worktree. Children remain independent
+of parent stop/detach; stopping a child does not remove its workspace. See the
+[delegation and integration boundaries](../README.md#persistent-delegated-children) before
+integrating changes or cleaning up a worktree.
 
-`Elara.Coordinator.status/1` reports children and live budgets.
-`Elara.Coordinator.kill_child/2` stops one child without stopping siblings. Call
-`GenServer.stop(coordinator)` when finished to stop its children and remove
-temporary coding worktrees.
+The former `Elara.start_coordinator/2` and `Elara.Coordinator` API were retired
+under ROB-1095/LAB-6. Its batch concurrency/token/time budgets, automatic
+candidate judging and map/reduce are deliberately removed. Threads does not
+provide those batch patterns or aggregate budgets.
 
 See [Detached sessions and remote workers](detached-and-remote.md) to route
 tools by capability and workspace.

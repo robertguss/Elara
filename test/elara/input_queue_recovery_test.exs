@@ -4,7 +4,7 @@ defmodule Elara.InputQueueRecoveryTest do
   alias Elara.Effect.ControllerJournal
   alias Elara.Effect.ExecutorLedger
   alias Elara.Effect.ExecutorLedger.Record
-  alias Elara.Effect.TestExecutor
+  alias Elara.Effect.Executor
   alias Elara.Message
   alias Elara.Message.{ToolCall, ToolResult}
   alias Elara.Session.Store
@@ -37,7 +37,7 @@ defmodule Elara.InputQueueRecoveryTest do
 
     executor_path = Path.join(root, "executor.sqlite3")
     journal_path = Path.join(root, "controller.sqlite3")
-    {:ok, executor} = TestExecutor.start_link(id: "executor-1", path: executor_path)
+    {:ok, executor} = Executor.start_link(id: "executor-1", path: executor_path)
     Process.unlink(executor)
 
     call = %ToolCall{id: "uncertain-call", name: "uncertain", args: {:ok, %{}}}
@@ -70,7 +70,7 @@ defmodule Elara.InputQueueRecoveryTest do
     job_id = only_job_id(journal_path)
 
     assert {:indeterminate, %Record{result: {:indeterminate, "killed mid-run"}}} =
-             TestExecutor.query(executor, job_id)
+             Executor.query(executor, job_id)
 
     {:ok, info} = Store.newest(cwd)
     kill_session(session)
@@ -92,7 +92,7 @@ defmodule Elara.InputQueueRecoveryTest do
 
     on_exit(fn ->
       if match?({:ok, _}, Elara.session_pid(resumed)), do: stop_session(resumed)
-      if Process.alive?(executor), do: TestExecutor.close(executor)
+      if Process.alive?(executor), do: Executor.close(executor)
     end)
 
     assert {:ok, _} = Elara.submit_input(resumed, attrs("second", "after restart"))
@@ -122,7 +122,7 @@ defmodule Elara.InputQueueRecoveryTest do
     executor_path = Path.join(root, "executor.sqlite3")
     journal_path = Path.join(root, "controller.sqlite3")
 
-    {:ok, executor} = TestExecutor.start_link(id: "executor-1", path: executor_path)
+    {:ok, executor} = Executor.start_link(id: "executor-1", path: executor_path)
 
     Process.unlink(executor)
 
@@ -156,11 +156,11 @@ defmodule Elara.InputQueueRecoveryTest do
     job_id = only_job_id(journal_path)
     kill_executor(executor)
 
-    {:ok, executor} = TestExecutor.start_link(id: "executor-1", path: executor_path)
+    {:ok, executor} = Executor.start_link(id: "executor-1", path: executor_path)
     Process.unlink(executor)
 
     assert {:accepted, %Record{callback_attempt_count: 1} = accepted} =
-             TestExecutor.query(executor, job_id)
+             Executor.query(executor, job_id)
 
     queued_reply = {:ok, assistant("queued done")}
     {:ok, resumed_agent} = Agent.start_link(fn -> [queued_reply] end)
@@ -179,7 +179,7 @@ defmodule Elara.InputQueueRecoveryTest do
 
     on_exit(fn ->
       if match?({:ok, _}, Elara.session_pid(resumed)), do: stop_session(resumed)
-      if Process.alive?(executor), do: TestExecutor.close(executor)
+      if Process.alive?(executor), do: Executor.close(executor)
     end)
 
     assert [%ToolResult{outcome: {:indeterminate, _}}] = tool_results(resumed)
@@ -208,7 +208,7 @@ defmodule Elara.InputQueueRecoveryTest do
     assert :ok = ExecutorLedger.close(ledger)
 
     assert_eventually(fn ->
-      match?({:completed, %Record{}}, TestExecutor.query(executor, job_id))
+      match?({:completed, %Record{}}, Executor.query(executor, job_id))
     end)
 
     assert_eventually(fn ->
@@ -257,7 +257,7 @@ defmodule Elara.InputQueueRecoveryTest do
 
     executor_path = Path.join(root, "executor.sqlite3")
     journal_path = Path.join(root, "controller.sqlite3")
-    {:ok, executor} = TestExecutor.start_link(id: "executor-1", path: executor_path)
+    {:ok, executor} = Executor.start_link(id: "executor-1", path: executor_path)
     Process.unlink(executor)
 
     queued_reply = {:ok, assistant("queued done")}
@@ -291,7 +291,7 @@ defmodule Elara.InputQueueRecoveryTest do
 
     on_exit(fn ->
       if match?({:ok, _}, Elara.session_pid(session)), do: stop_session(session)
-      if Process.alive?(executor), do: TestExecutor.close(executor)
+      if Process.alive?(executor), do: Executor.close(executor)
     end)
 
     assert {:ok, _} = Elara.submit_input(session, attrs("active", "start live mutation"))
@@ -320,7 +320,7 @@ defmodule Elara.InputQueueRecoveryTest do
     job_id = only_job_id(journal_path)
 
     assert_eventually(fn ->
-      match?({:completed, %Record{}}, TestExecutor.query(executor, job_id))
+      match?({:completed, %Record{}}, Executor.query(executor, job_id))
     end)
 
     assert_eventually(fn ->
@@ -357,7 +357,7 @@ defmodule Elara.InputQueueRecoveryTest do
 
     executor_path = Path.join(root, "executor.sqlite3")
     journal_path = Path.join(root, "controller.sqlite3")
-    {:ok, executor} = TestExecutor.start_link(id: "executor-1", path: executor_path)
+    {:ok, executor} = Executor.start_link(id: "executor-1", path: executor_path)
     Process.unlink(executor)
 
     provider =
@@ -387,7 +387,7 @@ defmodule Elara.InputQueueRecoveryTest do
 
     on_exit(fn ->
       if match?({:ok, _}, Elara.session_pid(session)), do: stop_session(session)
-      if Process.alive?(executor), do: TestExecutor.close(executor)
+      if Process.alive?(executor), do: Executor.close(executor)
     end)
 
     assert {:ok, _} = Elara.submit_input(session, attrs("active", "start mutation"))

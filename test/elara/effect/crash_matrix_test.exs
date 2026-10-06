@@ -5,7 +5,7 @@ defmodule Elara.Effect.CrashMatrixTest do
   alias Elara.Effect.ControllerJournal.Observation
   alias Elara.Effect.ExecutorLedger.Record
   alias Elara.Effect.Job
-  alias Elara.Effect.TestExecutor
+  alias Elara.Effect.Executor
   alias Elara.Message
   alias Elara.Message.{ToolCall, ToolResult}
   alias Elara.Session.Store
@@ -76,7 +76,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert [] = marker_records(context.marker_path)
 
     stop_session(recovered)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "row 1: crash before controller intent commit classifies not_started without execution",
@@ -131,7 +131,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert elapsed <= @bound_ms
 
     stop_session(recovered)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "row 2: crash after intent commit recovers unknown with one same-identity submit",
@@ -160,7 +160,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert_receive {:controller_hook, :after_intent_commit_before_dispatch, _journal}, @bound_ms
     store_path = newest_store_path(context.cwd)
     {job, nil} = controller_evidence(context.journal_path)
-    assert :unknown = TestExecutor.query(executor, job.job_id)
+    assert :unknown = Executor.query(executor, job.job_id)
     assert [] = marker_records(context.marker_path)
     kill_session(session)
 
@@ -172,7 +172,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert elapsed <= @bound_ms
 
     stop_session(recovered)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "row 3: crash after receipt rolls back acceptance and resubmits on the reopened owner",
@@ -197,7 +197,7 @@ defmodule Elara.Effect.CrashMatrixTest do
 
     started = now_ms()
     reopened = start_executor(context.executor_path)
-    assert :unknown = TestExecutor.query(reopened, job.job_id)
+    assert :unknown = Executor.query(reopened, job.job_id)
     assert :ok = Elara.replace_effect_executor(session, reopened)
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
     elapsed = elapsed_ms(started)
@@ -206,7 +206,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert elapsed <= @bound_ms
 
     stop_session(session)
-    assert :ok = TestExecutor.close(reopened)
+    assert :ok = Executor.close(reopened)
   end
 
   test "row 4: crash after acceptance commit continues accepted zero-attempt work once",
@@ -235,7 +235,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     reopened = start_executor(context.executor_path)
 
     assert {:accepted, %Record{admission_count: 1, callback_attempt_count: 0}} =
-             TestExecutor.query(reopened, job.job_id)
+             Executor.query(reopened, job.job_id)
 
     assert :ok = Elara.replace_effect_executor(session, reopened)
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
@@ -245,7 +245,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert elapsed <= @bound_ms
 
     stop_session(session)
-    assert :ok = TestExecutor.close(reopened)
+    assert :ok = Executor.close(reopened)
   end
 
   test "row 5: crash after accepted observation continues only on the same owner", context do
@@ -273,7 +273,7 @@ defmodule Elara.Effect.CrashMatrixTest do
 
     started = now_ms()
     reopened = start_executor(context.executor_path)
-    assert {:accepted, ^accepted} = TestExecutor.query(reopened, job.job_id)
+    assert {:accepted, ^accepted} = Executor.query(reopened, job.job_id)
     assert :ok = Elara.replace_effect_executor(session, reopened)
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
     elapsed = elapsed_ms(started)
@@ -282,7 +282,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert elapsed <= @bound_ms
 
     stop_session(session)
-    assert :ok = TestExecutor.close(reopened)
+    assert :ok = Executor.close(reopened)
   end
 
   test "row 6: crash after external mutation reports indeterminate and never reinvokes",
@@ -317,7 +317,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     reopened = start_executor(context.executor_path)
 
     assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0}} =
-             TestExecutor.query(reopened, job.job_id)
+             Executor.query(reopened, job.job_id)
 
     assert :ok = Elara.replace_effect_executor(session, reopened)
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
@@ -328,7 +328,7 @@ defmodule Elara.Effect.CrashMatrixTest do
               admission_count: 1,
               callback_attempt_count: 1,
               terminal_count: 0
-            } = attempted} = TestExecutor.query(reopened, job.job_id)
+            } = attempted} = Executor.query(reopened, job.job_id)
 
     assert {1, 1, 0} = executor_totals(context.executor_path)
     assert [^marker] = marker_records(context.marker_path)
@@ -354,7 +354,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert elapsed <= @bound_ms
 
     stop_session(session)
-    assert :ok = TestExecutor.close(reopened)
+    assert :ok = Executor.close(reopened)
   end
 
   test "row 7: crash after completion commit recovers the causal terminal result without callback",
@@ -386,7 +386,7 @@ defmodule Elara.Effect.CrashMatrixTest do
 
     started = now_ms()
     reopened = start_executor(context.executor_path)
-    assert {:completed, completed} = TestExecutor.query(reopened, job.job_id)
+    assert {:completed, completed} = Executor.query(reopened, job.job_id)
     assert :ok = Elara.replace_effect_executor(session, reopened)
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
     elapsed = elapsed_ms(started)
@@ -395,7 +395,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert elapsed <= @bound_ms
 
     stop_session(session)
-    assert :ok = TestExecutor.close(reopened)
+    assert :ok = Executor.close(reopened)
   end
 
   test "row 8: crash after terminal observation persists one result before transcript repair",
@@ -452,7 +452,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert elapsed <= @bound_ms
 
     stop_session(recovered)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "control: no fault produces one intent, admission, attempt, mutation, and result",
@@ -471,7 +471,7 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert elapsed <= @bound_ms
 
     stop_session(session)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "control: same ID and digest replay preserves accepted and terminal evidence", context do
@@ -499,11 +499,11 @@ defmodule Elara.Effect.CrashMatrixTest do
     started = now_ms()
 
     assert {:accepted, ^accepted} =
-             TestExecutor.submit(executor, job.job_id, job.operation_digest, fn ->
+             Executor.submit(executor, job.job_id, job.operation_digest, fn ->
                raise "same-digest accepted replay invoked callback"
              end)
 
-    assert {:accepted, ^accepted} = TestExecutor.query(executor, job.job_id)
+    assert {:accepted, ^accepted} = Executor.query(executor, job.job_id)
     assert elapsed_ms(started) <= @bound_ms
     assert {1, 0, 0} = executor_totals(context.executor_path)
     assert [] = marker_records(context.marker_path)
@@ -512,21 +512,21 @@ defmodule Elara.Effect.CrashMatrixTest do
     send(task, {:continue, :after_accept_observation_before_continue})
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
 
-    assert {:completed, completed} = TestExecutor.query(executor, job.job_id)
+    assert {:completed, completed} = Executor.query(executor, job.job_id)
 
     started = now_ms()
 
     assert {:completed, ^completed} =
-             TestExecutor.submit(executor, job.job_id, job.operation_digest, fn ->
+             Executor.submit(executor, job.job_id, job.operation_digest, fn ->
                raise "same-digest terminal replay invoked callback"
              end)
 
-    assert {:completed, ^completed} = TestExecutor.query(executor, job.job_id)
+    assert {:completed, ^completed} = Executor.query(executor, job.job_id)
     assert elapsed_ms(started) <= @bound_ms
     assert_success(session, executor, context, job, fixture, completed)
 
     stop_session(session)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "control: same ID with conflicting digest is rejected before mutation", context do
@@ -554,11 +554,11 @@ defmodule Elara.Effect.CrashMatrixTest do
     started = now_ms()
 
     assert {:error, :digest_conflict} =
-             TestExecutor.submit(executor, job.job_id, conflicting_job.operation_digest, fn ->
+             Executor.submit(executor, job.job_id, conflicting_job.operation_digest, fn ->
                raise "conflicting digest invoked callback"
              end)
 
-    assert {:accepted, ^accepted} = TestExecutor.query(executor, job.job_id)
+    assert {:accepted, ^accepted} = Executor.query(executor, job.job_id)
     assert elapsed_ms(started) <= @bound_ms
     assert {1, 0, 0} = executor_totals(context.executor_path)
     assert [] = marker_records(context.marker_path)
@@ -568,12 +568,12 @@ defmodule Elara.Effect.CrashMatrixTest do
     assert_success(session, executor, context, job, fixture)
 
     stop_session(session)
-    assert :ok = TestExecutor.close(executor)
+    assert :ok = Executor.close(executor)
   end
 
   defp assert_success(session, executor, context, job, fixture, expected_record \\ nil) do
     token = fixture["token"]
-    assert {:completed, %Record{} = completed} = TestExecutor.query(executor, job.job_id)
+    assert {:completed, %Record{} = completed} = Executor.query(executor, job.job_id)
     if expected_record, do: assert(completed == expected_record)
 
     assert completed.operation_digest == job.operation_digest
@@ -689,7 +689,7 @@ defmodule Elara.Effect.CrashMatrixTest do
 
   defp start_executor(path, hook \\ nil) do
     {:ok, executor} =
-      TestExecutor.start_link(id: "executor-1", path: path, fault_hook: hook || no_fault())
+      Executor.start_link(id: "executor-1", path: path, fault_hook: hook || no_fault())
 
     Process.unlink(executor)
     executor

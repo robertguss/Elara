@@ -75,7 +75,7 @@ Experimental `allowed-tools` and vendor-specific fields never grant capabilities
 or start plugins/MCP servers. Scripts run through ordinary `bash`, with its
 existing limits and outcome reporting; missing dependencies fail normally.
 Restart a session to rediscover metadata; selected files are reread and
-validated when loaded. Existing coordinator children rediscover in their own
+validated when loaded. Delegated children rediscover in their own
 working directory and inherit explicitly configured skill paths and capability
 limits.
 
@@ -436,7 +436,7 @@ no invented aggregate subscription accounting. F11 remains ordinary workspace
 session discovery. Observers can inspect/open but cannot delegate, integrate,
 clean up or stop work.
 
-Parent stop/detach, coordinator stop and sibling failure do not stop children.
+Parent stop/detach and sibling failure do not stop children.
 `/stop-subtree` explicitly requests interruption of this session and
 descendants; already-dispatched effects may still be settling. Stop never
 removes a worktree. An embedded VM still exits with its TUI: saved recovery is

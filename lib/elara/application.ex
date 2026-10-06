@@ -16,7 +16,6 @@ defmodule Elara.Application do
       {DynamicSupervisor, name: Elara.EffectExecutorSup, strategy: :one_for_one},
       {DynamicSupervisor, name: Elara.PluginSup, strategy: :one_for_one},
       {DynamicSupervisor, name: Elara.SessionSup, strategy: :one_for_one},
-      {DynamicSupervisor, name: Elara.CoordinatorSup, strategy: :one_for_one},
       Elara.Threads,
       Elara.Threads.Communication,
       Elara.TestJobs

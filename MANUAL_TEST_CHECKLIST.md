@@ -598,31 +598,17 @@ recording = Elara.recording(session)
 - [ ] Truncated tail records are ignored safely; genuinely incomplete recorded
       transitions are reported rather than treated as a match.
 
-## 13. Coordinated child sessions (**credentials**, advanced/costly)
+## 13. Delegated child sessions (**credentials**, advanced/costly)
 
-Start a parent session, then use `Elara.start_coordinator/2` and
-`Elara.Coordinator.run/4` as shown in
-[`docs/elixir-api.md`](docs/elixir-api.md). Use small prompts and budgets: every
-child can make provider requests.
+Use `Elara.Threads.start_child/3` as shown in
+[`docs/elixir-api.md`](docs/elixir-api.md) with small assignments. Every child
+can make provider requests. The retired Coordinator batch patterns, judging,
+map/reduce and aggregate budgets are not available.
 
-- [ ] `:parallel` runs independent bounded child specs.
-- [ ] `:specialists` assigns distinct roles/prompts.
-- [ ] `:candidates` runs candidates and a required `judge:` selects one.
-- [ ] `:map_reduce` runs map children and a required `reducer:` combines them.
-- [ ] Child specs require unique `id:` and `prompt:`; `role:` defaults to
-      `:general`.
-- [ ] `max_concurrency`, `token_budget`, `time_budget_ms`, and maximum result
-      size bound a run; status reports used/remaining budgets and child
-      progress.
-- [ ] Child failures are isolated and represented in the structured result;
-      compact results do not insert child transcripts into the parent.
-- [ ] `Elara.Coordinator.kill_child/2` kills one child without stopping
-      siblings.
-- [ ] A `role: :coding` child receives a distinct detached Git worktree; this
-      requires the parent cwd to be a Git checkout.
-- [ ] Stopping the coordinator stops children and removes temporary coding
-      worktrees.
-- [ ] Coordinator status includes currently registered worker health.
+- [ ] The child resolves its own project instructions and configured skills.
+- [ ] Child failure and parent stop leave independent siblings running.
+- [ ] A coding child has its managed Git branch/worktree; stopping does not
+      remove it. Review integration and cleanup through the public Threads path.
 
 ## 14. Security boundaries and documented limits
 

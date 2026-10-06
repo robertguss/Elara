@@ -6,13 +6,14 @@ defmodule Elara.Lab.Artifacts do
     source = String.split(tracked, <<0>>, trim: true) |> Enum.map(&Path.join(repo, &1))
     build = Application.app_dir(:elara) |> Path.dirname() |> Path.dirname()
     beams = Path.wildcard(Path.join(build, "lib/*/ebin/*.beam"))
+    consolidated = Path.wildcard(Path.join(build, "lib/*/consolidated/*.beam"))
 
     shared =
       Path.wildcard(Path.join(build, "lib/*/priv/**/*"))
       |> Enum.filter(&(Path.extname(&1) in [".so", ".dylib"]))
 
     native = Application.app_dir(:elara, "priv/native/exec-stub")
-    files = Map.new(source ++ beams ++ shared ++ [native], &{&1, hash(&1)})
+    files = Map.new(source ++ beams ++ consolidated ++ shared ++ [native], &{&1, hash(&1)})
     true = Enum.all?(files, fn {_, digest} -> is_binary(digest) and byte_size(digest) == 64 end)
 
     modules =

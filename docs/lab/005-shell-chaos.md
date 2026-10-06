@@ -846,7 +846,8 @@ This is a finite set of checkpoints, not an exhaustive fault cross-product.
 
 `MatrixRunner` launches one fresh externally owned peer per row with two BEAM
 schedulers and observed production supervisor intensity 3/period 5. Source,
-dependency BEAM, loaded-module and native hashes are frozen in a registration.
+application/dependency BEAMs, consolidation blobs, loaded application/dependency
+module MD5s and native hashes are frozen in a registration.
 Peers verify them before application admission and after shutdown. The peer
 runs from the pinned repository; HOME, TMPDIR, sessions and fixtures live under
 the disposable row root. The registered launcher invokes no repository compiler;

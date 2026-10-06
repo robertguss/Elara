@@ -7,6 +7,13 @@ defmodule Elara.Lab.ArtifactsTest do
     snapshot = Artifacts.snapshot(repo) |> JSON.encode!() |> JSON.decode!()
     assert snapshot["schema"] == 1
     assert snapshot["files"][Application.app_dir(:elara, "priv/native/exec-stub")] != nil
+    build = Application.app_dir(:elara) |> Path.dirname() |> Path.dirname()
+
+    for file <- Path.wildcard(Path.join(build, "lib/*/consolidated/*.beam")) do
+      assert snapshot["files"][file] != nil
+      refute Artifacts.verify(put_in(snapshot, ["files", file], "changed-consolidation")).verified
+    end
+
     assert Artifacts.verify(snapshot).verified
 
     file = Application.app_dir(:elara, "priv/native/exec-stub")

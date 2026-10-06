@@ -35,6 +35,13 @@ remove retained evidence without a specific owner decision. Done means merged.
   red controls prove registration and cleanup defects; 22 OpaqueShell, 100
   effect, and 8 Exec integration tests passed. Logs:
   `lab/results/rob-1233-verification-20261005/`.
+- LAB-5 transport preparation protects a worker job through the handler's
+  unlink/kill interval and handles closed socket setup by cancelling the job.
+  Four TCP/Exec lifecycle tests and two new deadline regressions cover real
+  process cleanup, monitor retirement, and buffered/sustained fragments. Red
+  controls and a forced-failure cleanup check are retained in
+  `lab/results/rob-1085-transport-20261005/`. Full suite 894 passed, seed 1085.
+  PR and merge evidence are in ROB-1085; this is not full matrix acceptance.
 
 Each implementation had a reviewed diff, clean format/diff checks, both Socket
 checks, and verified squash-merge tree equality. Current main includes all
@@ -50,7 +57,8 @@ timeout, or parser change. Logs: `lab/results/rob-1216-diagnosis-20261005/`.
 The issue is Needs Input for a retained failing assertion/stack/seed. Passing
 runs are negative evidence, not a fix.
 
-LAB-5 (ROB-1085) is next: the valid pilot and recovery fix are delivered; the
+LAB-5 (ROB-1085) is Building, the one selected executable lab item. The valid
+pilot, recovery fix, and transport preparation are delivered; the
 children/handoff/jobs/client/worker/stub/whole-VM/process-group matrix and at
 least 1000 schedules remain. Review and register its expanded method before
 measurement; reuse the durable lab runner and fresh production-intensity VMs.

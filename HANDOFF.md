@@ -19,43 +19,45 @@ or delete retained evidence without a specific owner decision.
 ## Current work
 
 ROB-1105 — Gateway authentication and repository-plugin trust prompt is
-Building, selected byf490dd77; planba30ce99/correctionsb512d2ec. Branch
-work/rob-1105-gateway-trust starts at main77591c0 (metadata21bd6c9).
-Gateway requires32–512-byte configured token before listen and checks the first
-request before create/attach/list. Rust ClientConnection uses the environment;
-embedded Mix TUI generates32 random bytes if absent. Loader checks exact source
-approval before parse/compile/callback/cache reuse; explicit mix elara.trust
-[WORKSPACE] prompts and stores hashes outside repositories. No new actor/dependency
-or automatic retry. Source APIs still reject protocol1 after authentication.
+Building on work/rob-1105-gateway-trust, based on main77591c0. Runtime/source
+commit7a0281942db46cb75c845001a1c1c278b28ca0f3 is accepted locally; final
+metadata review/PR/exact-head Socket checks/merge remain. Selectionf490dd77,
+planba30ce99, corrections142cb172, freezee8d2b75c. Do not mark Done before merge.
+Gateway validates a UTF8 32–512-byte token before listen and authenticates first
+request before create/attach/list. Shared native and lab observer connections
+send it on connect/reopen; embedded TUI generates32 random bytes if absent.
+Shared Exec Port.open removes token inheritance into ordinary child commands.
+Loader checks exact already-read source before parse/compile/callback/cache;
+explicit mix elara.trust [WORKSPACE] prompts and stores approval outside repos.
+Changed/new files need approval. No new actor/dependency, sandbox or automatic
+reconnect. Protocol1 remains unsupported after authentication.
 
-Red3/3 fail then guards3 pass. Broad49/54 then53/54 preparations retained:
-old raw observer fixtures omitted auth and terminal partial redraw split a word.
-Fixtures now send synthetic credentials, socket checks full notice and PTY checks
-visible elara.trust action. New acceptance17 passed; native reconnect preparation
-wrongly expected automatic retry and is excluded. Corrected explicit /open of the
-same session, native new/list/repeated attachments and forced proxy/native cleanup
-pass in gateway5. Temporary trust root and fixture-source approvals isolate all
-checks from developer state/credentials. Raw rob-1105-gateway-trust-20261006/.
-Native118/fmt/Clippy and compile warnings-as-errors/format/diff pass.
-Five wrong implementations each fail0/1 (ignored auth, equal-length false auth,
-ignored trust, implicit consent, native header omission); exact bytes restored.
-Focused56 pass (45.5s). Remaining consumers34/35 preparation fails only missing
-approval for renamed synthetic source; fixed fixture then diagnosis10 pass.
-Configured invalid UTF8 also rejects before listen. Final raw reconnect records
-native/proxy/thread/listener/peer sockets stopped, including forced failure.
-Source commit3b6ca9a is retained. First preflight aborted on a running VM;
-its claimed freeze was withdrawn33ff39b7 and a1 terminated/unqualified with
-no Result summary. Actual fresh freeze5e32c607 contains244 tracked/3 native
-hashes, global BEAM0 before a2. Qualified a2 completed1009/1035 (312.6s,
-seed1105), actual exit2: missing lab observer auth caused18 concurrency failures;
-five raw socket fixtures, context synthetic plugin approvals and Exec child
-environment also failed. All244/3 postflight hashes matched, clean/global BEAM0.
-Correction142cb172: shared lab connection token and shared Port.open removal
-keep gateway credentials out of ordinary commands; fixture/source approvals and
-IEx guide updated. All130 tests across the eight failing modules pass (116.5s). Compile with
-warnings-as-errors/format/diff pass. Preserve every
-preparation/full log; next clean committed freeze/full-a3/self-review/PR/checks/
-merge. Do not mark Done before required acceptance and merge.
+Full-a3:1035 passed (11 properties/1024 tests), seed1105,297.4s at clean7a02819.
+Before/after244 tracked runtime/test/config/infrastructure hashes and3 test
+native artifacts match; manifest SHA7ecf68f829c0084c594e6b42467df8b1511d9208072efc5647c53b38fc28d1dc.
+Scope does not claim every compiled BEAM identity. Preflight global BEAM0.
+Initial postflight saw one transient BEAM16073; gone before ownership check,
+so origin unknown and no process was stopped. Recorded test PID7508 is dead;
+fresh readback global BEAM0, native clients/exec stubs0. Actual native reconnect
+and forced failure prove own proxy/thread/listener/peer sockets stopped.
+Native118/fmt/Clippy, focused56 plus corrected consumers130 (116.5s), compile
+warnings-as-errors/format pass. Source/docs diff check excludes retained raw logs;
+unrestricted check flags only raw trailing blank lines, preserved verbatim.
+Five wrong implementations each fail0/1 (auth ignored/equal-length bypass,
+trust ignored/implicit consent/native header omission), exact bytes restored.
+Temporary trust root/synthetic credentials/explicit fixture approvals isolate
+checks from developer state. No account-backed or physical-terminal acceptance.
+
+Retain all raw rob-1105-gateway-trust-20261006/ evidence. First preflight aborted
+on a running VM; claimed freeze withdrawn33ff39b7, a1 mistakenly started then
+terminated, no Result summary, unqualified/excluded. Qualified a2 at3b6ca9a
+completed1009/1035,312.6s,exit2, all244/3 hashes matched, clean/global BEAM0.
+Shared lab observer lacked auth (18 concurrency failures); five older raw socket
+fixture modules, context plugin approvals and token inheritance caused remainder.
+Corrected shared boundaries and fixtures, then consumers130 and full-a3 passed.
+Older red/focused/reconnect preparations stay retained/excluded; first reconnect
+incorrectly expected automatic retry, corrected test exercises explicit /open
+of the same session after a real transport drop.
 
 LAB-8/ROB-1088 is Needs Input. All scripted chunks PR#54/#55/#57/#58/#59 are
 merged. Final merge77591c02a659c0fcda495331d5469a377251d559 equals reviewed

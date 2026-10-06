@@ -1,0 +1,19 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+Running ExUnit with seed: 1088, max_cases: 28
+Excluding tags: [:test]
+Including tags: [location: {"test/elara/lab_matrix_test.exs", 84}]
+
+
+
+  1) test general job rows require actual general-api evidence (Elara.Lab.MatrixTest)
+     test/elara/lab_matrix_test.exs:84
+     Expected false or nil, got true
+     code: refute Matrix.judge(missing, cell, "reviewed-sha").eligible
+     stacktrace:
+       test/elara/lab_matrix_test.exs:90: (test)
+
+
+Finished in 0.07 seconds (0.00s async, 0.07s sync)
+
+Result: 0/1 passed, 6 excluded
+Failed: 1 test

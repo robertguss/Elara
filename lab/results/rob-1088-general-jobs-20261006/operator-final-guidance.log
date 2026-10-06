@@ -1,0 +1,7 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 1088, max_cases: 28
+
+...
+Finished in 0.02 seconds (0.02s async, 0.00s sync)
+
+Result: 3 passed

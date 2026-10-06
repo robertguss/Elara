@@ -76,7 +76,12 @@ defmodule Elara.Lab.Matrix do
           []
       end
 
-    Map.fetch!(@checks, cell.scenario) ++ extra
+    api =
+      if cell.scenario == "job_recovery" and cell.params["api"] == "job",
+        do: ["general_job_api"],
+        else: []
+
+    Map.fetch!(@checks, cell.scenario) ++ extra ++ api
   end
 
   def judge(row, cell, commit) when is_map(row) do

@@ -302,3 +302,42 @@ before-suite freeze afterward. Postflight observes0 global/Elara BEAM; no quiet-
 host or comparative timing claim. Frozen count and postflight manifests retain
 artifact hashes and source boundaries; later readbacks are separate. Fresh final chaos/net
 comparison and separately approved real-model acceptance remain pending.
+
+## Final scripted phase — Frozen integrated recovery
+
+Operator PR#58 merged at b001c38, tree-equal to reviewed92e0470 after both
+actual exact-head Socket checks passed; deliveryd4e39bfc and review69a263a8
+retain exact full-testedf248162 boundaries. LAB8 remains Building, not Done.
+
+Reuse the existing JobRecovery fixture/gates/deadlines/native probes with an
+optional api:job selecting the public Jobs tool/run and mix_test arguments.
+Absent option retains the original workload. Status/replay/ack compatibility
+helpers observe the same primitive. The gate records actual tool identity and
+Matrix requires general_job_api evidence for those rows. Missing evidence is
+ineligible; false evidence is an eligible failure. Invalid API selection rejects
+before fixture resources. No new scenario engine, provider, profile or actor.
+
+The new five API checks first fail0/5; missing-Matrix-evidence check fails0/1.
+Focused recovery/Matrix24 pass (13.3s), including forced preparation failures
+through legacy and general APIs with actual actor/group stop assertions.
+Compile warnings-as-errors, format and diff checks pass. Full suite and source
+freeze are next. Raw preparations/controls remain retained.
+
+Plan dc1a9002 declares one fresh finite32-cell regression: original24 checkpoints,
+3 receipt transport checkpoints and5 general-job admission loss checkpoints,
+seeds1088700–1088731. Register exact source, compiled/native hashes, cells and
+60-second timeout before launch in rob-1088-final-chaos-20261006-a1. Use the
+existing MatrixRunner/S2 peers/production supervisor3/5/causal/OS cleanup checks;
+stop on failed, ineligible or unconfirmed cleanup. No edits/compiles/tests during
+launch. This is separate from the original registered1200 measurement and is
+not a performance comparison or proof over every possible schedule.
+
+Current declared count129 files/49,387 source+infrastructure lines,+24 final
+recovery variant/+1,012 cumulative versus48,375. Native inline tests and all
+compatibility/runtime/infrastructure additions remain included. Session stays
+2860 versus2657 baseline (+203); no Session change in operator/final variants.
+The baseline named thread_wait execution branch now shares one branch with
+completion_wait; compatibility aliases remain rather than counting their
+removal as a win. The total increase refutes the net-reduction hypothesis.
+Final frozen regression/results and separately approved capped real-model
+awaited-completion acceptance remain pending.

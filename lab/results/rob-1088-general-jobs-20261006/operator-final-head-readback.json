@@ -1,0 +1,13 @@
+{
+  "head": "92e0470e839b99dfcfe4a19679c9c816d34966da",
+  "frozen": "f248162cd81cebc28fed3cb78f7e460d707981af",
+  "source_test_hashes_matched": 240,
+  "changed_since_frozen": [
+    "HANDOFF.md",
+    "docs/lab/008-general-jobs.md",
+    "lab/results/rob-1088-general-jobs-20261006/operator-frozen-source-f248162.json",
+    "lab/results/rob-1088-general-jobs-20261006/operator-full-suite-a1.log",
+    "lab/results/rob-1088-general-jobs-20261006/operator-postflight.json",
+    "lab/results/rob-1088-general-jobs-20261006/operator-source-counts-f248162.json"
+  ]
+}

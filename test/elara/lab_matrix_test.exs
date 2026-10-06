@@ -81,6 +81,20 @@ defmodule Elara.Lab.MatrixTest do
         do: assert(Matrix.judge(invalid, cell, "reviewed-sha").stop)
   end
 
+  test "general job rows require actual general-api evidence" do
+    cell = Matrix.plan(1, 42) |> Enum.find(&(&1.scenario == "job_recovery"))
+    cell = %{cell | params: Map.put(cell.params, "api", "job")}
+    row = fixture(cell) |> put_in(["checks", "general_job_api"], true)
+    assert Matrix.judge(row, cell, "reviewed-sha").passed
+    missing = Map.update!(row, "checks", &Map.delete(&1, "general_job_api"))
+    refute Matrix.judge(missing, cell, "reviewed-sha").eligible
+    failed = put_in(row, ["checks", "general_job_api"], false)
+    verdict = Matrix.judge(failed, cell, "reviewed-sha")
+    assert verdict.eligible
+    refute verdict.passed
+    assert verdict.failed_checks == ["general_job_api"]
+  end
+
   test "unconfirmed cleanup and observed retention stop reuse even with otherwise valid evidence" do
     [cell | _] = Matrix.plan(1, 42)
     row = fixture(cell)

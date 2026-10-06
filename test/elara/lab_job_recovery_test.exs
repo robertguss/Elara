@@ -41,6 +41,34 @@ defmodule Elara.Lab.JobRecoveryTest do
     assert length(Enum.uniq(Enum.map(schedules, & &1.ttft_ms))) > 5
   end
 
+  for stage <- ~w(session_running runner_running manager_running executor_running stub_running) do
+    test "general job API at #{stage} preserves the same recovery guarantees" do
+      assert {:ok, [result]} =
+               Elara.Lab.run("job_recovery",
+                 seed: 42,
+                 params: %{"stage" => unquote(stage), "api" => "job"}
+               )
+
+      assert result.complete, inspect({result.error, result.checks})
+      assert Elara.Lab.failed_checks(result) == [], inspect(result)
+      assert result.cleanup.confirmed, inspect(result.cleanup)
+      assert result.launches == 1
+      assert result.native.after.stopped
+      assert result.job["profile"] == "mix_test"
+      assert result.checks.general_job_api
+      tool = Enum.find(result.ordering, &(&1.point == :job_tool_task))
+      assert tool.details[:tool] == "job"
+    end
+  end
+
+  test "invalid API selection rejects before fixture resources are created" do
+    for invalid <- [nil, false, 1, "unknown"] do
+      assert_raise ArgumentError, "unknown job API #{inspect(invalid)}", fn ->
+        JobRecovery.run(%{params: %{"api" => invalid}})
+      end
+    end
+  end
+
   test "a released source callback rejects the nominated fault" do
     assert {:ok, [result]} =
              Elara.Lab.run("job_recovery",
@@ -105,15 +133,16 @@ defmodule Elara.Lab.JobRecoveryTest do
     refute result.checks.target_down_witnessed
   end
 
-  for stage <- ~w(session_running manager_running) do
-    test "forced failure at #{stage} settles actors and the real command group" do
+  for stage <- ~w(session_running manager_running), api <- ~w(test_job job) do
+    test "forced failure at #{stage} through #{api} settles actors and the real command group" do
       stage = unquote(stage)
+      api = unquote(api)
       test_owner = self()
 
       assert {:ok, [result]} =
                Elara.Lab.run("job_recovery",
                  seed: 42,
-                 params: %{"stage" => stage},
+                 params: %{"stage" => stage, "api" => api},
                  hook: fn
                    {:before_fault,
                     %{gate: gate, session_pid: session, runner_pid: runner, native: native}} ->

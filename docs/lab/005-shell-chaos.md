@@ -341,3 +341,76 @@ intentional assertion failure (`cleanup-failure-control.log`). Full output is
 `full-suite.log`; delivery evidence is recorded in ROB-1085. These checks do not establish
 production-intensity VM recovery, input receipt safety across the remaining
 matrix, or the required seeded measurement.
+
+### Handoff observer preparation (2026-10-05)
+
+This is harness preparation, excluded from the pilot and the required >=1000
+schedule matrix. Base is `3cb4d35`; delivery and final verification are recorded
+in ROB-1085. Raw controls are in
+`lab/results/rob-1085-expanded-preparation-20261005/`.
+
+`handoff_recovery` gates A's first provider request, positively observes queued
+B/C receipts before releasing A, and kills the monitored source at one of five
+public handoff lifecycle hooks. It also reads the durable checkpoint before
+injection: prepared has no successor, created/transferred have an inactive
+successor, activated still has source stage transferred with an activated
+successor, and started has source stage started. An activated hook is not a
+durable stage named activated. Both target monitors must observe killed after
+the one nominated injection, while that hook remains held.
+
+The read-only observer follows persisted successor links, including successors
+that finished before recovery attachment. It validates parent/workspace and
+receipt identities, the declared input roster, unique history/call IDs, linear
+history, at-most-once User consumption, and matching tool results in each
+input's own segment. These are closed fixtures with distinct User payloads,
+not an observer for arbitrary branched production histories. A consumed
+receipt alone is insufficient. Successful completion requires that input's
+own non-interrupted persisted terminal and settled tools. A durable failed
+receipt, an interrupted turn, and a paused queue remain separate outcomes.
+
+Normal source handoff emits interrupted without necessarily appending a
+terminal Assistant. Its own observed User followed by exactly one interrupted
+event, matching its persisted consumed receipt with no active input or pending
+tool, can establish interruption. This cannot establish success. The collector
+subscribes before A; short-lived probe helpers never own its subscription.
+Physical marker labels are independent effect counts and never completion
+proof. Stale/wrong-session/duplicate events, wrong terminals, unexpected input
+history/receipts, repeated consumption, and misplaced tool results are rejected.
+
+Queue order and bounded provider timing vary by seed. Each input has at most
+one marker, and no marker is replayed by the continuation. The recovery clock
+starts before reopening; its bound is 5 seconds. Continuation plus two queued
+inputs must settle within 7 seconds of reopening (5 seconds plus two bounded
+1-second input allowances). Late observations cannot repair a missed clock.
+The reported digest hashes the selected schedule, including its seed; digest
+differences alone do not prove schedule diversity or timing variance.
+
+Cleanup is installed before waits. Gate admission closes atomically before
+collecting callers. Provider and marker callbacks must be admitted before
+doing work; admitted callers are monitored, killed, and awaited separately
+from session/helper/script cleanup. Forced failures with the provider or
+source held confirm their observed actors die. A released hook or target
+death before injection is an invalid fault row. Temporary wrong-code controls
+which promoted consumed-only completion or accepted premature death both
+failed and were restored. An additional red control exposed previously
+unaccounted inputs; the observer now rejects them.
+
+The initial nil-Boolean reporting failure, mismatched scripted streamed text,
+activated checkpoint name-equality failures, and full-suite registry-list
+failure are retained as harness/fixture failures, not runtime findings. Final
+focused verification passed 38 tests, seed 1085. The reviewed preparation
+produced five complete rows in five fresh dev VMs with production restart
+defaults, all 21 checks and cleanup true: recovery 16–243 ms and backlog
+settlement 18–245 ms. Raw rows and source hashes are in `production-reviewed/`.
+These rows use dirty source at the stated base and are preparatory observations.
+
+Limits: this family uses a same-VM scripted provider and textual inputs. It
+does not prove whole-VM restart, child/test-job/native process-group safety,
+executor slot/acknowledgment behavior, or the complete transport matrix.
+Those families and the expanded registered measurement remain unfinished.
+
+Integrated verification after the separately delivered ROB-1324 fixture repair
+passed all 914 full-suite checks (11 properties, 903 tests), seed 1085, in
+238.4 seconds. Its raw output is `full-suite-integrated.log`. The handoff lab
+code and preparation source hashes are unchanged; these tests add no registered
+measurement rows. Earlier failed suite output remains retained.

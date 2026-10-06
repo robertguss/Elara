@@ -749,6 +749,11 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Coordinator do
   def handle_call({:track, :collector, collector}, _from, state),
     do: {:reply, :ok, %{state | collectors: [collector | state.collectors]}}
 
+  def handle_call({:track, :worker, worker}, _from, state) when is_pid(worker) do
+    Process.monitor(worker)
+    {:reply, :ok, %{state | workers: MapSet.put(state.workers, worker)}}
+  end
+
   def handle_call(:snapshot, _from, state), do: {:reply, public_state(state), state}
 
   def handle_call(:evidence, _from, state) do

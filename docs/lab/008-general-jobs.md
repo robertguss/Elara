@@ -257,3 +257,44 @@ no count; excluded. The increase is negative evidence for the reduction
 hypothesis. Operator acknowledgment, fresh final chaos/comparison and the
 separately approved real-model acceptance remain pending. This supporting chunk
 does not complete LAB-8.
+
+## Chunk 4 — Operator job acknowledgment
+
+The attached v2 server reuses Jobs status and acknowledge_stopped for its own
+logical session's jobs. Observers can inspect; acknowledgment requires control,
+a nonempty job ID of at most128 bytes and explicit confirm_stopped:true. Extra
+session/force/settlement fields cannot override the attached owner or backend.
+Only indeterminate capacity is released after stopped confirmation; original
+status, output, completion identity/body and inbox receipt remain unchanged.
+Duplicate start still returns that evidence and never replays execution.
+
+TUI /job and /ack-job-stopped reuse the existing Inspection pane and slash help.
+The latter explicitly confirms the command and descendants stopped. An optional
+JSON-string argument preserves opaque whitespace/Unicode IDs; malformed/empty/
+over128-byte IDs retain the draft and show usage. No actor, ledger, record field,
+profile, model acknowledgment tool or dependency is added.
+
+Public TCP acceptance first failed0/1 with invalid_command, then passed1/1.
+Two native checks first failed0/2, then passed2/2: command parsing/controller
+restrictions and actual rendered Inspection in every layout for held/unknown
+and released/operator_confirmed evidence, retaining indeterminate and escaped
+untrusted output. Focused JobsProfile/TestJobs/Server41 pass (19.8s), including
+existing real native known-pending/late-settlement guards. These are scripted
+and native buffer checks, not physical owner or real-model acceptance.
+
+Removing controller authority or explicit confirmation each fails the sole
+executed public check0/1. A separate forced assertion after three attached
+sockets fails0/1; its saved a2 witness proves server/foreign session stopped,
+sockets closed and temporary root removed. All temporary mutations restore
+source bytes exactly. The first cleanup preparation's hardcoded line shifted
+when instrumentation was inserted and selected the preceding passing test;
+no witness existed, so that attempt is excluded rather than cleanup evidence.
+Raw operator-* logs/manifests/scripts remain in the same retained namespace.
+
+The provisional count is129 files/49,363 source/infrastructure lines, +157 this
+chunk/+988 cumulative. The declared count includes native inline tests;
+Elixir test changes add122 lines and raw control Python is77 lines, reported
+separately. Session stays2860 lines. Compile warnings-as-errors, Mix/native
+format, Clippy all-targets warnings-as-errors, native118 and diff checks pass.
+The full suite will be pinned to the source commit before review. Fresh final chaos/net
+comparison and separately approved real-model acceptance remain pending.

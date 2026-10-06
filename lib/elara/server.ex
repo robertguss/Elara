@@ -407,7 +407,9 @@ defmodule Elara.Server do
               "child_acknowledge",
               "child_integrate",
               "child_cleanup",
-              "child_stop_subtree"
+              "child_stop_subtree",
+              "job_status",
+              "job_acknowledge_stopped"
             ] do
     lifecycle_command(session, command, request, provider, lifetime)
   end
@@ -542,11 +544,50 @@ defmodule Elara.Server do
   end
 
   defp lifecycle_cwd(session, command)
-       when command in ["session_list", "session_tree", "child_list", "thread_parent"],
+       when command in [
+              "session_list",
+              "session_tree",
+              "child_list",
+              "thread_parent",
+              "job_status"
+            ],
        do: {:ok, Elara.cwd(session)}
 
   defp lifecycle_cwd(session, _command),
     do: Elara.attached_command(session, :input_workspace)
+
+  defp run_lifecycle_command(session, "job_status", %{"job_id" => id}, _provider, cwd, _lifetime)
+       when is_binary(id) and byte_size(id) in 1..128 do
+    with {:ok, json} <-
+           Elara.Jobs.run(%{"action" => "status", "job_id" => id}, %Elara.Tool.Ctx{
+             session_id: session,
+             cwd: cwd
+           }) do
+      {:ok, %{"type" => "job_result", "version" => 2, "result" => JSON.decode!(json)}}
+    end
+  end
+
+  defp run_lifecycle_command(
+         session,
+         "job_acknowledge_stopped",
+         %{"job_id" => id} = request,
+         _provider,
+         _cwd,
+         _lifetime
+       )
+       when is_binary(id) and byte_size(id) in 1..128 do
+    if request["confirm_stopped"] == true do
+      with {:ok, record} <- Elara.Jobs.acknowledge_stopped(session, id) do
+        {:ok, %{"type" => "job_result", "version" => 2, "result" => record}}
+      end
+    else
+      {:error, :stopped_confirmation_required}
+    end
+  end
+
+  defp run_lifecycle_command(_session, command, _request, _provider, _cwd, _lifetime)
+       when command in ["job_status", "job_acknowledge_stopped"],
+       do: {:error, :invalid_job_id}
 
   defp run_lifecycle_command(session, "child_start", request, _provider, _cwd, _lifetime) do
     with {:ok, child} <-

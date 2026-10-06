@@ -1,0 +1,154 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Compiling 2 files (.ex)
+    Checking elara-tui v0.1.0 (/Users/robertguss/Projects/startups/Elara/native/elara-tui)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.58s
+   Compiling elara-tui v0.1.0 (/Users/robertguss/Projects/startups/Elara/native/elara-tui)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.56s
+     Running unittests src/lib.rs (native/elara-tui/target/debug/deps/elara_tui-271dfa8307c0d199)
+
+running 100 tests
+test appearance::tests::every_slot_resolves_and_other_colors_pass_through ... ok
+test appearance::tests::every_text_token_has_readable_contrast_on_each_surface ... ok
+test editor::tests::no_op_delete_does_not_change_the_submitted_revision ... ok
+test editor::tests::edits_graphemes_and_selection_without_splitting_emoji ... ok
+test editor::tests::repeated_history_replacement_keeps_sentinel_in_bounds_and_restores_draft ... ok
+test editor::tests::full_width_hard_break_does_not_add_a_phantom_row ... ok
+test editor::tests::history_restores_exact_selected_draft ... ok
+test editor::tests::history_refresh_preserves_original_draft ... ok
+test editor::tests::words_and_logical_line_edges ... ok
+test inbox::tests::observer_cannot_submit ... ok
+test editor::tests::wrapped_navigation_remembers_column_and_resize_preserves_state ... ok
+test appearance::tests::preferences_round_trip_and_reject_invalid_values_without_rewriting ... ok
+test presentation::tests::provider_picker_keeps_interrupt_and_detach_available_except_during_safe_paste ... ok
+test presentation::tests::provider_picker_clamps_effort_when_switching_to_a_smaller_catalog_entry ... ok
+test presentation::tests::provider_controls_send_selected_settings_without_mutating_authority_or_draft ... ok
+test presentation::tests::public_answers_and_commentary_use_markdown_styles_and_code_blocks ... ok
+test presentation::tests::public_copy_excludes_labels_and_retains_selection_after_completion_or_interrupt ... ok
+test editor::tests::paste_is_atomic_sanitized_and_bounded ... ok
+test presentation::tests::appearance_cancel_preserves_choices_and_paste_is_never_hidden ... ok
+test presentation::tests::modal_safe_paste_closes_overlays_and_preserves_draft_focus ... ok
+test presentation::tests::overlays_keep_pending_and_disconnect_visible_and_honor_controls ... ok
+test presentation::tests::inline_reasoning_selection_survives_moving_to_panes_and_hiding ... ok
+test presentation::tests::real_public_parts_stay_bound_to_turns_and_hidden_across_layouts ... ok
+test inbox::tests::accepted_restored_images_do_not_reappear_after_ingestion ... ok
+test inbox::tests::edited_draft_survives_and_malformed_receipt_does_not_settle ... ok
+test presentation::tests::typed_content_and_tools_follow_provider_output_order ... ok
+test sessions::tests::child_acknowledgement_parses_opaque_json_string_multiset ... ok
+test sessions::tests::child_actions_restrict_observers_and_preserve_explicit_history_choice ... ok
+test presentation::tests::turns_page_down_reaches_second_prompt_after_long_first_prompt ... ok
+test inbox::tests::uncertain_submission_restores_and_queries_original_identity ... ok
+test sessions::tests::fuzzy_picker_and_exact_delete_identity ... ok
+test sessions::tests::observer_cannot_mutate_but_switch_is_observe_preserving ... ok
+test sessions::tests::job_actions_preserve_opaque_ids_and_require_controller_confirmation ... ok
+test sessions::tests::notification_acknowledgement_is_local_and_survives_resnapshot ... ok
+test presentation::tests::thinking_overlay_honors_its_f4_show_control ... ok
+test presentation::tests::turns_open_resets_thinking_overlay_scroll ... ok
+test sessions::tests::plugin_reload_is_explicit_negotiated_and_controller_only ... ok
+test inbox::tests::unknown_id_retains_draft_and_downgrade_or_corruption_blocks_resend ... ok
+test sessions::tests::reconnect_keeps_view_state_and_picker_handles_read_only_and_disconnect ... ok
+test tests::assistant_markdown_renders_blocks_and_inline_styles ... ok
+test presentation::tests::short_modals_always_show_escape_and_restore_draft ... ok
+test tests::duplicate_patch_is_ignored_without_changing_projection ... ok
+test tests::gap_incarnation_and_invalid_patch_request_one_resnapshot ... ok
+test tests::invalid_patch_is_atomic ... ok
+test tests::paste_and_safe_fallback_never_submit_or_interrupt ... ok
+test tests::projection_applies_closed_patch_set_and_clears_stream ... ok
+test tests::delayed_acceptance_is_visible_and_late_reply_clears_only_the_submitted_draft ... ok
+test tests::rejection_and_newer_draft_survive_replies ... ok
+test tests::streaming_markdown_keeps_multiline_speaker_prefix_and_cursor ... ok
+test tests::submitted_editor_waits_for_its_own_acceptance ... ok
+test presentation::tests::workbench_turn_summaries_are_bounded_to_visible_rows ... ok
+test tests::typed_answer_supersedes_only_its_matching_legacy_live_delta ... ok
+test tests::agent_provenance_is_not_rendered_as_the_owner_in_any_layout ... ok
+test sessions::tests::related_thread_navigation_keeps_observers_read_only_in_every_layout ... ok
+test tests::user_transcript_preserves_multiline_literal_text_and_tab_stops ... ok
+test tests::acceptance_notice_is_visible_even_when_transcript_is_full ... ok
+test tests::snapshots_streaming_interruptions_and_resize_preserve_selection_and_history_draft ... ok
+test tests::tall_editor_keeps_cursor_in_bounds_and_transcript_at_80_columns ... ok
+test tool_inspection_tests::non_tool_right_click_preserves_saved_selection_and_focus ... ok
+test sessions::tests::child_picker_limit_inspection_resume_and_retention_in_all_layouts ... ok
+test sessions::tests::picker_renders_loading_empty_errors_and_scrolls_confirmation_into_view ... ok
+test tool_inspection_tests::expanded_result_selection_copy_keeps_unicode_tabs_newlines_across_wraps ... ok
+test tests::composer_frames_cover_empty_wrapped_selected_and_tall_drafts ... ok
+test tool_inspection_tests::fold_and_viewer_survive_completion_resnapshot_and_restore_transcript_position ... ok
+test tools::tests::compact_labels_reported_source_and_core_caps_separately_from_folding ... ok
+test sessions::tests::job_results_render_retained_uncertainty_and_acknowledgment_in_every_layout ... ok
+test tools::tests::outcomes_are_joined_by_call_id_and_do_not_infer_success_from_text ... ok
+test tools::tests::preview_preserves_sanitization_and_caps_unicode_without_copying_the_tail ... ok
+test tools::tests::builtin_and_plugin_views_retain_arguments_results_and_canonical_states ... ok
+test transcript::navigation_tests::mouse_selection_skips_speaker_and_soft_wraps_but_keeps_tabs_and_newlines ... ok
+test transcript::navigation_tests::finalization_uses_expected_message_position_even_for_identical_text ... ok
+test tests::frame_dump_goldens_cover_required_states ... ok
+test transcript::navigation_tests::narrow_rows_never_overflow_and_keep_original_copy_bytes ... ok
+test transcript::navigation_tests::removed_entry_falls_back_to_surviving_position_and_clamps_graphemes ... ok
+test tools::tests::long_output_and_malformed_arguments_have_lossless_inspection ... ok
+test transcript::navigation_tests::search_maps_unicode_lowercase_offsets_and_cycles ... ok
+test transcript::tests::wrapped_unicode_copy_and_anchor ... ok
+test transcript::navigation_tests::soft_wrap_breaks_between_words_and_keeps_copy_bytes ... ok
+test transcript::navigation_tests::user_turns_and_pages_preserve_explicit_follow_choice ... ok
+test tool_inspection_tests::safe_paste_closes_viewer_before_editing_draft ... ok
+test transcript::navigation_tests::output_and_repeated_layout_do_not_move_paused_anchor_or_selection ... ok
+test transcript::navigation_tests::search_paste_limit_is_atomic_and_unicode_safe ... ok
+test tool_inspection_tests::mouse_gutter_toggles_and_right_click_enters_and_leaves_viewer ... ok
+test transcript_input_tests::control_c_detaches_from_search_unless_safe_paste ... ok
+test tool_inspection_tests::viewer_reports_connection_and_pending_acceptance ... ok
+test transcript_input_tests::help_exposes_transcript_bindings_in_standard_window ... ok
+test transcript_input_tests::control_x_interrupts_search_unless_safe_paste ... ok
+test transcript_input_tests::mouse_drag_stops_follow_and_copy_mapping_excludes_speaker ... ok
+test transcript_input_tests::focus_search_and_safe_paste_preserve_local_draft ... ok
+test transcript_input_tests::outside_wheel_preserves_prompt_focus_and_submission ... ok
+test transcript_input_tests::tool_entries_use_stable_call_ids_and_retain_outcome_content ... ok
+test transcript_input_tests::pasted_search_query_does_not_edit_draft ... ok
+test transcript_input_tests::mouse_release_or_outside_down_ends_selection_drag ... ok
+test tool_inspection_tests::transcript_uses_canonical_lifecycle_status_and_retained_result ... ok
+test transcript_input_tests::composer_navigation_and_height_changes_reuse_transcript_cache ... ok
+test transcript_input_tests::reverse_mouse_drag_includes_both_cells_and_unicode_graphemes ... ok
+test tools::tests::generic_preview_bounds_traversal_of_large_strings_and_containers ... ok
+test tool_inspection_tests::tool_lifecycle_preserves_section_relative_selection_and_drag ... ok
+test presentation::tests::layout_and_theme_switches_preserve_all_shared_state_and_historical_binding ... ok
+test presentation::tests::all_twelve_combinations_render_required_states_and_frames ... ok
+
+test result: ok. 100 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
+
+     Running unittests src/main.rs (native/elara-tui/target/debug/deps/elara_tui-31c5c41503306a83)
+
+running 2 tests
+test argument_tests::end_of_options_accepts_the_reported_hyphen_leading_session ... ok
+test argument_tests::delimiter_preserves_ordinary_forms_and_rejects_extra_positionals ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/input_attachments.rs (native/elara-tui/target/debug/deps/input_attachments-daadb93b46dbca99)
+
+running 13 tests
+test attachment_extension_is_requested_and_picker_never_submits_draft ... ok
+test provider_and_attachment_pickers_have_exclusive_keyboard_ownership ... ok
+test ordinary_email_and_cancelled_at_prose_never_attach ... ok
+test repeated_identical_image_is_deduplicated_and_pending_ingest_defers_discard ... ok
+test accepted_images_discard_cache_and_cancelled_ingestion_never_adds_late_image ... ok
+test image_bytes_are_uploaded_once_and_cleanup_does_not_consume_ask_reply ... ok
+test explicit_files_preserve_unicode_cursor_and_selection_and_submit_paths ... ok
+test submitted_attachment_metadata_is_visible_without_content_blobs ... ok
+test discovery_coalesces_edits_and_cancel_reopen_keeps_one_outstanding_request ... ok
+test four_selection_limit_removal_and_accepted_revision ... ok
+test stale_discovery_and_attachment_replies_never_consume_ask_acceptance ... ok
+test image_errors_disconnect_and_safe_paste_preserve_draft ... ok
+test file_picker_mouse_and_error_empty_states_work_in_every_layout ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/session_lifecycle.rs (native/elara-tui/target/debug/deps/session_lifecycle-ada71fcfd44d9b09)
+
+running 3 tests
+test dropping_connection_shuts_down_the_cloned_reader_socket ... ok
+test reconnect_preserves_editor_and_reingests_images_but_accepts_fresh_authority ... ok
+test handoff_links_never_grant_observers_control_or_claim_disconnected_success ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests elara_tui
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

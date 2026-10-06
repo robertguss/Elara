@@ -1,0 +1,55 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+Compiling 2 files (.ex)
+     warning: variable "request" is unused (if the variable is not meant to be used, prefix it with an underscore)
+     │
+ 573 │          %{"job_id" => id} = request,
+     │                              ~~~~~~~
+     │
+     └─ lib/elara/server.ex:573:30: Elara.Server.run_lifecycle_command/6
+
+Running ExUnit with seed: 1088, max_cases: 28
+Excluding tags: [:test]
+Including tags: [location: {"test/elara/jobs_profile_test.exs", 493}]
+
+
+
+  1) test v2 operator job inspection is owner scoped and stopped acknowledgment requires controller confirmation (Elara.JobsProfileTest)
+     test/elara/jobs_profile_test.exs:491
+     match (=) failed
+     code:  assert %{"type" => "session_error", "error" => "stopped_confirmation_required"} =
+              job_request(controller, request)
+     left:  %{"type" => "session_error", "error" => "stopped_confirmation_required"}
+     right: %{
+              "result" => %{
+                "cancel_requested" => false,
+                "cwd" => "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-48896-961737842/elara-profile-5954",
+                "delivery" => "accepted",
+                "job_id" => "profiled",
+                "key" => "d933515c12c5357bb5d29211b2a7c64fde247141ff4e237641b308152884d7af",
+                "output" => "job owner restarted without terminal evidence; command not retried",
+                "owner" => "9eZJw8ihJGbvSPxAAqLHxA",
+                "settlement" => "operator_confirmed",
+                "slot" => "released",
+                "source_before" => %{
+                  "files" => 3,
+                  "scope" => "mix.exs,mix.lock,lib/**,config/**,test/**",
+                  "sha256" => "4c378499e0d0ca5e5114ad94cfc8f09dd33b587b2fdbe4c57bed16a23b7b8dcf"
+                },
+                "source_changed_now" => false,
+                "status" => "indeterminate",
+                "target" => "test/job_test.exs",
+                "version" => 1
+              },
+              "type" => "job_result",
+              "version" => 2
+            }
+     stacktrace:
+       test/elara/jobs_profile_test.exs:542: anonymous fn/3 in Elara.JobsProfileTest."test v2 operator job inspection is owner scoped and stopped acknowledgment requires controller confirmation"/1
+       (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/elara/jobs_profile_test.exs:539: (test)
+
+
+Finished in 1.4 seconds (0.00s async, 1.4s sync)
+
+Result: 0/1 passed, 14 excluded
+Failed: 1 test

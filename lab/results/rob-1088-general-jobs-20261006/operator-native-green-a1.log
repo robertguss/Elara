@@ -1,0 +1,28 @@
+   Compiling elara-tui v0.1.0 (/Users/robertguss/Projects/startups/Elara/native/elara-tui)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.06s
+     Running unittests src/lib.rs (native/elara-tui/target/debug/deps/elara_tui-271dfa8307c0d199)
+
+running 2 tests
+test sessions::tests::job_actions_preserve_opaque_ids_and_require_controller_confirmation ... ok
+test sessions::tests::job_results_render_retained_uncertainty_and_acknowledgment_in_every_layout ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 98 filtered out; finished in 0.05s
+
+     Running unittests src/main.rs (native/elara-tui/target/debug/deps/elara_tui-31c5c41503306a83)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/input_attachments.rs (native/elara-tui/target/debug/deps/input_attachments-daadb93b46dbca99)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+     Running tests/session_lifecycle.rs (native/elara-tui/target/debug/deps/session_lifecycle-ada71fcfd44d9b09)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+

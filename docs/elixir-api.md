@@ -158,6 +158,16 @@ an explicitly bounded untrusted preview. Cancelled input returns an error;
 failed processing keeps its original receipt. Repeated observations do not
 replay work. Own-job and direct-related-thread checks remain authoritative.
 
+Attached protocol v2 clients can send `job_status` with `job_id` to inspect
+their own logical session's job; observers are allowed. The controller-only
+`job_acknowledge_stopped` command additionally requires `confirm_stopped: true`
+and the operator's confirmation that the command and descendants have stopped.
+Both return `job_result` with the existing record under `result`; IDs are
+nonempty strings of at most 128 bytes. `Elara.Jobs.acknowledge_stopped/2` remains
+the settlement authority: it rejects known pending execution and releases only
+an indeterminate reservation. Status/outcome and original inbox evidence remain
+unchanged; acknowledgment never retries a command or consumes its completion.
+
 There is no ordinary tool execution deadline on a completion wait. Interrupt
 cancels waiting without cancelling the job; caller/target/transport loss retires
 subscriptions. VM loss never replays uncertain execution. Thread identity uses

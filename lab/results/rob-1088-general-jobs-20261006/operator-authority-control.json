@@ -1,0 +1,13 @@
+{
+  "mode": "authority",
+  "exit_code": 2,
+  "source_hashes": {
+    "lib/elara/server.ex": "0fad123c261f8f9dbe7e20062bcbfb68d9059f8f4bbe1df81994fbb7ee95bbc0",
+    "test/elara/jobs_profile_test.exs": "cb12d60189989f2489bc1b4628184836aaf411704f05da0678824b3c58c73474"
+  },
+  "restored_hashes": {
+    "lib/elara/server.ex": "3d6824f61b24ae3e0d316fd93ac378765addfbac56bf384ece80e2b2e5ce4efa",
+    "test/elara/jobs_profile_test.exs": "cb12d60189989f2489bc1b4628184836aaf411704f05da0678824b3c58c73474"
+  },
+  "byte_exact_restored": true
+}

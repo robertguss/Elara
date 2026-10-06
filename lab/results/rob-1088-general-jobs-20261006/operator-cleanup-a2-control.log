@@ -1,0 +1,19 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 1088, max_cases: 28
+Excluding tags: [:test]
+Including tags: [location: {"test/elara/jobs_profile_test.exs", 502}]
+
+
+
+  1) test v2 operator job inspection is owner scoped and stopped acknowledgment requires controller confirmation (Elara.JobsProfileTest)
+     test/elara/jobs_profile_test.exs:502
+     forced operator cleanup control
+     code: flunk("forced operator cleanup control")
+     stacktrace:
+       test/elara/jobs_profile_test.exs:542: (test)
+
+
+Finished in 1.4 seconds (0.00s async, 1.4s sync)
+
+Result: 0/1 passed, 14 excluded
+Failed: 1 test

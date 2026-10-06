@@ -77,6 +77,7 @@ defmodule Elara.LabTest do
                "child_recovery",
                "concurrency",
                "concurrent_jobs",
+               "group_recovery",
                "handoff_recovery",
                "job_recovery",
                "provider_fault",

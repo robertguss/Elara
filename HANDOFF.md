@@ -100,7 +100,7 @@ Those passing runs remain negative evidence, not a fix.
 
 LAB-5 (ROB-1085) is Building, the one selected executable lab item. The valid
 pilot, recovery fix, transport, handoff, child and test-job preparations are delivered.
-The full seeded matrix, managed-descendant/client/worker/whole-VM families and at least
+The full seeded matrix, client/worker/whole-VM families and at least
 1000 schedules remain. Review and register its expanded method before
 measurement; reuse the durable lab runner and fresh production-intensity VMs.
 The handoff observer/gates/five checkpoints merged in PR #39 at `a4bbef1`
@@ -115,7 +115,7 @@ passed (all 14 checks and cleanup true). Raw evidence and rejected fault/cleanup
 controls remain in `lab/results/rob-1085-job-preparation-20261005/`; note 005 and
 ROB-1085 record review and delivery. Full suite 933 (11 properties, 922 tests),
 seed 1085, passed in 251.2 seconds; guidance 3, compile/format/diff passed.
-Executor/native-stub preparation uses `work/rob-1085-native-recovery`.
+Executor/native-stub preparation merged in PR #43 at `62cbaac`.
 It positively identifies the Exec owner, connected Port, native stub and
 guardian chain before injection, preserves a held/unknown job epoch before
 scoped synthetic acknowledgment, and verifies actual native stop first.
@@ -127,8 +127,26 @@ record final suite, review and delivery.
 Integrated native verification passed all 940 checks (11 properties, 929
 tests), seed 1085, in 256.8 seconds; guidance 3 and compile/format/diff passed.
 ROB-1085 records exact review, PR, integrated suite and
-merge evidence. These families are implemented but unmeasured. Next extend the
-remaining managed-descendant/client/worker/whole-VM families, preserving causal
+merge evidence. These families are implemented but unmeasured.
+Ordinary command-group preparation is implemented on `work/rob-1085-group-recovery`, based
+on `62cbaac`. Public Exec launches a shell-owned child in its assigned group;
+actual caller/executor/stub faults require independent PID/cwd/parent/group
+and Port/guardian witnesses, typed caller terminals and physical cleanup.
+Changed epochs remain unknown; this family creates no session inputs or job
+slots. Focused 90 passed, seed 1085. Held-guardian and unavailable-executor
+controls reject false native stop and false cleanup confirmation; exact source
+is restored. Raw evidence is in `lab/results/rob-1085-group-preparation-20261006/`.
+The earlier separate-group Port-child experiment is preserved locally at
+`627c5e7` and in the descendant preparation namespace. It exercises the documented
+detached-child exclusion and does not justify changing that policy. Note 005
+records the retained-root and failed diagnostic boundaries. Final suite,
+source hashes, review and delivery are on ROB-1085.
+Integrated verification passed all 947 checks (11 properties, 936 tests),
+seed 1085, in 262.6 seconds; guidance 3 and compile/format/diff passed. Three
+fresh final-source dev VMs with production restart intensity 3 passed every
+check, complete/cleanup true and one launch; recovery was 40–150 ms. These
+are preparations, excluded from the registered matrix.
+Next extend the remaining client/worker/whole-VM families, preserving causal
 fault witnesses, per-input receipt/terminal accounting, honest uncertainty,
 slot/acknowledgment and native cleanup checks. The handoff, child and test-job fixtures'
 script/gate PIDs support same-VM recovery only; do not reuse that provider

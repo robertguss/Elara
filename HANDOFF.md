@@ -150,8 +150,14 @@ renamed-tool controls reproduced the old defects. Full suite passed 970
 (11 properties, 959 tests; seed 1086; 274.4 s) at runtime `d6bd527`.
 Post-suite discovery correction adds only the two fixture paths to the existing
 ignore filter; driver/helper paths and bytes remain unchanged. Targeted loading
-checks passed 116 and full discovery found exactly 970 tests. Final finite-chaos regression remains pending.
-LAB-6 stays active until all acceptance is merged. Keep TestJobs until LAB-8
+checks passed 116 and full discovery found exactly 970 tests. The fresh registered final regression
+at clean `4ebab19b` passed all 24 checkpoints and 407 boolean checks; zero
+ineligible, failed or unconfirmed-cleanup rows. Independent ordered-row/VM
+readback and postflight artifact verification passed; launcher exited and no
+BEAM remains. Raw namespace: `lab/results/rob-1086-checkpoints-20261006-a1-*`.
+These rows are excluded from the original LAB-5 measurement; never rerun or
+pool either namespace. See note 006 for hashes, bounds and source identities.
+Final reviewed delivery is pending; LAB-6 stays active until acceptance is merged. Keep TestJobs until LAB-8
 supplies a replacement, and preserve all LAB-5 corpora. Do not resume LAB-3.
 
 LAB-8 also depends on LAB-5; LAB-4/LAB-7 retain their recorded dependencies.

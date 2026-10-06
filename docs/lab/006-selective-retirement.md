@@ -54,8 +54,8 @@ TestJobs stays until LAB-8 delivers its replacement.
 The first-chunk baseline passed 24 tests; post-change inheritance, Threads,
 executor, durable-input and effect coverage passed 148 at seed 1086. All seven
 executor caller files are byte-identical to baseline after only the
-`TestExecutor` to `Executor` substitution. Full suite passed 970 (11 properties, 959 tests), seed 1086, in 274.4 seconds
-at runtime revision `d6bd527`. Final finite-chaos regression remains pending.
+`TestExecutor` to `Executor` substitution. Full suite passed 970 (11 properties,
+959 tests), seed 1086, in 274.4 seconds at runtime revision `d6bd527`.
 Mix 1.20 scans both `.ex`/`.exs`; a retained filename-only attempt still warned.
 The final correction keeps the original fixture paths/bytes and adds their two
 precise paths to the existing test-discovery ignore rule. Explicit test_helper
@@ -72,3 +72,40 @@ existing persistence, usage, late-result, worker-crash and diagnosis PTY checks
 remain acceptance authority. Retain every failed log beside final evidence. Original registered
 measurements, failed controls, raw roots and branches remain retained. No real
 provider calls or human TUI acceptance are implied.
+
+
+## Final finite checkpoint Results
+
+The fresh, registered 24-case regression at clean source
+`4ebab19bfbbc85665b1d0e987d7521af3060e9a5` passed once: 24 eligible and
+passed, all 407 boolean checks true, zero ineligible/outcome-failed/unconfirmed
+cleanup rows. Each of the seven LAB-5 families retains its original fixed
+checkpoint contracts and deadlines, with one row per checkpoint and seeds
+1084900–1084923. Recovery/backlog maxima are 1037/1068 ms. This is finite
+regression coverage, not a new 1200-row measurement or a throughput comparison.
+
+Independent readback verifies all ordered cell identities, source/clean-tree
+and two-scheduler settings, actual production supervisor 3 restarts/5 seconds,
+owned Port/OS/stub witnesses, successful VM exit and cleanup, and byte-identical
+registration. Postflight artifacts match with no changed files or modules;
+the launcher exited zero and no BEAM remains. The five pinned registration and
+launcher/readback files still match their hashes. Runtime/plugin/fixture/helper
+bytes match the full-suite revision; the later precise discovery/docs change
+passed 116 focused checks and loaded the same 970 checks.
+
+Raw regression files are the exclusive
+`lab/results/rob-1086-checkpoints-20261006-a1-*` namespace, including the
+registration, launcher, all 24 row records, independent readback and both
+postflight records. Manifest SHA256:
+`7b2a8630a8038fd1f1722af8dba6a2349feafc312c6a221c493ccfd29a7882ae`;
+summary SHA256:
+`3def454053306b7c7f2a882560ce3000fe4afb92bf5e2c5ee1c76ed70208d29a`.
+Its unused measurement namespace was never launched. These rows stay excluded
+from LAB-5's original registered measurement; neither corpus may be overwritten.
+
+The retained Session/Core/effect assertions support the hypothesis for the
+finite tested workloads. The four Coordinator batch contracts/tests were
+removed deliberately under ROB-1095, and test-only driver relocation is reported
+separately from total source reduction. TestJobs remains for LAB-8. This does
+not establish arbitrary fault-position, detached-descendant, disk-damage,
+real-model or human acceptance claims, and does not resume LAB-3.

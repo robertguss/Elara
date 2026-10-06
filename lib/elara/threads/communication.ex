@@ -329,6 +329,7 @@ defmodule Elara.Threads.Communication do
         end
       end)
 
+    flush_reports()
     send(self(), :flush)
     {:noreply, %{state | waiters: waiters}}
   end
@@ -473,6 +474,10 @@ defmodule Elara.Threads.Communication do
 
   defp flush_reports do
     for path <- Path.wildcard(Path.join([root(), "completions", "*.json"])),
+        not match?(
+          {:ok, %{"correlation" => %{}}},
+          load(Path.join(root(), Path.basename(path)))
+        ),
         {:ok, r} <- [load(path)] do
       correlation =
         r["correlation"] ||

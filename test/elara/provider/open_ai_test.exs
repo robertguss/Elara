@@ -1,7 +1,9 @@
 defmodule Elara.Provider.OpenAITest do
   use ExUnit.Case, async: true
 
-  @loopback_timeout 2_000
+  # Content/transport checks allow scheduler and socket delay; this is a bounded
+  # fixture wait, not an assertion that the provider responds within two seconds.
+  @loopback_timeout 10_000
 
   alias Elara.Message
   alias Elara.Message.{ToolCall, ToolResult, User}
@@ -257,6 +259,44 @@ defmodule Elara.Provider.OpenAITest do
     request_body = await_server(server.task)
     assert {:ok, %{"stream" => true}} = JSON.decode(request_body)
     assert {:error, %Error{kind: :transport}, _config} = result
+  end
+
+  test "chat accepts a valid loopback response delayed beyond two seconds" do
+    body = JSON.encode!(%{"choices" => [%{"message" => %{"content" => "delayed"}}]})
+
+    server =
+      start_loopback_server(fn socket ->
+        Process.sleep(2_100)
+        send_content_length_response(socket, body)
+      end)
+
+    assert {:ok, %Message.Assistant{text: "delayed"}, _config} =
+             run_provider(fn -> OpenAI.chat(loopback_config(server.port), request()) end)
+
+    assert {:ok, %{"model" => "test-model"}} = JSON.decode(await_server(server.task))
+  end
+
+  test "stream accepts valid fragmented SSE delayed beyond two seconds" do
+    event = JSON.encode!(%{"choices" => [%{"delta" => %{"content" => "delayed"}}]})
+    fragments = ["data: " <> event <> "\n", "\ndata: [DO", "NE]\n\n"]
+    owner = self()
+
+    server =
+      start_loopback_server(fn socket ->
+        Process.sleep(2_100)
+        send_chunked_response(socket, fragments)
+      end)
+
+    assert {:ok, %Message.Assistant{text: "delayed"}, _config} =
+             run_provider(fn ->
+               OpenAI.stream(loopback_config(server.port), request(), fn delta ->
+                 send(owner, {:delayed_delta, delta})
+                 :ok
+               end)
+             end)
+
+    assert_receive {:delayed_delta, "delayed"}
+    assert {:ok, %{"stream" => true}} = JSON.decode(await_server(server.task))
   end
 
   defp loopback_config(port) do

@@ -67,12 +67,23 @@ CI has Socket checks and does not run mix test; local test evidence is separate.
 
 ## Current diagnosis and queue
 
-ROB-1216's bounded diagnosis did not reproduce SSE failure. The provider file
+ROB-1216's fixture repair follows two retained
+2-second loopback helper timeouts in the child candidate's full suite, seed
+1085 (920/922). The missing assertion/stack/seed evidence is now available.
+The fixture repair uses a bounded 10-second wait and keeps the runtime/parser
+and all response assertions unchanged. Public JSON and fragmented-SSE controls
+delayed 2100 ms both fail at the old limit; all 11 provider tests pass with the
+repair. Raw red/green and final verification output is retained under
+`lab/results/rob-1216-verification-20261005/`; Linear records exact review and
+delivery. Full suite 916 passed (11 properties, 905 tests), seed 1085, in
+263.2 seconds; compile/format/diff checks pass. Historical host scheduling was
+not causally measured.
+
+The earlier bounded diagnosis did not reproduce SSE failure. The provider file
 passed its initial execution plus 20 repetitions (189 test executions), then
 one full suite passed 888 (seed 183979), at source `4a9c0ad`. No assertion,
 timeout, or parser change. Logs: `lab/results/rob-1216-diagnosis-20261005/`.
-The issue is Needs Input for a retained failing assertion/stack/seed. Passing
-runs are negative evidence, not a fix.
+Those passing runs remain negative evidence, not a fix.
 
 LAB-5 (ROB-1085) is Building, the one selected executable lab item. The valid
 pilot, recovery fix, and transport preparation are delivered; the
@@ -81,11 +92,18 @@ least 1000 schedules remain. Review and register its expanded method before
 measurement; reuse the durable lab runner and fresh production-intensity VMs.
 The handoff observer/gates/five checkpoints originated at local candidate
 `149b6a5`, whose full suite exposed ROB-1324. That fixture repair merged in
-PR #38 at `0c2d6dd`; the handoff changes are integrated on
-`work/rob-1085-expanded-recovery-matrix`, with all 914 full-suite checks passing.
+PR #38 at `0c2d6dd`; the handoff changes merged in PR #39 at `a4bbef1`, with
+all 914 full-suite checks passing.
 ROB-1085 records review, PR and merge confirmation for this preparation.
-The handoff family is implemented but unmeasured. Next extend the remaining
-child/test-job/native/client/worker/stub/whole-VM families, preserving causal
+The child family is held in unpublished local candidate `2da7ff1` on
+`work/rob-1085-child-recovery`: focused 46 and three fresh dev-VM preparations
+passed all 16 checks plus cleanup, but the first full suite exposed ROB-1216.
+Preserve every control/root/log in
+`lab/results/rob-1085-child-preparation-20261005/`. After the independent fixture
+repair merges, rebase that candidate, reconcile this handoff, verify its exact
+source hashes and integrated suite, then review/push/PR/merge it. Both families
+remain unmeasured. Next extend remaining test-job/native/client/worker/stub/
+whole-VM families, preserving causal
 fault witnesses, per-input receipt/terminal accounting, honest uncertainty,
 slot/acknowledgment and native cleanup checks. The current handoff fixture's
 script/gate PIDs support same-VM recovery only; do not reuse that provider

@@ -1,106 +1,68 @@
-# Handoff — ROB-1233 fixture registration, 2026-10-05
+# Handoff — autonomous implementation, 2026-10-05
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
-is the sole planning and status source. The
+is the sole planning and status source. Read the
 [current handoff](https://linear.app/robert-guss/document/current-handoff-lab-3-attribution-and-continuation-569eb39fa4cd)
-and issue descriptions carry current continuation. Historical issue comments
-retain the briefs, review outcomes, decisions, and results.
+and current issue descriptions/comments for plans, review, results, and delivery.
 
-## Working arrangement
+## Working arrangement and active goal
 
-The owner removed the previous role-based workflow on 2026-10-05 and instructed
-the active agent to do the work in this session.
-Follow AGENTS.md's delivery and tracking rules. No external skill, separate
+The owner retired the previous role workflow and instructed the active agent to
+do all work here. Follow AGENTS.md and CLAUDE.md. No external skill, separate
 agent roles, routing script, or pane tooling is required.
 
-The current active goal is to implement every actionable Linear issue, choose
-the queue and implementation decisions autonomously, and move genuine owner
-questions to Needs Input before continuing. The goal is incomplete while any
-actionable work remains. LAB-3 remains Needs Input at its measurement pause;
-the digest fix does not launch a measurement or consume its remaining rerun.
+The active goal is to implement every actionable Linear issue, choose work and
+technical decisions autonomously, put genuine owner questions in Needs Input,
+and continue other work. The goal remains active while actionable work remains.
+Historical parked/unselected wording alone does not require owner permission.
+Keep at most one executable lab item. Do not force-push, deploy, release, or
+remove retained evidence without a specific owner decision. Done means merged.
 
-## Repository and verification
+## Delivered and verified
 
-ROB-1234 merged in PR #33 at `5e23f19`. Its Results hold the verification and
-review evidence: 31 recovery tests, a failing same-seed public regression before
-the fix, and clean compile/format/diff checks. The digest omits run identities;
-identity checks, historical evidence, recovery behavior, and bounds are intact.
+- The 46-issue accuracy audit and guidance retirement merged in PR #32 at
+  `4ec59de`. Its [record](https://linear.app/robert-guss/document/issue-accuracy-audit-2026-10-05-8070f2f9117f)
+  is a dated snapshot; later issue Results supersede its queue counts.
+- ROB-1234 merged in PR #33 at `5e23f19`: recovery digests omit run identities
+  while identity validation and evidence remain intact. A public same-seed
+  regression failed before the fix; 31 recovery tests passed afterward.
+- ROB-1254 merged in PR #34 at `4b8d4d9`: explicit provider synchronization
+  replaces the timed child fixture. Delayed observation reproduced the old
+  failure; the barrier and forced-failure cleanup controls passed. Full suite
+  887 passed, seed 670644. Logs: `lab/results/rob-1254-verification-20261005/`.
+- ROB-1233 merged in PR #35 at `4a9c0ad`: register the owned fixture root before
+  optional descendant sampling; verify command ownership on macOS. Independent
+  red controls prove registration and cleanup defects; 22 OpaqueShell, 100
+  effect, and 8 Exec integration tests passed. Logs:
+  `lab/results/rob-1233-verification-20261005/`.
 
-ROB-1254 merged in PR #34 at `4b8d4d9`. Its Linear Results hold the review and
-delivery record.
-A 650 ms observation delay reproduced the old idle-phase failure (seed 344403).
-The fixture now holds the coding provider request behind an explicit barrier
-through sibling failure and parent exit; only the test's answer releases it.
-The delayed barrier case passed (seed 816515). A forced failure before release
-proved on-exit termination of the held task (seed 708390); that temporary
-assertion is removed. Logs are retained under
-`lab/results/rob-1254-verification-20261005/`. Production source is unchanged.
-The full suite passed 887 tests (seed 670644); formatting and diff checks passed.
-Diff review confirms test-only synchronization with stronger lifecycle checks,
-bounded cleanup, and no production change. Check Linear for confirmed merge.
+Each implementation had a reviewed diff, clean format/diff checks, both Socket
+checks, and verified squash-merge tree equality. Current main includes all
+three fixes. No historical lab results or registered measurements were changed.
+CI has Socket checks and does not run mix test; local test evidence is separate.
 
-ROB-1233 is selected on `work/rob-1233-owned-fixture-registration` from that
-main. A childless blocked shell reproduces the old descendant-required
-registration failure (seed 810832). A separate control with registration fixed
-but Linux-only ownership checking proves failed cleanup on macOS (seed 850331).
-The helper now registers the root before optional descendant discovery and
-verifies command ownership with ps when /proc is unavailable. The forced-failure
-regression proves actual root termination, with backup teardown installed before
-waits. OpaqueShell 22 tests (seed 837079) and all effect tests 100 (seed 389333)
-passed. The issue records execution-test verification and delivery; logs are in
-`lab/results/rob-1233-verification-20261005/`. No production source, fixture
-command, or deadline changed. Original host-load causation remains unproven;
-the demonstrated structural defects are fixed.
+## Current diagnosis and queue
 
-Historical audit verification follows for provenance.
+ROB-1216's bounded diagnosis did not reproduce SSE failure. The provider file
+passed its initial execution plus 20 repetitions (189 test executions), then
+one full suite passed 888 (seed 183979), at source `4a9c0ad`. No assertion,
+timeout, or parser change. Logs: `lab/results/rob-1216-diagnosis-20261005/`.
+The issue is Needs Input for a retained failing assertion/stack/seed. Passing
+runs are negative evidence, not a fix.
 
-The audit started from clean main at `25fe51b0f6d75847d54d81fbd3204873c432b6ca`,
-equal to remote main. That revision includes the census fix `8568f34` and differs
-from it only in this handoff. The audit branch was
-`work/linear-state-audit-2026-10-05`. The audit changes AGENTS.md, CLAUDE.md,
-HANDOFF.md, and the guidance pointer test; implementation and experiment
-registrations are unchanged. Read the
-[Linear audit record](https://linear.app/robert-guss/document/issue-accuracy-audit-2026-10-05-8070f2f9117f)
-for the final checks and delivery revision. Recheck Git and Linear before acting.
+LAB-5 (ROB-1085) is next: the valid pilot and recovery fix are delivered; the
+children/handoff/jobs/client/worker/stub/whole-VM/process-group matrix and at
+least 1000 schedules remain. Review and register its expanded method before
+measurement; reuse the durable lab runner and fresh production-intensity VMs.
+LAB-6/LAB-8 depend on LAB-5; Coordinator judging/map-reduce removal was already
+decided by ROB-1095. LAB-4/LAB-7 retain their research dependencies.
 
-All 46 project issues, including archived items, their full descriptions,
-comments, status histories, attachments, and dependency relations were read.
-Done delivery records were compared with Git history and GitHub merge records.
-Current code was checked through the refreshed codebase-memory graph and
-bounded source inspection. Retained LAB-3 and LAB-5 JSONL was read to verify
-provenance, validity, completion, and failed checks. Historical real-provider,
-physical-terminal, and host-load failure claims remain dated evidence.
-
-Verification in this audit: full mix test 886 passed (seed 61482); guidance
-tests 3 passed; warnings-as-errors compile, format, and diff checks clean.
-Rust TUI tests 116 passed and exec-stub tests 6 passed. No registered
-measurement or real-provider run was repeated. The unresolved intermittent
-findings remain open despite this passing suite.
-
-## Queue and remaining gates
-
-- [ROB-1083](https://linear.app/robert-guss/issue/ROB-1083), LAB-3: paused;
-  the final N=500 supplementary rerun has not launched. Its description links
-  the current continuation and the existing approved measurement brief.
-- [ROB-1085](https://linear.app/robert-guss/issue/ROB-1085), LAB-5: Backlog.
-  The pilot and ROB-1235 recovery fix are delivered. The remaining fault matrix
-  and at least 1000 schedules are unfinished.
-- LAB-4 (ROB-1084) needs LAB-3 and the post-LAB-3 owner direction checkpoint
-  ROB-1091. LAB-6 (ROB-1086) and LAB-8 (ROB-1088) need LAB-5; ROB-1095's
-  deliberate Coordinator removal decision is made. LAB-7 (ROB-1087) needs
-  LAB-4 and LAB-6.
-- ROB-1097–1106 need individual scope review under the autonomous goal; their
-  former parked status alone does not block selection. ROB-1107/1108 are Needs
-  Input for the owner's hands-on/visual acceptance of existing TUI code.
-- ROB-1233 is the current delivery item; ROB-1216 is the next independent
-  diagnostic candidate. LAB-5's remaining matrix is actionable under the goal
-  after these independent fixes; LAB-3's measurement remains paused while
-  LAB-5 can be selected separately.
-  A passing run does not establish that an intermittent is fixed.
-
-LAB-3 closure is an owner decision. Keep at most one executable lab item and
-none while paused. No force-push, deployment, release, or evidence deletion
-without a specific owner decision.
+ROB-1107/1108 are Needs Input for owner hands-on/visual acceptance of implemented
+TUI behavior. ROB-1097–1106 require individual scope review under autonomy.
+LAB-3 remains at its recorded measurement pause, with its unrun final N=500
+profile and strict host protocol below. AC power was present during the current
+checks, but one measured 1-minute load was 23.52, above its required maximum 8;
+no load gate or measurement was launched. Do not stop unrelated workspace work.
 
 ## LAB-3 continuation
 

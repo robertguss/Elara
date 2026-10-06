@@ -131,14 +131,18 @@ and human acceptance remain excluded. An unrelated Phoenix VM was observed at
 postflight outside Elara; leave it alone. Timing is host-specific.
 
 LAB-6 (ROB-1086) is selected as the sole executable lab item. Work is on
-`work/rob-1086-selective-retirement`; read its staged plan and latest review in
-Linear before continuing. The first chunk removes Coordinator/Engine/API and
+`work/rob-1086-runtime-prototypes`; read its staged plan and latest review in
+Linear before continuing. The first chunk merged in PR #50 at `120f6549`; it removes Coordinator/Engine/API and
 migrates every TestExecutor caller to production Executor with assertions intact.
 Focused inheritance/Threads/executor/input/effect verification passed 148
 (seed 1086); caller migrations preserve all other bytes. The separate
 instruction/skill inheritance test uses public Threads. Note 006
 records the deliberately removed batch contracts and four Coordinator tests.
-LiteralPatch/OpaqueShell runtime retirement and project-plugin diagnosis follow;
+LiteralPatch/OpaqueShell move to test-only fixture drivers in the second chunk;
+all implementation/assertion bytes other than namespaces/module docs remain
+identical. Focused effect/executor/input 113 passed, seed 1086. Production
+application/code-path absence is checked separately. Project-plugin diagnosis
+follows;
 LAB-6 stays active until all acceptance is merged. Keep TestJobs until LAB-8
 supplies a replacement, and preserve all LAB-5 corpora. Do not resume LAB-3.
 

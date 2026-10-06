@@ -32,10 +32,17 @@ is removed. This chunk removes 997 production lines: Coordinator 239, Engine
 704, wrapper 43, API 10 and supervisor entry 1. Net diff is reported at review,
 separately from runtime removal.
 
-LiteralPatch/OpaqueShell runtime retirement and project-plugin diagnosis
-integration are subsequent chunks. Historical reconciliation drivers will be
-explicitly test-only; they do not expand receipt-backed production write to
-edit/bash. TestJobs stays until LAB-8 delivers its replacement.
+LiteralPatch/OpaqueShell retire from the production application in the second
+chunk: 579/622 lines move to `test/support/fixtures/` under
+`Elara.TestFixtures`. Only namespace/module documentation change in the drivers;
+only alias namespaces change in their two test files. All other bytes and
+assertions remain identical. This removes 1201 runtime lines by relocation,
+not 1201 total code lines. Test helper loading adds four lines. The fixtures
+exercise the production Sidecar/Executor/AtomicFile/Exec and preserve every
+historical crash/no-retry/causality contract; they are not production receipt-backed
+edit/bash. Focused effect/executor/input verification passed 113 (seed 1086).
+Project-plugin diagnosis integration follows. TestJobs stays until LAB-8 delivers
+its replacement.
 
 ## Verification and limits
 

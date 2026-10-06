@@ -74,6 +74,7 @@ defmodule Elara.LabTest do
     assert {:error,
             {:unknown_scenario, "nope",
              [
+               "child_recovery",
                "concurrency",
                "concurrent_jobs",
                "handoff_recovery",

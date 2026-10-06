@@ -414,3 +414,80 @@ passed all 914 full-suite checks (11 properties, 903 tests), seed 1085, in
 238.4 seconds. Its raw output is `full-suite-integrated.log`. The handoff lab
 code and preparation source hashes are unchanged; these tests add no registered
 measurement rows. Earlier failed suite output remains retained.
+
+### Child recovery preparation (2026-10-05)
+
+This is harness preparation at base `a4bbef1`, excluded from the pilot and the
+required >=1000 schedules. `child_recovery` uses the public delegation, child
+resume, review, acknowledgment and integration APIs in a disposable clean Git
+fixture. Local hooks and signing are disabled in that fixture. Its stateless
+provider serves only the declared inputs; no real-model or whole-VM claim is
+made. A coding child inherits the provider and tool wrappers through actual
+delegation. No local executor is opened by this roster.
+
+The hypothesis is that a parent or child crash neither creates another child
+nor consumes an accepted input twice, preserves uncertainty for unreceipted
+mutations, and settles child capacity. Three checkpoints are implemented:
+
+- `parent_delegated`: real child creation completed but the parent's delegation
+  callback has not returned. The failed parent input preserves `delegate-A`
+  as indeterminate; its queued B/C inputs and the child's original assignment
+  finish without another delegation.
+- `child_provider`: the child's first provider callback is held before a tool
+  plan. The assignment fails without a marker; queued B/C inputs finish.
+- `child_marker`: a marker has written in the child worktree but its callback
+  has not returned. The assignment fails with `child-marker-A` indeterminate.
+  Integration is blocked until the exact review digest/call IDs are
+  acknowledged, then succeeds. Marker bytes do not prove input success.
+
+Before injection, the fixture reads the durable source checkpoint, active
+input and pending calls, the actual source Task monitor, held caller ownership,
+queued B/C receipts with no User consumption, parent links and registered
+child slot. Two real monitors witness the exact target's killed DOWN after
+one injection. A released callback or premature death invalidates the row.
+Typed uncertainty and parent/child observations are captured before cleanup.
+Automatic parent reports are declared from each known completed child input's
+own persisted terminal ID; they are not inferred from arbitrary parent inputs.
+The closed observer rejects unrelated, repeated or stale inputs and receipts.
+
+Seeds vary B/C queue order and provider TTFT from 1 to 20 ms. Recovery starts
+before public reopening and has a 5-second bound. All queued work and reports,
+including marker acknowledgment/integration, must settle within 9 seconds:
+the base 5 seconds plus at most four 1-second input/report/remaining-work
+allowances. Digests hash this declared schedule; differing digests alone are
+not evidence of timing variance.
+
+Cleanup closes both admissions and settles admitted creators first, then uses
+a bounded serialized Threads barrier to discover/register child ownership.
+It settles sessions/helpers and verifies capacity is zero. A failed barrier
+cannot become an empty child roster or confirmed cleanup. Forced failures
+with delegation and marker held directly prove the observed actors die. A
+fresh-VM unavailable-barrier control retained one row and stopped a requested
+second repetition. Temporarily omitting parent barrier ownership falsely
+reported two clean rows and failed that control; the source was restored.
+Those failed controls, logs and retained roots are preserved.
+
+Focused verification passed 46 tests, seed 1085. Three fresh dev VMs using
+production restart defaults each produced a complete row with all 16 checks
+and cleanup true: recovery 11–13 ms, backlog 103–213 ms. Exact source hashes
+and rows are in `production-reviewed/` under
+`lab/results/rob-1085-child-preparation-20261005/`. These rows used dirty
+source at the stated base. Earlier annotation/cwd/compile fixture failures
+remain retained and establish no runtime finding.
+
+This family does not prove native process-group, test-job, whole-VM, or full
+transport recovery. Remaining families and registered measurement stay open
+on ROB-1085. Final suite, review and delivery evidence are recorded there.
+
+The first integrated suite completed 920/922 (11/11 properties, 909/911 tests)
+in 244.2 seconds, seed 1085. Both failures are the 2-second loopback provider
+fixture timeouts tracked by ROB-1216; no child preparation assertion failed.
+The complete original output is `full-suite.log`. This candidate is held for
+the separately tracked investigation and subsequent integrated verification.
+
+After ROB-1216's independently reviewed fixture repair merged in PR #40 at
+`5448d84`, the unchanged child lab code was rebased and all four preparation
+source hashes matched. Integrated verification at candidate `d1473e3` passed
+924 (11 properties, 913 tests), seed 1085, in 275.4 seconds. Full output is
+`full-suite-integrated.log`; the earlier failures and controls remain retained.
+This adds no registered measurement rows. Exact reviewed delivery is in Linear.

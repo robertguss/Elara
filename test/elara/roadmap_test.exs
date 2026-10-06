@@ -32,17 +32,21 @@ defmodule Elara.RoadmapTest do
     assert roadmap =~ "lab/results/"
   end
 
-  test "repository guidance uses the crew loop" do
+  test "repository guidance supports work in the current session" do
     claude = File.read!(Path.join(@root, "CLAUDE.md"))
+    agents = File.read!(Path.join(@root, "AGENTS.md"))
 
-    assert claude =~ "## Crew", "CLAUDE.md must configure the crew skill"
     assert claude =~ "Linear: team ROB, project Elara"
+    assert agents =~ "The active agent owns issue"
+    assert agents =~ "current session"
 
     for path <- ["AGENTS.md", "CLAUDE.md", "HANDOFF.md"] do
       contents = File.read!(Path.join(@root, path))
 
       refute contents =~ "amp-workflow", "#{path} must not mention amp-workflow"
       refute contents =~ "Amp review", "#{path} must not mention Amp review"
+      refute contents =~ "`crew`", "#{path} must not require the retired skill"
+      refute contents =~ "## Crew", "#{path} must not configure the retired workflow"
     end
   end
 end

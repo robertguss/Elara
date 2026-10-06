@@ -108,7 +108,7 @@ Socket checks. Two clean-head production-default controllers/peers pass all
 29/57 ms. Source, fault, durable identity, uncertainty, physical stop and cleanup
 are separate claims. Every preparation is excluded from the registered matrix.
 
-Current branch `work/rob-1085-chaos-matrix` adds finite planning, artifact
+The `work/rob-1085-chaos-matrix` candidate adds finite planning, artifact
 fingerprints, a production-intensity peer and a bounded external launcher. The
 proposed measurement is 24 checkpoints x 50 round-major repetitions = 1200 rows,
 with unique seeds 1085000–1086199. A separate 24-case qualification uses
@@ -122,9 +122,9 @@ because isolated HOME exposed globally ignored Finder metadata. Its raw rejectio
 remains; the repository now ignores that metadata explicitly, and artifact checks
 disable global Git excludes so they cannot conceal runtime source.
 
-Next: finish the matrix infrastructure's integrated verification and review,
-then push/PR/merge with passing required checks. Register and read back the exact
-merged source, artifacts, namespaces and launcher before qualification or
+Read ROB-1085 and PR #48 for the current verification, review and merge status;
+complete delivery if still pending. After merge, register and read back the exact
+source, artifacts, namespaces and launcher before qualification or
 measurement. Do not use preparations as matrix rows, rerun the registered
 corpus toward green, or launch an old registration against newer source.
 No registered matrix has run. LAB-5 is unfinished until its full acceptance is

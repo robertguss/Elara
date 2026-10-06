@@ -408,3 +408,9 @@ Limits: this family uses a same-VM scripted provider and textual inputs. It
 does not prove whole-VM restart, child/test-job/native process-group safety,
 executor slot/acknowledgment behavior, or the complete transport matrix.
 Those families and the expanded registered measurement remain unfinished.
+
+Integrated verification after the separately delivered ROB-1324 fixture repair
+passed all 914 full-suite checks (11 properties, 903 tests), seed 1085, in
+238.4 seconds. Its raw output is `full-suite-integrated.log`. The handoff lab
+code and preparation source hashes are unchanged; these tests add no registered
+measurement rows. Earlier failed suite output remains retained.

@@ -55,7 +55,8 @@ remove retained evidence without a specific owner decision. Done means merged.
   rejects unexpected inputs and stale receipt/event evidence. Provider and
   marker work must be admitted before effects; cleanup closes admission first.
   Focused verification passed 38, seed 1085; five fresh dev-VM preparations
-  passed all 21 checks. Controls and exact source hashes are in
+  passed all 21 checks. The integrated full suite passed 914, seed 1085.
+  Controls and exact source hashes are in
   `lab/results/rob-1085-expanded-preparation-20261005/`; see note 005 and
   ROB-1085 for final review, suite, and delivery evidence. These are preparations.
 
@@ -81,7 +82,8 @@ measurement; reuse the durable lab runner and fresh production-intensity VMs.
 The handoff observer/gates/five checkpoints originated at local candidate
 `149b6a5`, whose full suite exposed ROB-1324. That fixture repair merged in
 PR #38 at `0c2d6dd`; the handoff changes are integrated on
-`work/rob-1085-expanded-recovery-matrix` for final full-suite/delivery checks.
+`work/rob-1085-expanded-recovery-matrix`, with all 914 full-suite checks passing.
+ROB-1085 records review, PR and merge confirmation for this preparation.
 The handoff family is implemented but unmeasured. Next extend the remaining
 child/test-job/native/client/worker/stub/whole-VM families, preserving causal
 fault witnesses, per-input receipt/terminal accounting, honest uncertainty,

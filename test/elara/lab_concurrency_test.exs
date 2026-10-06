@@ -376,23 +376,124 @@ defmodule Elara.Lab.ConcurrencyTest do
   end
 
   test "a provider task outliving shutdown keeps the ledger it writes; cohort stays unknown" do
-    result =
-      run(%{
-        "duration_ms" => "300",
-        "drain_ms" => "300",
-        "stall_first_answer_ms" => "2500",
-        "shutdown_ms" => "200"
-      })
+    log =
+      capture_log(fn ->
+        with_stalled_provider(2800, fn hook ->
+          result = retained_provider_run(hook)
+          assert result.incomplete == :drain_timeout
+          assert result.settlement.leftover_tasks > 0
+          refute result.latency_ms.cohort_known
+          assert Map.has_key?(result, :retained_dir)
+        end)
+      end)
 
-    assert result.incomplete == :drain_timeout
-    assert result.settlement.leftover_tasks > 0
-    refute result.latency_ms.cohort_known
-    assert Map.has_key?(result, :retained_dir)
-
-    # The stalled tasks resume and write their ledger rows after the run returned.
-    log = capture_log(fn -> Process.sleep(3_000) end)
+    assert_receive {:providers_released, pids, true}, 1000
+    assert pids != []
+    assert Enum.all?(pids, &(not Process.alive?(&1)))
     refute log =~ "ArgumentError"
     refute log =~ "ets"
+  end
+
+  test "forced retained-ledger assertion failure still releases the actual provider tasks" do
+    log =
+      capture_log(fn ->
+        assert_raise RuntimeError, "forced retained-ledger assertion", fn ->
+          with_stalled_provider(0, fn hook ->
+            result = retained_provider_run(hook)
+            assert result.settlement.leftover_tasks > 0
+            raise "forced retained-ledger assertion"
+          end)
+        end
+      end)
+
+    assert_receive {:providers_released, pids, true}, 1000
+    assert pids != []
+    assert Enum.all?(pids, &(not Process.alive?(&1)))
+    refute log =~ "ArgumentError"
+    refute log =~ "ets"
+  end
+
+  defp retained_provider_run(hook) do
+    run(
+      %{
+        "duration_ms" => "1500",
+        "drain_ms" => "300",
+        "stall_first_answer_ms" => "1",
+        "shutdown_ms" => "200"
+      },
+      42,
+      hook: hook
+    )
+  end
+
+  defp with_stalled_provider(delay, fun) do
+    owner = self()
+    token = make_ref()
+    baseline = Task.Supervisor.children(Elara.TaskSup)
+    {:ok, barrier} = Agent.start(fn -> %{pids: MapSet.new(), closed: false, witnessed: false} end)
+
+    try do
+      hook = fn
+        {:provider_stalled, pid, _key} ->
+          hold =
+            Agent.get_and_update(barrier, fn state ->
+              {not state.closed, %{state | pids: MapSet.put(state.pids, pid)}}
+            end)
+
+          if hold do
+            receive do
+              {:release_provider, ^token} -> :ok
+            after
+              30_000 -> raise "retained provider barrier expired"
+            end
+          end
+
+        :before_session_settlement ->
+          witnessed = await_stalled_provider(barrier, 500)
+          Agent.update(barrier, &%{&1 | witnessed: witnessed})
+
+        :before_task_settlement ->
+          Process.sleep(delay)
+
+        _ ->
+          :ok
+      end
+
+      fun.(hook)
+    after
+      pids = Agent.get_and_update(barrier, &{MapSet.to_list(&1.pids), %{&1 | closed: true}})
+      refs = Enum.map(pids, &{&1, Process.monitor(&1)})
+      Enum.each(pids, &send(&1, {:release_provider, token}))
+
+      down =
+        Enum.map(refs, fn {pid, ref} ->
+          receive do
+            {:DOWN, ^ref, :process, ^pid, reason} -> reason == :normal
+          after
+            5_000 -> false
+          end
+        end)
+
+      writers = writers_settled?(baseline, 100)
+      state = Agent.get(barrier, & &1)
+      Agent.stop(barrier)
+      send(owner, {:providers_released, MapSet.to_list(state.pids), state.witnessed})
+      assert Enum.all?(down) and writers, "retained provider writers did not settle"
+    end
+  end
+
+  defp await_stalled_provider(_barrier, 0), do: false
+
+  defp await_stalled_provider(barrier, tries) do
+    pids = Agent.get(barrier, &MapSet.to_list(&1.pids))
+
+    if pids != [] and
+         Enum.all?(pids, &(Process.alive?(&1) and &1 in Task.Supervisor.children(Elara.TaskSup))) do
+      true
+    else
+      Process.sleep(10)
+      await_stalled_provider(barrier, tries - 1)
+    end
   end
 
   test "a setup failure still restores scheduler timing and destroys the trace session" do

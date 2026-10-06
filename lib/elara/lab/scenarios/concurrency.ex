@@ -710,7 +710,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
       id: sim_id,
       profile: profile(run.p),
       ledger: run.ledger,
-      fault: stall_hook(run.p.stall_first_answer_ms)
+      fault: stall_hook(run.p.stall_first_answer_ms, run.hook)
     )
   end
 
@@ -873,13 +873,18 @@ defmodule Elara.Lab.Scenarios.Concurrency do
 
   # Stalls each session's first answer request after its ledger row is written,
   # leaving its recorded start and intended schedule unchanged.
-  defp stall_hook(0), do: nil
+  defp stall_hook(0, _hook), do: nil
 
-  defp stall_hook(ms) do
+  defp stall_hook(ms, hook) do
     fn
       :provider_started, key ->
         [_id, request] = String.split(key, ":")
-        if String.to_integer(request) == @tool_rounds + 1, do: Process.sleep(ms)
+
+        if String.to_integer(request) == @tool_rounds + 1 do
+          hook.({:provider_stalled, self(), key})
+          Process.sleep(ms)
+        end
+
         :ok
 
       _point, _key ->
@@ -911,9 +916,11 @@ defmodule Elara.Lab.Scenarios.Concurrency do
 
     threads_settled = run.parent == nil or quiesce(run, Elara.Threads)
 
+    run.hook.(:before_session_settlement)
     deadline = System.monotonic_time(:millisecond) + run.p.shutdown_ms
     sessions = children(Elara.SessionSup) -- run.snapshot.sessions
     {left_sessions, killed} = stop_sessions(sessions, deadline)
+    run.hook.(:before_task_settlement)
     left_tasks = await_exit(children(Elara.TaskSup) -- run.snapshot.tasks, deadline)
     jobs = await_exec_idle(deadline)
     ledger_final = left_sessions == [] and left_tasks == []

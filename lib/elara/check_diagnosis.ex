@@ -6,64 +6,34 @@ defmodule Elara.CheckDiagnosis do
 
   @fields ~w(observed_failure likely_cause supporting_evidence unknowns next_check)
 
-  def tools do
-    [
-      %Tool{
-        name: "check_evidence",
-        description:
-          "Inspect the last captured project check and its immutable source/output excerpts. With no arguments, returns the run ID and artifact manifest. Supply artifact_id and optional start_line to read up to 20 captured lines.",
-        parameters: %{
-          "type" => "object",
-          "properties" => %{
-            "run_id" => %{"type" => "string"},
-            "artifact_id" => %{"type" => "string"},
-            "start_line" => %{"type" => "integer", "minimum" => 1}
-          },
-          "additionalProperties" => false
-        },
-        run: {__MODULE__, :run},
-        placement: :local
-      },
-      %Tool{
-        name: "diagnose_check",
-        description:
-          "Diagnose a captured failed project check using one additional model request and no tools. Get run_id from check_evidence. Returns observations, a cause hypothesis, validated source references, unknowns and a suggested next check. Interrupt cancels the diagnosis.",
-        parameters: %{
-          "type" => "object",
-          "properties" => %{"run_id" => %{"type" => "string"}},
-          "required" => ["run_id"],
-          "additionalProperties" => false
-        },
-        run: {__MODULE__, :run},
-        placement: :local
-      }
-    ]
-  end
-
-  def run(args, %Tool.Ctx{session_id: id, tool_name: "check_evidence"} = ctx) do
+  def inspect_evidence(args, %Tool.Ctx{session_id: id} = ctx) do
     with {:ok, pid} <- Elara.session_pid(id),
-         {:ok, evidence} <- GenServer.call(pid, {:check_evidence, args["run_id"]}),
+         {:ok, evidence} <- GenServer.call(pid, :tool_evidence),
+         {:ok, evidence} <- CheckEvidence.fetch(evidence, args["run_id"]),
          {:ok, view} <- evidence_view(evidence, args) do
       encode(:ok, view, ctx)
     end
   end
 
-  def run(
+  def diagnose(
         %{"run_id" => run_id} = args,
-        %Tool.Ctx{session_id: id, tool_name: "diagnose_check"} = ctx
+        %Tool.Ctx{session_id: id} = ctx
       )
       when map_size(args) == 1 and is_binary(run_id) and byte_size(run_id) in 1..80 do
     with {:ok, pid} <- Elara.session_pid(id),
-         {:ok, context} <- GenServer.call(pid, {:diagnosis_context, run_id}),
-         true <- context.evidence["exit_status"] != 0 do
-      diagnose(pid, context, ctx)
+         {:ok, context} <- GenServer.call(pid, :tool_provider_context),
+         {:ok, evidence} <- GenServer.call(pid, :tool_evidence),
+         {:ok, evidence} <- CheckEvidence.fetch(evidence, run_id),
+         true <- evidence["exit_status"] != 0 do
+      diagnose(pid, Map.put(context, :evidence, evidence), ctx)
     else
       false -> {:error, "The captured check passed; no failure diagnosis requested"}
       error -> error
     end
   end
 
-  def run(_, _), do: {:error, "diagnose_check requires one nonempty run_id from check_evidence"}
+  def diagnose(_, _),
+    do: {:error, "diagnose_check requires one nonempty run_id from check_evidence"}
 
   defp diagnose(owner, context, ctx) do
     {module, config} = context.provider
@@ -81,7 +51,7 @@ defmodule Elara.CheckDiagnosis do
       with :ok <-
              GenServer.call(
                owner,
-               {:diagnosis_provider, context.operation_id, {module, new_config}, usage}
+               {:tool_provider_result, context.operation_id, {module, new_config}, usage}
              ) do
         report = %{
           "contract" => "check_diagnosis/v1",

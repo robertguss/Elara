@@ -590,10 +590,6 @@ call. Saved handoff headers require this build for resume.
 
 - `read` reads a file.
 - `start_child` starts persistent delegated work as described above.
-- `check_evidence` inspects a captured project check's output and source excerpts.
-- `diagnose_check` diagnoses one captured failure with one additional model
-  request and validated evidence references. See [captured check diagnosis](docs/check-diagnosis.md)
-  for project-plugin setup, limits, cancellation and the Rust inspector.
 - `write` atomically writes a workspace-relative regular file and creates parent
   directories. It records durable controller intent and executor receipts before
   and after mutation.
@@ -653,6 +649,12 @@ repeat the same arguments, allowing read → edit → read and test → fix → 
 workflows, as well as fresh observations of external state. The iteration limit
 bounds repeated model requests; this guard is not a tool-result cache or an
 exactly-once execution guarantee.
+
+The project plugin adds `check_evidence` to inspect captured output/source and
+`diagnose_check` to diagnose one captured failure with one additional model
+request and validated references. These tools require the plugin; see
+[captured check diagnosis](docs/check-diagnosis.md) for setup, limits,
+cancellation and the Rust inspector.
 
 ## More user guides
 

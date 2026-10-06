@@ -7,7 +7,7 @@ defmodule ElixirProjectPlugin do
   @max_output_bytes 8_000
 
   @impl true
-  def metadata, do: %{id: "elixir_project", version: "3"}
+  def metadata, do: %{id: "elixir_project", version: "4"}
 
   @impl true
   def tools do
@@ -62,6 +62,33 @@ defmodule ElixirProjectPlugin do
         description:
           "Repeat this session's last Mix invocation, including its focused test target, using the current project files.",
         parameters: empty_schema()
+      },
+      %ToolSpec{
+        name: "check_evidence",
+        description:
+          "Inspect the last captured project check and its immutable source/output excerpts. With no arguments, returns the run ID and artifact manifest. Supply artifact_id and optional start_line to read up to 20 captured lines.",
+        parameters: %{
+          "type" => "object",
+          "properties" => %{
+            "run_id" => %{"type" => "string"},
+            "artifact_id" => %{"type" => "string"},
+            "start_line" => %{"type" => "integer", "minimum" => 1}
+          },
+          "additionalProperties" => false
+        },
+        cancel_on_interrupt: true
+      },
+      %ToolSpec{
+        name: "diagnose_check",
+        description:
+          "Diagnose a captured failed project check using one additional model request and no tools. Get run_id from check_evidence. Returns observations, a cause hypothesis, validated source references, unknowns and a suggested next check. Interrupt cancels the diagnosis.",
+        parameters: %{
+          "type" => "object",
+          "properties" => %{"run_id" => %{"type" => "string"}},
+          "required" => ["run_id"],
+          "additionalProperties" => false
+        },
+        cancel_on_interrupt: true
       }
     ]
   end
@@ -183,6 +210,14 @@ defmodule ElixirProjectPlugin do
   def handle_tool("elixir_rerun_last", _args, ctx, state) do
     {name, args} = state.last_run.invocation
     handle_tool(name, args, ctx, state)
+  end
+
+  def handle_tool("check_evidence", args, ctx, state) do
+    {Elara.CheckDiagnosis.inspect_evidence(args, ctx), state}
+  end
+
+  def handle_tool("diagnose_check", args, ctx, state) do
+    {Elara.CheckDiagnosis.diagnose(args, ctx), state}
   end
 
   def handle_tool(_name, _args, _ctx, state), do: {{:error, "unknown elixir project tool"}, state}

@@ -40,7 +40,8 @@ defmodule Elara.Session do
             subscribers: %{pid() => reference()},
             pending_reply: GenServer.from() | nil,
             tasks: %{
-              reference() => {:provider | :tool, Core.ref(), pid(), {pid(), reference()} | nil}
+              reference() =>
+                {:provider | :tool, Core.ref(), pid(), {pid(), reference(), boolean()} | nil}
             },
             pending_effects: %{Core.ref() => Job.t()},
             timers: %{Core.ref() => reference()}
@@ -434,9 +435,8 @@ defmodule Elara.Session do
     {:reply, shell.cwd, shell}
   end
 
-  def handle_call({:record_check, evidence}, {caller, _}, shell) do
-    with {:ok, _ref, call} <- active_tool(shell, caller),
-         true <- call.name in ["elixir_check", "elixir_test", "elixir_rerun_last"],
+  def handle_call({:tool_evidence, evidence}, {caller, _}, shell) do
+    with {:ok, _ref, _call} <- active_tool(shell, caller),
          true <- Elara.CheckEvidence.valid?(evidence),
          {:ok, store} <-
            Store.save(%{shell.store | check_evidence: evidence}) do
@@ -448,16 +448,16 @@ defmodule Elara.Session do
     end
   end
 
-  def handle_call({:check_evidence, run_id}, _from, shell) do
-    {:reply, Elara.CheckEvidence.fetch(shell.store.check_evidence, run_id), shell}
+  def handle_call(:tool_evidence, {caller, _}, shell) do
+    case active_tool(shell, caller) do
+      {:ok, _, _} -> {:reply, {:ok, shell.store.check_evidence}, shell}
+      error -> {:reply, error, shell}
+    end
   end
 
-  def handle_call({:diagnosis_context, run_id}, {caller, _}, shell) do
-    with {:ok, ref, %{name: "diagnose_check"}} <- active_tool(shell, caller),
-         {:ok, evidence} <-
-           Elara.CheckEvidence.fetch(shell.store.check_evidence, run_id) do
+  def handle_call(:tool_provider_context, {caller, _}, shell) do
+    with {:ok, ref, _call} <- active_tool(shell, caller) do
       context = %{
-        evidence: evidence,
         provider:
           Provider.Visibility.configure(shell.provider, shell.core.config.provider_settings),
         settings: shell.core.config.provider_settings,
@@ -468,16 +468,15 @@ defmodule Elara.Session do
       {:reply, {:ok, context}, shell}
     else
       {:error, reason} -> {:reply, {:error, reason}, shell}
-      _ -> {:reply, {:error, "Diagnosis invocation is no longer active"}, shell}
     end
   end
 
   def handle_call(
-        {:diagnosis_provider, operation_id, {module, config}, usage},
+        {:tool_provider_result, operation_id, {module, config}, usage},
         {caller, _},
         shell
       ) do
-    with {:ok, ref, %{name: "diagnose_check"}} <- active_tool(shell, caller),
+    with {:ok, ref, _call} <- active_tool(shell, caller),
          true <- operation_id == "#{shell.incarnation}:#{ref}",
          true <- module == elem(shell.provider, 0),
          true <- Provider.Visibility.valid_usage?(usage) do
@@ -485,7 +484,7 @@ defmodule Elara.Session do
       shell = if usage, do: feed({:tool_usage, ref, usage}, shell), else: shell
       {:reply, :ok, shell}
     else
-      _ -> {:reply, {:error, "Diagnosis invocation is no longer active"}, shell}
+      _ -> {:reply, {:error, "Tool provider invocation is no longer active"}, shell}
     end
   end
 
@@ -1579,7 +1578,7 @@ defmodule Elara.Session do
             [config, request, tool]
           )
 
-        track_tool_task(shell, task, core_ref, {plugin.server, lease})
+        track_tool_task(shell, task, core_ref, {plugin.server, lease, tool.cancel_on_interrupt})
 
       {:error, :busy} ->
         feed({:tool_result, core_ref, {:error, "plugin is busy"}}, shell)
@@ -1871,9 +1870,9 @@ defmodule Elara.Session do
       {kind, core_ref, pid, plugin_lease} = Map.fetch!(shell.tasks, task_ref)
       _ = kind
 
-      # Plugin checkouts stay with the in-flight invocation so reload remains
-      # :busy until that call ends. Builtin/provider tasks are killed now.
-      if plugin_lease do
+      # Ordinary plugin invocations drain; explicitly cancellable tools release
+      # their lease on interruption like builtin/provider tasks.
+      if match?({_, _, false}, plugin_lease) do
         shell
       else
         Process.demonitor(task_ref, [:flush])
@@ -1885,6 +1884,7 @@ defmodule Elara.Session do
           0 -> :ok
         end
 
+        abort_plugin_invocation(plugin_lease)
         untrack_task(shell, task_ref, core_ref)
       end
     end)
@@ -1892,14 +1892,14 @@ defmodule Elara.Session do
 
   defp settle_tool_result(nil, outcome), do: outcome
 
-  defp settle_tool_result({server, lease}, {:commit, outcome, plugin_state}) do
+  defp settle_tool_result({server, lease, _cancel}, {:commit, outcome, plugin_state}) do
     case PluginServer.commit_invocation(server, lease, plugin_state) do
       :ok -> outcome
       {:error, :stale_lease} -> {:error, "plugin invocation expired"}
     end
   end
 
-  defp settle_tool_result({server, lease}, {:abort, outcome}) do
+  defp settle_tool_result({server, lease, _cancel}, {:abort, outcome}) do
     :ok = PluginServer.abort_invocation(server, lease)
     outcome
   end
@@ -1911,7 +1911,7 @@ defmodule Elara.Session do
 
   defp abort_plugin_invocation(nil), do: :ok
 
-  defp abort_plugin_invocation({server, lease}) do
+  defp abort_plugin_invocation({server, lease, _cancel}) do
     PluginServer.abort_invocation(server, lease)
   end
 

@@ -143,6 +143,21 @@ defmodule Elara.PluginTest do
     end
   end
 
+  test "plugin cancellation declarations must be boolean", %{path: path} do
+    write_counter(path, module_name(), "1")
+
+    source =
+      path
+      |> File.read!()
+      |> String.replace(
+        "description: \"Increment a counter.\",",
+        "description: \"Increment a counter.\", cancel_on_interrupt: \"yes\","
+      )
+
+    File.write!(path, source)
+    assert {:error, :invalid_plugin_tool} = Loader.load(path)
+  end
+
   test "reload changes code without changing the session, state process, state, or history", %{
     path: path,
     dir: dir

@@ -49,7 +49,8 @@ end
 Callbacks:
 
 - `metadata/0` returns exactly `%{id: String.t(), version: String.t()}`.
-- `tools/0` returns tool names, descriptions, and JSON Schemas.
+- `tools/0` returns tool names, descriptions, JSON Schemas and optional
+  `cancel_on_interrupt` (boolean, default false).
 - `init/1` returns `{:ok, initial_state}` or `{:error, reason}`.
 - `handle_tool/4` returns `{outcome, new_state}`, where an outcome is
   `{:ok, text}`, `{:error, text}`, or `{:indeterminate, text}`.
@@ -90,7 +91,10 @@ before discovery-policy tracking retain their saved fixed path selection.
 Each session stays on its loaded plugin revision until that session reloads. On
 success, new calls use the new code while the plugin's process and state
 survive. Reload is refused during a turn and while an interrupted plugin call
-still holds its state lease.
+still holds its state lease. Read-only tools may explicitly set
+`cancel_on_interrupt: true`; interruption kills their worker and releases the
+lease without committing returned plugin state. Ordinary tools keep draining.
+This declaration does not roll back any external side effect.
 
 The controlling TUI connection waits for compilation and migration to finish,
 including callbacks longer than five seconds, then reports success or failure.

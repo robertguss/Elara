@@ -171,7 +171,10 @@ summarization.
 ancestry plus `Elara.Skills` metadata (Agent Skills format). Skills load
 _metadata_ into context; bodies load selectively through the `skill` tool.
 `Elara.Plugin` loads trusted local `.elara/plugins/*.exs` tools with
-generation/lease-based atomic reload.
+generation/lease-based atomic reload. Project check evidence/diagnosis tools
+belong to the project plugin, not the built-in roster. Session binds evidence
+and provider updates to the current tool caller/incarnation; plugins may opt
+read-only tools into immediate interruption with `cancel_on_interrupt: true`.
 
 ## Conventions that matter here
 

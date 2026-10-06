@@ -8,7 +8,7 @@ first implemented slice of the [DSPy research proposal](features-research/dspy-f
 ## Try it
 
 Start Elara from the updated checkout. The project plugin must be loaded at
-version 3; see [plugin discovery and reload](plugins.md) for another Mix project.
+version 4; see [plugin discovery and reload](plugins.md) for another Mix project.
 `/plugins reload` activates a revised plugin between turns in a session using
 default discovery. Restart Elara to load changes to the harness itself.
 
@@ -26,7 +26,8 @@ it does not automatically find the implementation. `elixir_check` also accepts
 `evidence_paths`. `elixir_rerun_last` uses the remembered arguments and captures
 the files again before running the command again.
 
-The agent can use these built-in tools:
+The loaded project plugin exposes these tools; they are absent when the plugin
+is disabled:
 
 | Tool | Input | Result |
 | --- | --- | --- |

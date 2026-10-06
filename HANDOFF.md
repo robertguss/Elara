@@ -131,19 +131,33 @@ and human acceptance remain excluded. An unrelated Phoenix VM was observed at
 postflight outside Elara; leave it alone. Timing is host-specific.
 
 LAB-6 (ROB-1086) is selected as the sole executable lab item. Work is on
-`work/rob-1086-runtime-prototypes`; read its staged plan and latest review in
-Linear before continuing. The first chunk merged in PR #50 at `120f6549`; it removes Coordinator/Engine/API and
+`work/rob-1086-project-diagnosis`; read its staged plan and latest review in
+Linear before continuing. The first chunk merged in PR #50 at `120f6549`; it
+removes Coordinator/Engine/API and
 migrates every TestExecutor caller to production Executor with assertions intact.
 Focused inheritance/Threads/executor/input/effect verification passed 148
 (seed 1086); caller migrations preserve all other bytes. The separate
 instruction/skill inheritance test uses public Threads. Note 006
 records the deliberately removed batch contracts and four Coordinator tests.
-LiteralPatch/OpaqueShell move to test-only fixture drivers in the second chunk;
-all implementation/assertion bytes other than namespaces/module docs remain
+The second chunk merged in PR #51 at `3163b6f`; LiteralPatch/OpaqueShell
+move to test-only fixture drivers. All implementation/assertion bytes other than namespaces/module docs remain
 identical. Focused effect/executor/input 113 passed, seed 1086. Production
 application/code-path absence is checked separately. Project-plugin diagnosis
-follows;
-LAB-6 stays active until all acceptance is merged. Keep TestJobs until LAB-8
+is being delivered: project-plugin definitions, invocation-bound generic
+evidence/provider access, opt-in cancellation and compatible evidence DTOs.
+The original cancellation/persistence/usage/PTY assertions remain; absence and
+renamed-tool controls reproduced the old defects. Full suite passed 970
+(11 properties, 959 tests; seed 1086; 274.4 s) at runtime `d6bd527`.
+Post-suite discovery correction adds only the two fixture paths to the existing
+ignore filter; driver/helper paths and bytes remain unchanged. Targeted loading
+checks passed 116 and full discovery found exactly 970 tests. The fresh registered final regression
+at clean `4ebab19b` passed all 24 checkpoints and 407 boolean checks; zero
+ineligible, failed or unconfirmed-cleanup rows. Independent ordered-row/VM
+readback and postflight artifact verification passed; launcher exited and no
+BEAM remains. Raw namespace: `lab/results/rob-1086-checkpoints-20261006-a1-*`.
+These rows are excluded from the original LAB-5 measurement; never rerun or
+pool either namespace. See note 006 for hashes, bounds and source identities.
+Final reviewed delivery is pending; LAB-6 stays active until acceptance is merged. Keep TestJobs until LAB-8
 supplies a replacement, and preserve all LAB-5 corpora. Do not resume LAB-3.
 
 LAB-8 also depends on LAB-5; LAB-4/LAB-7 retain their recorded dependencies.

@@ -8,7 +8,7 @@ defmodule Elara.CheckEvidence do
   def record(%Elara.Tool.Ctx{session_id: nil}, _evidence), do: :ok
 
   def record(%Elara.Tool.Ctx{session_id: id}, evidence) do
-    with {:ok, pid} <- Elara.session_pid(id), do: GenServer.call(pid, {:record_check, evidence})
+    with {:ok, pid} <- Elara.session_pid(id), do: GenServer.call(pid, {:tool_evidence, evidence})
   end
 
   def fetch(nil, _run_id),

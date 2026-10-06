@@ -50,7 +50,8 @@ defmodule Elara.Tool do
           plugin: PluginRef.t() | nil,
           capabilities: [String.t()],
           placement: :local | :remote | :any,
-          mutating: boolean()
+          mutating: boolean(),
+          cancel_on_interrupt: boolean()
         }
   defstruct [
     :name,
@@ -61,7 +62,8 @@ defmodule Elara.Tool do
     version: "1",
     capabilities: [],
     placement: :any,
-    mutating: false
+    mutating: false,
+    cancel_on_interrupt: false
   ]
 
   @spec builtins() :: [t()]
@@ -74,7 +76,7 @@ defmodule Elara.Tool do
       Elara.Skills.tool(),
       Elara.Threads.tool(),
       Elara.TestJobs.tool()
-    ] ++ Elara.Threads.Communication.tools() ++ Elara.CheckDiagnosis.tools()
+    ] ++ Elara.Threads.Communication.tools()
   end
 
   @doc false

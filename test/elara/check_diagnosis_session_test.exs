@@ -75,6 +75,47 @@ defmodule Elara.CheckDiagnosisSessionTest do
     %{cwd: cwd}
   end
 
+  test "diagnosis tools require the project plugin", %{cwd: cwd} do
+    {session, script, _} = session(cwd, false, plugins: [])
+    names = Enum.map(Elara.Tool.builtins(), & &1.name)
+    refute "check_evidence" in names
+    refute "diagnose_check" in names
+    assert {:error, error} = invoke(session, script, "diagnose_check", %{"run_id" => "missing"})
+    assert error =~ "unknown tool"
+    refute_receive {:diagnosis_request, _, _}
+  end
+
+  @tag timeout: 60_000
+  test "renamed project tools retain evidence and provider accounting without shell name rules",
+       %{cwd: cwd} do
+    plugin = Path.join(cwd, "renamed_plugin.exs")
+
+    source =
+      @plugin
+      |> File.read!()
+      |> String.replace("\"elixir_test\"", "\"project_test\"")
+      |> String.replace("\"check_evidence\"", "\"project_evidence\"")
+      |> String.replace("\"diagnose_check\"", "\"project_diagnosis\"")
+
+    File.write!(plugin, source)
+    {session, script, _} = session(cwd, false, plugins: [plugin])
+
+    assert {:error, output} =
+             invoke(session, script, "project_test", %{"target" => "test/example_test.exs:3"})
+
+    [_, run_id] = Regex.run(~r/evidence_run_id=([^\s]+)/, output)
+    assert {:ok, manifest} = invoke(session, script, "project_evidence", %{"run_id" => run_id})
+    assert JSON.decode!(manifest)["id"] == run_id
+    assert {:ok, text} = invoke(session, script, "project_diagnosis", %{"run_id" => run_id})
+    report = JSON.decode!(text)
+    assert report["status"] == "accepted"
+    assert report["run_id"] == run_id
+    assert report["provider_calls"] == 1
+
+    assert Elara.materialized_view(session)["provider_view"]["usage"]["session_totals"] ==
+             report["usage"]
+  end
+
   @tag timeout: 60_000
   test "real failed check, immutable evidence, one diagnosis, inspection and replay", %{cwd: cwd} do
     {session, script, _pid} = session(cwd)
@@ -137,7 +178,7 @@ defmodule Elara.CheckDiagnosisSessionTest do
   test "capture preserves clone, fork, resume, and rewind without carrying evidence across history changes",
        %{cwd: cwd} do
     for operation <- [:clone, :fork, :resume, :rewind] do
-      {session, script, pid} = session(cwd, false, persist: true)
+      {session, script, _pid} = session(cwd, false, persist: true)
       run_id = failed_check(session, script)
       first = hd(Elara.user_entries(session)).id
 
@@ -157,7 +198,7 @@ defmodule Elara.CheckDiagnosisSessionTest do
       end
 
       assert {:error, "No captured check." <> _} =
-               GenServer.call(pid, {:check_evidence, run_id})
+               invoke(session, script, "check_evidence", %{"run_id" => run_id})
     end
   end
 
@@ -175,8 +216,8 @@ defmodule Elara.CheckDiagnosisSessionTest do
     assert {:error, output} = tool_result(session, "elixir_test").outcome
     assert String.valid?(output)
     assert output =~ "�"
-    assert {:ok, evidence} = GenServer.call(pid, {:check_evidence, run_id})
-    assert evidence["output_encoding_repaired"]
+    assert {:ok, evidence} = invoke(session, script, "check_evidence", %{"run_id" => run_id})
+    assert JSON.decode!(evidence)["output_encoding_repaired"]
     assert {:ok, _} = Elara.Session.Store.open(:sys.get_state(pid).store.path, cwd)
   end
 
@@ -188,6 +229,15 @@ defmodule Elara.CheckDiagnosisSessionTest do
     prepare(script, "diagnose_check", %{"run_id" => run_id})
     pending = Task.async(fn -> Elara.ask(session, "Diagnose the captured failure") end)
     assert_receive {:diagnosis_request, worker, request}, 5_000
+
+    on_exit(fn -> stop_owned_worker(worker) end)
+
+    assert {:error, _} = GenServer.call(pid, :tool_provider_context)
+    assert {:error, _} = GenServer.call(pid, :tool_evidence)
+
+    assert {:error, _} =
+             GenServer.call(pid, {:tool_provider_result, "forged", {Provider, %{}}, nil})
+
     monitor = Process.monitor(worker)
     assert {:running_tool, _, _, _, _} = Elara.status(session).phase
     [{ref, _task}] = Map.to_list(:sys.get_state(pid).tasks)
@@ -197,6 +247,9 @@ defmodule Elara.CheckDiagnosisSessionTest do
     prepare(other_script, "diagnose_check", %{"run_id" => other_run})
     other_pending = Task.async(fn -> Elara.ask(other, "Diagnose independently") end)
     assert_receive {:diagnosis_request, other_worker, other_request}, 5_000
+
+    on_exit(fn -> stop_owned_worker(other_worker) end)
+
     Elara.interrupt(session)
     assert {:error, :interrupted} = Task.await(pending, 5_000)
     assert_receive {:DOWN, ^monitor, :process, ^worker, _}, 5_000
@@ -240,7 +293,7 @@ defmodule Elara.CheckDiagnosisSessionTest do
     run_id = failed_check(session, script)
     assert {:ok, diagnosis} = invoke(session, script, "diagnose_check", %{"run_id" => run_id})
     store = :sys.get_state(pid).store
-    assert {:error, _} = GenServer.call(pid, {:record_check, store.check_evidence})
+    assert {:error, _} = GenServer.call(pid, {:tool_evidence, store.check_evidence})
     GenServer.stop(pid)
     File.write!(Path.join(cwd, "lib/example.ex"), "changed after session stopped\n")
 
@@ -333,6 +386,12 @@ defmodule Elara.CheckDiagnosisSessionTest do
 
     assert status == 0, output
     assert output =~ "Diagnosis PTY passed"
+  end
+
+  defp stop_owned_worker(worker) do
+    ref = Process.monitor(worker)
+    Process.exit(worker, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^worker, _}, 5_000
   end
 
   defp session(cwd, gated \\ false, opts \\ []) do

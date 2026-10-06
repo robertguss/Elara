@@ -157,9 +157,15 @@ defmodule Elara.Plugin.Loader do
 
   defp validate_tools(tools) when is_list(tools) do
     Enum.reduce_while(tools, {:ok, MapSet.new(), []}, fn
-      %ToolSpec{name: name, description: description, parameters: parameters} = tool,
+      %ToolSpec{
+        name: name,
+        description: description,
+        parameters: parameters,
+        cancel_on_interrupt: cancel
+      } = tool,
       {:ok, names, acc}
-      when is_binary(name) and name != "" and is_binary(description) and is_map(parameters) ->
+      when is_binary(name) and name != "" and is_binary(description) and is_map(parameters) and
+             is_boolean(cancel) ->
         if MapSet.member?(names, name) do
           {:halt, {:error, {:duplicate_plugin_tool, name}}}
         else

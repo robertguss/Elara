@@ -50,7 +50,13 @@ legacy upgrades; trace24 reads/24 reports, transport quiescent and1/1 pass.
 Both public regressions+17 communication tests pass19/19. Runtime repair source
 86a5c3321c9b8135395388439b807eb71a06643b; compile/format/diff pass. Linear
 comments ee76eca9/6640ac42 and note008 retain failures, repairs and restored
-instrumentation. Fresh frozen full suite and PR delivery remain. No model or
+instrumentation. Second full suite atc430c1e passed1019/1020 (306.6s); completion/settlement
+checks passed, but attachment PTY oversize-error visibility failed. ROB-1331's
+one-line existing bounded wait is merged in PR#56 ate096868, reviewed1bfba2f,
+with both Socket checks and tree equality. Owned delay old0/1/new1/1 plus
+ordinary1/1 and cleanup witnesses pass. Main's fixture fix is integrated here;
+only test/support/input_attachments_pty.py changes among240 frozen source/test
+hashes. Fresh full suite and shared-wait PR delivery remain. No model or
 historical corpus was run.
 
 After this chunk: operator server/TUI acknowledgment, fresh final LAB-5-style

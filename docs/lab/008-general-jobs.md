@@ -213,7 +213,14 @@ observes24 receipt reads for24 admitted reports, transport_quiescent=true and
 1/1 pass (43excluded,2.9s). Report counts differ between runs; these are diagnostic
 regressions, not pooled or registered measurements. The temporary fixture is
 restored byte-exact, and compile warnings-as-errors/format/diff pass. A fresh
-frozen full suite is pending.
+frozen full suite atc430c1e passes1019/1020 (11/11 properties,1008/1009 tests;
+seed1088,306.6s). Completion/settlement checks pass; the sole failure is the
+existing attachment PTY oversize-error observation. ROB-1331's independent
+fixture PR#56 merges ate096868: reuse its existing8s wait for the same actual
+visible error. A1.2s owned rendering delay fails old0/1 and passes new1/1; ordinary
+product1/1 and both teardown witnesses pass. Integrated main changes only that
+fixture among240 frozen source/test hashes; no completion/runtime change.
+A fresh full suite after integration is pending.
 
 Removing claimed consumption fails its sole executed held-job check (0/1).
 Removing transport dependency retirement fails its sole executed loss check

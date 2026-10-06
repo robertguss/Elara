@@ -160,8 +160,11 @@ counters and deadline/control fairness; default ordinary bash keeps its cap-kill
 policy. Public red 0/5, expanded green21, restored mutation controls and focused
 67 pass; native format/Clippy/seven tests and compile/format/diff pass. Note008
 and `lab/results/rob-1088-general-jobs-20261006/` retain baseline counts, failed
-controls and scope. Integrated suite/review/chunk delivery remain pending. This
-chunk adds99 counted source lines; overall reduction is not established.
+controls and scope. Full integrated999 (11 properties,988 tests), seed1088,282.5s passes at clean
+`404ce86`; postflight has no BEAM/fixture process and hashes all logs. Immutable
+review/chunk delivery evidence is in Linear; this supporting chunk does not
+complete LAB-8 acceptance. It adds99 counted source lines; overall reduction
+is not established.
 
 After output-policy delivery, generalize TestJobs to trusted Jobs profiles while
 loading v1 records and keeping the test_job alias. Then implement the reviewed

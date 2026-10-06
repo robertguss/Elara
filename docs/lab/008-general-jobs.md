@@ -75,6 +75,11 @@ compile warnings-as-errors and Elixir format/diff pass.
 All raw red/green/mutation/focused/native logs and reviewed control source remain
 in `lab/results/rob-1088-general-jobs-20261006/`. Chunk 1 adds 99 counted source
 lines (52 Elixir, 47 native including inline tests). This is not evidence of an
-overall reduction. Integrated suite, immutable review and chunk delivery are
-pending; profiles, correlated wake, UI acknowledgment, final chaos/net-line
-comparison and the separately approved real-model gate remain in ROB-1088.
+overall reduction. The integrated full suite passes 999 (11 properties, 988
+tests), seed 1088, in 282.5 seconds at clean
+`404ce8604d9728695be03f93170a918ae3e1dab9`. No BEAM or output-policy fixture
+process remains after the suite; the retained postflight record hashes every
+verification log. Immutable review/chunk delivery evidence is in Linear.
+Profiles, correlated wake, UI acknowledgment, final chaos/net-line comparison
+and the separately approved real-model gate remain in ROB-1088; this supporting
+chunk does not complete LAB-8 acceptance.

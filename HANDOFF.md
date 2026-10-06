@@ -146,6 +146,26 @@ seed 1085, in 262.6 seconds; guidance 3 and compile/format/diff passed. Three
 fresh final-source dev VMs with production restart intensity 3 passed every
 check, complete/cleanup true and one launch; recovery was 40–150 ms. These
 are preparations, excluded from the registered matrix.
+Transport candidate `d501a4c` is held on `work/rob-1085-transport-recovery`.
+Its focused 99 and three 13-check production-default VM preparations passed,
+but the integrated suite passed 952/953 (seed 1085, 284.5 s): the existing
+concurrency retained-ledger fixture at line 378 observed zero leftover tasks.
+ROB-1325 owns a separate synchronization repair. A collector-backed delayed
+observation reproduces that old timing assumption; the first four mailbox
+observer attempts were invalid and remain retained. The repair holds actual
+provider Tasks, registers release before assertions and checks normal DOWN
+and public writer settlement, including forced assertion failure. Raw source,
+red/green and final verification output are in
+`lab/results/rob-1325-verification-20261006/`; Linear records review/delivery.
+Repair verification passed concurrency 44, both final writer controls and
+all 948 integrated checks (11 properties, 937 tests; seed 1085; 265.1 s).
+Compile with warnings as errors, format and diff checks passed. Killing
+providers instead of releasing them fails both ledger tests; normal DOWN
+is required. Final source hashes are verified. After merge, rebase the
+unpushed held candidate, preserve its failing suite and verify the integrated
+transport tree before delivery. No registered
+measurement was launched, and LAB-3's owner sequencing/host gates remain.
+
 Next extend the remaining client/worker/whole-VM families, preserving causal
 fault witnesses, per-input receipt/terminal accounting, honest uncertainty,
 slot/acknowledgment and native cleanup checks. The handoff, child and test-job fixtures'

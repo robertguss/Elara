@@ -1,0 +1,16 @@
+{
+  "freeze_file_created": false,
+  "rows": [
+    {
+      "pid": 55197,
+      "cwd": "/Users/robertguss/Projects/startups/Elara",
+      "owned_unqualified_full_run": true
+    },
+    {
+      "pid": 61232,
+      "cwd": "/Users/robertguss/Projects/startups/Elara",
+      "owned_unqualified_full_run": false
+    }
+  ],
+  "scope": "failed preflight; unqualified a1 excluded; SIGTERM only exact owned mix test --seed 1105 VM; other VMs untouched"
+}

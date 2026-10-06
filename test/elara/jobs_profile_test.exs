@@ -605,6 +605,7 @@ defmodule Elara.JobsProfileTest do
   end
 
   defp job_request(socket, request) do
+    request = Map.put(request, "token", System.fetch_env!("ELARA_SERVER_TOKEN"))
     assert :ok = :gen_tcp.send(socket, Elara.Protocol.encode(request))
     assert {:ok, line} = :gen_tcp.recv(socket, 0, 2_000)
     JSON.decode!(line)

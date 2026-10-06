@@ -1,0 +1,187 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 1105, max_cases: 28
+
+.......
+
+  1) test commands run through the execution stub see no ELARA_* or XAI_API_KEY (Elara.TestEnvironmentTest)
+     test/elara/test_environment_test.exs:29
+     Assertion with == failed
+     code:  assert String.split(output, "\n", trim: true) == []
+     left:  ["ELARA_SERVER_TOKEN"]
+     right: []
+     stacktrace:
+       test/elara/test_environment_test.exs:36: (test)
+
+.........................................................................................................................................................................................................................................    warning: the default value for the last optional argument in the private function fun/7 is never used
+    │
+ 49 │   defp fun(class, module, function, arity, us, calls \\ 1, native \\ false),
+    │        ~
+    │
+    └─ test/elara/lab_profile_report_test.exs:49:8: Elara.Lab.ProfileReportTest (module)
+
+....................................
+
+  2) test negotiated RPCs handle pipelined writes, fragmented JSON and discard (Elara.AttachmentTest)
+     test/elara/attachment_test.exs:197
+     ** (Protocol.UndefinedError) protocol Enumerable not implemented for Atom. This protocol is implemented for: DBConnection.PrepareStream, DBConnection.Stream, Date.Range, Exqlite.Stream, File.Stream, Function, GenEvent.Stream, HashDict, HashSet, IO.Stream, Jason.OrderedObject, List, Map, MapSet, Range, Req.Response.Async, Stream, StreamData
+
+     Got value:
+
+         nil
+
+     code: assert "input_attachments_v1" in receive_rpc(socket)["extensions"]
+     stacktrace:
+       (elixir 1.20.4) lib/enum.ex:5: Enumerable.impl_for!/1
+       (elixir 1.20.4) lib/enum.ex:212: Enumerable.member?/2
+       (elixir 1.20.4) lib/enum.ex:2036: Enum.__in__/2
+       test/elara/attachment_test.exs:232: (test)
+
+................    warning: incompatible types given to Elara.Lab.Scenarios.JobRecovery.run/1:
+
+        Elara.Lab.Scenarios.JobRecovery.run(%{params: %{"api" => invalid}})
+
+    given types:
+
+        -dynamic(%{params: %{binary() => term()}})-
+
+    but expected one of:
+
+        #1
+        %{..., provider: :real}
+
+        #2
+        %{
+          ...,
+          dir: binary() or empty_list() or non_empty_list(term(), term()),
+          params: map(),
+          provider: if_set(not :real),
+          seed: term()
+        }
+
+    where "invalid" was given the type:
+
+        # type: dynamic()
+        # from: test/elara/lab_job_recovery_test.exs:65:17
+        invalid <- [nil, false, 1, "unknown"]
+
+    type warning found at:
+    │
+ 67 │         JobRecovery.run(%{params: %{"api" => invalid}})
+    │                     ~
+    │
+    └─ test/elara/lab_job_recovery_test.exs:67:21: Elara.Lab.JobRecoveryTest."test invalid API selection rejects before fixture resources are created"/1
+
+     warning: the following conditional expression:
+
+         send(self(), {:spawned, pid})
+
+     will always evaluate to:
+
+         dynamic({:spawned, term()})
+
+     where "pid" was given the type:
+
+         # type: dynamic()
+         # from: test/elara/lab_profile_test.exs
+         {:spawned, pid}
+
+     type warning found at:
+     │
+ 176 │           {:spawned, pid} -> send(self(), {:spawned, pid}) && [pid]
+     │           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     │
+     └─ test/elara/lab_profile_test.exs:176: Elara.Lab.ProfileTest."test classes a pid whose census and spawn records disagree is unclassified"/1
+
+.......................................
+12:32:39.393 [error] Task #PID<0.1875.0> started from #PID<0.1871.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.1870.0>, {:get_and_update, #Function<3.93906535/1 in Elara.Lab.Faults.hook/2>}, 5000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/faults.ex:38: anonymous fn/4 in Elara.Lab.Faults.hook/2
+    (elara 0.1.0) lib/elara/provider/simulated.ex:238: anonymous fn/7 in Elara.Provider.Simulated.stream_deltas/5
+    (elixir 1.20.4) lib/enum.ex:1857: anonymous fn/3 in Enum.map_reduce/3
+    (elixir 1.20.4) lib/enum.ex:4659: Enum.reduce_range/5
+    (elixir 1.20.4) lib/enum.ex:2626: Enum.map_reduce/3
+    (elara 0.1.0) lib/elara/provider/simulated.ex:231: Elara.Provider.Simulated.stream_deltas/5
+    (elara 0.1.0) lib/elara/provider/simulated.ex:204: Elara.Provider.Simulated.answer/4
+    (elara 0.1.0) lib/elara/provider/simulated.ex:125: Elara.Provider.Simulated.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+..................................
+
+  3) test TCP input queue negotiation enforces observer writes and filters legacy inbox patches (Elara.InputQueueTest)
+     test/elara/input_queue_test.exs:330
+     match (=) failed
+     code:  assert %{"snapshot" => %{"inbox" => _}} = attach.(controller, "control", ["input_queue_v1"])
+     left:  %{"snapshot" => %{"inbox" => _}}
+     right: %{
+              "error" => "authentication_failed",
+              "type" => "error",
+              "version" => 2
+            }
+     stacktrace:
+       test/elara/input_queue_test.exs:365: (test)
+
+...........................................
+12:32:50.336 [error] Task #PID<0.2770.0> started from Elara.TestJobs terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["mix", "test", "test/job_test.exs"], [cwd: "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-55197-127571355/elara-test-job-22914", timeout_ms: 60000, max_bytes: 16384, output_policy: :head_tail, expected_token: %{"generation" => 2, "incarnation" => "9Z_ilKWJ_ufzeh9IncVHXQ"}]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<9.28342840/0 in Elara.Jobs.start_job/7>
+    Args: []
+.....................................................................................................................................
+12:33:26.899 [error] Task #PID<0.6920.0> started from #PID<0.6916.0> terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["sh", "-c", "printf '%s' \"$$\" > os_pid\nsleep 60 &\nprintf '%s' \"$!\" > descendant_pid\nprintf x >> started\nwhile [ ! -e release ]; do sleep 0.01; done\n"], [cwd: "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-55197-127571355/elara-lab-group_recovery-42-55197-2adf76f41b3d64a9/workspace", timeout_ms: 60000, max_bytes: 1024]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<4.109585720/0 in Elara.Lab.Scenarios.GroupRecovery.flow/2>
+    Args: []
+.............warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-55197-127571355/elara-lab-checked-5-55197-8497a4072801837e; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_test.exs:96: Elara.LabTest."test failed checks keep evidence; unconfirmed cleanup keeps the root bound and stops"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.....warning: lab scenario smoke raised; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-55197-127571355/elara-lab-smoke-1-55197-606747be4c8ed605; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:144: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_test.exs:64: Elara.LabTest."test real mode refuses a request cap below one request per turn, before any network use"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+warning: lab scenario smoke raised; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-55197-127571355/elara-lab-smoke-1-55197-3098143e55899bbd; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:144: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_test.exs:68: Elara.LabTest."test real mode refuses a request cap below one request per turn, before any network use"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...........
+12:33:50.140 [notice] SIGTERM received - shutting down
+

@@ -146,6 +146,7 @@ defmodule Elara.Lab.Client do
     with {:ok, socket} <- :gen_tcp.connect({127, 0, 0, 1}, state.port, opts),
          request = %{
            "version" => 2,
+           "token" => System.get_env("ELARA_SERVER_TOKEN"),
            "command" => "attach",
            "session_id" => session_id,
            "mode" => "observe",

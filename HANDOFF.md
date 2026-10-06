@@ -43,8 +43,19 @@ Focused56 pass (45.5s). Remaining consumers34/35 preparation fails only missing
 approval for renamed synthetic source; fixed fixture then diagnosis10 pass.
 Configured invalid UTF8 also rejects before listen. Final raw reconnect records
 native/proxy/thread/listener/peer sockets stopped, including forced failure.
-Freeze the clean commit/source-test hashes, run full suite without edits, then
-self-review/PR/checks/merge. Do not mark Done before these required checks.
+Source commit3b6ca9a is retained. First preflight aborted on a running VM;
+its claimed freeze was withdrawn33ff39b7 and a1 terminated/unqualified with
+no Result summary. Actual fresh freeze5e32c607 contains244 tracked/3 native
+hashes, global BEAM0 before a2. Qualified a2 completed1009/1035 (312.6s,
+seed1105), actual exit2: missing lab observer auth caused18 concurrency failures;
+five raw socket fixtures, context synthetic plugin approvals and Exec child
+environment also failed. All244/3 postflight hashes matched, clean/global BEAM0.
+Correction142cb172: shared lab connection token and shared Port.open removal
+keep gateway credentials out of ordinary commands; fixture/source approvals and
+IEx guide updated. All130 tests across the eight failing modules pass (116.5s). Compile with
+warnings-as-errors/format/diff pass. Preserve every
+preparation/full log; next clean committed freeze/full-a3/self-review/PR/checks/
+merge. Do not mark Done before required acceptance and merge.
 
 LAB-8/ROB-1088 is Needs Input. All scripted chunks PR#54/#55/#57/#58/#59 are
 merged. Final merge77591c02a659c0fcda495331d5469a377251d559 equals reviewed

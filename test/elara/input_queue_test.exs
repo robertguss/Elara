@@ -80,7 +80,10 @@ defmodule Elara.InputQueueTest do
     socket
   end
 
-  defp send_json(socket, value), do: :gen_tcp.send(socket, Elara.Protocol.encode(value))
+  defp send_json(socket, value) do
+    value = Map.put(value, "token", System.fetch_env!("ELARA_SERVER_TOKEN"))
+    :gen_tcp.send(socket, Elara.Protocol.encode(value))
+  end
 
   defp recv_json(socket) do
     {:ok, line} = :gen_tcp.recv(socket, 0, 2_000)

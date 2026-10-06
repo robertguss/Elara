@@ -30,6 +30,8 @@ embedded Mix TUI generates a token automatically when none is configured.
 Direct protocol clients send it as `token` on the first request; unsupported
 protocol versions remain unsupported after authentication.
 
+Elara's execution stub strips this token from ordinary child-command environments.
+
 ```bash
 mix elara.server
 ```

@@ -592,7 +592,8 @@ defmodule Elara.Exec do
         :binary,
         :exit_status,
         :use_stdio,
-        :hide
+        :hide,
+        env: [{~c"ELARA_SERVER_TOKEN", false}]
       ])
 
     case await_ready(port, "") do

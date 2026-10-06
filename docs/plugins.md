@@ -127,6 +127,9 @@ the recorded status. Asking for `elixir_last_run` does not change that state.
 
 To exercise live capability addition in a disposable Mix project:
 
+Set the same random `ELARA_SERVER_TOKEN` (32–512 bytes) in both terminals
+before starting the gateway and client; see [gateway setup](detached-and-remote.md).
+
 1. From the Elara checkout, run `iex -S mix`. Start a session before adding a
    plugin with `{:ok, id} = Elara.start_session(cwd: "/absolute/path/to/project")`
    and a server in that same VM with `Elara.Server.start(port: 4048)`. In another

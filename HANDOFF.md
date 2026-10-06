@@ -59,6 +59,18 @@ remove retained evidence without a specific owner decision. Done means merged.
   Controls and exact source hashes are in
   `lab/results/rob-1085-expanded-preparation-20261005/`; see note 005 and
   ROB-1085 for final review, suite, and delivery evidence. These are preparations.
+- LAB-5 child preparation covers parent delegation and child provider/marker
+  crashes through the public child lifecycle in a disposable Git fixture.
+  It checks durable input/tool identities, automatic reports, one child,
+  capacity release and exact acknowledgment before integration. Focused 46
+  and three fresh dev-VM rows passed (all 16 checks and cleanup true).
+  Released-callback, premature-death, forced-failure and unavailable-barrier
+  controls are retained, including a rejected barrier-ownership mutation, in
+  `lab/results/rob-1085-child-preparation-20261005/`. See note 005 and ROB-1085
+  for final suite, review and delivery. The first full suite passed 920/922;
+  ROB-1216's two loopback helper timeouts were repaired separately in PR #40.
+  The integrated suite and exact delivery are recorded in ROB-1085. These are
+  preparations.
 
 Delivered changes have reviewed diffs, clean format/diff checks, both Socket
 checks, and verified squash-merge tree equality in their Linear records.
@@ -67,7 +79,8 @@ CI has Socket checks and does not run mix test; local test evidence is separate.
 
 ## Current diagnosis and queue
 
-ROB-1216's fixture repair follows two retained
+ROB-1216 is Done after PR #40 merged at `5448d84`. Its fixture repair follows
+two retained
 2-second loopback helper timeouts in the child candidate's full suite, seed
 1085 (920/922). The missing assertion/stack/seed evidence is now available.
 The fixture repair uses a bounded 10-second wait and keeps the runtime/parser
@@ -90,22 +103,15 @@ pilot, recovery fix, and transport preparation are delivered; the
 children/handoff/jobs/client/worker/stub/whole-VM/process-group matrix and at
 least 1000 schedules remain. Review and register its expanded method before
 measurement; reuse the durable lab runner and fresh production-intensity VMs.
-The handoff observer/gates/five checkpoints originated at local candidate
-`149b6a5`, whose full suite exposed ROB-1324. That fixture repair merged in
-PR #38 at `0c2d6dd`; the handoff changes merged in PR #39 at `a4bbef1`, with
-all 914 full-suite checks passing.
-ROB-1085 records review, PR and merge confirmation for this preparation.
-The child family is held in unpublished local candidate `2da7ff1` on
-`work/rob-1085-child-recovery`: focused 46 and three fresh dev-VM preparations
-passed all 16 checks plus cleanup, but the first full suite exposed ROB-1216.
-Preserve every control/root/log in
-`lab/results/rob-1085-child-preparation-20261005/`. After the independent fixture
-repair merges, rebase that candidate, reconcile this handoff, verify its exact
-source hashes and integrated suite, then review/push/PR/merge it. Both families
-remain unmeasured. Next extend remaining test-job/native/client/worker/stub/
-whole-VM families, preserving causal
+The handoff observer/gates/five checkpoints merged in PR #39 at `a4bbef1`
+after ROB-1324's fixture repair. The child family follows on
+`work/rob-1085-child-recovery`, rebased after PR #40's fixture repair. Its
+original held candidate was `2da7ff1`; preserve all earlier failed output.
+ROB-1085 records exact review, PR, integrated suite and
+merge evidence. Both families are implemented but unmeasured. Next extend the
+remaining test-job/native/client/worker/stub/whole-VM families, preserving causal
 fault witnesses, per-input receipt/terminal accounting, honest uncertainty,
-slot/acknowledgment and native cleanup checks. The current handoff fixture's
+slot/acknowledgment and native cleanup checks. The handoff and child fixtures'
 script/gate PIDs support same-VM recovery only; do not reuse that provider
 configuration for whole-VM restart. Keep every preparation separate from the
 eventual registered matrix and preserve its source provenance.

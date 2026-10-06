@@ -1,0 +1,9 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+Compiling 6 files (.ex)
+Generated elara app
+Running ExUnit with seed: 1105, max_cases: 28
+
+...
+Finished in 0.1 seconds (0.00s async, 0.1s sync)
+
+Result: 3 passed

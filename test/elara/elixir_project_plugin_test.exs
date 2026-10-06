@@ -122,7 +122,7 @@ defmodule Elara.ElixirProjectPluginTest do
 
     assert Elara.plugins(session) == []
     plugin = Path.join(project, ".elara/plugins/elixir_project.exs")
-    File.cp!(Path.expand("../support/fixtures/elixir_project_v1.exs", __DIR__), plugin)
+    copy_plugin(Path.expand("../support/fixtures/elixir_project_v1.exs", __DIR__), plugin)
     assert {:ok, [version1]} = Elara.reload_plugins(session)
     assert version1.version == "1"
 
@@ -142,7 +142,7 @@ defmodule Elara.ElixirProjectPluginTest do
     assert File.read!(source) =~ ":correct"
     before_history = Elara.transcript(session)
 
-    File.cp!(@plugin, plugin)
+    copy_plugin(@plugin, plugin)
     assert {:ok, [version2]} = Elara.reload_plugins(session)
     assert version2.version == "4"
     assert version2.pid == version1.pid
@@ -264,5 +264,11 @@ defmodule Elara.ElixirProjectPluginTest do
       )
 
     result.outcome
+  end
+
+  defp copy_plugin(source, destination) do
+    File.cp!(source, destination)
+    {:ok, snapshot} = Elara.Plugin.Trust.snapshot([destination])
+    :ok = Elara.Plugin.Trust.approve(snapshot)
   end
 end

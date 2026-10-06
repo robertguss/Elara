@@ -994,7 +994,13 @@ impl Drop for ClientConnection {
 }
 
 impl ClientConnection {
-    pub fn connect(port: u16, request: Value) -> Result<(Self, Value), String> {
+    pub fn connect(port: u16, mut request: Value) -> Result<(Self, Value), String> {
+        if let Ok(token) = std::env::var("ELARA_SERVER_TOKEN") {
+            request
+                .as_object_mut()
+                .ok_or("connection request must be an object")?
+                .insert("token".to_string(), json!(token));
+        }
         let stream = TcpStream::connect(("127.0.0.1", port))
             .map_err(|error| format!("cannot connect to 127.0.0.1:{port}: {error}"))?;
         stream

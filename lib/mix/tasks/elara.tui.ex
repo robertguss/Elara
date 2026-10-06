@@ -62,6 +62,13 @@ defmodule Mix.Tasks.Elara.Tui do
   end
 
   defp start_embedded_server(port) do
+    unless System.get_env("ELARA_SERVER_TOKEN") do
+      System.put_env(
+        "ELARA_SERVER_TOKEN",
+        Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+      )
+    end
+
     case Elara.Server.start(port: port, name: Elara.Server, lifetime: :embedded) do
       {:ok, _server} ->
         :ok

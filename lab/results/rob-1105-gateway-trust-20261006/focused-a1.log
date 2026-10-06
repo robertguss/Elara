@@ -1,0 +1,158 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Compiling 3 files (.ex)
+Running ExUnit with seed: 1105, max_cases: 28
+
+.   Compiling elara-tui v0.1.0 (/Users/robertguss/Projects/startups/Elara/native/elara-tui)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.43s
+
+
+  1) test actual Rust TUI discovers a plugin and reports a rejected revision (Elara.PluginReloadProtocolTest)
+     test/elara/plugin_reload_protocol_test.exs:5
+     Traceback (most recent call last):
+       File "/Users/robertguss/Projects/startups/Elara/test/support/plugin_reload_pty.py", line 58, in <module>
+         wait_for((b"needs", b"approval"))
+         ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+       File "/Users/robertguss/Projects/startups/Elara/test/support/plugin_reload_pty.py", line 43, in wait_for
+         raise AssertionError(f"Missing {text!r}: {bytes(output[-5000:])!r}")
+     AssertionError: Missing (b'needs', b'approval'): b'\x1b[37;1H\x1b[;m/delegate coding|research TASK: persistent child \x1b[;m\xc2\xb7 /d\x1b[37;55Hlegate-fork coding|research TASK: include history \xc2\xb7 /chi\x1b[37;112Hdren ins\x1b[;mp\x1b[38;2H\x1b[;m/\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;3H\x1b[37;2H\x1b[;mplugins reload t\x1b[37;19Hu\x1b[37;21Hted local plugins: /plugins r\x1b[;meloadr send/queue \xc2\xb7 0 queued \xc2\xb7 F12 queue \xc2\xb7 Ctrl-S steer \xc2\xb7 Ctr\x1b[37;112H-X stop \x1b[;m\xe2\x94\x90\x1b[38;3H\x1b[;mp\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;4H\x1b[38;4H\x1b[;ml\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;5H\x1b[38;5H\x1b[;mu\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;6H\x1b[38;6H\x1b[;mg\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;7H\x1b[38;7H\x1b[;mi\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;8H\x1b[38;8H\x1b[;mn\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;9H\x1b[38;9H\x1b[;ms\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;10H\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;11H\x1b[38;11H\x1b[;mr\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;12H\x1b[38;12H\x1b[;me\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;13H\x1b[38;13H\x1b[;ml\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;14H\x1b[38;14H\x1b[;mo\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;15H\x1b[38;15H\x1b[;ma\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;16H\x1b[38;16H\x1b[;md\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;17H\x1b[37;1H\x1b[;m\xe2\x94\x8c PROMPT\x1b[37;10H\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\x1b[;m Ente\x1b[38;2H\x1b[;m        \x1b[38;11H      \x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;2H\x1b[36;10H\x1b[;m "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-40628-315566872/plugin-pty-579/.elara/plugin\x1b[m\x1b[m\x1b[m\x1b[0m\x1b[?25h\x1b[38;2H'
+
+     code: assert status == 0, output
+     stacktrace:
+       test/elara/plugin_reload_protocol_test.exs:54: (test)
+
+..................
+
+  2) test interactive composer retains exact text through terminal events (Elara.TuiTest)
+     test/elara/tui_test.exs:153
+     Traceback (most recent call last):
+       File "/Users/robertguss/Projects/startups/Elara/test/support/tui_pty.py", line 24, in <module>
+         assert json.loads(reader.readline())["type"] == "attached"
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     AssertionError
+
+     code: assert status == 0, output
+     stacktrace:
+       test/elara/tui_test.exs:182: (test)
+
+.
+
+  3) test appearance changes preserve prompt selection and save local defaults (Elara.TuiTest)
+     test/elara/tui_test.exs:301
+     Traceback (most recent call last):
+       File "/Users/robertguss/Projects/startups/Elara/test/support/appearance_pty.py", line 23, in <module>
+         assert json.loads(reader.readline())["type"] == "attached"
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     AssertionError
+
+     code: assert status == 0, output
+     stacktrace:
+       test/elara/tui_test.exs:331: (test)
+
+
+
+  4) test interactive tool inspection exposes retained output and preserves the draft (Elara.TuiTest)
+     test/elara/tui_test.exs:253
+     Traceback (most recent call last):
+       File "/Users/robertguss/Projects/startups/Elara/test/support/tool_inspection_pty.py", line 23, in <module>
+         assert json.loads(reader.readline())["type"] == "attached"
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     AssertionError
+
+     code: assert status == 0, output
+     stacktrace:
+       test/elara/tui_test.exs:296: (test)
+
+ ✳ elara   ~/Projects/startups/Elara                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara      │ ember / ember · Thinking expanded · F1 help │       ~/Projects/startups/Elara
+summary session=epxaVEATx_-PNIALcvg89g incarnation=EzcS6OZmk-btRxGo saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+ ✳ elara   ~/Projects/startups/Elara                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara      │ ember / ember · Thinking expanded · F1 help │       ~/Projects/startups/Elara
+ embedded · exits with TUI · control · connected · head 0 · idle · outcome - · TLD3CxPK2M32vI7UYBvam
+summary session=TLD3CxPK2M32vI7UYBvamA incarnation=qBrBXoO9luSUluGk saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+ ✳ elara   ~/Projects/startups/Elara                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara      │ ember / ember · Thinking expanded · F1 help │       ~/Projects/startups/Elara
+summary session=2HZgBY1daV8WTXNoXDzxuA incarnation=jtmpPdUSD895zUre saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+.
+
+  5) test interactive transcript navigates and copies without losing the draft (Elara.TuiTest)
+     test/elara/tui_test.exs:205
+     Traceback (most recent call last):
+       File "/Users/robertguss/Projects/startups/Elara/test/support/transcript_pty.py", line 22, in <module>
+         assert json.loads(reader.readline())["type"] == "attached"
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     AssertionError
+
+     code: assert status == 0, output
+     stacktrace:
+       test/elara/tui_test.exs:248: (test)
+
+............................
+Finished in 20.9 seconds (0.00s async, 20.9s sync)
+
+Result: 49/54 passed
+Failed: 5 tests

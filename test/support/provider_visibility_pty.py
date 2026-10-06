@@ -101,7 +101,7 @@ print(json.dumps(dict(http_port=http.server_port)), flush=True)
 context = json.loads(sys.stdin.readline())
 observer = socket.create_connection(("127.0.0.1", context["port"]), timeout=5)
 reader = observer.makefile("rb")
-observer.sendall((json.dumps(dict(version=2, command="attach", session_id=context["session"],
+observer.sendall((json.dumps(dict(version=2, token=os.environ["ELARA_SERVER_TOKEN"], command="attach", session_id=context["session"],
                                 mode="observe", extensions=["provider_visibility_v1"])) + "\n").encode())
 assert json.loads(reader.readline())["type"] == "attached"
 

@@ -116,7 +116,16 @@ defmodule Elara.TuiLifecycleTest do
   end
 
   defp request(socket, command) do
-    :ok = :gen_tcp.send(socket, Elara.Protocol.encode(Map.put(command, "version", 2)))
+    :ok =
+      :gen_tcp.send(
+        socket,
+        Elara.Protocol.encode(
+          command
+          |> Map.put("version", 2)
+          |> Map.put_new("token", System.fetch_env!("ELARA_SERVER_TOKEN"))
+        )
+      )
+
     response(socket)
   end
 

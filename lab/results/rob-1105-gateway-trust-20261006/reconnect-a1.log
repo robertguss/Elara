@@ -1,0 +1,21 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+Running ExUnit with seed: 1105, max_cases: 28
+
+.
+
+  1) test actual native client authenticates new, list and repeated attachments without exposing the token (Elara.GatewayTrustTest)
+     test/elara/gateway_trust_test.exs:171
+     ** (MatchError) no match of right hand side value:
+
+         {"cleanup={\"native_stopped\": true, \"proxy_thread_stopped\": true, \"listener_closed\": true}\nTraceback (most recent call last):\n  File \"/Users/robertguss/Projects/startups/Elara/test/support/gateway_reconnect_pty.py\", line 91, in <module>\n    assert connected.is_set() and not errors, \"native reconnect did not attach with authentication\"\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: native reconnect did not attach with authentication\n",
+          1}
+
+     code: {reconnected, 0} =
+     stacktrace:
+       test/elara/gateway_trust_test.exs:197: (test)
+
+...
+Finished in 8.3 seconds (0.00s async, 8.3s sync)
+
+Result: 4/5 passed
+Failed: 1 test

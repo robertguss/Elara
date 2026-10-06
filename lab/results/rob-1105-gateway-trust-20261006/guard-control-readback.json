@@ -1,0 +1,32 @@
+[
+  {
+    "name": "ignore-auth",
+    "exit": 2,
+    "result": "0/1 passed",
+    "restored_sha256": "9876e15b2c9eb84896603e2e0365d2373f0ce6b564868a3e1b4d012731773bdb"
+  },
+  {
+    "name": "equal-length-auth",
+    "exit": 2,
+    "result": "0/1 passed",
+    "restored_sha256": "9876e15b2c9eb84896603e2e0365d2373f0ce6b564868a3e1b4d012731773bdb"
+  },
+  {
+    "name": "ignore-trust",
+    "exit": 2,
+    "result": "0/1 passed",
+    "restored_sha256": "9d09c317a12b961ba611269ccd5cd6597ca3bafab0d3043b36fb9c72bc137f1a"
+  },
+  {
+    "name": "implicit-consent",
+    "exit": 2,
+    "result": "0/1 passed",
+    "restored_sha256": "05402bf658879bab9bdf4ab1b742afdd5ede07eecb85aa6f086d3e98ac7623fc"
+  },
+  {
+    "name": "native-missing-header",
+    "exit": 2,
+    "result": "0/1 passed",
+    "restored_sha256": "5fff7453d5286b2de2c9d8b91d49b39ccb8fd512b763bd75447fc9b1636b211d"
+  }
+]

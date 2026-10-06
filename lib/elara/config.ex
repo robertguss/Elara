@@ -49,6 +49,10 @@ defmodule Elara.Config do
     do:
       "Refresh your login in Codex, then retry Elara. Elara does not refresh or rotate borrowed Codex credentials."
 
+  def error_message(:server_token_required),
+    do:
+      "Set ELARA_SERVER_TOKEN to a shared random token of 32–512 bytes in the server and client terminals."
+
   def error_message(reason), do: inspect(reason)
 
   defp resolve_default(env) do

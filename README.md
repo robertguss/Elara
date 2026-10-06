@@ -214,6 +214,12 @@ long-lived mode. Assistant responses and in-progress content render as terminal
 Markdown, including styled headings, emphasis, code, lists, quotes, links, and
 tables. User prompts and tool output remain literal.
 
+Long-lived servers require the same `ELARA_SERVER_TOKEN` (32–512 bytes) in
+the server and client terminals. The embedded Mix TUI creates a random token
+when none is configured. Before loading repository plugins, review their
+source and run `mix elara.trust WORKSPACE` from the Elara checkout. Approval
+covers exact file bytes; changed or new plugins need approval again.
+
 Press **F11** or enter `/sessions` to find live and saved sessions in the
 current workspace. Type a fuzzy name/ID filter, use arrows to select, and Enter
 to switch. `/new` creates and opens another session; `/name TEXT` names the

@@ -29,7 +29,12 @@ defmodule Elara.ProtocolV2Test do
     socket
   end
 
-  defp send_json(socket, message), do: :gen_tcp.send(socket, Protocol.encode(message))
+  defp send_json(socket, message),
+    do:
+      :gen_tcp.send(
+        socket,
+        Protocol.encode(Map.put_new(message, "token", System.fetch_env!("ELARA_SERVER_TOKEN")))
+      )
 
   defp recv_json(socket, timeout \\ 2_000) do
     {:ok, line} = recv_line(socket, timeout)

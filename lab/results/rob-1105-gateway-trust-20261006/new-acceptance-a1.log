@@ -1,0 +1,20 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+Running ExUnit with seed: 1105, max_cases: 28
+
+....
+
+  1) test actual native client authenticates new, list and repeated attachments without exposing the token (Elara.GatewayTrustTest)
+     test/elara/gateway_trust_test.exs:152
+     ** (MatchError) no match of right hand side value:
+
+         []
+
+     code: [session] = Enum.filter(Elara.live_sessions(), &(&1.cwd == cwd))
+     stacktrace:
+       test/elara/gateway_trust_test.exs:165: (test)
+
+...
+Finished in 5.8 seconds (0.00s async, 5.8s sync)
+
+Result: 7/8 passed
+Failed: 1 test

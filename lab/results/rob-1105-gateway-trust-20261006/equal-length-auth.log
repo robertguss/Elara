@@ -1,0 +1,24 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+Compiling 2 files (.ex)
+Running ExUnit with seed: 1105, max_cases: 28
+Excluding tags: [:test]
+Including tags: [location: {"test/elara/gateway_trust_test.exs", 51}]
+
+
+
+  1) test authentication precedes first-request operations including rejected legacy versions (Elara.GatewayTrustTest)
+     test/elara/gateway_trust_test.exs:51
+     Assertion with == failed
+     code:  assert response["error"] == "authentication_failed"
+     left:  "unsupported_version"
+     right: "authentication_failed"
+     stacktrace:
+       test/elara/gateway_trust_test.exs:77: anonymous fn/6 in Elara.GatewayTrustTest."test authentication precedes first-request operations including rejected legacy versions"/1
+       (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/elara/gateway_trust_test.exs:57: (test)
+
+
+Finished in 0.07 seconds (0.00s async, 0.07s sync)
+
+Result: 0/1 passed, 4 excluded
+Failed: 1 test

@@ -34,6 +34,7 @@ defmodule Elara.Server do
     port = Keyword.get(opts, :port, @default_port)
     provider = Keyword.get(opts, :provider)
     lifetime = Keyword.get(opts, :lifetime, :long_lived)
+    token = Keyword.get_lazy(opts, :token, fn -> System.get_env("ELARA_SERVER_TOKEN") end)
 
     listen_opts = [
       :binary,
@@ -44,14 +45,18 @@ defmodule Elara.Server do
       ip: {127, 0, 0, 1}
     ]
 
-    case :gen_tcp.listen(port, listen_opts) do
-      {:ok, listen} ->
-        {:ok, actual_port} = :inet.port(listen)
-        acceptor = spawn_link(fn -> accept_loop(listen, provider, lifetime) end)
-        {:ok, %{listen: listen, port: actual_port, acceptor: acceptor}}
+    with true <- is_binary(token) and String.valid?(token) and byte_size(token) in 32..512 do
+      case :gen_tcp.listen(port, listen_opts) do
+        {:ok, listen} ->
+          {:ok, actual_port} = :inet.port(listen)
+          acceptor = spawn_link(fn -> accept_loop(listen, provider, lifetime, token) end)
+          {:ok, %{listen: listen, port: actual_port, acceptor: acceptor}}
 
-      {:error, reason} ->
-        {:stop, reason}
+        {:error, reason} ->
+          {:stop, reason}
+      end
+    else
+      false -> {:stop, :server_token_required}
     end
   end
 
@@ -64,31 +69,32 @@ defmodule Elara.Server do
     :ok
   end
 
-  defp accept_loop(listen, provider, lifetime) do
+  defp accept_loop(listen, provider, lifetime, token) do
     case :gen_tcp.accept(listen) do
       {:ok, socket} ->
         {:ok, pid} =
           Task.Supervisor.start_child(Elara.TaskSup, fn ->
             receive do
-              {:socket, socket} -> connection(socket, provider, lifetime)
+              {:socket, socket} -> connection(socket, provider, lifetime, token)
             end
           end)
 
         :ok = :gen_tcp.controlling_process(socket, pid)
         send(pid, {:socket, socket})
-        accept_loop(listen, provider, lifetime)
+        accept_loop(listen, provider, lifetime, token)
 
       {:error, :closed} ->
         :ok
 
       {:error, _reason} ->
-        accept_loop(listen, provider, lifetime)
+        accept_loop(listen, provider, lifetime, token)
     end
   end
 
-  defp connection(socket, provider, lifetime) do
+  defp connection(socket, provider, lifetime, token) do
     with {:ok, line} <- recv_line(socket, 30_000),
-         {:ok, request} <- Protocol.decode(line) do
+         {:ok, request} <- Protocol.decode(line),
+         :ok <- authenticate(request, token) do
       establish_connection(socket, provider, lifetime, request)
     else
       {:error, reason} -> send_error(socket, reason, Protocol.version())
@@ -96,6 +102,13 @@ defmodule Elara.Server do
 
     :gen_tcp.close(socket)
   end
+
+  defp authenticate(%{"token" => provided}, token)
+       when is_binary(provided) and byte_size(provided) == byte_size(token) do
+    if :crypto.hash_equals(provided, token), do: :ok, else: {:error, :authentication_failed}
+  end
+
+  defp authenticate(_request, _token), do: {:error, :authentication_failed}
 
   defp establish_connection(socket, provider, lifetime, request) do
     version = response_version(request)
@@ -1034,6 +1047,12 @@ defmodule Elara.Server do
        do: Elara.Config.error_message(reason)
 
   defp format_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
+
+  defp format_reason({kind, path, :plugin_trust_required})
+       when kind in [:plugin_load_failed, :plugin_reload_failed],
+       do:
+         "Plugin needs approval; from Elara run mix elara.trust WORKSPACE. File: #{inspect(path)}"
+
   defp format_reason(reason), do: inspect(reason)
 
   defp send_json(socket, message), do: :gen_tcp.send(socket, Protocol.encode(message))

@@ -19,6 +19,7 @@ defmodule Elara.Plugin.Loader do
   @spec load(String.t()) :: {:ok, Candidate.t()} | {:error, term()}
   def load(path) when is_binary(path) do
     with {:ok, source} <- File.read(path),
+         :ok <- Elara.Plugin.Trust.check(path, source),
          {:ok, quoted} <- parse(source, path),
          {:ok, source_module, body, meta} <- plugin_module(quoted),
          :ok <- validate_body(body, source_module),

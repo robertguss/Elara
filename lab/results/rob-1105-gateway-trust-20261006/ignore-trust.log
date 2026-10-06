@@ -1,0 +1,25 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+Compiling 3 files (.ex)
+Running ExUnit with seed: 1105, max_cases: 28
+Excluding tags: [:test]
+Including tags: [location: {"test/elara/gateway_trust_test.exs", 126}]
+
+
+
+  1) test unapproved and changed plugin bytes cannot execute during compilation (Elara.GatewayTrustTest)
+     test/elara/gateway_trust_test.exs:126
+     Expected false or nil, got true
+     code: refute File.exists?(witness)
+     arguments:
+
+         # 1
+         "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-49074-300129115/gateway-trust-197/compiled"
+
+     stacktrace:
+       test/elara/gateway_trust_test.exs:129: (test)
+
+
+Finished in 0.07 seconds (0.00s async, 0.07s sync)
+
+Result: 0/1 passed, 4 excluded
+Failed: 1 test

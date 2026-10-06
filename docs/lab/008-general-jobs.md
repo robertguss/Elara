@@ -220,7 +220,16 @@ fixture PR#56 merges ate096868: reuse its existing8s wait for the same actual
 visible error. A1.2s owned rendering delay fails old0/1 and passes new1/1; ordinary
 product1/1 and both teardown witnesses pass. Integrated main changes only that
 fixture among240 frozen source/test hashes; no completion/runtime change.
-A fresh full suite after integration is pending.
+Full at clean6b00b962838bdb9f0169e8961286712e9ecdc868 passes1020
+(11properties,1009tests;seed1088,318.2s), exit0. Postflight verifies every one
+of240 frozen source/test hashes, a clean tree. Subsequent ownership audit finds one unrelated WTS VM and
+no Elara BEAM; it is left running. Raw completion-*
+artifacts and their hashes remain retained in completion-postflight.json.
+Temporary trace instrumentation adds15 test-only lines and is fully restored;
+raw Python controls231 lines are separately counted. This is supporting
+verification, not final LAB-8 chaos/model acceptance. The final handoff URL
+and its durable-pointer test constant change after the cloud document rename;
+the three guidance checks cover that metadata update. Runtime remains unchanged.
 
 Removing claimed consumption fails its sole executed held-job check (0/1).
 Removing transport dependency retirement fails its sole executed loss check

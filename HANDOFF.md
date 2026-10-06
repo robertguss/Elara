@@ -2,7 +2,7 @@
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
 is the sole planning and status source. Read the
-[current handoff](https://linear.app/robert-guss/document/current-handoff-lab-3-attribution-and-continuation-569eb39fa4cd)
+[current handoff](https://linear.app/robert-guss/document/current-handoff-autonomous-implementation-569eb39fa4cd)
 and current issue descriptions/comments for plans, review, Results and delivery.
 
 ## Working arrangement and goal
@@ -56,8 +56,13 @@ one-line existing bounded wait is merged in PR#56 ate096868, reviewed1bfba2f,
 with both Socket checks and tree equality. Owned delay old0/1/new1/1 plus
 ordinary1/1 and cleanup witnesses pass. Main's fixture fix is integrated here;
 only test/support/input_attachments_pty.py changes among240 frozen source/test
-hashes. Fresh full suite and shared-wait PR delivery remain. No model or
-historical corpus was run.
+hashes. Full at clean6b00b96 now passes1020 (11 properties,1009 tests;seed1088,318.2s).
+Postflight verifies all240 frozen source/test hashes, clean tree. Subsequent ownership audit finds one unrelated WTS VM and
+no Elara BEAM; it is left running;
+completion-postflight.json retains raw hashes. Shared-wait PR delivery remains.
+No model or historical corpus was run. The cloud handoff is renamed to
+autonomous implementation; obsolete role setup instructions are removed,
+and repository links/pointer-test constant use its current URL.
 
 After this chunk: operator server/TUI acknowledgment, fresh final LAB-5-style
 chaos and net-line/special-case comparison. Complete all independent scripted

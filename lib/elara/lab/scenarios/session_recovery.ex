@@ -1431,7 +1431,7 @@ defmodule Elara.Lab.Scenarios.SessionRecovery.Observer do
     complete = evidence_complete and cleanup.confirmed
 
     Map.merge(judged, %{
-      choices_digest: Elara.Lab.digest({witness.fault, witness.inputs, cleanup.choices}),
+      choices_digest: Elara.Lab.digest({witness.fault, cleanup.choices}),
       completed_turns:
         if(judged.checks.history_identity, do: terminal_count(witness.history), else: 0),
       bounds: %{

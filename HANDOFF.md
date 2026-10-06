@@ -1,4 +1,4 @@
-# Handoff — Linear accuracy audit, 2026-10-05
+# Handoff — ROB-1234 recovery digest, 2026-10-05
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
 is the sole planning and status source. The
@@ -9,15 +9,30 @@ retain the briefs, review outcomes, decisions, and results.
 ## Working arrangement
 
 The owner removed the previous role-based workflow on 2026-10-05 and instructed
-the active agent to perform the audit and guidance corrections in this session.
+the active agent to do the work in this session.
 Follow AGENTS.md's delivery and tracking rules. No external skill, separate
 agent roles, routing script, or pane tooling is required.
 
-This authorization covers the Linear audit and guidance changes. LAB-3's
-measurement remains paused at the owner's 2026-10-03 stopping point; this audit
-does not launch a measurement or consume the remaining authorized rerun.
+The current active goal is to implement every actionable Linear issue, choose
+the queue and implementation decisions autonomously, and move genuine owner
+questions to Needs Input before continuing. The goal is incomplete while any
+actionable work remains. LAB-3 remains Needs Input at its measurement pause;
+the digest fix does not launch a measurement or consume its remaining rerun.
 
 ## Repository and verification
+
+ROB-1234 is selected on `work/rob-1234-reproducible-recovery-digest` from main
+`4ec59de`. Its Linear issue holds the execution plan, review, and delivery
+record. Recovery reports now hash the fault and raw simulator choices, omitting
+per-run identities from the digest while preserving identity validation and
+evidence. The same-seed real-run regression failed on the old code; the full
+recovery file then passed 31 tests (seed 98431), including fresh runs of all
+three faults. Compile with warnings as errors, formatting, and diff checks
+passed. The diff review confirms the reporting-only scope: recovery behavior,
+registration, bounds, and retained result files are unchanged. Check Linear
+and Git for merged delivery before treating this issue as Done.
+
+Historical audit verification follows for provenance.
 
 The audit started from clean main at `25fe51b0f6d75847d54d81fbd3204873c432b6ca`,
 equal to remote main. That revision includes the census fix `8568f34` and differs
@@ -56,7 +71,8 @@ findings remain open despite this passing suite.
   LAB-4 and LAB-6.
 - ROB-1097–1106 remain parked. ROB-1107/1108 cover deferred hands-on acceptance
   of existing TUI implementation.
-- ROB-1216, ROB-1233, ROB-1234, and ROB-1254 remain unresolved Backlog findings.
+- ROB-1234 is the current delivery item; ROB-1254 is the next independent
+  candidate. ROB-1216, ROB-1233, and ROB-1254 remain unresolved findings.
   A passing run does not establish that an intermittent is fixed.
 
 LAB-3 closure is an owner decision. Keep at most one executable lab item and

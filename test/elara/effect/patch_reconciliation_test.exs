@@ -5,8 +5,8 @@ defmodule Elara.Effect.PatchReconciliationTest do
   alias Elara.Effect.ControllerJournal.Observation, as: ControllerObservation
   alias Elara.Effect.ExecutorLedger.Record
   alias Elara.Effect.Job
-  alias Elara.Effect.LiteralPatch
-  alias Elara.Effect.LiteralPatch.{Observation, Result}
+  alias Elara.TestFixtures.LiteralPatch
+  alias Elara.TestFixtures.LiteralPatch.{Observation, Result}
   alias Elara.Effect.Executor
 
   @bound_ms 2_000

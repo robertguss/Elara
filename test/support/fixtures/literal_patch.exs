@@ -1,5 +1,5 @@
-defmodule Elara.Effect.LiteralPatch do
-  @moduledoc false
+defmodule Elara.TestFixtures.LiteralPatch do
+  @moduledoc "Historical reconciliation driver; test-only evidence, no production API."
 
   alias Elara.Effect.AtomicFile
   alias Elara.Effect.ControllerJournal

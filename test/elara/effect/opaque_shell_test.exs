@@ -1,11 +1,11 @@
-defmodule Elara.Effect.OpaqueShellTest do
+defmodule Elara.TestFixtures.OpaqueShellTest do
   use ExUnit.Case, async: false
 
   alias Elara.Effect.ControllerJournal
   alias Elara.Effect.ExecutorLedger.Record
   alias Elara.Effect.Job
-  alias Elara.Effect.OpaqueShell
-  alias Elara.Effect.OpaqueShell.{Result, Workspace}
+  alias Elara.TestFixtures.OpaqueShell
+  alias Elara.TestFixtures.OpaqueShell.{Result, Workspace}
   alias Elara.Effect.Executor
 
   @bound_ms 5_000

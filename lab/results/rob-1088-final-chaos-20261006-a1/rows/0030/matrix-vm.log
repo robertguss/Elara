@@ -1,0 +1,11 @@
+
+11:22:10.053 [error] Task #PID<0.197.0> started from Elara.TestJobs terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["mix", "test", "test/job_test.exs"], [cwd: "/Users/robertguss/Projects/startups/Elara/lab/results/rob-1088-final-chaos-20261006-a1/rows/0030/tmp/elara-lab-job_recovery-1088730-28800-2133ad57cbdd04ac/workspace", timeout_ms: 60000, max_bytes: 16384, output_policy: :head_tail, expected_token: %{"generation" => 1, "incarnation" => "XkhZebrI8ryT4qNR9aOFJQ"}]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<9.28342840/0 in Elara.Jobs.start_job/7>
+    Args: []
+
+11:22:10.373 [notice] Application elara exited: :stopped

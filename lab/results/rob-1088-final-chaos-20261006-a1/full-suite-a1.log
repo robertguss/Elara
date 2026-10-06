@@ -1,0 +1,825 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 1088, max_cases: 28
+
+...................................................................................................................................................................................................................................    warning: the default value for the last optional argument in the private function fun/7 is never used
+    │
+ 49 │   defp fun(class, module, function, arity, us, calls \\ 1, native \\ false),
+    │        ~
+    │
+    └─ test/elara/lab_profile_report_test.exs:49:8: Elara.Lab.ProfileReportTest (module)
+
+................................................................    warning: incompatible types given to Elara.Lab.Scenarios.JobRecovery.run/1:
+
+        Elara.Lab.Scenarios.JobRecovery.run(%{params: %{"api" => invalid}})
+
+    given types:
+
+        -dynamic(%{params: %{binary() => term()}})-
+
+    but expected one of:
+
+        #1
+        %{..., provider: :real}
+
+        #2
+        %{
+          ...,
+          dir: binary() or empty_list() or non_empty_list(term(), term()),
+          params: map(),
+          provider: if_set(not :real),
+          seed: term()
+        }
+
+    where "invalid" was given the type:
+
+        # type: dynamic()
+        # from: test/elara/lab_job_recovery_test.exs:65:17
+        invalid <- [nil, false, 1, "unknown"]
+
+    type warning found at:
+    │
+ 67 │         JobRecovery.run(%{params: %{"api" => invalid}})
+    │                     ~
+    │
+    └─ test/elara/lab_job_recovery_test.exs:67:21: Elara.Lab.JobRecoveryTest."test invalid API selection rejects before fixture resources are created"/1
+
+     warning: the following conditional expression:
+
+         send(self(), {:spawned, pid})
+
+     will always evaluate to:
+
+         dynamic({:spawned, term()})
+
+     where "pid" was given the type:
+
+         # type: dynamic()
+         # from: test/elara/lab_profile_test.exs
+         {:spawned, pid}
+
+     type warning found at:
+     │
+ 176 │           {:spawned, pid} -> send(self(), {:spawned, pid}) && [pid]
+     │           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     │
+     └─ test/elara/lab_profile_test.exs:176: Elara.Lab.ProfileTest."test classes a pid whose census and spawn records disagree is unclassified"/1
+
+......................................
+11:00:07.352 [error] Task #PID<0.1796.0> started from #PID<0.1792.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.1791.0>, {:get_and_update, #Function<3.93906535/1 in Elara.Lab.Faults.hook/2>}, 5000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/faults.ex:38: anonymous fn/4 in Elara.Lab.Faults.hook/2
+    (elara 0.1.0) lib/elara/provider/simulated.ex:238: anonymous fn/7 in Elara.Provider.Simulated.stream_deltas/5
+    (elixir 1.20.4) lib/enum.ex:1857: anonymous fn/3 in Enum.map_reduce/3
+    (elixir 1.20.4) lib/enum.ex:4659: Enum.reduce_range/5
+    (elixir 1.20.4) lib/enum.ex:2626: Enum.map_reduce/3
+    (elara 0.1.0) lib/elara/provider/simulated.ex:231: Elara.Provider.Simulated.stream_deltas/5
+    (elara 0.1.0) lib/elara/provider/simulated.ex:204: Elara.Provider.Simulated.answer/4
+    (elara 0.1.0) lib/elara/provider/simulated.ex:125: Elara.Provider.Simulated.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+...............................................
+11:00:16.405 [error] Task #PID<0.3138.0> started from #PID<0.3134.0> terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["sh", "-c", "printf '%s' \"$$\" > os_pid\nsleep 60 &\nprintf '%s' \"$!\" > descendant_pid\nprintf x >> started\nwhile [ ! -e release ]; do sleep 0.01; done\n"], [cwd: "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-group_recovery-42-2321-f110fbf1e7bf6af0/workspace", timeout_ms: 60000, max_bytes: 1024]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<4.109585720/0 in Elara.Lab.Scenarios.GroupRecovery.flow/2>
+    Args: []
+..............................................................................................
+11:00:35.390 [error] Task #PID<0.4687.0> started from #PID<0.4681.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.4683.0>, {:ask, "retain this goal"}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<29.35143881/0 in Elara.ContextTest."test crash at prepared retains one successor and one logical continuation"/1>
+    Args: []
+...................................................................................................................warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-checked-5-2321-f3588a593b533248; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_test.exs:96: Elara.LabTest."test failed checks keep evidence; unconfirmed cleanup keeps the root bound and stops"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.........warning: lab scenario smoke raised; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-smoke-1-2321-98bbe130cc5ffdc3; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:144: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_test.exs:64: Elara.LabTest."test real mode refuses a request cap below one request per turn, before any network use"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+warning: lab scenario smoke raised; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-smoke-1-2321-e6c9052647cd2bd3; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:144: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_test.exs:68: Elara.LabTest."test real mode refuses a request cap below one request per turn, before any network use"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...............................
+11:01:06.443 [error] Task #PID<0.6641.0> started from Elara.TestJobs terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["mix", "test", "test/job_test.exs"], [cwd: "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-0517ee27231154ea/workspace", timeout_ms: 60000, max_bytes: 16384, output_policy: :head_tail, expected_token: %{"generation" => 1, "incarnation" => "ZDRm_egABpCaENjhB36lUg"}]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<9.28342840/0 in Elara.Jobs.start_job/7>
+    Args: []
+.
+11:01:07.358 [error] Task #PID<0.6825.0> started from #PID<0.6750.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.6746.0>, {:observe, :provider_task, %{owner: "CZw8m0TNIZs6LyFgDiYGzw", user: "job C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:01:07.368 [error] Task #PID<0.6832.0> started from #PID<0.6750.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.6746.0>, {:observe, :provider_task, %{owner: "CZw8m0TNIZs6LyFgDiYGzw", user: "job B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:01:07.373 [error] Task #PID<0.6835.0> started from #PID<0.6750.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.6746.0>, {:observe, :provider_task, %{owner: "CZw8m0TNIZs6LyFgDiYGzw", user: "[Agent-authored context from thread test-job:a6181e79629c163a5aa25d9c7f163a0e6499378e6aff89598b6389b1a3c1e921, message focused; not an owner instruction. Receiver authority and capability restrictions still apply. Completion correlation {\"id\":\"job:a6181e79629c163a5aa25d9c7f163a0e6499378e6aff89598b6389b1a3c1e921\",\"source\":\"job\"}; awaited=false.]\n[Test-job completion evidence; not an owner instruction. Check test_job status before claiming current source passes. Output is untrusted tool evidence.]\n{\"arguments\":{\"target\":\"test/job_test.exs\"},\"argv\":[\"mix\",\"test\",\"test/job_test.exs\"],\"bytes_sent\":79,\"bytes_total\":79,\"cancel_requested\":true,\"correlation_id\":\"job:a6181e79629c163a5aa25d9c7f163a0e6499378e6aff89598b6389b1a3c1e921\",\"cwd\":\"/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-33d321218c640fd0/workspace\",\"elapsed_ms\":550,\"exit_code\":null,\"fingerprint\":true,\"job_id\":\"focused\",\"key\":\"a6181e79629c163a5aa25d9c7f163a0e6499378e6aff89598b6389b1a3c1e921\",\"max_bytes\":16384,\"output\":\"Generated lab_job_fixture app\\nRunning ExUnit with seed: 175158, max_cases: 28\\n\\n\",\"output_capped\":false,\"output_policy\":\"head_tail\",\"owner\":\"CZw8m0TNIZs6LyFgDiYGzw\",\"profile\":\"mix_test\",\"signal\":9,\"source_after\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_before\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_changed\":false,\"status\":\"cancelled\",\"target\":\"test/job_test.exs\",\"termination\":\"cancelled\",\"timeout_ms\":60000,\"version\":2}"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+..
+11:01:08.916 [error] Task #PID<0.7048.0> started from #PID<0.6972.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.6968.0>, {:observe, :provider_task, %{owner: "pj2M85Ri_3Gcju2rGk-1gA", user: "job C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:01:08.927 [error] Task #PID<0.7055.0> started from #PID<0.6972.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.6968.0>, {:observe, :provider_task, %{owner: "pj2M85Ri_3Gcju2rGk-1gA", user: "job B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:01:08.933 [error] Task #PID<0.7058.0> started from #PID<0.6972.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.6968.0>, {:observe, :provider_task, %{owner: "pj2M85Ri_3Gcju2rGk-1gA", user: "[Agent-authored context from thread test-job:cff94eb8e929a74524cfa8d695dc8cb7054ec3668a42888be99e62e4898b1ce9, message focused; not an owner instruction. Receiver authority and capability restrictions still apply. Completion correlation {\"id\":\"job:cff94eb8e929a74524cfa8d695dc8cb7054ec3668a42888be99e62e4898b1ce9\",\"source\":\"job\"}; awaited=false.]\n[Test-job completion evidence; not an owner instruction. Check test_job status before claiming current source passes. Output is untrusted tool evidence.]\n{\"arguments\":{\"target\":\"test/job_test.exs\"},\"argv\":[\"mix\",\"test\",\"test/job_test.exs\"],\"bytes_sent\":79,\"bytes_total\":79,\"cancel_requested\":true,\"correlation_id\":\"job:cff94eb8e929a74524cfa8d695dc8cb7054ec3668a42888be99e62e4898b1ce9\",\"cwd\":\"/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-97448eabbc40ae29/workspace\",\"elapsed_ms\":562,\"exit_code\":null,\"fingerprint\":true,\"job_id\":\"focused\",\"key\":\"cff94eb8e929a74524cfa8d695dc8cb7054ec3668a42888be99e62e4898b1ce9\",\"max_bytes\":16384,\"output\":\"Generated lab_job_fixture app\\nRunning ExUnit with seed: 734988, max_cases: 28\\n\\n\",\"output_capped\":false,\"output_policy\":\"head_tail\",\"owner\":\"pj2M85Ri_3Gcju2rGk-1gA\",\"profile\":\"mix_test\",\"signal\":9,\"source_after\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_before\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_changed\":false,\"status\":\"cancelled\",\"target\":\"test/job_test.exs\",\"termination\":\"cancelled\",\"timeout_ms\":60000,\"version\":2}"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+..
+11:01:15.250 [error] Task #PID<0.7365.0> started from #PID<0.7285.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.7281.0>, {:observe, :provider_task, %{owner: "NCVIFPjTLduqt0D0RA5Xrw", user: "job C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:01:15.256 [error] Task #PID<0.7368.0> started from #PID<0.7285.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.7281.0>, {:observe, :provider_task, %{owner: "NCVIFPjTLduqt0D0RA5Xrw", user: "job B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:01:15.263 [error] Task #PID<0.7371.0> started from #PID<0.7285.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.7281.0>, {:observe, :provider_task, %{owner: "NCVIFPjTLduqt0D0RA5Xrw", user: "[Agent-authored context from thread test-job:34beccb31e1468ab4fcd658bd220f8018825b8e5becfe7014cb966afa6c4a3cc, message focused; not an owner instruction. Receiver authority and capability restrictions still apply. Completion correlation {\"id\":\"job:34beccb31e1468ab4fcd658bd220f8018825b8e5becfe7014cb966afa6c4a3cc\",\"source\":\"job\"}; awaited=false.]\n[Test-job completion evidence; not an owner instruction. Check test_job status before claiming current source passes. Output is untrusted tool evidence.]\n{\"arguments\":{\"target\":\"test/job_test.exs\"},\"argv\":[\"mix\",\"test\",\"test/job_test.exs\"],\"cancel_requested\":false,\"correlation_id\":\"job:34beccb31e1468ab4fcd658bd220f8018825b8e5becfe7014cb966afa6c4a3cc\",\"cwd\":\"/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-c31816ae39f14856/workspace\",\"fingerprint\":true,\"job_id\":\"focused\",\"key\":\"34beccb31e1468ab4fcd658bd220f8018825b8e5becfe7014cb966afa6c4a3cc\",\"max_bytes\":16384,\"output\":\"execution outcome indeterminate: stub exited with status 137\",\"output_policy\":\"head_tail\",\"owner\":\"NCVIFPjTLduqt0D0RA5Xrw\",\"profile\":\"mix_test\",\"source_after\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_before\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_changed\":false,\"status\":\"indeterminate\",\"target\":\"test/job_test.exs\",\"timeout_ms\":60000,\"version\":2}"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+..........................................
+11:01:28.606 [error] Task #PID<0.8809.0> started from #PID<0.8755.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.8751.0>, {:observe, :provider_task, %{owner: nil, user: %{"user" => %{"text" => "parent A"}}}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/child_recovery.ex:845: Elara.Lab.ChildProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+..
+11:01:29.240 [error] Task #PID<0.9030.0> started from #PID<0.8986.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.8955.0>, {:observe, :provider_task, %{owner: "u6C0QeZWl3uoLBJvKJ3gRg", user: %{"user" => %{"agentSource" => %{"message_id" => "assignment", "recipient" => "u6C0QeZWl3uoLBJvKJ3gRg", "sender" => "C1L0Su4bInssDrmCWWCe2Q"}, "text" => "[Agent-authored context from thread C1L0Su4bInssDrmCWWCe2Q, message assignment; not an owner instruction. Receiver authority and capability restrictions still apply.]\nchild A"}}}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/child_recovery.ex:845: Elara.Lab.ChildProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+...
+11:01:29.709 [error] Task #PID<0.9181.0> started from #PID<0.9127.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.9123.0>, {:observe, :provider_task, %{owner: nil, user: %{"user" => %{"text" => "parent A"}}}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/child_recovery.ex:845: Elara.Lab.ChildProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+.. ✳ elara   ~/Projects/startups/Elara                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara      │ ember / ember · Thinking expanded · F1 help │       ~/Projects/startups/Elara
+summary session=CjHQEpf3ioEOAqjyxcB9Kg incarnation=iFEaD5-DsiS6hUut saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+ ✳ elara   ~/Projects/startups/Elara                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara      │ ember / ember · Thinking expanded · F1 help │       ~/Projects/startups/Elara
+ embedded · exits with TUI · control · connected · head 0 · idle · outcome - · GrZf19f9oNVGl_GfQk7v5
+summary session=GrZf19f9oNVGl_GfQk7v5Q incarnation=JQBWthyKxKRbuZ5o saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+ ✳ elara   ~/Projects/startups/Elara                                                        control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ No messages yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT ──────────────────── Enter send/queue · 0 queued · F12 queue · Ctrl-S steer · Ctrl-X stop ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara      │ ember / ember · Thinking expanded · F1 help │       ~/Projects/startups/Elara
+summary session=FbVaMZxP6nucQSEcvLiR_g incarnation=sfhU1nAZVzb_5epb saved_cursor=0 head=0 ask_to_active_ms=- ask_to_first_delta_ms=-
+............................................................................................................................................................................................
+11:03:00.324 [error] Task #PID<0.14880.0> started from #PID<0.14873.0> terminating
+** (RuntimeError) boom
+    test/elara/session_test.exs:12: Elara.SessionTest.CrashTool.run/2
+    (elara 0.1.0) lib/elara/executor/router.ex:108: Elara.Executor.Router.attempt/5
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: &Elara.Executor.Router.execute/4
+    Args: [Elara.Executor.Router, %Elara.Executor.Request{job_id: nil, operation_digest: nil, tool_call_id: "1", session_id: "H6yXj0qL2kfs8AFlkLvexA", tool_name: "crash", tool_version: "1", arguments: %{}, workspace_id: "BvqVUheZJOwJinP6ReP4wYfXMbx_n0IblDvj5euy63E", deadline_ms: 1791299010324, max_output_bytes: 16384, cancellation_id: "1bHMq0HApozUONbC", required_capabilities: [], placement: :any, mutating: false}, %Elara.Tool{name: "crash", description: "crash", parameters: %{"properties" => %{}, "type" => "object"}, run: {Elara.SessionTest.CrashTool, :run}, plugin: nil, version: "1", capabilities: [], placement: :any, mutating: false, cancel_on_interrupt: false}, "/Users/robertguss/Projects/startups/Elara"]
+.........................................................warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-concurrency-42-2321-5926ad3793e0a38a; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:534: Elara.Lab.ConcurrencyTest."test a changed execution epoch leaves cleanup unconfirmed"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...warning: lab scenario concurrency raised; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-concurrency-1-2321-df465d2f0288248f; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:144: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_concurrency_test.exs:519: Elara.Lab.ConcurrencyTest."test the scenario refuses to start while Elara.Exec runs a job"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+..warning: lab scenario concurrency raised; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-concurrency-1-2321-302173d3729a723a; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:144: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  test/elara/lab_concurrency_test.exs:704: Elara.Lab.ConcurrencyTest."test the scenario refuses the real provider"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.........warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-concurrency-42-2321-aaa22c6d63e1678c; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:382: anonymous fn/1 in Elara.Lab.ConcurrencyTest."test a provider task outliving shutdown keeps the ledger it writes; cohort stays unknown"/1
+  test/elara/lab_concurrency_test.exs:462: Elara.Lab.ConcurrencyTest.with_stalled_provider/2
+  (ex_unit 1.20.4) lib/ex_unit/capture_log.ex:127: ExUnit.CaptureLog.with_log/2
+  (ex_unit 1.20.4) lib/ex_unit/capture_log.ex:89: ExUnit.CaptureLog.capture_log/2
+  test/elara/lab_concurrency_test.exs:380: Elara.Lab.ConcurrencyTest."test a provider task outliving shutdown keeps the ledger it writes; cohort stays unknown"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-concurrency-42-2321-df98aa5c09365484; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:364: Elara.Lab.ConcurrencyTest."test a task outliving the shutdown deadline leaves cleanup unconfirmed and the root retained"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+....warning: lab scenario concurrency raised; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-concurrency-1-2321-e07810f557cd8bdc; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:144: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  test/elara/lab_concurrency_test.exs:504: Elara.Lab.ConcurrencyTest."test a setup failure still restores scheduler timing and destroys the trace session"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-concurrency-42-2321-91b065950219af30; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:646: Elara.Lab.ConcurrencyTest."test reports the transport cannot accept keep the run retained"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-concurrency-42-2321-b40a10513f557d95; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:402: anonymous fn/1 in Elara.Lab.ConcurrencyTest."test forced retained-ledger assertion failure still releases the actual provider tasks"/1
+  test/elara/lab_concurrency_test.exs:462: Elara.Lab.ConcurrencyTest.with_stalled_provider/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:864: ExUnit.Assertions.assert_raise/2
+  (ex_unit 1.20.4) lib/ex_unit/assertions.ex:829: ExUnit.Assertions.assert_raise/3
+  (ex_unit 1.20.4) lib/ex_unit/capture_log.ex:127: ExUnit.CaptureLog.with_log/2
+  (ex_unit 1.20.4) lib/ex_unit/capture_log.ex:89: ExUnit.CaptureLog.capture_log/2
+  test/elara/lab_concurrency_test.exs:399: Elara.Lab.ConcurrencyTest."test forced retained-ledger assertion failure still releases the actual provider tasks"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.......warning: lab cleanup unconfirmed; retained /var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-concurrency-42-2321-d0f3e217d6beadcf; its sessions root stays bound
+  (elara 0.1.0) lib/elara/lab.ex:168: Elara.Lab.settle_once/4
+  (elara 0.1.0) lib/elara/lab.ex:123: Elara.Lab.run_once/4
+  (elara 0.1.0) lib/elara/lab.ex:73: anonymous fn/8 in Elara.Lab.run/2
+  (elixir 1.20.4) lib/enum.ex:5191: Enumerable.Range.reduce/5
+  (elixir 1.20.4) lib/enum.ex:2676: Enum.reduce_while/3
+  (elara 0.1.0) lib/elara/lab.ex:71: Elara.Lab.run/2
+  test/elara/lab_concurrency_test.exs:107: Elara.Lab.ConcurrencyTest.run/3
+  test/elara/lab_concurrency_test.exs:657: Elara.Lab.ConcurrencyTest."test watchers die with their users when a run stops inside turn 1"/1
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:533: ExUnit.Runner.exec_test/2
+  (stdlib 8.1) timer.erl:599: :timer.tc/2
+  (ex_unit 1.20.4) lib/ex_unit/runner.ex:455: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+................
+11:04:22.871 [error] Task #PID<0.29526.0> started from #PID<0.29453.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.29449.0>, {:observe, :provider_task, %{owner: "UspmL49yYcz-oj7A3KLnpQ", user: "job C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:22.881 [error] Task #PID<0.29533.0> started from #PID<0.29453.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.29449.0>, {:observe, :provider_task, %{owner: "UspmL49yYcz-oj7A3KLnpQ", user: "job B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:22.888 [error] Task #PID<0.29536.0> started from #PID<0.29453.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.29449.0>, {:observe, :provider_task, %{owner: "UspmL49yYcz-oj7A3KLnpQ", user: "[Agent-authored context from thread test-job:98cc52b7cd28d6080c91d44db818f6d4fc31625a12b2bd6d849769e782bf25e9, message focused; not an owner instruction. Receiver authority and capability restrictions still apply. Completion correlation {\"id\":\"job:98cc52b7cd28d6080c91d44db818f6d4fc31625a12b2bd6d849769e782bf25e9\",\"source\":\"job\"}; awaited=false.]\n[Test-job completion evidence; not an owner instruction. Check test_job status before claiming current source passes. Output is untrusted tool evidence.]\n{\"arguments\":{\"target\":\"test/job_test.exs\"},\"argv\":[\"mix\",\"test\",\"test/job_test.exs\"],\"bytes_sent\":79,\"bytes_total\":79,\"cancel_requested\":true,\"correlation_id\":\"job:98cc52b7cd28d6080c91d44db818f6d4fc31625a12b2bd6d849769e782bf25e9\",\"cwd\":\"/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-fd7e8b3608fd2062/workspace\",\"elapsed_ms\":519,\"exit_code\":null,\"fingerprint\":true,\"job_id\":\"focused\",\"key\":\"98cc52b7cd28d6080c91d44db818f6d4fc31625a12b2bd6d849769e782bf25e9\",\"max_bytes\":16384,\"output\":\"Generated lab_job_fixture app\\nRunning ExUnit with seed: 711919, max_cases: 28\\n\\n\",\"output_capped\":false,\"output_policy\":\"head_tail\",\"owner\":\"UspmL49yYcz-oj7A3KLnpQ\",\"profile\":\"mix_test\",\"signal\":9,\"source_after\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_before\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_changed\":false,\"status\":\"cancelled\",\"target\":\"test/job_test.exs\",\"termination\":\"cancelled\",\"timeout_ms\":60000,\"version\":2}"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+...
+11:04:26.180 [error] Task #PID<0.29906.0> started from Elara.TestJobs terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["mix", "test", "test/job_test.exs"], [cwd: "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-c0ec810bf3516508/workspace", timeout_ms: 60000, max_bytes: 16384, output_policy: :head_tail, expected_token: %{"generation" => 6, "incarnation" => "ex6Xj6KIEWm8OMZxaXsAFg"}]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<9.28342840/0 in Elara.Jobs.start_job/7>
+    Args: []
+..
+11:04:28.296 [error] Task #PID<0.30248.0> started from #PID<0.30166.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30162.0>, {:observe, :provider_task, %{owner: "ViWgIL_E0Krv4kCpwgpfjA", user: "job C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:28.305 [error] Task #PID<0.30255.0> started from #PID<0.30166.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30162.0>, {:observe, :provider_task, %{owner: "ViWgIL_E0Krv4kCpwgpfjA", user: "job B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:28.312 [error] Task #PID<0.30258.0> started from #PID<0.30166.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30162.0>, {:observe, :provider_task, %{owner: "ViWgIL_E0Krv4kCpwgpfjA", user: "[Agent-authored context from thread test-job:c084521100bbbbbb904ca1a32d6af61bc047e59d105c7e1ab50406dea3523479, message focused; not an owner instruction. Receiver authority and capability restrictions still apply. Completion correlation {\"id\":\"job:c084521100bbbbbb904ca1a32d6af61bc047e59d105c7e1ab50406dea3523479\",\"source\":\"job\"}; awaited=false.]\n[Test-job completion evidence; not an owner instruction. Check test_job status before claiming current source passes. Output is untrusted tool evidence.]\n{\"arguments\":{\"target\":\"test/job_test.exs\"},\"argv\":[\"mix\",\"test\",\"test/job_test.exs\"],\"bytes_sent\":79,\"bytes_total\":79,\"cancel_requested\":true,\"correlation_id\":\"job:c084521100bbbbbb904ca1a32d6af61bc047e59d105c7e1ab50406dea3523479\",\"cwd\":\"/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-fbce01b2d4ef862c/workspace\",\"elapsed_ms\":617,\"exit_code\":null,\"fingerprint\":true,\"job_id\":\"focused\",\"key\":\"c084521100bbbbbb904ca1a32d6af61bc047e59d105c7e1ab50406dea3523479\",\"max_bytes\":16384,\"output\":\"Generated lab_job_fixture app\\nRunning ExUnit with seed: 136550, max_cases: 28\\n\\n\",\"output_capped\":false,\"output_policy\":\"head_tail\",\"owner\":\"ViWgIL_E0Krv4kCpwgpfjA\",\"profile\":\"mix_test\",\"signal\":9,\"source_after\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_before\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_changed\":false,\"status\":\"cancelled\",\"target\":\"test/job_test.exs\",\"termination\":\"cancelled\",\"timeout_ms\":60000,\"version\":2}"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+.
+11:04:28.970 [error] Task #PID<0.30351.0> started from #PID<0.30273.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30269.0>, {:observe, :provider_task, %{owner: "_UCu9magMO3fDGN8ziXdGQ", user: "job C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:28.976 [error] Task #PID<0.30354.0> started from #PID<0.30273.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30269.0>, {:observe, :provider_task, %{owner: "_UCu9magMO3fDGN8ziXdGQ", user: "job B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:28.983 [error] Task #PID<0.30357.0> started from #PID<0.30273.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30269.0>, {:observe, :provider_task, %{owner: "_UCu9magMO3fDGN8ziXdGQ", user: "[Agent-authored context from thread test-job:533d430982c4d435e3ec5e9e0d58106acb30da63ea79405460c91b31c3e84012, message focused; not an owner instruction. Receiver authority and capability restrictions still apply. Completion correlation {\"id\":\"job:533d430982c4d435e3ec5e9e0d58106acb30da63ea79405460c91b31c3e84012\",\"source\":\"job\"}; awaited=false.]\n[Test-job completion evidence; not an owner instruction. Check test_job status before claiming current source passes. Output is untrusted tool evidence.]\n{\"arguments\":{\"target\":\"test/job_test.exs\"},\"argv\":[\"mix\",\"test\",\"test/job_test.exs\"],\"bytes_sent\":148,\"bytes_total\":148,\"cancel_requested\":false,\"correlation_id\":\"job:533d430982c4d435e3ec5e9e0d58106acb30da63ea79405460c91b31c3e84012\",\"cwd\":\"/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-512614c535a163da/workspace\",\"elapsed_ms\":492,\"exit_code\":0,\"fingerprint\":true,\"job_id\":\"focused\",\"key\":\"533d430982c4d435e3ec5e9e0d58106acb30da63ea79405460c91b31c3e84012\",\"max_bytes\":16384,\"output\":\"Generated lab_job_fixture app\\nRunning ExUnit with seed: 791692, max_cases: 28\\n\\n.\\nFinished in 0.1 seconds (0.00s async, 0.1s sync)\\n\\nResult: 1 passed\\n\",\"output_capped\":false,\"output_policy\":\"head_tail\",\"owner\":\"_UCu9magMO3fDGN8ziXdGQ\",\"profile\":\"mix_test\",\"signal\":null,\"source_after\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_before\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_changed\":false,\"status\":\"passed\",\"target\":\"test/job_test.exs\",\"termination\":\"exited\",\"timeout_ms\":60000,\"version\":2}"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+.
+11:04:29.588 [error] Task #PID<0.30445.0> started from #PID<0.30372.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30368.0>, {:observe, :provider_task, %{owner: "2RfFLxnsp8C_j9CB_ruYoA", user: "job C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:29.597 [error] Task #PID<0.30452.0> started from #PID<0.30372.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30368.0>, {:observe, :provider_task, %{owner: "2RfFLxnsp8C_j9CB_ruYoA", user: "job B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:29.603 [error] Task #PID<0.30455.0> started from #PID<0.30372.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30368.0>, {:observe, :provider_task, %{owner: "2RfFLxnsp8C_j9CB_ruYoA", user: "[Agent-authored context from thread test-job:f4f34bb03eae0df450bda3f9be03818258dfa2e738c85ff4fd73379fbddeb546, message focused; not an owner instruction. Receiver authority and capability restrictions still apply. Completion correlation {\"id\":\"job:f4f34bb03eae0df450bda3f9be03818258dfa2e738c85ff4fd73379fbddeb546\",\"source\":\"job\"}; awaited=false.]\n[Test-job completion evidence; not an owner instruction. Check test_job status before claiming current source passes. Output is untrusted tool evidence.]\n{\"arguments\":{\"target\":\"test/job_test.exs\"},\"argv\":[\"mix\",\"test\",\"test/job_test.exs\"],\"bytes_sent\":79,\"bytes_total\":79,\"cancel_requested\":true,\"correlation_id\":\"job:f4f34bb03eae0df450bda3f9be03818258dfa2e738c85ff4fd73379fbddeb546\",\"cwd\":\"/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-4818eccd2fbcf097/workspace\",\"elapsed_ms\":518,\"exit_code\":null,\"fingerprint\":true,\"job_id\":\"focused\",\"key\":\"f4f34bb03eae0df450bda3f9be03818258dfa2e738c85ff4fd73379fbddeb546\",\"max_bytes\":16384,\"output\":\"Generated lab_job_fixture app\\nRunning ExUnit with seed: 427301, max_cases: 28\\n\\n\",\"output_capped\":false,\"output_policy\":\"head_tail\",\"owner\":\"2RfFLxnsp8C_j9CB_ruYoA\",\"profile\":\"mix_test\",\"signal\":9,\"source_after\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_before\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_changed\":false,\"status\":\"cancelled\",\"target\":\"test/job_test.exs\",\"termination\":\"cancelled\",\"timeout_ms\":60000,\"version\":2}"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+.
+11:04:30.257 [error] Task #PID<0.30546.0> started from #PID<0.30470.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30466.0>, {:observe, :provider_task, %{owner: "PhSfTOqNceHbY0rF9s_S9A", user: "job C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:30.267 [error] Task #PID<0.30551.0> started from #PID<0.30470.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30466.0>, {:observe, :provider_task, %{owner: "PhSfTOqNceHbY0rF9s_S9A", user: "job B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:30.273 [error] Task #PID<0.30554.0> started from #PID<0.30470.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30466.0>, {:observe, :provider_task, %{owner: "PhSfTOqNceHbY0rF9s_S9A", user: "[Agent-authored context from thread test-job:a0af7be11ea2e441d0280778f67a6c01292c3365272ade7a76633e3d55033ae9, message focused; not an owner instruction. Receiver authority and capability restrictions still apply. Completion correlation {\"id\":\"job:a0af7be11ea2e441d0280778f67a6c01292c3365272ade7a76633e3d55033ae9\",\"source\":\"job\"}; awaited=false.]\n[Test-job completion evidence; not an owner instruction. Check test_job status before claiming current source passes. Output is untrusted tool evidence.]\n{\"arguments\":{\"target\":\"test/job_test.exs\"},\"argv\":[\"mix\",\"test\",\"test/job_test.exs\"],\"bytes_sent\":78,\"bytes_total\":78,\"cancel_requested\":true,\"correlation_id\":\"job:a0af7be11ea2e441d0280778f67a6c01292c3365272ade7a76633e3d55033ae9\",\"cwd\":\"/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-28f876db5b01ab81/workspace\",\"elapsed_ms\":536,\"exit_code\":null,\"fingerprint\":true,\"job_id\":\"focused\",\"key\":\"a0af7be11ea2e441d0280778f67a6c01292c3365272ade7a76633e3d55033ae9\",\"max_bytes\":16384,\"output\":\"Generated lab_job_fixture app\\nRunning ExUnit with seed: 91057, max_cases: 28\\n\\n\",\"output_capped\":false,\"output_policy\":\"head_tail\",\"owner\":\"PhSfTOqNceHbY0rF9s_S9A\",\"profile\":\"mix_test\",\"signal\":9,\"source_after\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_before\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_changed\":false,\"status\":\"cancelled\",\"target\":\"test/job_test.exs\",\"termination\":\"cancelled\",\"timeout_ms\":60000,\"version\":2}"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+...
+11:04:32.566 [error] Task #PID<0.30890.0> started from #PID<0.30812.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30808.0>, {:observe, :provider_task, %{owner: "fwvcfbXNT1hhIfZ6N3Ejdg", user: "job C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:32.572 [error] Task #PID<0.30893.0> started from #PID<0.30812.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30808.0>, {:observe, :provider_task, %{owner: "fwvcfbXNT1hhIfZ6N3Ejdg", user: "job B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:32.579 [error] Task #PID<0.30896.0> started from #PID<0.30812.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30808.0>, {:observe, :provider_task, %{owner: "fwvcfbXNT1hhIfZ6N3Ejdg", user: "[Agent-authored context from thread test-job:ac65403b83b38c357730a71d3acaab418209ff420491657e653ec141282c4ed9, message focused; not an owner instruction. Receiver authority and capability restrictions still apply. Completion correlation {\"id\":\"job:ac65403b83b38c357730a71d3acaab418209ff420491657e653ec141282c4ed9\",\"source\":\"job\"}; awaited=false.]\n[Test-job completion evidence; not an owner instruction. Check test_job status before claiming current source passes. Output is untrusted tool evidence.]\n{\"arguments\":{\"target\":\"test/job_test.exs\"},\"argv\":[\"mix\",\"test\",\"test/job_test.exs\"],\"cancel_requested\":false,\"correlation_id\":\"job:ac65403b83b38c357730a71d3acaab418209ff420491657e653ec141282c4ed9\",\"cwd\":\"/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-59aec283267a8bde/workspace\",\"fingerprint\":true,\"job_id\":\"focused\",\"key\":\"ac65403b83b38c357730a71d3acaab418209ff420491657e653ec141282c4ed9\",\"max_bytes\":16384,\"output\":\"runner stopped without terminal evidence; not retried\",\"output_policy\":\"head_tail\",\"owner\":\"fwvcfbXNT1hhIfZ6N3Ejdg\",\"profile\":\"mix_test\",\"source_after\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_before\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_changed\":false,\"status\":\"indeterminate\",\"target\":\"test/job_test.exs\",\"timeout_ms\":60000,\"version\":2}"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+.
+11:04:34.118 [error] Task #PID<0.30990.0> started from #PID<0.30912.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30908.0>, {:observe, :provider_task, %{owner: "GQczgyRXV1sezVpEqh4mCw", user: "job B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:34.127 [error] Task #PID<0.30998.0> started from #PID<0.30912.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.30908.0>, {:observe, :provider_task, %{owner: "GQczgyRXV1sezVpEqh4mCw", user: "[Agent-authored context from thread test-job:7c1e5c06b398c11fc6044c56de26ac229310f3255749867f993c3f8935092a2c, message focused; not an owner instruction. Receiver authority and capability restrictions still apply. Completion correlation {\"id\":\"job:7c1e5c06b398c11fc6044c56de26ac229310f3255749867f993c3f8935092a2c\",\"source\":\"job\"}; awaited=false.]\n[Test-job completion evidence; not an owner instruction. Check test_job status before claiming current source passes. Output is untrusted tool evidence.]\n{\"arguments\":{\"target\":\"test/job_test.exs\"},\"argv\":[\"mix\",\"test\",\"test/job_test.exs\"],\"bytes_sent\":79,\"bytes_total\":79,\"cancel_requested\":true,\"correlation_id\":\"job:7c1e5c06b398c11fc6044c56de26ac229310f3255749867f993c3f8935092a2c\",\"cwd\":\"/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-lab-job_recovery-42-2321-356386409f9353f1/workspace\",\"elapsed_ms\":530,\"exit_code\":null,\"fingerprint\":true,\"job_id\":\"focused\",\"key\":\"7c1e5c06b398c11fc6044c56de26ac229310f3255749867f993c3f8935092a2c\",\"max_bytes\":16384,\"output\":\"Generated lab_job_fixture app\\nRunning ExUnit with seed: 957890, max_cases: 28\\n\\n\",\"output_capped\":false,\"output_policy\":\"head_tail\",\"owner\":\"GQczgyRXV1sezVpEqh4mCw\",\"profile\":\"mix_test\",\"signal\":9,\"source_after\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_before\":{\"files\":3,\"scope\":\"mix.exs,mix.lock,lib/**,config/**,test/**\",\"sha256\":\"efe2a912c89aaf18597bfa7d526a589d9419284f778c779d8927bae946f9dd5c\"},\"source_changed\":false,\"status\":\"cancelled\",\"target\":\"test/job_test.exs\",\"termination\":\"cancelled\",\"timeout_ms\":60000,\"version\":2}"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/job_recovery.ex:961: Elara.Lab.JobProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+.....................
+11:04:39.534 [error] Task #PID<0.31852.0> started from Elara.TestJobs terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["mix", "test", "test/job_test.exs"], [cwd: "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-2321-557020368/elara-test-job-449410", timeout_ms: 60000, max_bytes: 16384, output_policy: :head_tail, expected_token: %{"generation" => 2, "incarnation" => "zSQ8tbRVOTvkcLK_C_yPpg"}]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<9.28342840/0 in Elara.Jobs.start_job/7>
+    Args: []
+.............
+11:04:50.139 [error] Task #PID<0.32363.0> started from #PID<0.32332.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32320.0>, {:observe, :provider_task, %{input: "transport A"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:50.145 [error] Task #PID<0.32366.0> started from #PID<0.32332.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32320.0>, {:observe, :provider_task, %{input: "transport B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:50.151 [error] Task #PID<0.32369.0> started from #PID<0.32332.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32320.0>, {:observe, :provider_task, %{input: "transport C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+.....
+11:04:53.135 [error] Task #PID<0.32734.0> started from #PID<0.32702.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32690.0>, {:observe, :provider_task, %{input: "transport A"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:53.141 [error] Task #PID<0.32737.0> started from #PID<0.32702.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32690.0>, {:observe, :provider_task, %{input: "transport B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:53.146 [error] Task #PID<0.32740.0> started from #PID<0.32702.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32690.0>, {:observe, :provider_task, %{input: "transport C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+.
+11:04:53.504 [error] Task #PID<0.32790.0> started from #PID<0.32760.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32750.0>, {:observe, :provider_task, %{input: "transport A"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:53.510 [error] Task #PID<0.32793.0> started from #PID<0.32760.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32750.0>, {:observe, :provider_task, %{input: "transport C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:53.515 [error] Task #PID<0.32796.0> started from #PID<0.32760.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32750.0>, {:observe, :provider_task, %{input: "transport B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+.
+11:04:54.045 [error] Task #PID<0.32846.0> started from #PID<0.32815.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32805.0>, {:observe, :provider_task, %{input: "transport A"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:54.050 [error] Task #PID<0.32849.0> started from #PID<0.32815.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32805.0>, {:observe, :provider_task, %{input: "transport C"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+
+11:04:54.056 [error] Task #PID<0.32852.0> started from #PID<0.32815.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.32805.0>, {:observe, :provider_task, %{input: "transport B"}}, 1000)
+    ** (EXIT) no process: the process is not alive or there's no process currently associated with the given name, possibly because its application isn't started
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elara 0.1.0) lib/elara/lab/scenarios/transport_recovery.ex:834: Elara.Lab.TransportProvider.stream/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<61.126653951/0 in Elara.Session.run_effect/4>
+    Args: []
+...
+Finished in 304.9 seconds (4.7s async, 300.1s sync)
+
+Result: 1030 passed (11 properties, 1019 tests)

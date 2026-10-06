@@ -1,0 +1,16 @@
+{
+  "recorded_at_utc": "2026-10-06T15:17:28.606961+00:00",
+  "host": {
+    "machine": "arm64",
+    "macos": "26.6.2"
+  },
+  "power": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=22872163)\t31%; discharging; 0:40 remaining present: true",
+  "load_average": [
+    4.50732421875,
+    5.4462890625,
+    5.59228515625
+  ],
+  "pre_generation_global_beam_count": 0,
+  "pre_generation_elara_beam_count": 0,
+  "scope": "conditions recorded; no quiet-host or timing comparison claim"
+}

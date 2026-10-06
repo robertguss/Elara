@@ -23,12 +23,14 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
   def run(context) do
     stage = get_in(context, [:params, "stage"]) || "session_running"
     unless stage in @stages, do: raise(ArgumentError, "unknown job stage #{inspect(stage)}")
+    api = Map.get(context.params, "api", "test_job")
+    unless api in ~w(test_job job), do: raise(ArgumentError, "unknown job API #{inspect(api)}")
     cwd = Path.join(context.dir, "workspace")
     Jobs.fixture(cwd)
     {:ok, co} = Coordinator.start_link([])
     {:ok, gate} = Gate.start_link()
     Process.unlink(gate)
-    config = %{co: co, gate: gate, cwd: cwd, schedule: schedule(context.seed, stage)}
+    config = %{co: co, gate: gate, cwd: cwd, api: api, schedule: schedule(context.seed, stage)}
     log = Elara.Lab.choice_log()
 
     try do
@@ -96,7 +98,8 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
     baseline = call!(config, :exec_baseline, deadline, &Elara.Exec.status/0)
     if baseline.jobs != 0, do: throw(:foreign_exec_jobs)
     provider = {Elara.Lab.JobProvider, config}
-    tools = [%{TestJobs.tool() | run: {__MODULE__, :run_job}}]
+    module = if config.api == "job", do: Elara.Jobs, else: TestJobs
+    tools = [%{module.tool() | run: {__MODULE__, :run_job}}]
 
     parent =
       call!(config, :start, deadline, fn ->
@@ -428,8 +431,9 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
   @doc false
   def run_job(args, ctx) do
     config = :persistent_term.get(@key)
-    :ok = Gate.observe(config.gate, :job_tool_task, %{owner: ctx.session_id})
-    TestJobs.run(args, ctx)
+    :ok = Gate.observe(config.gate, :job_tool_task, %{owner: ctx.session_id, tool: ctx.tool_name})
+    module = if config.api == "job", do: Elara.Jobs, else: TestJobs
+    module.run(args, ctx)
   end
 
   def owner, do: :persistent_term.get({@key, :parent}, nil)
@@ -852,6 +856,14 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
         checks
       end
 
+    checks =
+      if config.api == "job" do
+        tool = event(events, :job_tool_task)
+        Map.put(checks, :general_job_api, tool != nil and tool.details[:tool] == "job")
+      else
+        checks
+      end
+
     %{
       checks: checks,
       complete:
@@ -965,9 +977,16 @@ defmodule Elara.Lab.JobProvider do
            [
              %ToolCall{
                id: "job-A",
-               name: "test_job",
+               name: config.api,
                args:
-                 {:ok, %{"action" => "start", "job_id" => "focused", "target" => Jobs.target()}}
+                 {:ok,
+                  Map.merge(
+                    %{"action" => "start", "job_id" => "focused"},
+                    if(config.api == "job",
+                      do: %{"profile" => "mix_test", "arguments" => %{"target" => Jobs.target()}},
+                      else: %{"target" => Jobs.target()}
+                    )
+                  )}
              }
            ]}
 

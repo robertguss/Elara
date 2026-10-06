@@ -18,39 +18,44 @@ or delete retained evidence without a specific owner decision.
 
 ## Current work
 
-LAB-8/ROB-1088 remains Building, the sole executable lab. Supporting output,
-profile and shared-completion chunks PR#54/#55/#57 are merged. Current main
-508d96b98a17b39ab26bb3501ad42296b4549515 equals reviewed finald8c3d0f; both
-actual exact-head Socket checks passed. Delivery60c5e50e and reviews234888bc/
-e71e154c in Linear retain exact evidence. Full1020 at frozen6b00b96; repaired19,
-initial focused134, final job instruction46 and pointer3 passed. Source count
-129files/49,206lines,+466 shared wait/+831 cumulative, negative reduction
-result. ROB-1331's PTY fixture prerequisite is Done/PR#56/e096868. Note008 and
-raw rob-1088-general-jobs-20261006/ retain failures, repairs, mutations, source
-and readbacks. The cloud handoff uses the autonomous title/current URL; obsolete
-role setup instructions are removed, historical evidence links preserved.
+LAB-8/ROB-1088 is In Review, sole executable lab. Supporting output,
+profiles, shared completion and operator chunks PR#54/#55/#57/#58 are merged.
+Main b001c3831a298bd9b7a10af25b0df9e6ad1f71ce equals reviewed92e0470;
+operator actual exact-head Socket checks passed. Deliveryd4e39bfc/review69a263a8
+retain full1021 at frozenf248162, focused41/native118/pointer3, source240-hash
+readback, authority/confirmation controls and forced cleanup a2. Operator count
+129/49,363,+157 phase/+988 cumulative, negative reduction evidence. ROB-1331
+is Done/PR#56. See note008 and retained operator-* artifacts.
 
-Current branch work/rob-1088-job-acknowledgment starts from508d96b. Read exact
-operator plan0bb4ff60-03e3-4120-a0a6-e29173faf8a5 in ROB-1088. Implementation now
-reuses Jobs status/acknowledge_stopped: owner-scoped v2 status, controller-only
-explicit confirmation, bounded IDs, retained indeterminate result/no replay.
-TUI /job and /ack-job-stopped reuse Inspection. Public baseline red0/1/native
-red0/2 turn green1/1 and2/2; focused41 pass. Authority/confirmation mutations
-each fail0/1 and restore; forced cleanup a2 fails0/1 with all four teardown
-witness fields true. Initial wrong-line cleanup preparation is retained/excluded.
-Count129files/49,363lines,+157 this chunk/+988 cumulative; Session2860 unchanged.
-Full1021 (11properties,1010tests),seed1088,308.3s at cleanf248162 passes;
-all240 source/test hashes match postflight. Build/native118/format/Clippy/diff
-pass; postflight0 global/Elara BEAM. Current full evidence/source is frozen at
-f248162cd81cebc28fed3cb78f7e460d707981af. Scoped review/PR delivery next; Linear
-owns latest review/check/merge evidence. See note008 and retained operator-*
-namespace; no physical or real-model acceptance claim.
+Current branch work/rob-1088-final-chaos from b001c38; exact final-phase plan
+in commentdc1a9002-91cd-4e6e-97f9-1cb90a4c3cb0. JobRecovery now selects genuine
+Jobs tool/run with api:job and mix_test arguments; absent option keeps legacy
+workload. Its existing gate records actual tool identity; Matrix requires this
+evidence for general rows. Invalid API rejects before resources. Public red0/5
+and missing-Matrix-evidence red0/1 turn green focused24, including forced native
+failures through both APIs. Compile/format/diff pass. Count129/49,387,+24 phase/
++1,012 cumulative; Session2860 unchanged. Full1030 (11properties,1019tests),
+seed1088,304.9s passes at clean aa78b730f8b47ed552262797d9efccefad3c7adb;
+all240 before-suite hashes match postflight,0 global/Elara BEAM. Frozen compiled
+registration430f832d pins measurement81dc682 (same source/test bytes as aa78b73).
+It records364 compiled modules/836 artifacts and529 required checks.
 
-After that supporting chunk: fresh final LAB-5-style chaos and net-line/special-
-case comparison. Complete all independent scripted work before the separately
-approved capped real-model acceptance gate; if still unapproved, put LAB-8 in
-Needs Input and continue other actionable issues. Linear owns queue/status.
-Do not resume paused LAB-3 or reuse original registered corpus namespaces.
+Fresh finite regression namespace lab/results/rob-1088-final-chaos-20261006-a1/:
+24 original checkpoints,3 receipt transport,5 general job API,32 distinct seeds
+1088700–1088731. Existing MatrixRunner, S2 peers, supervisor3/5, causal/OS/cleanup
+checks. Launcher exited0:32 recorded/eligible/passed,544 checks all true, five
+general-api proofs true, no ineligible/unconfirmed cleanup. Canonical artifact
+verification exits0; final240 hashes match and global BEAM count0. Raw results
+and postflight retained. Registration SHA27fe958a; summary SHAf78d7d53.
+Keep this finite regression separate from original LAB-5 registered measurement;
+no comparative timing/quiet-host/universal-proof claim. Scripted acceptance and
+line comparison complete; final self-review/PR/checks/merge next.
+
+After final scripted review/delivery, separately approved capped real-model
+awaited-completion acceptance remains. If approval absent, Needs Input and
+continue independent backlog. LAB-4/LAB-7 still depend on paused LAB-3 and owner
+direction. Do not resume that pause or any human/account gate automatically.
+Linear owns latest queue/status/review/check/merge evidence.
 
 ## Retained evidence and continuation boundaries
 

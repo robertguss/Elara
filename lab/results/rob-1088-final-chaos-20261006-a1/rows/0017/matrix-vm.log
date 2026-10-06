@@ -1,0 +1,11 @@
+
+11:21:51.905 [error] Task #PID<0.175.0> started from #PID<0.94.0> terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["sh", "-c", "printf '%s' \"$$\" > os_pid\nsleep 60 &\nprintf '%s' \"$!\" > descendant_pid\nprintf x >> started\nwhile [ ! -e release ]; do sleep 0.01; done\n"], [cwd: "/Users/robertguss/Projects/startups/Elara/lab/results/rob-1088-final-chaos-20261006-a1/rows/0017/tmp/elara-lab-group_recovery-1088717-27150-e08439c19e518549/workspace", timeout_ms: 60000, max_bytes: 1024]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<4.109585720/0 in Elara.Lab.Scenarios.GroupRecovery.flow/2>
+    Args: []
+
+11:21:52.064 [notice] Application elara exited: :stopped

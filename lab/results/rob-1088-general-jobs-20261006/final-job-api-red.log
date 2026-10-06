@@ -1,0 +1,74 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+Running ExUnit with seed: 1088, max_cases: 28
+Excluding tags: [:test]
+Including tags: [location: {"test/elara/lab_job_recovery_test.exs", 45}]
+
+
+
+  1) test general job API at manager_running preserves the same recovery guarantees (Elara.Lab.JobRecoveryTest)
+     test/elara/lab_job_recovery_test.exs:45
+     Assertion with == failed
+     code:  assert tool.details[:tool] == "job"
+     left:  nil
+     right: "job"
+     stacktrace:
+       test/elara/lab_job_recovery_test.exs:59: (test)
+
+
+10:39:41.912 [error] Task #PID<0.508.0> started from Elara.TestJobs terminating
+** (stop) exited in: GenServer.call(Elara.Exec, {:run, ["mix", "test", "test/job_test.exs"], [cwd: "/var/folders/f8/ft7ygqg92pj8qh0rwplbw2x80000gn/T/elara-test-run-89311-918557610/elara-lab-job_recovery-42-89311-8d1d535f234d321e/workspace", timeout_ms: 60000, max_bytes: 16384, output_policy: :head_tail, expected_token: %{"generation" => 1, "incarnation" => "DecNumFQYrndyBNEWn03kQ"}]}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.4) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<9.28342840/0 in Elara.Jobs.start_job/7>
+    Args: []
+
+
+  2) test general job API at executor_running preserves the same recovery guarantees (Elara.Lab.JobRecoveryTest)
+     test/elara/lab_job_recovery_test.exs:45
+     Assertion with == failed
+     code:  assert tool.details[:tool] == "job"
+     left:  nil
+     right: "job"
+     stacktrace:
+       test/elara/lab_job_recovery_test.exs:59: (test)
+
+
+
+  3) test general job API at runner_running preserves the same recovery guarantees (Elara.Lab.JobRecoveryTest)
+     test/elara/lab_job_recovery_test.exs:45
+     Assertion with == failed
+     code:  assert tool.details[:tool] == "job"
+     left:  nil
+     right: "job"
+     stacktrace:
+       test/elara/lab_job_recovery_test.exs:59: (test)
+
+
+
+  4) test general job API at session_running preserves the same recovery guarantees (Elara.Lab.JobRecoveryTest)
+     test/elara/lab_job_recovery_test.exs:45
+     Assertion with == failed
+     code:  assert tool.details[:tool] == "job"
+     left:  nil
+     right: "job"
+     stacktrace:
+       test/elara/lab_job_recovery_test.exs:59: (test)
+
+
+
+  5) test general job API at stub_running preserves the same recovery guarantees (Elara.Lab.JobRecoveryTest)
+     test/elara/lab_job_recovery_test.exs:45
+     Assertion with == failed
+     code:  assert tool.details[:tool] == "job"
+     left:  nil
+     right: "job"
+     stacktrace:
+       test/elara/lab_job_recovery_test.exs:59: (test)
+
+
+Finished in 5.3 seconds (0.00s async, 5.3s sync)
+
+Result: 0/5 passed, 9 excluded
+Failed: 5 tests

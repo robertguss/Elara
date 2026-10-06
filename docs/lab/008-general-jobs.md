@@ -302,3 +302,61 @@ before-suite freeze afterward. Postflight observes0 global/Elara BEAM; no quiet-
 host or comparative timing claim. Frozen count and postflight manifests retain
 artifact hashes and source boundaries; later readbacks are separate. Fresh final chaos/net
 comparison and separately approved real-model acceptance remain pending.
+
+## Final scripted phase — Frozen integrated recovery
+
+Operator PR#58 merged at b001c38, tree-equal to reviewed92e0470 after both
+actual exact-head Socket checks passed; deliveryd4e39bfc and review69a263a8
+retain exact full-testedf248162 boundaries. LAB8 remains Building, not Done.
+
+Reuse the existing JobRecovery fixture/gates/deadlines/native probes with an
+optional api:job selecting the public Jobs tool/run and mix_test arguments.
+Absent option retains the original workload. Status/replay/ack compatibility
+helpers observe the same primitive. The gate records actual tool identity and
+Matrix requires general_job_api evidence for those rows. Missing evidence is
+ineligible; false evidence is an eligible failure. Invalid API selection rejects
+before fixture resources. No new scenario engine, provider, profile or actor.
+
+The new five API checks first fail0/5; missing-Matrix-evidence check fails0/1.
+Focused recovery/Matrix24 pass (13.3s), including forced preparation failures
+through legacy and general APIs with actual actor/group stop assertions.
+Compile warnings-as-errors, format and diff checks pass. Full1030 (11properties,
+1019tests),seed1088,304.9s passes at clean aa78b730f8b47ed552262797d9efccefad3c7adb.
+All240 source/test hashes match the before-suite freeze; postflight0 global/
+Elara BEAM. Raw preparations/controls and exact source/count/postflight artifacts
+remain retained. No comparative timing or quiet-host claim.
+
+Plan dc1a9002 declares one fresh finite32-cell regression: original24 checkpoints,
+3 receipt transport checkpoints and5 general-job admission loss checkpoints,
+seeds1088700–1088731. Register exact source, compiled/native hashes, cells and
+60-second timeout before launch in rob-1088-final-chaos-20261006-a1. Use the
+existing MatrixRunner/S2 peers/production supervisor3/5/causal/OS cleanup checks;
+stop on failed, ineligible or unconfirmed cleanup. No edits/compiles/tests during
+launch. This is separate from the original registered1200 measurement and is
+not a performance comparison or proof over every possible schedule.
+
+Current declared count129 files/49,387 source+infrastructure lines,+24 final
+recovery variant/+1,012 cumulative versus48,375. Native inline tests and all
+compatibility/runtime/infrastructure additions remain included. Session stays
+2860 versus2657 baseline (+203); no Session change in operator/final variants.
+The baseline named thread_wait execution branch now shares one branch with
+completion_wait; compatibility aliases remain rather than counting their
+removal as a win. The total increase refutes the net-reduction hypothesis.
+Registration430f832d was posted before launch at frozen measurement source
+81dc6826013fe858c0cf02c844555aaf5358ebab (source/test bytes equal full-tested aa78b73).
+It records364 compiled module identities/836 artifacts and529 required checks.
+Registration SHA25627fe958afd68abcdf427fd4559e432c751bfad23b0ec34e355c687815268f9f8;
+driver SHA2566e314ed3130e50a63c22fb4e0a564eaf8a93cfaf73d6fcb9042d511b58a79f2d.
+The launcher actually exited0:32 recorded/32 eligible/32 passed,544 reported
+checks all true, all five general-api proofs true, no ineligible or unconfirmed
+cleanup rows. Each row matches the registered identity/parameters/source pin.
+Canonical compiled/native artifact verification afterward exits0; all240
+source/test hashes still match and global BEAM count is0. Raw rows, registration,
+host conditions, logs, summary and hash postflight are retained in the fresh
+namespace. Summary SHA256f78d7d53127b1e0baae64a6441c11f8d4641996d792119e91b2d9d7088bcf1bf.
+
+This completes the finite scripted regression and net-line comparison. It does
+not pool rows with LAB-5's original1200, establish comparative performance or
+prove every schedule. Separately approved capped real-model awaited-completion
+acceptance remains pending; overall LAB-8 must remain incomplete until that gate
+is resolved. The net-reduction hypothesis is refuted by the measured increase.

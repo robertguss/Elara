@@ -1,0 +1,19 @@
+{
+  "commit": "81dc6826013fe858c0cf02c844555aaf5358ebab",
+  "full_tested_source": "aa78b730f8b47ed552262797d9efccefad3c7adb",
+  "source_test_hashes_matched": 240,
+  "cell_count": 32,
+  "required_checks": 529,
+  "seed_first": 1088700,
+  "seed_last": 1088731,
+  "modules": 364,
+  "artifact_files": 836,
+  "registration_sha256": "27fe958afd68abcdf427fd4559e432c751bfad23b0ec34e355c687815268f9f8",
+  "driver_sha256": "6e314ed3130e50a63c22fb4e0a564eaf8a93cfaf73d6fcb9042d511b58a79f2d",
+  "native": {
+    "/Users/robertguss/Projects/startups/Elara/_build/dev/lib/elara/priv/native/exec-stub": "1b07e65948b69d7b4c52649b0cd07b413669b33065d2c4384d9e90299010d382"
+  },
+  "purpose": "LAB8 finite frozen-source regression; separate from original LAB5 measurement",
+  "root": "/Users/robertguss/Projects/startups/Elara/lab/results/rob-1088-final-chaos-20261006-a1/rows",
+  "measurement_root_absent_before_launch": true
+}

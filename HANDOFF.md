@@ -18,46 +18,36 @@ or delete retained evidence without a specific owner decision.
 
 ## Current work
 
-ROB-1105 — Gateway authentication and repository-plugin trust prompt is
-Building on work/rob-1105-gateway-trust, based on main77591c0. Runtime/source
-commit7a0281942db46cb75c845001a1c1c278b28ca0f3 is accepted locally; final
-metadata review/PR/exact-head Socket checks/merge remain. Selectionf490dd77,
-planba30ce99, corrections142cb172, freezee8d2b75c. Do not mark Done before merge.
-Gateway validates a UTF8 32–512-byte token before listen and authenticates first
-request before create/attach/list. Shared native and lab observer connections
-send it on connect/reopen; embedded TUI generates32 random bytes if absent.
-Shared Exec Port.open removes token inheritance into ordinary child commands.
-Loader checks exact already-read source before parse/compile/callback/cache;
-explicit mix elara.trust [WORKSPACE] prompts and stores approval outside repos.
-Changed/new files need approval. No new actor/dependency, sandbox or automatic
-reconnect. Protocol1 remains unsupported after authentication.
+ROB-1098 — Offline policy evaluation by replay is Planning, selected Ready
+under autonomous decision6c63dc8c. Sole executable experimental item, branch
+work/rob-1098-policy-replay from merged main18fd675. Inspect current Core,
+Recorder/Replay, context handoff and agent wake-budget paths, then record a
+refutable bounded deterministic plan/acceptance in Linear before runtime edits.
+Reuse existing components, keep Core pure and authority/default behavior intact;
+offline replay never executes providers/replacement shells/tools. Technical
+choices are delegated. Historical parked wording alone does not block selection.
+Fresh raw namespace:lab/results/rob-1098-policy-replay-20261006/; don't reuse
+original LAB5 measurement or other retained namespaces. No real-model/account
+or physical-terminal acceptance is needed for this scope.
 
-Full-a3:1035 passed (11 properties/1024 tests), seed1105,297.4s at clean7a02819.
-Before/after244 tracked runtime/test/config/infrastructure hashes and3 test
-native artifacts match; manifest SHA7ecf68f829c0084c594e6b42467df8b1511d9208072efc5647c53b38fc28d1dc.
-Scope does not claim every compiled BEAM identity. Preflight global BEAM0.
-Initial postflight saw one transient BEAM16073; gone before ownership check,
-so origin unknown and no process was stopped. Recorded test PID7508 is dead;
-fresh readback global BEAM0, native clients/exec stubs0. Actual native reconnect
-and forced failure prove own proxy/thread/listener/peer sockets stopped.
-Native118/fmt/Clippy, focused56 plus corrected consumers130 (116.5s), compile
-warnings-as-errors/format pass. Source/docs diff check excludes retained raw logs;
-unrestricted check flags only raw trailing blank lines, preserved verbatim.
-Five wrong implementations each fail0/1 (auth ignored/equal-length bypass,
-trust ignored/implicit consent/native header omission), exact bytes restored.
-Temporary trust root/synthetic credentials/explicit fixture approvals isolate
-checks from developer state. No account-backed or physical-terminal acceptance.
-
-Retain all raw rob-1105-gateway-trust-20261006/ evidence. First preflight aborted
-on a running VM; claimed freeze withdrawn33ff39b7, a1 mistakenly started then
-terminated, no Result summary, unqualified/excluded. Qualified a2 at3b6ca9a
-completed1009/1035,312.6s,exit2, all244/3 hashes matched, clean/global BEAM0.
-Shared lab observer lacked auth (18 concurrency failures); five older raw socket
-fixture modules, context plugin approvals and token inheritance caused remainder.
-Corrected shared boundaries and fixtures, then consumers130 and full-a3 passed.
-Older red/focused/reconnect preparations stay retained/excluded; first reconnect
-incorrectly expected automatic retry, corrected test exercises explicit /open
-of the same session after a real transport drop.
+ROB-1105 is Done: PR60 merged18fd6759f449ce3769c10cfcfe5b0d3250044c9d at
+2026-10-06T16:58:22Z, tree-equal reviewed7bcaf869c61cdb560129ecd4a61640249489bb8b
+after both actual exact-head Socket checks passed and fresh mergeability readback.
+Standalone diff equality exits0. Review32f0e2eb/deliveryfc827868 retain boundaries.
+Gateway first-request authentication covers native/lab connections/reopen; shared
+Exec strips inherited token; exact-source plugin approval gates compilation and
+reload with explicit mix elara.trust [WORKSPACE] consent. Native118/focused56/
+corrected consumers130/compile/format pass; five wrong guards fail0/1, actual
+native same-session reopen and forced proxy/native/socket cleanup pass. Full1035
+(seed1105,297.4s) at clean source7a02819, all244 tracked/3 native hashes match.
+Manifest SHA7ecf68f8 covers source/native, not every compiled BEAM. Initial
+postflight transient BEAM16073 disappeared before ownership inspection (origin
+unknown); recorded test PID7508 dead, fresh global BEAM/native/exec-stub0.
+Raw rob-1105-gateway-trust-20261006/ retains every failure/preflight correction:
+a1 unqualified/terminated/no Result; a2 valid failing1009/1035,312.6s, source
+identity matched; corrected shared boundaries/fixtures then full-a3 passed.
+Raw logs remain verbatim including trailing blank lines; source/docs diff check
+passes. No sandbox/real-model/account/physical-terminal proof claimed.
 
 LAB-8/ROB-1088 is Needs Input. All scripted chunks PR#54/#55/#57/#58/#59 are
 merged. Final merge77591c02a659c0fcda495331d5469a377251d559 equals reviewed

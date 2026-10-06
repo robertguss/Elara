@@ -1,0 +1,53 @@
+{
+  "pr": {
+    "baseRefName": "main",
+    "headRefOid": "7bcaf869c61cdb560129ecd4a61640249489bb8b",
+    "mergeStateStatus": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "number": 60,
+    "state": "OPEN",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-06T16:57:34Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://socket.dev/dashboard/org/rjg/sbom/c9cd69e0-6269-4e77-adc3-3aab92a9ca22",
+        "name": "Socket Security: Project Report",
+        "startedAt": "2026-10-06T16:57:31Z",
+        "status": "COMPLETED",
+        "workflowName": ""
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-06T16:57:36Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://socket.dev",
+        "name": "Socket Security: Pull Request Alerts",
+        "startedAt": "2026-10-06T16:57:34Z",
+        "status": "COMPLETED",
+        "workflowName": ""
+      }
+    ],
+    "url": "https://github.com/robertguss/Elara/pull/60"
+  },
+  "base_sha": "77591c02a659c0fcda495331d5469a377251d559",
+  "checks": [
+    {
+      "id": 112393536142,
+      "name": "Socket Security: Pull Request Alerts",
+      "head_sha": "7bcaf869c61cdb560129ecd4a61640249489bb8b",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 112393513104,
+      "name": "Socket Security: Project Report",
+      "head_sha": "7bcaf869c61cdb560129ecd4a61640249489bb8b",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "checkout_clean": true,
+  "source_native_identity_matched": true,
+  "readback_utc": "2026-10-06T16:58:16.736191+00:00"
+}

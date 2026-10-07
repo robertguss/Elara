@@ -1577,13 +1577,24 @@ defmodule Elara.Session do
     emit(event, effect_id, shell, patch_context)
   end
 
-  defp run_effect({:call_provider, core_ref, request}, _effect_id, shell, _patch_context) do
+  defp run_effect({:call_provider, core_ref, request}, effect_id, shell, _patch_context) do
     budget = Context.budget(shell.core, shell.context_limit)
+    frozen = Handoff.frozen?(shell.store)
 
-    cond do
-      Handoff.frozen?(shell.store) -> feed(:interrupt, shell)
-      budget["handoff_required"] -> begin_handoff(shell, core_ref)
-      true -> run_effect({:dispatch_provider, core_ref, request}, nil, shell, nil)
+    branch =
+      cond do
+        frozen -> :interrupt_frozen
+        budget["handoff_required"] -> :attempt_handoff
+        true -> :attempt_dispatch
+      end
+
+    recorder = FlightRecorder.context_decision(shell.recorder, effect_id, budget, frozen, branch)
+    shell = %{shell | recorder: recorder}
+
+    case branch do
+      :interrupt_frozen -> feed(:interrupt, shell)
+      :attempt_handoff -> begin_handoff(shell, core_ref)
+      :attempt_dispatch -> run_effect({:dispatch_provider, core_ref, request}, nil, shell, nil)
     end
   end
 

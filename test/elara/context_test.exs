@@ -5,6 +5,8 @@ defmodule Elara.ContextTest do
 
   defmodule Controlled do
     @behaviour Elara.Provider
+    def noop(_arguments, _context), do: {:ok, "ok"}
+
     def chat(owner, request) do
       send(owner, {:model, self(), request})
 
@@ -130,6 +132,82 @@ defmodule Elara.ContextTest do
     assert {:ok, reopened} = Store.open(successor.path)
     assert Elara.Completion.thread_correlation(reopened) == correlation
     assert {:error, :unrelated_thread} = Elara.Threads.Communication.wait(h["id"], source)
+
+    assert [%{branch: :attempt_handoff, frozen: false} = decision] =
+             Elara.recording(source).context_decisions
+
+    assert decision.limit == 100_000
+
+    assert {:ok, %{segments: [%{status: :match, compared: 1}]}} =
+             Elara.FlightRecorder.ContextCensus.compare(Elara.recording(source), 100_000)
+
+    assert [%{branch: :attempt_dispatch}] = Elara.recording(h["id"]).context_decisions
+  end
+
+  test "blocked handoff is recorded as an attempt, not a successful handoff", %{root: root} do
+    {:ok, id} =
+      Elara.start_session(
+        cwd: root,
+        provider: {Controlled, self()},
+        persist: false,
+        context_limit: 1000,
+        tools: [],
+        plugins: []
+      )
+
+    assert {:error, {:provider_error, %{message: message}}} = Elara.ask(id, "no persistence")
+    assert message =~ "handoff_requires_persistence"
+    assert [%{branch: :attempt_handoff}] = Elara.recording(id).context_decisions
+    refute_receive {:model, _, _}
+  end
+
+  test "in-flight frozen gate records precedence before interrupting", %{root: root} do
+    # Inject a frozen store while a provider is in flight to reach the shell's
+    # defensive guard; ordinary new asks are rejected before reaching this gate.
+    tool = %Elara.Tool{
+      name: "noop",
+      description: "fixture",
+      parameters: %{},
+      run: {Controlled, :noop}
+    }
+
+    {:ok, id} =
+      Elara.start_session(
+        cwd: root,
+        provider: {Controlled, self()},
+        tools: [tool],
+        plugins: [],
+        context_limit: 100_000
+      )
+
+    assert :ok = Elara.ask_async(id, "go")
+    assert_receive {:model, model, _}, 2000
+    {:ok, pid} = Elara.session_pid(id)
+
+    :sys.replace_state(pid, fn shell ->
+      %{shell | store: %{shell.store | context: %{"handoff" => %{"stage" => "stopped"}}}}
+    end)
+
+    send(
+      model,
+      {:answer,
+       %Message.Assistant{
+         text: String.duplicate("x", 80_000),
+         tool_calls: [%Message.ToolCall{id: "noop", name: "noop", args: {:ok, %{}}}]
+       }}
+    )
+
+    await(fn -> Elara.status(id).phase == :idle end)
+
+    assert [%{branch: :attempt_dispatch}, %{branch: :interrupt_frozen, frozen: true} = frozen] =
+             Elara.recording(id).context_decisions
+
+    assert frozen.estimate_tokens > 80_000
+
+    assert {:ok, %{segments: [%{status: :match, compared: 2}]}} =
+             Elara.FlightRecorder.ContextCensus.compare(Elara.recording(id), 100_000)
+
+    refute_receive {:model, _, _}
   end
 
   test "handoff and persisted resume retain plugin selection without activating new files", %{

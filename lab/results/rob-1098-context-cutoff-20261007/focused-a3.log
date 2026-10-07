@@ -1,0 +1,17 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Compiling 4 files (.ex)
+Running ExUnit with seed: 1098, max_cases: 16
+
+.......................................
+21:05:20.277 [error] Task #PID<0.623.0> started from #PID<0.617.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.619.0>, {:ask, "retain this goal"}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.3) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.3) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.3) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<29.37455697/0 in Elara.ContextTest."test crash at prepared retains one successor and one logical continuation"/1>
+    Args: []
+......................................
+Finished in 42.0 seconds (3.4s async, 38.5s sync)
+
+Result: 77 passed (11 properties, 66 tests)

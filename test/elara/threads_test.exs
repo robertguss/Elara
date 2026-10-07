@@ -395,6 +395,12 @@ defmodule Elara.ThreadsTest do
 
     assert message =~ "Child concurrency limit 1 reached"
 
+    recording = Elara.recording(idle_child["id"])
+    assert List.last(recording.context_decisions).branch == :attempt_dispatch
+
+    assert {:ok, %{segments: [%{status: :diverged, compared: 1, excluded: 1}]}} =
+             Elara.FlightRecorder.ContextCensus.compare(recording, 1)
+
     Application.put_env(:elara, :thread_limit, 2)
     assert {:ok, _} = Threads.start_child(parent, "admitted at two")
     send(next_request(), {:answer, "at two"})

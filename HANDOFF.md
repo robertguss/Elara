@@ -27,17 +27,21 @@ and saved defaults after reopening. Three layouts and four themes were sampled,
 not every combination. Read Linear for exact evidence and limits; no broad
 daily-driver or LAB-8 acceptance is implied.
 
-ROB-1098 recording-sufficiency assessment and oracle consultation are complete.
-The issue remains Backlog: no runtime implementation or experiment started.
-Read its assessment comment for source evidence and the proposed next slice:
-record the existing context budget, frozen guard, causal effect ID and selected
-branch, then compare alternative cutoffs offline with accounting held fixed.
-Existing flights cannot generally reconstruct those shell decisions. Missing
-observations must yield unknown; analysis stops at the first divergence or gap.
-This cannot establish outcome quality or continuity across rebase/restart.
-Do not move policy into Core or capture private provider state for this slice.
-Register a refutable plan before implementation; use scripted fixtures, not
-provider calls. No new lab driver is needed by default.
+ROB-1098 now implements the registered context-cutoff slice: versioned shell
+observations and `Elara.FlightRecorder.ContextCensus.compare/2`. Live policy is
+unchanged. The census holds accounting fixed and stops each conditional segment
+prefix at its first divergence/gap; legacy recordings are unsupported. It does
+not infer outcome quality, successful handoffs, savings or continuity across
+rebase/restart. No provider-private state or wake-policy capture was added.
+
+Full suite: 1061 passed (11 properties); focused: 77 passed (11 properties).
+Compile/format/source-doc diff checks passed. Oracle's fresh-VM atom and malformed
+coverage findings were reproduced red and fixed; follow-up found no blockers.
+Read `docs/lab/009-context-cutoff-census.md` and ROB-1098 for registration,
+review and delivery state. Raw logs, including rejected preparations, remain in
+`lab/results/rob-1098-context-cutoff-20261007/`. No production corpus was evaluated
+and no preferred cutoff selected. Future corpus use needs fresh observations;
+do not backfill missing facts or resume broader policy work automatically.
 
 LAB-3 remains unfinished and paused on its original owner-host protocol.
 LAB-8 scripted delivery is merged, but capped real-model acceptance remains

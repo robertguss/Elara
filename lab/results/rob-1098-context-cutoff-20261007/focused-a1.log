@@ -1,0 +1,60 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+Compiling 5 files (.ex)
+Generated elara app
+Running ExUnit with seed: 1098, max_cases: 16
+
+.................
+
+  1) test in-flight frozen gate records precedence before interrupting (Elara.ContextTest)
+     test/elara/context_test.exs:162
+     ** (MatchError) no match of right hand side value:
+
+         {:error,
+          {:function_clause,
+           [
+             {Elara.FlightRecorder, :normalize_implementation,
+              [
+                %Elara.Tool{
+                  name: "noop",
+                  description: "fixture",
+                  parameters: %{},
+                  run: #Function<66.74261964/2 in Elara.ContextTest."test in-flight frozen gate records precedence before interrupting"/1>,
+                  plugin: nil,
+                  version: "1",
+                  capabilities: [],
+                  placement: :any,
+                  mutating: false,
+                  cancel_on_interrupt: false
+                }
+              ], [file: ~c"lib/elara/flight_recorder.ex", line: 821]},
+             {Elara.FlightRecorder, :normalize_tool, 1,
+              [file: ~c"lib/elara/flight_recorder.ex", line: 817]},
+             {Enum, :"-map/2-lists^map/1-1-", 2, [file: ~c"lib/enum.ex", line: 1725]},
+             {Elara.FlightRecorder, :normalize_state, 2,
+              [file: ~c"lib/elara/flight_recorder.ex", line: 518]},
+             {Elara.FlightRecorder, :segment, 3,
+              [file: ~c"lib/elara/flight_recorder.ex", line: 84]},
+             {Elara.Session, :init, 1, [file: ~c"lib/elara/session.ex", line: 184]},
+             {:gen_server, :init_it, 2, [file: ~c"gen_server.erl", line: 2276]},
+             {:gen_server, :init_it, 6, [file: ~c"gen_server.erl", line: 2236]},
+             {:proc_lib, :init_p_do_apply, 3, [file: ~c"proc_lib.erl", line: 333]}
+           ]}}
+
+     code: {:ok, id} =
+     stacktrace:
+       test/elara/context_test.exs:172: (test)
+
+.
+20:57:03.035 [error] Task #PID<0.596.0> started from #PID<0.590.0> terminating
+** (stop) exited in: GenServer.call(#PID<0.592.0>, {:ask, "retain this goal"}, :infinity)
+    ** (EXIT) killed
+    (elixir 1.20.3) lib/gen_server.ex:1183: GenServer.call/3
+    (elixir 1.20.3) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.3) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: #Function<29.74261964/0 in Elara.ContextTest."test crash at prepared retains one successor and one logical continuation"/1>
+    Args: []
+......................................
+Finished in 39.8 seconds (1.2s async, 38.6s sync)
+
+Result: 56/57 passed
+Failed: 1 test

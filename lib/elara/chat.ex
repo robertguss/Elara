@@ -26,8 +26,26 @@ defmodule Elara.Chat do
 
         case Elara.start_session(session_opts) do
           {:ok, session} ->
-            start_reader(self())
-            exit({:shutdown, run(session, :stdio, seed)})
+            terminal = terminal?(:standard_io)
+            terminal_mode = if terminal, do: quiet_paste_markers()
+            if terminal, do: IO.write("\e[?2004h")
+            reader = start_reader(self())
+
+            try do
+              exit({:shutdown, run(session, :stdio, seed)})
+            after
+              Process.unlink(reader)
+              Process.exit(reader, :shutdown)
+              if terminal, do: IO.write("\e[?2004l")
+
+              if terminal_mode do
+                {device, mode} = terminal_mode
+
+                System.cmd("sh", ["-c", "stty \"$1\" <\"$2\"", "elara-chat", mode, device],
+                  stderr_to_stdout: true
+                )
+              end
+            end
 
           {:error, reason} ->
             Mix.shell().error(startup_error(reason))
@@ -78,6 +96,9 @@ defmodule Elara.Chat do
     receive do
       {:stdin, :eof} ->
         dispatch(session, session_pid, out, phase, :eof, %{opts | rewrite: false})
+
+      {:stdin, {:paste, text}} ->
+        dispatch(session, session_pid, out, phase, {:paste, text}, %{opts | rewrite: false})
 
       {:stdin, line} ->
         dispatch(session, session_pid, out, phase, {:line, line}, %{opts | rewrite: tty?(out)})
@@ -246,20 +267,26 @@ defmodule Elara.Chat do
   defp resume_opt(false), do: nil
 
   defp start_reader(parent) do
-    spawn_link(fn -> reader_loop(parent) end)
+    spawn_link(fn -> Elara.Chat.Input.read(parent) end)
   end
 
-  defp reader_loop(parent) do
-    case IO.gets("") do
-      :eof ->
-        send(parent, {:stdin, :eof})
-
-      {:error, _} ->
-        send(parent, {:stdin, :eof})
-
-      line when is_binary(line) ->
-        send(parent, {:stdin, line})
-        reader_loop(parent)
+  # Keep the terminal's existing echo/editing, but don't echo ESC as literal ^[.
+  # Save the original tty flags so exit restores even an initially disabled echoctl.
+  defp quiet_paste_markers do
+    # Port subprocesses lack the parent's controlling tty; open its named device.
+    with {tty, 0} <- System.cmd("ps", ["-o", "tty=", "-p", System.pid()]),
+         device = "/dev/" <> String.trim(tty),
+         {mode, 0} <-
+           System.cmd("sh", ["-c", "stty -g <\"$1\"", "elara-chat", device],
+             stderr_to_stdout: true
+           ),
+         {_, 0} <-
+           System.cmd("sh", ["-c", "stty -echoctl <\"$1\"", "elara-chat", device],
+             stderr_to_stdout: true
+           ) do
+      {device, String.trim(mode)}
+    else
+      _ -> nil
     end
   end
 

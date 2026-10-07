@@ -209,6 +209,12 @@ Common chat commands:
 Prefix a prompt with `//` to send text beginning with `/`. Commands that change
 session state are refused during a turn; interrupt the turn first.
 
+In terminals supporting bracketed paste (including WezTerm), chat holds a
+multiline paste as one draft until you press Enter. Pasted slash commands are
+literal prompt text; type `/quit` or `/interrupt` to execute those commands.
+Pipes and terminals without bracketed paste remain line-oriented: use a single
+line there, or use the TUI for multiline editing.
+
 See [Sessions and chat](docs/sessions.md) for persistence, branching, and the
 full command behavior.
 

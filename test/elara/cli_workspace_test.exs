@@ -178,6 +178,7 @@ defmodule Elara.CLIWorkspaceTest do
 
     {:ok, remaining, opts} = Mix.Tasks.Elara.Chat.parse_args(["--cwd", ctx.target])
     {:ok, out} = StringIO.open("")
+    Process.unlink(out)
     stdio = spawn(fn -> waiting_stdio(out) end)
 
     on_exit(fn ->

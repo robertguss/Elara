@@ -36,14 +36,18 @@ From the Elara checkout:
 mix elara.chat --cwd "$PRACTICE_ROOT/chat" --name shipping-practice
 ```
 
-Paste this prompt:
+Paste this prompt, then press Enter to submit it. Copy only the text inside the
+block, not Markdown fence characters. Type `/quit` as a command rather than
+pasting it: terminal pastes are literal prompt text.
 
-> In this shipping example, extend shipping_fee to accept an optional discount
-> in integer cents, defaulting to zero. Decide free-shipping eligibility using
-> subtotal minus discount. The threshold stays 5,000 cents and the fee stays
-> 500 cents. Assume valid inputs: nonnegative integers and discount no greater
-> than subtotal. Preserve one-argument callers. Add focused tests, run them,
-> and report exactly what changed and what passed. Do not add dependencies.
+```text
+In this shipping example, extend shipping_fee to accept an optional discount
+in integer cents, defaulting to zero. Decide free-shipping eligibility using
+subtotal minus discount. The threshold stays 5,000 cents and the fee stays
+500 cents. Assume valid inputs: nonnegative integers and discount no greater
+than subtotal. Preserve one-argument callers. Add focused tests, run them,
+and report exactly what changed and what passed. Do not add dependencies.
+```
 
 After `/quit`, verify independently:
 
@@ -70,13 +74,15 @@ From the Elara checkout:
 mix elara.tui --cwd "$PRACTICE_ROOT/tui" new
 ```
 
-Paste this prompt:
+Paste this prompt, then press Enter to submit it:
 
-> In this shipping example, add quote(subtotal) returning a map with
-> :subtotal, :shipping and :total, all integer cents. Reuse shipping_fee/1;
-> total is subtotal plus shipping. Preserve shipping_fee/1. Add boundary tests,
-> run them, and report exactly what changed and what passed. Do not add
-> dependencies or discount support in this fresh workspace.
+```text
+In this shipping example, add quote(subtotal) returning a map with
+:subtotal, :shipping and :total, all integer cents. Reuse shipping_fee/1;
+total is subtotal plus shipping. Preserve shipping_fee/1. Add boundary tests,
+run them, and report exactly what changed and what passed. Do not add
+dependencies or discount support in this fresh workspace.
+```
 
 Detach with Ctrl-C, then verify independently:
 

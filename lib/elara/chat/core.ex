@@ -10,6 +10,7 @@ defmodule Elara.Chat.Core do
 
   @type input ::
           {:line, String.t()}
+          | {:paste, String.t()}
           | :eof
           | {:event, Elara.Event.t()}
           | {:session_down, term()}
@@ -77,6 +78,14 @@ defmodule Elara.Chat.Core do
   def step(phase, input)
 
   def step(:idle, {:line, line}), do: idle_line(parse(line))
+
+  def step(:idle, {:paste, text}) do
+    case String.trim(text) do
+      "" -> idle_line(:empty)
+      text -> idle_line({:prompt, text})
+    end
+  end
+
   def step(:idle, :eof), do: {:idle, [{:halt, 0}]}
   def step(:idle, :ask_rejected), do: {:idle, print([@rejected, @prompt])}
   def step(:idle, {:session_down, _}), do: halt_down()
@@ -126,6 +135,11 @@ defmodule Elara.Chat.Core do
     in_turn_line(phase, prompt, parse(line))
   end
 
+  def step({:in_turn, prompt} = phase, {:paste, text}) do
+    command = if String.trim(text) == "", do: :empty, else: {:prompt, text}
+    in_turn_line(phase, prompt, command)
+  end
+
   def step({:in_turn, _}, :eof), do: {{:exiting, 0}, [:interrupt]}
   def step({:in_turn, _}, :ask_rejected), do: {:idle, print([@rejected, @prompt])}
   def step({:in_turn, _}, {:session_down, _}), do: halt_down()
@@ -148,6 +162,7 @@ defmodule Elara.Chat.Core do
     end
   end
 
+  def step({:exiting, _} = phase, {:paste, _}), do: {phase, []}
   def step({:exiting, code} = phase, :eof), do: {phase, [{:halt, code}]}
   def step({:exiting, _code} = phase, :ask_rejected), do: {phase, []}
   def step({:exiting, _}, {:session_down, _}), do: halt_down()

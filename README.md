@@ -46,6 +46,10 @@ to an already-live session retains that session's original workspace.
 The working directory controls relative tool paths, shell commands, local plugin
 discovery, session scope, project instructions, and Agent Skills discovery.
 
+For a small practice project, use [the shipping example](examples/shipping/README.md).
+Its Mac guide creates disposable workspaces and includes chat/TUI tasks with
+independent checks. The baseline needs no dependencies or network.
+
 ## Project instructions and Agent Skills
 
 Elara loads `AGENTS.md` from the working directory and its ancestors, ordered

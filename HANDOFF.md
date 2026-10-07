@@ -1,9 +1,28 @@
-# Handoff — balanced research and daily use, 2026-10-07
+# Handoff — TUI-first daily use, 2026-10-07
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
 is the sole planning and status source. Read the
 [current handoff](https://linear.app/robert-guss/document/current-handoff-autonomous-implementation-569eb39fa4cd)
 and issue descriptions/comments for queue, acceptance, review and delivery.
+
+The owner clarified that the TUI is the primary interactive product. Preserve
+the Elixir API/one-shot use and existing chat compatibility; new interactive
+work targets the TUI. ROB-1341 under ROB-1106 delivers the bounded source-backed
+`bin/elara` launcher. Bare `elara` starts a new session in caller cwd, not an
+automatic resume; explicit list/session targets and `--cwd` remain supported.
+README documents PATH setup. This is not a standalone package or installer.
+
+Launcher configuration/builds stay in Elara's checkout; application startup and
+relative credential/UI paths use caller cwd. Native argument preflight replaces
+the duplicate Mix parser. Oracle identified a project-override leak into tool
+commands; the wrapper now clears `MIX_EXS` rather than exporting Elara's path.
+Subprocess checks cover project isolation, build confinement, saved reopening,
+Codex model/effort forwarding with fake credentials, option-like prompts, and
+live-session workspace authority. The scripted PTY exercises multiline editing,
+resize, stop/queue/resume, and clean Ctrl-C exit through the launcher; existing
+native Esc coverage remains. Read ROB-1341 for final test/review/merge evidence.
+Linux PTY verification is not Mac/WezTerm/Herdr launcher acceptance. No real
+provider calls were made, and no new Mac acceptance has been reported.
 
 The owner explicitly chose balanced research and daily-use improvements.
 ROB-1091 records that decision. The full 49-issue audit and oracle consultation
@@ -34,7 +53,7 @@ prefix at its first divergence/gap; legacy recordings are unsupported. It does
 not infer outcome quality, successful handoffs, savings or continuity across
 rebase/restart. No provider-private state or wake-policy capture was added.
 
-Full suite: 1061 passed (11 properties); focused: 77 passed (11 properties).
+ROB-1098 verification: 1061 passed (11 properties); focused: 77 passed (11 properties).
 Compile/format/source-doc diff checks passed. Oracle's fresh-VM atom and malformed
 coverage findings were reproduced red and fixed; follow-up found no blockers.
 Read `docs/lab/009-context-cutoff-census.md` and ROB-1098 for registration,

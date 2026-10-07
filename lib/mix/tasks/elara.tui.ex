@@ -11,31 +11,23 @@ defmodule Mix.Tasks.Elara.Tui do
   """
   @requirements ["app.start"]
 
-  @default_port 4_048
-  @switches [
-    port: :integer,
-    cwd: :string,
-    observe: :boolean,
-    headless: :boolean,
-    event_dump: :boolean,
-    dump_events: :boolean,
-    ask: :string,
-    interrupt_after_ms: :integer,
-    timeout_ms: :integer,
-    width: :integer,
-    height: :integer,
-    appearance: :boolean,
-    layout: :string,
-    theme: :string,
-    diagnostics: :boolean,
-    preview_reasoning: :boolean,
-    help: :boolean
-  ]
-
   @impl true
   def run(argv) do
-    binary = binary!()
-    maybe_start_embedded_server(argv)
+    run_binary(binary!(), argv)
+  end
+
+  @doc false
+  def run_binary(binary, argv) do
+    # Use the client's grammar for validation, defaults and last-option-wins
+    # semantics. In particular, a prompt may itself look like an option.
+    case System.cmd(binary, ["--mix-preflight" | argv], stderr_to_stdout: true) do
+      {port, 0} ->
+        start_embedded_server(port |> String.trim() |> String.to_integer())
+
+      {message, status} ->
+        Mix.shell().error(String.trim_trailing(message))
+        exit({:shutdown, status})
+    end
 
     port =
       Port.open({:spawn_executable, String.to_charlist(binary)}, [
@@ -46,29 +38,6 @@ defmodule Mix.Tasks.Elara.Tui do
       ])
 
     await_exit(port)
-  end
-
-  defp maybe_start_embedded_server(argv) do
-    case OptionParser.parse(argv, strict: @switches, aliases: [o: :observe, h: :help]) do
-      {opts, command, []} when command != [] ->
-        case Elara.CLI.workspace_options(opts) do
-          {:ok, _opts} ->
-            :ok
-
-          {:error, message} ->
-            Mix.shell().error(message)
-            exit({:shutdown, 1})
-        end
-
-        port = Keyword.get(opts, :port, environment_port())
-
-        if is_integer(port) and port in 1..65_535 do
-          start_embedded_server(port)
-        end
-
-      _other_command_or_invalid_arguments ->
-        :ok
-    end
   end
 
   defp start_embedded_server(port) do
@@ -98,13 +67,6 @@ defmodule Mix.Tasks.Elara.Tui do
 
       {:error, reason} ->
         Mix.raise("could not start embedded Elara server: #{Elara.Config.error_message(reason)}")
-    end
-  end
-
-  defp environment_port do
-    case Integer.parse(System.get_env("ELARA_SERVER_PORT", "")) do
-      {port, ""} when port in 1..65_535 -> port
-      _invalid_or_missing -> @default_port
     end
   end
 

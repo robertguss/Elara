@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Keep argument and environment paths relative to the caller, not the checkout.
+caller="$PWD"
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd -- "$root"
+# Select this checkout without leaking a project override into agent tools.
+unset MIX_EXS
+exec mix elara.launch "$caller" "$@"

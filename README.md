@@ -12,8 +12,10 @@ existing agents.
 
 ## Run from source
 
-Elara currently runs from this Mix project; it does not install a standalone
-`elara` executable. You need Elixir 1.20, Erlang/OTP 29, Rust 1.88 or newer with
+The TUI is Elara's primary interactive interface. The `bin/elara` launcher runs
+it from this source checkout while working in your current project. It is not
+a standalone release: keep the checkout and toolchain installed.
+You need Elixir 1.20, Erlang/OTP 29, Rust 1.88 or newer with
 Cargo, rustfmt, and Clippy, plus the `flock` command. The Rust components can be
 installed with `rustup component add rustfmt clippy`; distribution-provided Rust
 1.85 is too old for the TUI dependencies. Mix builds the Rust execution stub
@@ -21,11 +23,38 @@ automatically and builds the Rust TUI on first use; a missing Cargo installation
 fails with setup instructions.
 
 ```bash
-git clone https://github.com/robertguss/elixir-harness.git
-cd elixir-harness
+git clone https://github.com/robertguss/Elara.git
+cd Elara
 mix deps.get
+export PATH="$PWD/bin:$PATH"
 ```
 
+For future terminals, add that **absolute checkout path** to your shell's PATH
+(for example, `export PATH="$HOME/code/Elara/bin:$PATH"` in `~/.zshrc`). Add the
+directory to PATH rather than copying or symlinking the script elsewhere.
+[Configure a provider](#authenticate) from the Elara checkout, then:
+
+```bash
+cd /path/to/your/project
+elara                         # new TUI session here; does not auto-resume
+elara list                    # live and saved sessions for this workspace
+elara SESSION_ID              # reopen a listed session
+elara -- -SESSION_ID          # IDs beginning with a hyphen
+elara --cwd ../other-project  # relative to the directory you invoke it from
+```
+
+Existing provider/model/reasoning settings and login files are reused. Relative
+`CODEX_HOME`, `ELARA_TUI_STATE_DIR`, and `ELARA_TUI_APPEARANCE_FILE` paths stay
+relative to the invoking directory, even with `--cwd`. Session history, tools,
+instructions, and skill discovery use the selected workspace instead.
+The launcher builds in the Elara checkout; it does not evaluate your project's
+`mix.exs` or place build artifacts there. It does not install dependencies or
+update itself. An embedded server lives only as long as the launcher; use
+`mix elara.server` from the Elara checkout with a shared `ELARA_SERVER_TOKEN`
+when sessions need to outlive the TUI.
+
+The Elixir API and one-shot commands remain supported. Line-oriented chat is
+retained for compatibility, but new interactive work focuses on the TUI.
 The `mix elara.ask`, `mix elara.chat`, and `mix elara.tui` commands use the Mix process's current
 directory by default. To target another existing directory while running from
 the Elara checkout, pass `--cwd DIR`; relative directories resolve against the
@@ -38,8 +67,7 @@ mix elara.tui --cwd /path/to/project new
 mix elara.ask --cwd /path/to/project -- "--literal prompt text"
 ```
 
-The [Elixir API](docs/elixir-api.md) also accepts an absolute `cwd:`. This is
-workspace selection, not installation of a standalone launcher.
+The [Elixir API](docs/elixir-api.md) also accepts an absolute `cwd:`.
 TUI listing and saved-session reopening use the selected workspace; attaching
 to an already-live session retains that session's original workspace.
 

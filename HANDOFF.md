@@ -18,24 +18,30 @@ TUI passed three tests/format/quote checks. Those reports are recorded in
 ROB-1106/1107, not a blanket acceptance of all TUI interactions or LAB-8.
 The earlier TUI Enter concern was withdrawn; its cause remains unconfirmed.
 
-ROB-1335 fixes the confirmed chat multiline-paste split on
-`work/rob-1335-chat-paste`. Bracketed paste accumulates one literal draft until
-Enter, preserving typed command boundaries. Normal exit restores tty flags and
-stops the reader. A real scripted-provider PTY test verifies Unicode, blank
-lines, pasted slash text, no premature submission, typed `/quit`, and restoration
-with echoctl initially on/off. Prompt examples are copyable text blocks.
-Fresh full suite: 1050 passed (11 properties); compile warnings-as-errors,
-format and diff checks passed. Read ROB-1335 for authoritative delivery evidence.
-Mac/WezTerm retest of this fix remains pending; no model calls were made by
-the agent. Pipes/terminals without bracketed paste remain line-oriented.
+ROB-1335 chat multiline-paste repair is merged in PR #63. Owner Mac/WezTerm
+retest passed, including typed `/quit`. The delivered verification was 1050
+passed (11 properties), plus compile/format checks and scripted PTY coverage.
+ROB-1107/1108 are now Done after owner TUI interaction and visual acceptance:
+editing, navigation, tool viewer/search/copy, appearance, smaller-window use,
+and saved defaults after reopening. Three layouts and four themes were sampled,
+not every combination. Read Linear for exact evidence and limits; no broad
+daily-driver or LAB-8 acceptance is implied.
 
-ROB-1098 stays Backlog until fresh use and sufficient recorded policy facts
-justify a bounded divergence census; replay cannot establish outcome quality
-beyond the first divergence. Do not start another lab driver by default.
+ROB-1098 recording-sufficiency assessment and oracle consultation are complete.
+The issue remains Backlog: no runtime implementation or experiment started.
+Read its assessment comment for source evidence and the proposed next slice:
+record the existing context budget, frozen guard, causal effect ID and selected
+branch, then compare alternative cutoffs offline with accounting held fixed.
+Existing flights cannot generally reconstruct those shell decisions. Missing
+observations must yield unknown; analysis stops at the first divergence or gap.
+This cannot establish outcome quality or continuity across rebase/restart.
+Do not move policy into Core or capture private provider state for this slice.
+Register a refutable plan before implementation; use scripted fixtures, not
+provider calls. No new lab driver is needed by default.
 
 LAB-3 remains unfinished and paused on its original owner-host protocol.
 LAB-8 scripted delivery is merged, but capped real-model acceptance remains
-Needs Input. ROB-1107/1108 retain owner hands-on/physical-terminal gates.
+Needs Input. ROB-1106 remains the Backlog daily-driver umbrella.
 No account-backed run, paused measurement, deployment or evidence disposal
 is authorized by the direction change. Preserve every raw namespace under
 `lab/results/`, original measurements, failed/excluded controls, historical

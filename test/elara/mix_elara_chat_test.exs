@@ -20,6 +20,18 @@ defmodule Mix.Tasks.Elara.ChatTest do
              Chat.parse_args(["--name", "investigation"])
   end
 
+  test "workspace selection coexists with continuation, naming and literal prompts" do
+    cwd = Path.expand("../..", __DIR__)
+
+    assert {:ok, ["--literal"], opts} =
+             Chat.parse_args(["--cwd", cwd, "--continue", "--name", "target", "--", "--literal"])
+
+    assert opts == [continue: true, name: "target", cwd: cwd]
+    assert {:error, message} = Chat.parse_args(["--cwd", __ENV__.file])
+    assert message =~ "--cwd must name an existing directory"
+    assert {:error, _} = Chat.parse_args(["--cwd"])
+  end
+
   test "unknown options print an error and exit 1" do
     assert {:error, "unknown option: --resume"} = Chat.parse_args(["--resume", "session"])
     assert catch_exit(Chat.run(["--unknown"])) == {:shutdown, 1}

@@ -27,10 +27,18 @@ mix deps.get
 ```
 
 The `mix elara.ask` and `mix elara.chat` commands use the Mix process's current
-directory as the session working directory. With the commands above, that is the
-Elara checkout itself. Those commands do not currently accept a `--cwd` option.
-To target another directory, use the [Elixir API](docs/elixir-api.md) and pass
-an absolute `cwd:`.
+directory by default. To target another existing directory while running from
+the Elara checkout, pass `--cwd DIR`; relative directories resolve against the
+invoking directory without changing it:
+
+```bash
+mix elara.ask --cwd /path/to/project "summarize this repository"
+mix elara.chat --cwd /path/to/project --continue
+mix elara.ask --cwd /path/to/project -- "--literal prompt text"
+```
+
+The [Elixir API](docs/elixir-api.md) also accepts an absolute `cwd:`. This is
+workspace selection, not installation of a standalone launcher.
 
 The working directory controls relative tool paths, shell commands, local plugin
 discovery, session scope, project instructions, and Agent Skills discovery.

@@ -11,10 +11,12 @@ there is no installed `elara` executable. User-facing surfaces are
 `mix elara.worker`, `mix elara.login`, and the public `Elara` Elixir API. There
 is no web UI.
 
-Elara is primarily a **BEAM harness research lab**; daily use is secondary. Work
-follows the research questions (RQ-n) and lab queue (LAB-n) in
+Elara balances **BEAM harness research and daily-use improvements** under the
+owner's 2026-10-07 direction decision. Work follows the research questions
+(RQ-n), lab queue (LAB-n), and bounded usability issues in
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215).
-Build product features only when an experiment needs them.
+Product features may serve daily use directly; experiments still require
+refutable hypotheses and separately recorded evidence.
 
 Linear is the sole current planning and status source. `ROADMAP.md` and
 `HANDOFF.md` are durable pointers, not duplicate tracking documents. Follow
@@ -78,9 +80,9 @@ cd native/elara-tui  && cargo fmt --check && cargo clippy && cargo test
 
 ## Running the agent
 
-The Mix tasks use the Mix process's cwd as the session working directory and
-have **no `--cwd` flag**; only the Elixir API accepts an absolute `cwd:`. To
-exercise the full loop without credentials:
+Ask/chat use the Mix process's cwd by default and accept `--cwd DIR` to select
+an existing workspace without changing the process directory. The Elixir API
+accepts an absolute `cwd:`. To exercise the full loop without credentials:
 
 ```elixir
 Elara.start_session(provider: {Elara.Provider.Scripted, agent_pid}, cwd: dir, persist: false)

@@ -13,7 +13,12 @@ defmodule Elara.Chat do
     continue? = Keyword.get(opts, :continue, false)
     name = Keyword.get(opts, :name)
 
-    case Elara.Config.resolve() do
+    provider =
+      if Keyword.has_key?(opts, :provider),
+        do: Keyword.fetch(opts, :provider),
+        else: Elara.Config.resolve()
+
+    case provider do
       {:ok, provider} ->
         session_opts =
           Keyword.take(opts, [:cwd]) ++

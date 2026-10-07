@@ -14,6 +14,7 @@ defmodule Mix.Tasks.Elara.Tui do
   @default_port 4_048
   @switches [
     port: :integer,
+    cwd: :string,
     observe: :boolean,
     headless: :boolean,
     event_dump: :boolean,
@@ -50,6 +51,15 @@ defmodule Mix.Tasks.Elara.Tui do
   defp maybe_start_embedded_server(argv) do
     case OptionParser.parse(argv, strict: @switches, aliases: [o: :observe, h: :help]) do
       {opts, command, []} when command != [] ->
+        case Elara.CLI.workspace_options(opts) do
+          {:ok, _opts} ->
+            :ok
+
+          {:error, message} ->
+            Mix.shell().error(message)
+            exit({:shutdown, 1})
+        end
+
         port = Keyword.get(opts, :port, environment_port())
 
         if is_integer(port) and port in 1..65_535 do

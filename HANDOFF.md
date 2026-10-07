@@ -11,14 +11,19 @@ are recorded in the project discussion and
 [this thread](https://ampcode.com/threads/T-01a1165f-98bc-759f-9d6a-1c07e4b6cbad).
 Historical measurements remain source/host-specific; this audit did not rerun them.
 
-ROB-1332, a bounded CLI `--cwd` slice under ROB-1106, is Building on
-`work/rob-1332-cli-cwd` from merged PR #60. Implementation has begun with
-ask/chat argument parsing, directory validation and explicit session cwd
-propagation. Native TUI propagation and scripted public startup/history/tool
-acceptance remain unfinished; parser tests are not proof of those behaviors.
-Read ROB-1332 for the exact continuation and verification/delivery state.
+ROB-1332, a bounded CLI `--cwd` slice under ROB-1106, is implemented on
+`work/rob-1332-cli-cwd` from merged PR #60. Scripted public startup tests cover
+target tools, instructions, skills, plugin trust and chat history; native tests
+cover creation/listing/saved reopen, live-ID authority and tilde parity.
+Fresh `mix test` passed 1044 (11 properties), native tests passed 119,
+compile-with-warnings-as-errors, format and Clippy passed. An earlier full run
+failed the unchanged connection-sampler test; its focused rerun and the fresh
+full suite passed without changing sampler code. Oracle's tilde finding was
+fixed and re-reviewed. Read ROB-1332 for authoritative PR/check/merge evidence.
+Next is bounded use on another disposable repository, not another lab driver;
+real-model and owner-terminal acceptance are not implied by scripted tests.
 ROB-1098 is Backlog, not blocked on the prior stop-for-day; reconsider its
-recorded-input replay experiment after workspace selection.
+recorded-input replay experiment after fresh use and sufficient recorded facts.
 
 LAB-3 remains unfinished and paused on its original owner-host protocol.
 LAB-8 scripted delivery is merged, but capped real-model acceptance remains

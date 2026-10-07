@@ -124,7 +124,11 @@ defmodule Elara.TuiTest do
     System.put_env("ELARA_TUI_STATE_DIR", context.state_dir)
     System.delete_env("ELARA_SERVER_TOKEN")
 
-    assert :ok = Mix.Tasks.Elara.Tui.run(["new", "--headless"])
+    target = Path.join(Path.dirname(context.state_dir), "selected workspace")
+    File.mkdir_p!(target)
+    assert target != File.cwd!()
+    assert :ok = Mix.Tasks.Elara.Tui.run(["new", "--headless", "--cwd", target])
+    assert Enum.any?(Elara.live_sessions(), &(&1.cwd == target))
 
     assert {:ok, token} =
              Base.url_decode64(System.fetch_env!("ELARA_SERVER_TOKEN"), padding: false)
@@ -137,7 +141,8 @@ defmodule Elara.TuiTest do
     stop_sessions_except(existing_sessions)
 
     # A flag only the Rust client reads must still start the embedded server.
-    assert :ok = Mix.Tasks.Elara.Tui.run(["new", "--headless", "--diagnostics"])
+    assert :ok = Mix.Tasks.Elara.Tui.run(["new", "--headless", "--diagnostics", "--cwd", target])
+    assert Enum.any?(Elara.live_sessions(), &(&1.cwd == target))
     embedded = Process.whereis(Elara.Server)
     assert is_pid(embedded)
     assert Elara.Server.port(embedded) == embedded_port
@@ -152,10 +157,13 @@ defmodule Elara.TuiTest do
                "--headless",
                "--port",
                Integer.to_string(external_port),
+               "--cwd",
+               target,
                "--",
                "new"
              ])
 
+    assert Enum.any?(Elara.live_sessions(), &(&1.cwd == target))
     assert Process.alive?(external)
     assert Process.whereis(Elara.Server) == nil
     stop_sessions_except(existing_sessions)

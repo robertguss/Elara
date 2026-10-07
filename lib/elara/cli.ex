@@ -3,8 +3,8 @@ defmodule Elara.CLI do
 
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
 
-  @spec main([String.t()]) :: :ok | no_return()
-  def main(argv) do
+  @spec main([String.t()], keyword()) :: :ok | no_return()
+  def main(argv, options \\ []) do
     {prompt, opts} =
       case parse_args(argv) do
         {:ok, prompt, opts} ->
@@ -15,7 +15,12 @@ defmodule Elara.CLI do
           exit({:shutdown, 1})
       end
 
-    case Elara.Config.resolve() do
+    provider =
+      if Keyword.has_key?(options, :provider),
+        do: Keyword.fetch(options, :provider),
+        else: Elara.Config.resolve()
+
+    case provider do
       {:ok, provider} ->
         run_ask(prompt, provider, opts)
 

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::{self, Write};
+use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
@@ -28,6 +29,7 @@ struct Args {
     diagnostics: bool,
     preview_reasoning: bool,
     target: String,
+    cwd: PathBuf,
     port: u16,
     observe: bool,
     headless: bool,
@@ -51,6 +53,7 @@ impl Args {
         let mut diagnostics = false;
         let mut preview_reasoning = false;
         let mut target = None;
+        let mut cwd = None;
         let mut positional_only = false;
         let mut port = environment_port();
         let mut observe = false;
@@ -71,6 +74,7 @@ impl Args {
             }
             match argument.as_str() {
                 "--" => positional_only = true,
+                "--cwd" => cwd = Some(next_value(&mut arguments, "--cwd")?),
                 "--appearance" => appearance = true,
                 "--layout" => {
                     layout = Some(ViewLayout::parse(&next_value(&mut arguments, "--layout")?)?)
@@ -103,6 +107,7 @@ impl Args {
         }
 
         let target = target.ok_or_else(|| usage().to_string())?;
+        let cwd = workspace(cwd.as_deref())?;
         if width < 40 || height < 8 {
             return Err("headless frame must be at least 40x8".to_string());
         }
@@ -123,6 +128,7 @@ impl Args {
             diagnostics,
             preview_reasoning,
             target,
+            cwd,
             port,
             observe,
             headless,
@@ -134,6 +140,36 @@ impl Args {
             height,
         })
     }
+}
+
+fn workspace(selected: Option<&str>) -> Result<PathBuf, String> {
+    let cwd = match selected {
+        Some("") => return Err("--cwd must name an existing directory".into()),
+        Some(path) if path == "~" || path.starts_with("~/") => {
+            let home = std::env::var_os("HOME")
+                .ok_or_else(|| "cannot expand --cwd without HOME".to_string())?;
+            std::path::absolute(PathBuf::from(home).join(path.strip_prefix("~/").unwrap_or("")))
+                .map_err(|error| error.to_string())?
+        }
+        Some(path) => std::path::absolute(path).map_err(|error| error.to_string())?,
+        None => std::env::current_dir().map_err(|error| error.to_string())?,
+    };
+    // Match Elixir's lexical Path.expand without resolving workspace symlinks.
+    let mut expanded = PathBuf::new();
+    for component in cwd.components() {
+        if component == Component::ParentDir {
+            expanded.pop();
+        } else {
+            expanded.push(component);
+        }
+    }
+    if !expanded.is_dir() {
+        return Err(format!(
+            "--cwd must name an existing directory: {}",
+            cwd.display()
+        ));
+    }
+    Ok(expanded)
 }
 
 fn next_value(arguments: &mut impl Iterator<Item = String>, flag: &str) -> Result<String, String> {
@@ -160,7 +196,7 @@ fn environment_port() -> u16 {
 }
 
 fn usage() -> &'static str {
-    "usage: elara-tui [OPTIONS] [--] SESSION|new|list\noptions: [--port PORT] [--observe] [--ask PROMPT] \
+    "usage: elara-tui [OPTIONS] [--] SESSION|new|list\noptions: [--cwd DIR] [--port PORT] [--observe] [--ask PROMPT] \
      [--headless] [--event-dump] [--appearance] [--layout ember|observatory|workbench] [--theme ember|observatory|workbench|forest] [--diagnostics] [--preview-reasoning]"
 }
 
@@ -176,7 +212,7 @@ fn main() -> ExitCode {
 
 fn run(args: Args) -> Result<(), String> {
     if args.target == "list" {
-        return list_sessions(args.port, args.event_dump);
+        return list_sessions(args.port, args.event_dump, &args.cwd);
     }
 
     let mut appearance = Appearance::load().unwrap_or_else(|error| {
@@ -202,7 +238,8 @@ fn run(args: Args) -> Result<(), String> {
     } else {
         cursors.load(&args.target)
     };
-    let request = attach_request(&args.target, mode, &saved);
+    let mut request = attach_request(&args.target, mode, &saved);
+    request["cwd"] = json!(args.cwd.to_string_lossy());
     let started = Instant::now();
     let (mut connection, attached) = ClientConnection::connect(args.port, request)?;
     dump_frame(args.event_dump, started, &attached);
@@ -297,13 +334,13 @@ fn pick_appearance(original: Appearance) -> Result<Appearance, String> {
     }
 }
 
-fn list_sessions(port: u16, event_dump: bool) -> Result<(), String> {
+fn list_sessions(port: u16, event_dump: bool, cwd: &Path) -> Result<(), String> {
     let started = Instant::now();
     let (_connection, frame) = ClientConnection::connect(
         port,
         json!({
             "version": 2, "command": "list",
-            "cwd": std::env::current_dir().map_err(|error| error.to_string())?.to_string_lossy()
+            "cwd": cwd.to_string_lossy()
         }),
     )?;
     dump_frame(event_dump, started, &frame);
@@ -702,6 +739,27 @@ mod argument_tests {
 
     fn parse(arguments: &[&str]) -> Result<Args, String> {
         Args::parse_from(arguments.iter().map(|value| (*value).to_owned()))
+    }
+
+    #[test]
+    fn workspace_is_lexical_and_invalid_selections_fail_before_connecting() {
+        let invoking = std::env::current_dir().unwrap();
+        assert_eq!(parse(&["new"]).unwrap().cwd, invoking);
+        assert_eq!(parse(&["--cwd", "src/..", "new"]).unwrap().cwd, invoking);
+        assert_eq!(
+            parse(&["list", "--cwd", invoking.to_str().unwrap()])
+                .unwrap()
+                .cwd,
+            invoking
+        );
+        for arguments in [
+            &["new", "--cwd"][..],
+            &["--cwd", "", "new"],
+            &["--cwd", "Cargo.toml", "new"],
+            &["--cwd", "src/missing-workspace", "new"],
+        ] {
+            assert!(parse(arguments).is_err());
+        }
     }
 
     #[test]

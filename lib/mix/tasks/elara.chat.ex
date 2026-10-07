@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Elara.Chat do
   @requirements ["app.start"]
   use Mix.Task
 
-  @switches [continue: :boolean, name: :string]
+  @switches [continue: :boolean, name: :string, cwd: :string]
 
   @impl true
   def run(argv) do
@@ -33,8 +33,11 @@ defmodule Mix.Tasks.Elara.Chat do
   def parse_args(argv) do
     case OptionParser.parse(argv, strict: @switches) do
       {opts, remaining, []} ->
-        {:ok, remaining,
-         continue: Keyword.get(opts, :continue, false), name: Keyword.get(opts, :name)}
+        with {:ok, workspace} <- Elara.CLI.workspace_options(Keyword.take(opts, [:cwd])) do
+          {:ok, remaining,
+           [continue: Keyword.get(opts, :continue, false), name: Keyword.get(opts, :name)] ++
+             workspace}
+        end
 
       {_opts, _remaining, [{flag, _value} | _]} ->
         {:error, "unknown option: #{flag}"}

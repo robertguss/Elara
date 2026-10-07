@@ -30,7 +30,10 @@ tracked `.ex/.exs/.rs/.sh/.py` except tests, docs, raw lab results and TUI examp
 it includes native inline test blocks and all new compatibility/native/runtime/
 infrastructure files. Report test and raw orchestration sizes separately; do not
 hide added code by moving or renaming it. Final net lines and session special
-cases are still pending. No original LAB-5 corpus or LAB-3 measurement is reused.
+cases were pending at registration; the final scripted result below reports
+32/32 passing cells and a net increase that refutes the reduction hypothesis.
+The separately capped real-model acceptance remains pending. No original LAB-5
+corpus or LAB-3 measurement is reused.
 
 ## Chunk 1 — Native output policy
 
@@ -354,6 +357,9 @@ Canonical compiled/native artifact verification afterward exits0; all240
 source/test hashes still match and global BEAM count is0. Raw rows, registration,
 host conditions, logs, summary and hash postflight are retained in the fresh
 namespace. Summary SHA256f78d7d53127b1e0baae64a6441c11f8d4641996d792119e91b2d9d7088bcf1bf.
+The retained `host-conditions.json` reports Battery Power, 31% and discharging,
+with load averages 4.51/5.45/5.59. These are recorded conditions, not a
+quiet-host or comparative-performance qualification.
 
 This completes the finite scripted regression and net-line comparison. It does
 not pool rows with LAB-5's original1200, establish comparative performance or

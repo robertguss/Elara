@@ -3,18 +3,26 @@ defmodule Elara.CLI do
 
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
 
-  @spec main([String.t()]) :: :ok | no_return()
-  def main(argv) do
-    prompt = argv |> Enum.join(" ") |> String.trim()
+  @spec main([String.t()], keyword()) :: :ok | no_return()
+  def main(argv, options \\ []) do
+    {prompt, opts} =
+      case parse_args(argv) do
+        {:ok, prompt, opts} ->
+          {prompt, opts}
 
-    if prompt == "" do
-      Mix.shell().error("usage: mix elara.ask \"prompt\"")
-      exit({:shutdown, 1})
-    end
+        {:error, message} ->
+          Mix.shell().error(message)
+          exit({:shutdown, 1})
+      end
 
-    case Elara.Config.resolve() do
+    provider =
+      if Keyword.has_key?(options, :provider),
+        do: Keyword.fetch(options, :provider),
+        else: Elara.Config.resolve()
+
+    case provider do
       {:ok, provider} ->
-        run_ask(prompt, provider)
+        run_ask(prompt, provider, opts)
 
       {:error, :not_logged_in} ->
         Mix.shell().error(
@@ -30,6 +38,40 @@ defmodule Elara.CLI do
       {:error, reason} ->
         Mix.shell().error("Config error: #{Elara.Config.error_message(reason)}")
         exit({:shutdown, 1})
+    end
+  end
+
+  @doc false
+  def parse_args(argv) do
+    case OptionParser.parse(argv, strict: [cwd: :string]) do
+      {opts, remaining, []} ->
+        prompt = remaining |> Enum.join(" ") |> String.trim()
+
+        with {:ok, opts} <- workspace_options(opts) do
+          if prompt == "" do
+            {:error, "usage: mix elara.ask [--cwd DIR] [--] \"prompt\""}
+          else
+            {:ok, prompt, opts}
+          end
+        end
+
+      {_opts, _remaining, [{flag, _value} | _]} ->
+        {:error, "unknown or missing option value: #{flag}"}
+    end
+  end
+
+  @doc false
+  def workspace_options(opts) do
+    case Keyword.fetch(opts, :cwd) do
+      :error ->
+        {:ok, opts}
+
+      {:ok, cwd} ->
+        if cwd != "" and File.dir?(Path.expand(cwd)) do
+          {:ok, Keyword.put(opts, :cwd, Path.expand(cwd))}
+        else
+          {:error, "--cwd must name an existing directory: #{inspect(cwd)}"}
+        end
     end
   end
 
@@ -77,8 +119,8 @@ defmodule Elara.CLI do
 
   def render({:turn_ended, outcome, :streamed}), do: ["\n", render({:turn_ended, outcome})]
 
-  defp run_ask(prompt, provider) do
-    {:ok, session} = Elara.start_session(provider: provider, persist: false)
+  defp run_ask(prompt, provider, opts) do
+    {:ok, session} = Elara.start_session(opts ++ [provider: provider, persist: false])
     {:ok, session_pid} = Elara.session_pid(session)
     ref = Process.monitor(session_pid)
     :ok = Elara.subscribe(session)

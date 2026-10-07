@@ -31,9 +31,17 @@ commands. Local plugins have the same OS access as Elara. Use a clean clone or a
 disposable worktree, not a checkout with uncommitted work.
 
 `mix elara.ask`, `mix elara.chat`, and a newly created TUI session use the Mix
-process's current directory as the agent working directory. They do not have a
-`--cwd` option. The public Elixir API accepts an absolute `cwd:` when embedding
-Elara elsewhere.
+process's current directory by default. Pass `--cwd /path/to/disposable/repo`
+from the Elara checkout to select another existing workspace; relative paths
+resolve against the invoking directory. Saved-session listing and reopening
+use that selection, but live-ID attachment retains the live session's cwd.
+The public Elixir API also accepts an absolute `cwd:` when embedding Elara elsewhere.
+
+- [ ] From the Elara checkout, complete a real task in a different disposable
+      repository through both `mix elara.chat --cwd DIR` and
+      `mix elara.tui --cwd DIR new`; record dates, findings and session evidence.
+- [ ] Invalid, empty and file-valued `--cwd` selections fail before a session
+      starts; project plugin approval is still required in the selected repo.
 
 ```bash
 # Run from a clean Elara checkout.

@@ -115,6 +115,133 @@ defmodule Elara.TuiLifecycleTest do
     refute second_view =~ "observer mutation must not land"
   end
 
+  test "explicit cwd drives native creation, listing and saved reopen from another directory",
+       context do
+    other = Path.join(Path.dirname(context.cwd), "other workspace")
+    File.mkdir_p!(other)
+    invoking = File.cwd!()
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+    port = Elara.Server.port(server)
+
+    on_exit(fn ->
+      if Process.alive?(server), do: GenServer.stop(server)
+
+      for session <- Elara.live_sessions(), session.cwd in [context.cwd, other] do
+        {:ok, pid} = Elara.session_pid(session.id)
+        DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+      end
+    end)
+
+    relative = Path.relative_to(context.cwd, invoking, force: true)
+
+    assert {created, 0} =
+             run(context.binary, context.state, invoking, port, "new", [
+               "--headless",
+               "--cwd",
+               relative
+             ])
+
+    assert [_, id] = Regex.run(~r/summary session=([^ ]+)/, created)
+    assert Elara.cwd(id) == context.cwd
+    assert :ok = Elara.name_session(id, "selected native session")
+    # The default path still selects the executable's actual invoking directory.
+    assert {default_created, 0} =
+             run(context.binary, context.state, other, port, "new", ["--headless"])
+
+    assert [_, other_id] = Regex.run(~r/summary session=([^ ]+)/, default_created)
+    assert Elara.cwd(other_id) == other
+
+    assert {listing, 0} =
+             run(context.binary, context.state, invoking, port, "list", ["--cwd", context.cwd])
+
+    assert listing =~ id
+    refute listing =~ other_id
+    {:ok, pid} = Elara.session_pid(id)
+    :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+
+    assert {reopened, 0} =
+             run(context.binary, context.state, invoking, port, id, [
+               "--headless",
+               "--cwd",
+               context.cwd
+             ])
+
+    assert reopened =~ "summary session=#{id}"
+    assert Elara.cwd(id) == context.cwd
+    # Live-ID attachment retains the original workspace despite a different selection.
+    assert {attached, 0} =
+             run(context.binary, context.state, invoking, port, id, [
+               "--observe",
+               "--headless",
+               "--cwd",
+               other
+             ])
+
+    assert attached =~ "summary session=#{id}"
+    assert Elara.cwd(id) == context.cwd
+    :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, elem(Elara.session_pid(id), 1))
+
+    assert {rejected, 1} =
+             run(context.binary, context.state, invoking, port, id, ["--headless", "--cwd", other])
+
+    assert rejected =~ "session_not_found"
+
+    for cwd <- ["", __ENV__.file, Path.join(context.cwd, "missing")] do
+      assert {error, 1} =
+               run(context.binary, context.state, invoking, port, "new", [
+                 "--headless",
+                 "--cwd",
+                 cwd
+               ])
+
+      assert error =~ "--cwd must name an existing directory"
+    end
+
+    assert File.cwd!() == invoking
+  end
+
+  test "native tilde expansion distinguishes home from a literal tilde directory", context do
+    home = Path.join(context.cwd, "fake home")
+    child = Path.join(home, "existing directory")
+    literal = Path.join(context.cwd, "~")
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+    port = Elara.Server.port(server)
+    on_exit(fn -> if Process.alive?(server), do: GenServer.stop(server) end)
+
+    sessions =
+      for {selection, expected} <- [
+            {"~", home},
+            {"~/existing directory", child},
+            {"./~", literal}
+          ] do
+        File.mkdir_p!(expected)
+        {:ok, id} = Elara.start_session(cwd: expected, provider: script([]))
+
+        on_exit(fn ->
+          case Elara.session_pid(id) do
+            {:ok, pid} -> DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+            _ -> :ok
+          end
+        end)
+
+        {selection, id}
+      end
+
+    for {selection, id} <- sessions do
+      assert {listing, 0} =
+               System.cmd(
+                 context.binary,
+                 ["--cwd", selection, "--port", Integer.to_string(port), "list"],
+                 cd: context.cwd,
+                 env: [{"HOME", home}, {"ELARA_TUI_STATE_DIR", context.state}],
+                 stderr_to_stdout: true
+               )
+
+      assert listing =~ id
+      for {_, other_id} <- sessions, other_id != id, do: refute(listing =~ other_id)
+    end
+  end
+
   defp request(socket, command) do
     :ok =
       :gen_tcp.send(

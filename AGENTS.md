@@ -21,8 +21,8 @@ evidence. Repository tests only check the durable pointers.
 
 ## Cursor Cloud specific instructions
 
-Elara is a single Mix app (an Elixir coding-agent CLI) that is primarily a BEAM
-harness research lab; daily use is secondary. Standard commands live in
+Elara is a single Mix app (an Elixir coding-agent CLI) balancing BEAM harness
+research with daily-use improvements. Standard commands live in
 `README.md` (the "Develop" section) and `mix.exs`; the notes below only cover
 things that are non-obvious in the Cloud environment.
 

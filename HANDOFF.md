@@ -11,27 +11,27 @@ are recorded in the project discussion and
 [this thread](https://ampcode.com/threads/T-01a1165f-98bc-759f-9d6a-1c07e4b6cbad).
 Historical measurements remain source/host-specific; this audit did not rerun them.
 
-ROB-1334 supplies `examples/shipping/README.md`: the owner requested a prepared
-workspace rather than selecting another repository. The dependency-free baseline
-and Mac copy/launch guide leave chat discount and TUI quote exercises unfinished.
-Baseline test/format/compile and documented shell syntax passed in the orb;
-acceptance values were checked against an in-memory reference, not a model run.
-Read ROB-1334 in Linear for delivery evidence. Owner dogfooding remains pending;
-the suggested five-minute stop rule is manual, not an enforced spend cap.
+ROB-1332 workspace selection and ROB-1334 shipping practice workspace are merged
+in PRs #61/#62. The owner completed both practice tasks on Mac/WezTerm with
+configured Codex `gpt-5.5`/`low`: chat passed two tests/format/discount checks;
+TUI passed three tests/format/quote checks. Those reports are recorded in
+ROB-1106/1107, not a blanket acceptance of all TUI interactions or LAB-8.
+The earlier TUI Enter concern was withdrawn; its cause remains unconfirmed.
 
-ROB-1332, a bounded CLI `--cwd` slice under ROB-1106, is implemented on
-`work/rob-1332-cli-cwd` from merged PR #60. Scripted public startup tests cover
-target tools, instructions, skills, plugin trust and chat history; native tests
-cover creation/listing/saved reopen, live-ID authority and tilde parity.
-Fresh `mix test` passed 1044 (11 properties), native tests passed 119,
-compile-with-warnings-as-errors, format and Clippy passed. An earlier full run
-failed the unchanged connection-sampler test; its focused rerun and the fresh
-full suite passed without changing sampler code. Oracle's tilde finding was
-fixed and re-reviewed. Read ROB-1332 for authoritative PR/check/merge evidence.
-Next is bounded use on another disposable repository, not another lab driver;
-real-model and owner-terminal acceptance are not implied by scripted tests.
-ROB-1098 is Backlog, not blocked on the prior stop-for-day; reconsider its
-recorded-input replay experiment after fresh use and sufficient recorded facts.
+ROB-1335 fixes the confirmed chat multiline-paste split on
+`work/rob-1335-chat-paste`. Bracketed paste accumulates one literal draft until
+Enter, preserving typed command boundaries. Normal exit restores tty flags and
+stops the reader. A real scripted-provider PTY test verifies Unicode, blank
+lines, pasted slash text, no premature submission, typed `/quit`, and restoration
+with echoctl initially on/off. Prompt examples are copyable text blocks.
+Fresh full suite: 1050 passed (11 properties); compile warnings-as-errors,
+format and diff checks passed. Read ROB-1335 for authoritative delivery evidence.
+Mac/WezTerm retest of this fix remains pending; no model calls were made by
+the agent. Pipes/terminals without bracketed paste remain line-oriented.
+
+ROB-1098 stays Backlog until fresh use and sufficient recorded policy facts
+justify a bounded divergence census; replay cannot establish outcome quality
+beyond the first divergence. Do not start another lab driver by default.
 
 LAB-3 remains unfinished and paused on its original owner-host protocol.
 LAB-8 scripted delivery is merged, but capped real-model acceptance remains

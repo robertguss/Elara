@@ -11,6 +11,14 @@ are recorded in the project discussion and
 [this thread](https://ampcode.com/threads/T-01a1165f-98bc-759f-9d6a-1c07e4b6cbad).
 Historical measurements remain source/host-specific; this audit did not rerun them.
 
+ROB-1334 supplies `examples/shipping/README.md`: the owner requested a prepared
+workspace rather than selecting another repository. The dependency-free baseline
+and Mac copy/launch guide leave chat discount and TUI quote exercises unfinished.
+Baseline test/format/compile and documented shell syntax passed in the orb;
+acceptance values were checked against an in-memory reference, not a model run.
+Read ROB-1334 in Linear for delivery evidence. Owner dogfooding remains pending;
+the suggested five-minute stop rule is manual, not an enforced spend cap.
+
 ROB-1332, a bounded CLI `--cwd` slice under ROB-1106, is implemented on
 `work/rob-1332-cli-cwd` from merged PR #60. Scripted public startup tests cover
 target tools, instructions, skills, plugin trust and chat history; native tests

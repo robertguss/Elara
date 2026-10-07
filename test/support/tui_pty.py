@@ -15,7 +15,8 @@ import sys
 import termios
 import time
 
-binary, server_port, session = sys.argv[1:]
+binary, server_port, session, *detach = sys.argv[1:]
+assert detach in ([], ["ctrl-c"])
 observer = socket.create_connection(("127.0.0.1", int(server_port)), timeout=5)
 reader = observer.makefile("rb")
 observer.sendall((json.dumps({"version": 2, "command": "attach", "token": os.environ["ELARA_SERVER_TOKEN"], "session_id": session,
@@ -123,7 +124,7 @@ try:
     send(b"\x1bOP")  # F1 opens help
     assert b"Composer" in output
     send(b"\x1b")  # close help
-    send(b"\x1b")  # detach
+    send(b"\x03" if detach else b"\x1b")  # Ctrl-C through launcher, Esc through native
     wait_for(lambda: b"\x1b[?2004l" in output, "bracketed paste disabled on exit")
     _, status = os.waitpid(pid, 0)
     pid = None

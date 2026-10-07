@@ -23,6 +23,7 @@ use ratatui::backend::CrosstermBackend;
 use serde_json::{Value, json};
 
 struct Args {
+    preflight: bool,
     appearance: bool,
     layout: Option<ViewLayout>,
     theme: Option<Theme>,
@@ -47,6 +48,8 @@ impl Args {
     }
 
     fn parse_from(mut arguments: impl Iterator<Item = String>) -> Result<Self, String> {
+        let mut preflight = false;
+        let mut default_new = false;
         let mut appearance = false;
         let mut layout = None;
         let mut theme = None;
@@ -74,6 +77,10 @@ impl Args {
             }
             match argument.as_str() {
                 "--" => positional_only = true,
+                // Internal Mix/launcher controls; all user arguments use this
+                // same parser before the server starts and before attachment.
+                "--mix-preflight" => preflight = true,
+                "--default-new" => default_new = true,
                 "--cwd" => cwd = Some(next_value(&mut arguments, "--cwd")?),
                 "--appearance" => appearance = true,
                 "--layout" => {
@@ -106,8 +113,13 @@ impl Args {
             }
         }
 
-        let target = target.ok_or_else(|| usage().to_string())?;
+        let target = target
+            .or_else(|| default_new.then(|| "new".to_string()))
+            .ok_or_else(|| usage().to_string())?;
         let cwd = workspace(cwd.as_deref())?;
+        if port == 0 {
+            return Err("--port must be between 1 and 65535".into());
+        }
         if width < 40 || height < 8 {
             return Err("headless frame must be at least 40x8".to_string());
         }
@@ -122,6 +134,7 @@ impl Args {
             return Err("--appearance requires an interactive terminal; use --layout/--theme with --headless".into());
         }
         Ok(Self {
+            preflight,
             appearance,
             layout,
             theme,
@@ -211,6 +224,10 @@ fn main() -> ExitCode {
 }
 
 fn run(args: Args) -> Result<(), String> {
+    if args.preflight {
+        println!("{}", args.port);
+        return Ok(());
+    }
     if args.target == "list" {
         return list_sessions(args.port, args.event_dump, &args.cwd);
     }
@@ -739,6 +756,40 @@ mod argument_tests {
 
     fn parse(arguments: &[&str]) -> Result<Args, String> {
         Args::parse_from(arguments.iter().map(|value| (*value).to_owned()))
+    }
+
+    #[test]
+    fn launcher_default_does_not_rewrite_arguments_or_fill_missing_values() {
+        assert!(parse(&[]).is_err());
+        assert_eq!(parse(&["--default-new"]).unwrap().target, "new");
+        assert_eq!(parse(&["--default-new", "list"]).unwrap().target, "list");
+        assert_eq!(
+            parse(&["--default-new", "--", "-session"]).unwrap().target,
+            "-session"
+        );
+        let args = parse(&[
+            "--mix-preflight",
+            "--default-new",
+            "--port",
+            "2345",
+            "--port",
+            "3456",
+            "--ask",
+            "--cwd",
+        ])
+        .unwrap();
+        assert!(args.preflight);
+        assert_eq!(args.target, "new");
+        assert_eq!(args.port, 3456);
+        assert_eq!(args.ask.as_deref(), Some("--cwd"));
+        for args in [
+            &["--default-new", "--cwd"][..],
+            &["--default-new", "--ask"],
+            &["--default-new", "--unknown"],
+            &["--default-new", "--port", "0"],
+        ] {
+            assert!(parse(args).is_err());
+        }
     }
 
     #[test]

@@ -14,7 +14,14 @@ defmodule Elara.FlightRecorder do
   defmodule Recording do
     @moduledoc "Portable recording loaded from a live session or a flight file."
     @type t :: %__MODULE__{}
-    defstruct [:header, segments: [], transitions: [], incomplete: [], event_causes: %{}]
+    defstruct [
+      :header,
+      segments: [],
+      transitions: [],
+      incomplete: [],
+      event_causes: %{},
+      context_decisions: []
+    ]
   end
 
   defmodule Report do
@@ -34,7 +41,8 @@ defmodule Elara.FlightRecorder do
       segments: [],
       transitions: [],
       causes: %{},
-      event_causes: %{}
+      event_causes: %{},
+      context_decisions: []
     ]
   end
 
@@ -53,6 +61,7 @@ defmodule Elara.FlightRecorder do
       recording_id: recording_id,
       session_id: session_id,
       incarnation: incarnation,
+      capabilities: %{context_gate: 1},
       producer: %{
         elara_version: Application.spec(:elara, :vsn) |> to_string(),
         otp_release: System.otp_release()
@@ -158,8 +167,34 @@ defmodule Elara.FlightRecorder do
       header: recorder.header,
       segments: recorder.segments,
       transitions: recorder.transitions,
-      event_causes: recorder.event_causes
+      event_causes: recorder.event_causes,
+      context_decisions: recorder.context_decisions
     }
+  end
+
+  @doc "Records the shell's context branch before attempting handoff or dispatch."
+  def context_decision(%State{} = recorder, effect_id, budget, frozen, branch)
+      when branch in [:interrupt_frozen, :attempt_handoff, :attempt_dispatch] do
+    # Earlier effects can feed nested transitions; use the original causal ID.
+    transition = Enum.find(recorder.transitions, &(&1.id == Map.delete(effect_id, :effect_index)))
+
+    entry = %{
+      type: :context_decision,
+      version: 1,
+      semantics: :fixed_reserves_v1,
+      effect: effect_id,
+      segment: transition.segment,
+      limit: budget["limit"],
+      estimate_tokens: budget["estimate_tokens"],
+      reserves: budget["reserves"],
+      frozen: frozen,
+      branch: branch
+    }
+
+    recorder
+    |> write_frame(entry)
+    |> sync()
+    |> Map.update!(:context_decisions, &(&1 ++ [entry]))
   end
 
   @spec path(State.t()) :: String.t() | nil
@@ -906,7 +941,8 @@ defmodule Elara.FlightRecorder do
        segments: segments,
        transitions: transitions,
        incomplete: incomplete ++ Map.values(begins),
-       event_causes: event_causes
+       event_causes: event_causes,
+       context_decisions: Enum.filter(frames, &match?(%{type: :context_decision}, &1))
      }}
   end
 

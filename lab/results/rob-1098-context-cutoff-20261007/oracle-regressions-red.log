@@ -1,0 +1,53 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+Running ExUnit with seed: 1098, max_cases: 16
+
+..
+
+  1) test malformed expected effects cannot hide a gap before a later matching gate (Elara.ContextCensusTest)
+     test/elara/context_census_test.exs:158
+     match (=) failed
+     code:  assert {:error, :invalid_context_reference} = ContextCensus.compare(broken, 100)
+     left:  {:error, :invalid_context_reference}
+     right: {:ok,
+             %{
+               cutoff: 100,
+               semantics: :fixed_reserves_v1,
+               segments: [
+                 %{
+                   reason: :init,
+                   status: :match,
+                   unknown: nil,
+                   segment: 0,
+                   excluded: 0,
+                   compared: 1,
+                   divergence: nil,
+                   eligible: 1
+                 }
+               ]
+             }}
+     stacktrace:
+       test/elara/context_census_test.exs:177: anonymous fn/4 in Elara.ContextCensusTest."test malformed expected effects cannot hide a gap before a later matching gate"/1
+       (elixir 1.20.3) lib/enum.ex:1725: Enum."-map/2-lists^map/1-1-"/2
+       test/elara/context_census_test.exs:162: (test)
+
+.........
+
+  2) test fresh VM can plain-load and replay every context branch without Session or Census (Elara.FlightRecorderTest)
+     test/elara/flight_recorder_test.exs:325
+     ** (MatchError) no match of right hand side value:
+
+         {:error, :invalid_frame}
+
+         (stdlib 8.0.3) erl_eval.erl:796: :erl_eval.expr/6
+         (stdlib 8.0.3) erl_eval.erl:1048: :erl_eval.do_apply/7
+         (stdlib 8.0.3) erl_eval.erl:276: :erl_eval.exprs/6
+
+     code: assert status == 0, output
+     stacktrace:
+       test/elara/flight_recorder_test.exs:383: (test)
+
+.
+Finished in 1.0 seconds (0.3s async, 0.7s sync)
+
+Result: 12/14 passed
+Failed: 2 tests

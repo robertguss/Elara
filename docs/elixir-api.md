@@ -270,6 +270,26 @@ Replay invokes the pure session core only; it does not call the provider or run
 tools. Pass `step: &OtherCore.step/2` to compare another implementation, or an
 `inject:` map to insert, replace, or drop facts during replay.
 
+New recordings also capture the shell's context-budget decision before it
+attempts handoff or provider dispatch. Compare a positive integer cutoff offline:
+
+```elixir
+{:ok, census} = Elara.FlightRecorder.ContextCensus.compare(recording, 200_000)
+# A .flight path is accepted too. Inspect each entry in census.segments.
+```
+
+The census holds recorded estimates/reserves fixed; it does not simulate a
+different context limit or run Core, tools, providers, or handoff operations.
+Each segment reports `eligible`, `compared`, `excluded`, and a status:
+`:match`, `:diverged`, `:unknown`, or `:no_decisions`. The first divergence
+includes its causal effect ID and baseline/candidate **attempted branches**.
+Missing/invalid observations stop the prefix as unknown; malformed references
+return an error. Legacy files without the observation capability are unsupported.
+Later segments are independent baseline conditions, not continuations of an
+alternative history. Neither a replay match nor this census establishes exact
+dispatched requests, successful handoffs, outcome quality or token savings.
+See [the registered experiment and limits](lab/009-context-cutoff-census.md).
+
 ## Delegate child sessions
 
 Use the durable Threads lifecycle to delegate an assignment:

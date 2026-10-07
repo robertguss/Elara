@@ -10,8 +10,10 @@
   **Measurement commits:** `97311a1` (sessions curve), `97d2166` (child-thread
   variant)
 - **Status:** the sessions curve has been measured: the timing and count sweeps
-  ran on 2026-09-27. The child-thread variant ran the same day. Attribution is
-  registered (2026-09-27); its profile runs have not been made.
+  ran on 2026-09-27. The child-thread variant ran the same day. Subsequent
+  attribution profiles and diagnostics are recorded below: only N = 10 supports
+  eligible attribution; both N = 500 profiles failed `users_ok`. LAB-3 remains
+  unfinished and paused under the original owner-host protocol; see Linear.
 
 ## Reference workload
 

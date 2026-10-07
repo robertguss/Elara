@@ -9,7 +9,8 @@ decisions, parked ideas, and completion there, not in a repository queue.
 - [Current handoff](https://linear.app/robert-guss/document/current-handoff-autonomous-implementation-569eb39fa4cd)
 
 Experiment registrations, methods, and results remain in `docs/lab/`.
-Raw measurement evidence stays under `lab/results/`, outside Git. Moving
+Raw measurement evidence stays under `lab/results/`. New results are ignored
+by default; selected historical evidence has been explicitly tracked in Git. Moving
 tracking does not authorize changing registrations or deleting evidence.
 
 The complete pre-migration roadmap is preserved in the

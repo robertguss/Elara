@@ -13,7 +13,10 @@
   in ROB-1231 (`c82a17f`). Attempts 1, 2 and 3 are invalid historical evidence.
   Attempt 4, the registered pilot at `c82a17f` (2026-10-03), is valid: claim 1
   held in 20/20 provider runs and the predicted finding held in 10/10 marker
-  runs. The parent LAB-5 remains unfinished.
+  runs. LAB-5 subsequently completed its registered finite matrix on 2026-10-06:
+  1200/1200 eligible and passed, 50 rows at each of 24 checkpoints. See the
+  final result below and ROB-1085 in Linear; this is not arbitrary-schedule or
+  real-model coverage.
 
 ## Method
 

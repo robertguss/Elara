@@ -1,4 +1,4 @@
-# Handoff — TUI-first daily use, 2026-10-07
+# Handoff — TUI-first daily use, 2026-10-08
 
 [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
 is the sole planning and status source. Read the
@@ -61,6 +61,18 @@ review and delivery state. Raw logs, including rejected preparations, remain in
 `lab/results/rob-1098-context-cutoff-20261007/`. No production corpus was evaluated
 and no preferred cutoff selected. Future corpus use needs fresh observations;
 do not backfill missing facts or resume broader policy work automatically.
+
+ROB-1342 adds the read-only `grep` and `glob` workspace search tools under
+ROB-1106, so daily navigation no longer needs the unsandboxed `bash` tool. Both
+delegate to ripgrep through the existing `Elara.Exec` argv path and are rooted at
+the session cwd ROB-1332 made authoritative. A missing `rg` is one actionable
+error, not a second Elixir ignore engine that could answer differently per host.
+Results are sorted, capped and labelled when truncated; nothing mutates, so an
+incomplete search is an error, never `indeterminate`. Read ROB-1342 and PR #67
+for the plan, review and delivery state. The verify-elara harness now drives
+these tools, with evidence under
+`.cursor/skills/verify-elara/artifacts/tools/20261008-115317-57598/`. Linux
+scripted drives are not Mac/WezTerm acceptance, and no real-model run was made.
 
 LAB-3 remains unfinished and paused on its original owner-host protocol.
 LAB-8 scripted delivery is merged, but capped real-model acceptance remains

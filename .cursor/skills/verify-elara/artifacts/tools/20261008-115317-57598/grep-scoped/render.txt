@@ -1,0 +1,5 @@
+[turn] search nested
+  -> grep: path=lib/nested dir pattern=@marker
+  <- ok (1 lines)
+scoped
+[done]

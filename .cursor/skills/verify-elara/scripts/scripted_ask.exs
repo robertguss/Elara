@@ -12,6 +12,7 @@ tool = System.get_env("ELARA_VERIFY_TOOL")
 tool = if tool in [nil, ""], do: nil, else: tool
 path = System.get_env("ELARA_VERIFY_PATH")
 content = System.get_env("ELARA_VERIFY_CONTENT")
+pattern = System.get_env("ELARA_VERIFY_PATTERN")
 
 {:ok, assistant} = Elara.Message.assistant(reply, [])
 
@@ -42,6 +43,19 @@ replies =
         id: "verify-bash-1",
         name: "bash",
         args: {:ok, %{"command" => content}}
+      }
+
+      {:ok, first} = Elara.Message.assistant(nil, [call])
+      [{:ok, first}, {:ok, assistant}]
+
+    search when search in ["grep", "glob"] ->
+      args = %{"pattern" => pattern}
+      args = if path in [nil, ""], do: args, else: Map.put(args, "path", path)
+
+      call = %Elara.Message.ToolCall{
+        id: "verify-#{search}-1",
+        name: search,
+        args: {:ok, args}
       }
 
       {:ok, first} = Elara.Message.assistant(nil, [call])
@@ -100,4 +114,20 @@ halt =
 {_input, body} = StringIO.contents(io)
 File.mkdir_p!(Path.dirname(out))
 File.write!(out, body)
+
+# The render only counts result lines. Read-only tools have no file bytes to
+# inspect afterwards, so retain the returned text as the observed state.
+results =
+  for %Elara.Message.ToolResult{} = result <- Elara.transcript(session) do
+    {state, text} =
+      case result.outcome do
+        {:ok, text} -> {"ok", text}
+        {:error, text} -> {"error", text}
+        {:indeterminate, text} -> {"indeterminate", text}
+      end
+
+    "#{result.name} #{state}\n#{text}\n"
+  end
+
+File.write!(Path.join(Path.dirname(out), "tool_results.txt"), results)
 System.halt(halt)

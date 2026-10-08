@@ -9,6 +9,9 @@ A turn can read a file, write a workspace-relative file, replace one string, or 
 - `tool-edit` replaces exactly one occurrence.
 - `tool-bash` runs `/bin/sh -c` in the session cwd with stdout and stderr merged.
 - `tool-write-reject` rejects absolute paths, `..`, and non-file write targets.
+- `tool-grep` returns `path:line:text` for a regex across the session cwd.
+- `tool-glob` lists session-cwd files whose path matches a glob, sorted.
+- `tool-search-reject` rejects a search `path` that leaves the session cwd.
 
 ## How to get to it (user POV)
 
@@ -26,6 +29,9 @@ Preconditions:
 - **Write.** Run `.cursor/skills/verify-elara/bin/drive scripted-ask --feature tools --prompt "write the note" --tool write --path nested/note.txt --content hello --reply "wrote it"`. Exit code `0`. `render.txt` contains `  -> write:` and `  <- ok`. `$WORKSPACE/nested/note.txt` contains `hello`.
 - **Read.** Run `.cursor/skills/verify-elara/bin/drive scripted-ask --feature tools --prompt "read the note" --tool read --path nested/note.txt --reply "the note says hello"`. Exit code `0`. Render contains `  -> read:` and `  <- ok`.
 - **Bash.** Run `.cursor/skills/verify-elara/bin/drive scripted-ask --feature tools --prompt "print hi" --tool bash --content "printf hi" --reply "hi"`. Exit code `0`. Render contains `  -> bash:` and `  <- ok`.
+- **Glob.** Seed `$WORKSPACE` first, then run `.cursor/skills/verify-elara/bin/drive scripted-ask --feature tools --prompt "list the modules" --tool glob --pattern '**/*.ex' --reply "listed them"`. Exit code `0`. Render contains `  -> glob:` and `  <- ok`, and the result names only seeded workspace paths, sorted.
+- **Grep.** Run `.cursor/skills/verify-elara/bin/drive scripted-ask --feature tools --prompt "find the marker" --tool grep --pattern '@marker' --reply "found it"`. Exit code `0`. Render contains `  -> grep:` and `  <- ok` with `path:line:text`.
+- **Search path rejection.** Repeat the grep drive with `--path ..`. Exit code `0` for the turn, but the render shows `  <- error:` naming the working directory. A search that silently widens its scope is a failure.
 - **Proof.** Keep `render.txt` and a copy of any written file under `artifacts/tools/<run-id>/`. A tool line without the file bytes is incomplete. A file write without the `  -> write:` line is incomplete.
 
 ## Gotchas
@@ -35,3 +41,6 @@ Preconditions:
 - `edit` needs exactly one `old_text` match. Zero or many matches leave the file unchanged.
 - Model-selected tools on a credentialed Mix drive are probabilistic. If the model ignores the request, record a usability miss; do not infer the tool is broken. Use scripted-ask to force the tool call.
 - Shell output kept in history is capped at 16 KiB. A 30-second tool timeout is the default.
+- `grep` and `glob` need the `rg` executable. Without it they return one error naming the install; there is no fallback matcher, so do not read an empty result as "no matches" until `rg --version` is confirmed.
+- Both search tools honour `.gitignore` and always skip `.git`, `_build`, `deps`, `node_modules`, and `target`. A seeded file under those names is expected to be invisible.
+- An explicit glob outranks ignore files in ripgrep, so a pattern naming an ignored file does match it. An ignored directory stays pruned unless the pattern matches that directory's own path.

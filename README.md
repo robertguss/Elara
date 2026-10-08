@@ -675,6 +675,40 @@ call. Saved handoff headers require this build for resume.
   the stub, reports an `indeterminate` outcome because it may have partially
   changed the workspace. Commands that exit on their own report success or
   their exit status.
+- `grep` searches workspace file contents for a regular expression and returns
+  `path:line:text` per match.
+- `glob` lists workspace files whose path matches a glob pattern, one per line.
+
+## Workspace search
+
+`grep` and `glob` are read-only and rooted at the session working directory, so
+basic navigation does not need `bash`. Both delegate to
+[ripgrep](https://github.com/BurntSushi/ripgrep); a missing `rg` is a tool error
+naming the install rather than a different built-in matcher, so the same call
+cannot answer differently on two hosts. Both tools are always advertised, so the
+roster does not vary with the host.
+
+They honour `.gitignore` (whether or not the directory is a Git checkout) and
+always skip `.git`, `.hg`, `.svn`, `_build`, `deps`, `node_modules`, and
+`target`; those exclusions are applied last, so they override the requested
+pattern. Ripgrep applies the requested glob with higher precedence than ignore
+files, so a pattern naming an ignored file does match it; an ignored directory
+stays pruned unless the pattern matches that directory's own path. Results are
+sorted by path, so repeated calls agree. An optional `path` scopes the search to a
+workspace-relative file or directory; absolute paths, `..`, and non-canonical
+paths are rejected. That scope is lexical, like the rest of relative path
+handling, and is not a filesystem boundary.
+
+`grep` returns at most 100 matching lines and `glob` at most 200 paths, each
+overridable up to 1000 with `limit`. Long lines are clipped and the session's
+output byte cap still applies; a bounded result ends with one bracketed
+truncation notice. `grep` also takes an optional `glob` filter and
+`case_insensitive`. No match is reported as `no matches` or `no files`. When
+ripgrep cannot complete a search, including an unusable pattern or an unreadable
+file in scope, its diagnostic is returned as an error rather than presenting a
+partial scan as complete. These tools never mutate, so an interrupted, timed-out
+or lost search is an ordinary error, never `indeterminate`. Indexed and semantic
+search are out of scope.
 
 Any running mutating tool (`bash`, `write`, `edit`) that is interrupted, times
 out or crashes before returning its own result is likewise `indeterminate`.

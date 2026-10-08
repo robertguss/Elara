@@ -1,0 +1,9 @@
+mode=scripted-ask
+feature=tools
+run_id=20261008-115317-57598
+home=/tmp/elara-verify-20261008-115317-57598/home
+workspace=/tmp/elara-verify-20261008-115317-57598/workspace
+worktree=/tmp/elara-verify-20261008-115317-57598/worktree
+port=47119
+exit=0
+evidence=/workspace/.cursor/skills/verify-elara/artifacts/tools/20261008-115317-57598

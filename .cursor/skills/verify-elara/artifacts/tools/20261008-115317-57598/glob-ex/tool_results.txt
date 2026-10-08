@@ -1,0 +1,3 @@
+glob ok
+lib/alpha.ex
+lib/nested dir/beta file.ex

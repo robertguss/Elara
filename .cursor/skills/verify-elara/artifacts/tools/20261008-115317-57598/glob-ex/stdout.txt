@@ -1,0 +1,6 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+[turn] list the modules
+  -> glob: pattern=**/*.ex
+  <- ok (2 lines)
+listed them
+[done]

@@ -83,6 +83,7 @@ fn summary(name: &str, args: &Value, call: &Value) -> String {
     match name {
         "bash" => preview(args["command"].as_str().unwrap_or("arguments unavailable")),
         "read" | "write" | "edit" => preview(args["path"].as_str().unwrap_or("?")),
+        "grep" | "glob" => preview(args["pattern"].as_str().unwrap_or("?")),
         _ => generic_preview(&call["args"]),
     }
 }
@@ -343,6 +344,8 @@ mod tests {
         for (name, args) in [
             ("bash", json!({"command":"printf hello"})),
             ("read", json!({"path":"file"})),
+            ("grep", json!({"pattern":"needle","glob":"**/*.ex"})),
+            ("glob", json!({"pattern":"**/*.ex"})),
             ("write", json!({"path":"file","content":"new\nbytes"})),
             (
                 "edit",
@@ -381,6 +384,18 @@ mod tests {
                     assert!(expanded.contains(crate::outcome(&outcome).1));
                 }
             }
+        }
+    }
+    #[test]
+    fn search_headers_summarize_the_pattern_rather_than_raw_arguments() {
+        for name in ["grep", "glob"] {
+            let call = json!({"id":"c","name":name,"args":{"ok":{"pattern":"needle","path":"lib"}},"status":"succeeded","outcome":{"ok":"lib/a.ex:1:needle\n[truncated at the 1-matches cap; narrow the pattern or path]"}});
+            let folded = entry("s", &call, false).text;
+            assert!(folded.contains("needle"));
+            assert!(!folded.contains("pattern"));
+            let expanded = entry("s", &call, true).text;
+            assert!(expanded.contains("lib/a.ex:1:needle"));
+            assert!(expanded.contains("truncated at the 1-matches cap"));
         }
     }
     #[test]

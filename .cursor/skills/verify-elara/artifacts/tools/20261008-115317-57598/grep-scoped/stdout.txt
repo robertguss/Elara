@@ -1,0 +1,6 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+[turn] search nested
+  -> grep: path=lib/nested dir pattern=@marker
+  <- ok (1 lines)
+scoped
+[done]

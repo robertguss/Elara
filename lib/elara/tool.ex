@@ -73,6 +73,8 @@ defmodule Elara.Tool do
       write_tool(),
       edit_tool(),
       bash_tool(),
+      grep_tool(),
+      glob_tool(),
       Elara.Skills.tool(),
       Elara.Threads.tool(),
       Elara.TestJobs.tool(),
@@ -191,6 +193,82 @@ defmodule Elara.Tool do
       capabilities: ["shell"],
       mutating: true,
       run: {Elara.Tools, :bash}
+    }
+  end
+
+  @search_scope "Read-only, rooted at the working directory. Honours .gitignore, " <>
+                  "skips VCS and build directories, orders results deterministically, " <>
+                  "and bounds them with a truncation notice. Requires ripgrep."
+
+  defp grep_tool do
+    %__MODULE__{
+      name: "grep",
+      description:
+        "Search workspace file contents for a regular expression, returning path:line:text per match. " <>
+          @search_scope,
+      parameters: %{
+        "type" => "object",
+        "properties" => %{
+          "pattern" => %{
+            "type" => "string",
+            "description" => "Rust-syntax regular expression to search for"
+          },
+          "path" => %{
+            "type" => "string",
+            "description" =>
+              "Optional workspace-relative file or directory to search; defaults to the whole workspace"
+          },
+          "glob" => %{
+            "type" => "string",
+            "description" => "Optional path glob limiting which files are searched, e.g. **/*.ex"
+          },
+          "case_insensitive" => %{
+            "type" => "boolean",
+            "description" => "Match regardless of case; defaults to false"
+          },
+          "limit" => %{
+            "type" => "integer",
+            "minimum" => 1,
+            "maximum" => 1000,
+            "description" => "Maximum matching lines to return; defaults to 100"
+          }
+        },
+        "required" => ["pattern"]
+      },
+      capabilities: ["filesystem:read"],
+      run: {Elara.Tools.Search, :grep}
+    }
+  end
+
+  defp glob_tool do
+    %__MODULE__{
+      name: "glob",
+      description:
+        "List workspace files whose path matches a glob pattern, one path per line. " <>
+          @search_scope,
+      parameters: %{
+        "type" => "object",
+        "properties" => %{
+          "pattern" => %{
+            "type" => "string",
+            "description" => "Path glob to match, e.g. **/*.ex or lib/**/tool*.ex"
+          },
+          "path" => %{
+            "type" => "string",
+            "description" =>
+              "Optional workspace-relative directory to list; defaults to the whole workspace"
+          },
+          "limit" => %{
+            "type" => "integer",
+            "minimum" => 1,
+            "maximum" => 1000,
+            "description" => "Maximum paths to return; defaults to 200"
+          }
+        },
+        "required" => ["pattern"]
+      },
+      capabilities: ["filesystem:read"],
+      run: {Elara.Tools.Search, :glob}
     }
   end
 end

@@ -1,0 +1,2 @@
+grep ok
+lib/nested dir/beta file.ex:1:# @marker in a spaced path

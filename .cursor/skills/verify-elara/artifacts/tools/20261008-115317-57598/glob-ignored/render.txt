@@ -1,0 +1,5 @@
+[turn] list the logs
+  -> glob: pattern=**/*.log
+  <- ok (1 lines)
+listed logs
+[done]

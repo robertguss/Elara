@@ -277,6 +277,7 @@ defmodule Elara.Server do
 
   defp phase_name(:idle), do: "idle"
   defp phase_name({:calling_provider, _ref, _iteration}), do: "calling_provider"
+  defp phase_name({:awaiting_retry, _ref, _iteration, _attempt, _delay_ms}), do: "awaiting_retry"
   defp phase_name({:running_tool, _ref, _call, _remaining, _iteration}), do: "running_tool"
 
   defp connection_loop(socket, session, version, line_buffer, provider, lifetime) do

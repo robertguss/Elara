@@ -606,6 +606,7 @@ defmodule Elara.Threads do
             allowed_capabilities: caps,
             max_iterations: config.max_iterations,
             max_tool_output_bytes: config.max_tool_output_bytes,
+            provider_retry: config.provider_retry,
             tool_timeout_ms: config.tool_timeout_ms,
             context_limit: config.context_limit
           ]

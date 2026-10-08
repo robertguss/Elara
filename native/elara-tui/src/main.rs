@@ -381,7 +381,7 @@ fn list_sessions(port: u16, event_dump: bool, cwd: &Path) -> Result<(), String> 
             .filter(|state| {
                 matches!(
                     *state,
-                    "saved" | "idle" | "calling_provider" | "running_tool"
+                    "saved" | "idle" | "calling_provider" | "running_tool" | "awaiting_retry"
                 )
             })
             .ok_or_else(|| "session list has an invalid state".to_string())?;

@@ -7,6 +7,7 @@ defmodule Elara.Session.Core do
 
   alias Elara.{Message, Provider, Tool}
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
+  alias Elara.Provider.Retry
 
   defmodule Config do
     @type t :: %__MODULE__{
@@ -14,14 +15,16 @@ defmodule Elara.Session.Core do
             tools: %{String.t() => Tool.t()},
             provider_settings: Elara.Provider.Visibility.settings() | nil,
             max_iterations: pos_integer(),
-            max_tool_output_bytes: pos_integer()
+            max_tool_output_bytes: pos_integer(),
+            retry: Elara.Provider.Retry.Policy.t()
           }
     defstruct [
       :system,
       :tools,
       :provider_settings,
       max_iterations: 12,
-      max_tool_output_bytes: 16_384
+      max_tool_output_bytes: 16_384,
+      retry: %Elara.Provider.Retry.Policy{}
     ]
   end
 
@@ -30,8 +33,13 @@ defmodule Elara.Session.Core do
   @type phase ::
           :idle
           | {:calling_provider, ref(), iteration :: pos_integer()}
+          | {:awaiting_retry, ref(), iteration :: pos_integer(), attempt :: pos_integer(),
+             delay_ms :: non_neg_integer()}
           | {:running_tool, ref(), current :: ToolCall.t(), remaining :: [ToolCall.t()],
              iteration :: pos_integer()}
+
+  @typedoc "Attempts already failed for the current provider call, and the wait they scheduled."
+  @type retry :: %{attempts: pos_integer(), waited_ms: non_neg_integer()}
 
   @type streaming :: %{
           id: String.t(),
@@ -47,6 +55,7 @@ defmodule Elara.Session.Core do
             phase: Elara.Session.Core.phase(),
             streaming: Elara.Session.Core.streaming() | nil,
             tool_usage: Elara.Provider.Visibility.usage() | nil,
+            retry: Elara.Session.Core.retry() | nil,
             next_ref: pos_integer()
           }
     defstruct [
@@ -55,6 +64,7 @@ defmodule Elara.Session.Core do
       phase: :idle,
       streaming: nil,
       tool_usage: nil,
+      retry: nil,
       next_ref: 1,
       deferred_calls: [],
       steering?: false
@@ -67,6 +77,7 @@ defmodule Elara.Session.Core do
           | {:provider_delta, ref(), Provider.delta()}
           | {:provider_settings, Elara.Provider.Visibility.settings()}
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
+          | {:retry_elapsed, ref()}
           | {:tool_result, ref(), Tool.outcome()}
           | {:tool_usage, ref(), Elara.Provider.Visibility.usage()}
           | {:tool_deferred, ref(), String.t()}
@@ -78,6 +89,7 @@ defmodule Elara.Session.Core do
 
   @type effect ::
           {:call_provider, ref(), Provider.Request.t()}
+          | {:await_retry, ref(), min_ms :: non_neg_integer(), max_ms :: non_neg_integer()}
           | {:run_tool, ref(), ToolCall.t(), Tool.t()}
           | {:emit, Elara.Event.t()}
 
@@ -168,7 +180,9 @@ defmodule Elara.Session.Core do
   def step(%State{phase: :idle} = state, {:ask_input, %User{} = user}) do
     prompt = user.text
     history = state.history ++ [user]
-    {ref, state} = take_ref(%{state | history: history, deferred_calls: [], steering?: false})
+
+    {ref, state} =
+      take_ref(%{state | history: history, deferred_calls: [], steering?: false, retry: nil})
 
     effects = [
       {:emit, {:turn_started, prompt}},
@@ -235,7 +249,7 @@ defmodule Elara.Session.Core do
         message: "final assistant did not match streamed content"
       }
 
-      {%{state | phase: :idle, streaming: nil},
+      {%{state | phase: :idle, streaming: nil, retry: nil},
        [{:emit, streamed_turn_ended({:provider_error, error}, streaming)}]}
     else
       finish_provider(state, asst, streaming)
@@ -243,10 +257,13 @@ defmodule Elara.Session.Core do
   end
 
   def step(
-        %State{phase: {:calling_provider, r, _}, streaming: streaming} = state,
+        %State{phase: {:calling_provider, r, iteration}, streaming: streaming} = state,
         {:provider_result, r, {:error, error}}
       ) do
-    stop_stream(state, streaming, {:provider_error, error})
+    case plan_retry(state, streaming, error) do
+      {:retry, retry, window} -> await_retry(state, iteration, retry, window, error)
+      :stop -> stop_stream(state, streaming, {:provider_error, error})
+    end
   end
 
   def step(
@@ -254,6 +271,15 @@ defmodule Elara.Session.Core do
         :interrupt
       ) do
     stop_stream(state, streaming, :interrupted)
+  end
+
+  def step(%State{phase: {:awaiting_retry, r, iteration, _, _}} = state, {:retry_elapsed, r}) do
+    next_provider_attempt(state, iteration)
+  end
+
+  def step(%State{phase: {:awaiting_retry, _, _, _, _}} = state, fact)
+      when fact in [:interrupt, :steer] do
+    {%{state | phase: :idle, streaming: nil, retry: nil}, [{:emit, {:turn_ended, :interrupted}}]}
   end
 
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_deferred, r, system}) do
@@ -344,6 +370,11 @@ defmodule Elara.Session.Core do
     end
   end
 
+  # Every stop ends the turn, so the retry budget for the abandoned provider
+  # call dies with it rather than carrying into the next one.
+  defp stop_stream(%State{retry: retry} = state, streaming, outcome) when retry != nil,
+    do: stop_stream(%{state | retry: nil}, streaming, outcome)
+
   defp stop_stream(state, %{public_content: [_ | _]} = streaming, outcome) do
     text =
       streaming.public_content
@@ -366,10 +397,65 @@ defmodule Elara.Session.Core do
       {%{state | phase: :idle, streaming: nil},
        [{:emit, streamed_turn_ended(outcome, streaming)}]}
 
+  # A failed attempt is replayable only while it has published nothing: no
+  # streamed text, no typed public part, and no tool call (an errored attempt
+  # never produces one). Once the operator or the transcript has seen output,
+  # repeating the request would duplicate it, so the error surfaces instead.
+  defp plan_retry(state, streaming, error) do
+    failed = if state.retry, do: state.retry.attempts + 1, else: 1
+    waited = if state.retry, do: state.retry.waited_ms, else: 0
+
+    if published?(streaming) do
+      :stop
+    else
+      case Retry.schedule(state.config.retry, failed, waited, error) do
+        {:retry, window} ->
+          {:retry, %{attempts: failed, waited_ms: waited + window.max_ms}, window}
+
+        :stop ->
+          :stop
+      end
+    end
+  end
+
+  defp published?(%{text: "", public_content: []}), do: false
+  defp published?(%{}), do: true
+
+  defp await_retry(state, iteration, retry, window, error) do
+    {ref, state} = take_ref(state)
+    attempt = retry.attempts + 1
+
+    event =
+      {:provider_retry,
+       %{
+         attempt: attempt,
+         max_attempts: state.config.retry.max_attempts,
+         delay_ms: window.max_ms,
+         error: error
+       }}
+
+    {%{
+       state
+       | phase: {:awaiting_retry, ref, iteration, attempt, window.max_ms},
+         streaming: nil,
+         retry: retry
+     }, [{:emit, event}, {:await_retry, ref, window.min_ms, window.max_ms}]}
+  end
+
+  defp next_provider_attempt(state, iteration) do
+    {ref, state} = take_ref(state)
+
+    {%{
+       state
+       | phase: {:calling_provider, ref, iteration},
+         streaming: new_stream(ref, state.config.provider_settings)
+     }, [call_provider_effect(state, ref)]}
+  end
+
   defp finish_provider(state, asst, streaming) do
     asst = %{asst | request_settings: streaming.settings}
     history = state.history ++ [asst]
-    state = %{state | history: history, streaming: nil}
+    state = %{state | history: history, streaming: nil, retry: nil}
 
     appended =
       if streaming.text == "" do
@@ -451,7 +537,10 @@ defmodule Elara.Session.Core do
     {state, [{:emit, {:message_appended, result}} | more]}
   end
 
+  # Retries belong to one provider call, so a new iteration starts with a fresh budget.
   defp next_provider_call(state, iteration) do
+    state = %{state | retry: nil}
+
     if iteration > state.config.max_iterations do
       {%{state | phase: :idle}, [{:emit, {:turn_ended, :turn_limit}}]}
     else

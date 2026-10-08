@@ -7,6 +7,7 @@ defmodule Elara.Provider.OpenAI do
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
   alias Elara.Provider
   alias Elara.Provider.Error
+  alias Elara.Provider.Retry
   alias Elara.Tool
 
   @derive {Inspect, except: [:api_key]}
@@ -157,9 +158,17 @@ defmodule Elara.Provider.OpenAI do
     {:error, %Error{kind: :transport, message: Exception.message(exception)}}
   end
 
-  def parse_response({:ok, %Req.Response{status: status, body: body}}) when status != 200 do
+  def parse_response({:ok, %Req.Response{status: status, body: body} = response})
+      when status != 200 do
     snippet = body_snippet(body)
-    {:error, %Error{kind: :http, status: status, message: "#{status} #{snippet}"}}
+
+    {:error,
+     %Error{
+       kind: :http,
+       status: status,
+       message: "#{status} #{snippet}",
+       retry_after_ms: Retry.from_response(response)
+     }}
   end
 
   def parse_response({:ok, %Req.Response{status: 200, body: body}}) do
@@ -430,9 +439,16 @@ defmodule Elara.Provider.OpenAI do
     {:error, %Error{kind: :transport, message: Exception.message(exception)}}
   end
 
-  defp finish_stream({:ok, %Req.Response{status: status}}, state) when status != 200 do
+  defp finish_stream({:ok, %Req.Response{status: status} = response}, state) when status != 200 do
     snippet = body_snippet(state.error_body)
-    {:error, %Error{kind: :http, status: status, message: "#{status} #{snippet}"}}
+
+    {:error,
+     %Error{
+       kind: :http,
+       status: status,
+       message: "#{status} #{snippet}",
+       retry_after_ms: Retry.from_response(response)
+     }}
   end
 
   defp finish_stream({:ok, %Req.Response{status: 200}}, %{error: %Error{} = error}),

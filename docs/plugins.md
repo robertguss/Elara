@@ -72,7 +72,7 @@ literal name for self-references inside the plugin.
 
 Approve the file, then start a chat or explicitly reload an existing session
 as described below. The plugin tool is then available to the model alongside
-`read`, `write`, `edit`, and `bash`.
+`read`, `write`, `edit`, `bash`, `grep`, and `glob`.
 
 ## Reload without restarting chat
 

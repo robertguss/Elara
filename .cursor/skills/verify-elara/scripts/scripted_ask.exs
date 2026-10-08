@@ -14,6 +14,35 @@ path = System.get_env("ELARA_VERIFY_PATH")
 content = System.get_env("ELARA_VERIFY_CONTENT")
 pattern = System.get_env("ELARA_VERIFY_PATTERN")
 
+fail_first = String.to_integer(System.get_env("ELARA_VERIFY_FAIL_FIRST", "0"))
+fail_kind = System.get_env("ELARA_VERIFY_FAIL_KIND", "transient")
+retry_attempts = System.get_env("ELARA_VERIFY_RETRY_ATTEMPTS")
+
+# Canned provider failures that precede the scripted turn, so a drive can show
+# what a user sees when the model API is flaky, rate limiting, or refusing.
+failure =
+  case fail_kind do
+    "transient" ->
+      %Elara.Provider.Error{kind: :http, status: 503, message: "503 service overloaded"}
+
+    "retry_after" ->
+      %Elara.Provider.Error{
+        kind: :http,
+        status: 429,
+        message: "429 rate limited",
+        retry_after_ms: 1_000
+      }
+
+    "terminal" ->
+      %Elara.Provider.Error{kind: :http, status: 401, message: "401 invalid api key"}
+
+    other ->
+      Mix.shell().error("scripted_ask: unsupported ELARA_VERIFY_FAIL_KIND #{other}")
+      System.halt(1)
+  end
+
+failures = List.duplicate({:error, failure}, fail_first)
+
 {:ok, assistant} = Elara.Message.assistant(reply, [])
 
 replies =
@@ -69,7 +98,7 @@ replies =
       System.halt(1)
   end
 
-{:ok, agent} = Agent.start_link(fn -> replies end)
+{:ok, agent} = Agent.start_link(fn -> failures ++ replies end)
 
 session_opts = [
   provider: {Elara.Provider.Scripted, agent},
@@ -78,6 +107,15 @@ session_opts = [
 ]
 
 session_opts = if is_binary(name), do: Keyword.put(session_opts, :name, name), else: session_opts
+
+session_opts =
+  if retry_attempts in [nil, ""],
+    do: session_opts,
+    else:
+      Keyword.put(session_opts, :provider_retry,
+        max_attempts: String.to_integer(retry_attempts),
+        base_delay_ms: 250
+      )
 
 {:ok, session} = Elara.start_session(session_opts)
 :ok = Elara.subscribe(session)

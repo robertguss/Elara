@@ -38,41 +38,47 @@ ROB-1106/1107, not a blanket acceptance of all TUI interactions or LAB-8.
 The earlier TUI Enter concern was withdrawn; its cause remains unconfirmed.
 
 ROB-1335 chat multiline-paste repair is merged in PR #63. Owner Mac/WezTerm
-retest passed, including typed `/quit`. The delivered verification was 1050
-passed (11 properties), plus compile/format checks and scripted PTY coverage.
-ROB-1107/1108 are now Done after owner TUI interaction and visual acceptance:
-editing, navigation, tool viewer/search/copy, appearance, smaller-window use,
-and saved defaults after reopening. Three layouts and four themes were sampled,
-not every combination. Read Linear for exact evidence and limits; no broad
-daily-driver or LAB-8 acceptance is implied.
+retest passed, including typed `/quit`. ROB-1107/1108 are Done after owner TUI
+interaction and visual acceptance: editing, navigation, tool viewer/search/copy,
+appearance, smaller-window use, and saved defaults after reopening. Three layouts
+and four themes were sampled, not every combination. Read Linear for exact
+evidence and limits; no broad daily-driver or LAB-8 acceptance is implied.
 
-ROB-1098 now implements the registered context-cutoff slice: versioned shell
+ROB-1098 implements the registered context-cutoff slice: versioned shell
 observations and `Elara.FlightRecorder.ContextCensus.compare/2`. Live policy is
 unchanged. The census holds accounting fixed and stops each conditional segment
 prefix at its first divergence/gap; legacy recordings are unsupported. It does
 not infer outcome quality, successful handoffs, savings or continuity across
-rebase/restart. No provider-private state or wake-policy capture was added.
-
-ROB-1098 verification: 1061 passed (11 properties); focused: 77 passed (11 properties).
-Compile/format/source-doc diff checks passed. Oracle's fresh-VM atom and malformed
-coverage findings were reproduced red and fixed; follow-up found no blockers.
-Read `docs/lab/009-context-cutoff-census.md` and ROB-1098 for registration,
-review and delivery state. Raw logs, including rejected preparations, remain in
-`lab/results/rob-1098-context-cutoff-20261007/`. No production corpus was evaluated
-and no preferred cutoff selected. Future corpus use needs fresh observations;
-do not backfill missing facts or resume broader policy work automatically.
+rebase/restart. Read `docs/lab/009-context-cutoff-census.md` and ROB-1098 for
+registration, review and delivery state. Raw logs, including rejected
+preparations, remain in `lab/results/rob-1098-context-cutoff-20261007/`. No
+production corpus was evaluated and no preferred cutoff selected. Future corpus
+use needs fresh observations; do not backfill missing facts or resume broader
+policy work automatically.
 
 ROB-1342 adds the read-only `grep` and `glob` workspace search tools under
 ROB-1106, so daily navigation no longer needs the unsandboxed `bash` tool. Both
 delegate to ripgrep through the existing `Elara.Exec` argv path and are rooted at
-the session cwd ROB-1332 made authoritative. A missing `rg` is one actionable
-error, not a second Elixir ignore engine that could answer differently per host.
-Results are sorted, capped and labelled when truncated; nothing mutates, so an
-incomplete search is an error, never `indeterminate`. Read ROB-1342 and PR #67
-for the plan, review and delivery state. The verify-elara harness now drives
-these tools, with evidence under
+the session cwd ROB-1332 made authoritative. Read ROB-1342 and PR #67 for the
+plan, review and delivery state. Harness evidence is under
 `.cursor/skills/verify-elara/artifacts/tools/20261008-115317-57598/`. Linux
 scripted drives are not Mac/WezTerm acceptance, and no real-model run was made.
+
+ROB-1343 retries transient provider failures under ROB-1106. `Elara.Provider.Retry`
+is the one pure policy: it classifies a `Provider.Error` by kind and status and
+sizes a backoff window. `Elara.Session.Core` decides whether to replay and emits
+`{:await_retry, ...}`; the shell picks the jittered wait inside that window and
+arms a timer that any transition out of `awaiting_retry` cancels. Every provider
+is served because Core owns the only `call_provider` effect. An attempt that
+already streamed text or a typed public part is never replayed; its error
+surfaces so nothing duplicates. `Retry-After` is honored exactly and refused,
+not shortened, past the wait budget. Retries never consume `max_iterations`.
+Lab scenarios that inject provider faults disable retries so their accounting
+keeps its meaning. Read ROB-1343 and its PR for the plan, review and delivery
+state; harness evidence is under `.cursor/skills/verify-elara/artifacts/retry/`.
+Linux scripted drives are not Mac/WezTerm acceptance, and no real-model or
+account-backed run was made. The retry status row is proved by the Rust frame
+test, not by a driven TUI session.
 
 LAB-3 remains unfinished and paused on its original owner-host protocol.
 LAB-8 scripted delivery is merged, but capped real-model acceptance remains
@@ -85,4 +91,4 @@ branches and stash; Linear retains their exact pins and boundaries.
 The active agent owns implementation and review in the current session.
 Keep at most one executable lab item. Done requires merged acceptance.
 Standing authorization covers reviewed issue-branch push/PR/merge after
-required checks, not force-push, deployment, release or evidence deletion.
+required checks, not force-push, deployment, release or evidence disposal.

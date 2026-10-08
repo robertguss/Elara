@@ -49,3 +49,4 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Rust TUI](./tui.md) covers `mix elara.tui new --headless`, list, and attach-by-id.
 - [Sessions](./sessions.md) covers persist, `--continue`, `/resume`, `/name`, `/tree`, `/fork`, and `/clone`.
 - [Built-in tools](./tools.md) covers `read`, `write`, `edit`, and `bash` as a user sees them through a turn.
+- [Transient provider failures](./provider-retry.md) covers the `[retry]` line, exhaustion, `Retry-After`, and failures that must not be retried.

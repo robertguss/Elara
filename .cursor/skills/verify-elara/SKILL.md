@@ -63,6 +63,7 @@ Helpers (from repo root, after launch):
 .cursor/skills/verify-elara/bin/drive scripted-chat --feature chat --lines '/help,/quit'
 .cursor/skills/verify-elara/bin/drive scripted-ask --feature ask --prompt 'summarize this workspace' --reply 'workspace contains README.md'
 .cursor/skills/verify-elara/bin/drive scripted-ask --feature tools --prompt 'write the note' --tool write --path nested/note.txt --content hello --reply 'wrote it'
+.cursor/skills/verify-elara/bin/drive scripted-ask --feature retry --prompt 'summarize this workspace' --fail-first 1 --retry-attempts 3
 .cursor/skills/verify-elara/bin/drive mix-ask-usage --feature ask
 .cursor/skills/verify-elara/bin/drive mix-ask-unauth --feature ask --prompt 'summarize this workspace'
 .cursor/skills/verify-elara/bin/drive tui-headless --feature tui

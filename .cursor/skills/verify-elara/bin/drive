@@ -34,6 +34,11 @@ mix-ask / scripted-ask:
   --persist            persist the session under isolated HOME
   --name TEXT
 
+scripted-ask provider failures:
+  --fail-first N       canned provider failures before the scripted reply
+  --fail-kind KIND     transient (503) | retry_after (429) | terminal (401)
+  --retry-attempts N   provider_retry max_attempts, counting the first attempt
+
 scripted-chat / mix-chat:
   --lines a,b,c        stdin lines, comma-separated (default /help,/quit)
   --reply TEXT
@@ -69,6 +74,9 @@ NAME=""
 ASK=""
 PERSIST=0
 CONTINUE=0
+FAIL_FIRST=0
+FAIL_KIND="transient"
+RETRY_ATTEMPTS=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -84,6 +92,9 @@ while [ $# -gt 0 ]; do
     --pattern) PATTERN="${2:?}"; shift 2 ;;
     --name) NAME="${2:?}"; shift 2 ;;
     --ask) ASK="${2:?}"; shift 2 ;;
+    --fail-first) FAIL_FIRST="${2:?}"; shift 2 ;;
+    --fail-kind) FAIL_KIND="${2:?}"; shift 2 ;;
+    --retry-attempts) RETRY_ATTEMPTS="${2:?}"; shift 2 ;;
     --persist) PERSIST=1; shift ;;
     --continue) CONTINUE=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -180,6 +191,9 @@ case "$MODE" in
     export ELARA_VERIFY_PATH="$TOOL_PATH"
     export ELARA_VERIFY_CONTENT="$CONTENT"
     export ELARA_VERIFY_PATTERN="$PATTERN"
+    export ELARA_VERIFY_FAIL_FIRST="$FAIL_FIRST"
+    export ELARA_VERIFY_FAIL_KIND="$FAIL_KIND"
+    export ELARA_VERIFY_RETRY_ATTEMPTS="$RETRY_ATTEMPTS"
     run_and_capture "$REPO_ROOT" mix run "$SCRIPTS/scripted_ask.exs"
     ;;
   scripted-chat)

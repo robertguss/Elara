@@ -70,7 +70,10 @@ defmodule Elara.Session.Handoff do
          {:ok, store} <- Store.open(path),
          encoded when is_binary(encoded) <- store.context["options"],
          {:ok, bytes} <- Base.decode64(encoded) do
+      # The saved options carry a retry policy struct, so its atoms must exist
+      # before a fresh VM decodes them safely.
       Elara.Tool.builtins()
+      Elara.Provider.Retry.default()
       saved = :erlang.binary_to_term(bytes, [:safe])
 
       provider =

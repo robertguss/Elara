@@ -698,6 +698,7 @@ defmodule Elara.Threads do
     # Load built-in atoms before safe decoding in a fresh VM. Custom tool
     # modules must be loaded by their installation, never from disk data.
     Elara.Tool.builtins()
+    Elara.Provider.Retry.default()
     with {:ok, bytes} <- Base.decode64(encoded), do: {:ok, :erlang.binary_to_term(bytes, [:safe])}
   rescue
     ArgumentError -> {:error, :child_options_unavailable_load_original_tool_modules}

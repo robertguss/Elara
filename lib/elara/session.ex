@@ -44,7 +44,8 @@ defmodule Elara.Session do
                 {:provider | :tool, Core.ref(), pid(), {pid(), reference(), boolean()} | nil}
             },
             pending_effects: %{Core.ref() => Job.t()},
-            timers: %{Core.ref() => reference()}
+            timers: %{Core.ref() => reference()},
+            retry_timer: {Core.ref(), reference()} | nil
           }
 
     defstruct [
@@ -85,6 +86,7 @@ defmodule Elara.Session do
       pending_effects: %{},
       effect_recovery_pending: [],
       timers: %{},
+      retry_timer: nil,
       consuming_id: nil,
       completion_waiters: %{},
       completion_claims: %{}
@@ -505,6 +507,7 @@ defmodule Elara.Session do
       skill_options: shell.skill_options,
       max_iterations: shell.core.config.max_iterations,
       max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
+      provider_retry: shell.core.config.retry,
       tool_timeout_ms: shell.tool_timeout_ms,
       router: shell.router,
       workspace_id: shell.workspace_id,
@@ -945,6 +948,12 @@ defmodule Elara.Session do
     {:noreply,
      %{shell | subscribers: subscribers, attachments: attachments, controller: controller}}
   end
+
+  def handle_info({:retry_elapsed, core_ref}, %{retry_timer: {core_ref, _timer}} = shell) do
+    {:noreply, feed({:retry_elapsed, core_ref}, %{shell | retry_timer: nil})}
+  end
+
+  def handle_info({:retry_elapsed, _core_ref}, shell), do: {:noreply, shell}
 
   def handle_info({:tool_deadline, core_ref}, shell) do
     case find_task_by_core_ref(shell, core_ref, :tool) do
@@ -1496,9 +1505,10 @@ defmodule Elara.Session do
     {recorder, begin} = FlightRecorder.begin_transition(shell.recorder, shell.core, fact)
     message_offset = length(shell.core.history)
     previous_streaming = shell.core.streaming
+    previous_phase = shell.core.phase
     {core, effects} = Core.step(shell.core, fact)
     {recorder, transition} = FlightRecorder.complete_transition(recorder, begin, core, effects)
-    shell = %{shell | core: core, recorder: recorder}
+    shell = settle_retry_timer(previous_phase, %{shell | core: core, recorder: recorder})
 
     patch_context = %{
       message_offset: message_offset,
@@ -1596,6 +1606,15 @@ defmodule Elara.Session do
       :attempt_handoff -> begin_handoff(shell, core_ref)
       :attempt_dispatch -> run_effect({:dispatch_provider, core_ref, request}, nil, shell, nil)
     end
+  end
+
+  # Core sized the window; the shell picks the actual wait inside it so
+  # concurrent sessions do not re-converge on one retry instant. A
+  # server-directed delay arrives as a single point and is honored exactly.
+  defp run_effect({:await_retry, core_ref, min_ms, max_ms}, _effect_id, shell, _patch_context) do
+    delay = min_ms + :rand.uniform(max_ms - min_ms + 1) - 1
+    timer = Process.send_after(self(), {:retry_elapsed, core_ref}, delay)
+    %{cancel_retry_timer(shell) | retry_timer: {core_ref, timer}}
   end
 
   defp run_effect({:dispatch_provider, core_ref, request}, _, shell, _) do
@@ -1948,6 +1967,31 @@ defmodule Elara.Session do
 
         %{shell | timers: timers}
     end
+  end
+
+  # A retry wait belongs to the one awaiting_retry phase that armed it, so any
+  # transition out of that phase — interrupt, steer, handoff — cancels it at once.
+  defp settle_retry_timer({:awaiting_retry, ref, _, _, _}, shell) do
+    case shell.core.phase do
+      {:awaiting_retry, ^ref, _, _, _} -> shell
+      _other_phase -> cancel_retry_timer(shell)
+    end
+  end
+
+  defp settle_retry_timer(_previous_phase, shell), do: shell
+
+  defp cancel_retry_timer(%{retry_timer: nil} = shell), do: shell
+
+  defp cancel_retry_timer(%{retry_timer: {core_ref, timer}} = shell) do
+    Process.cancel_timer(timer)
+
+    receive do
+      {:retry_elapsed, ^core_ref} -> :ok
+    after
+      0 -> :ok
+    end
+
+    %{shell | retry_timer: nil}
   end
 
   defp find_task_by_core_ref(shell, core_ref, kind) do
@@ -2575,6 +2619,7 @@ defmodule Elara.Session do
   defp steer(shell) do
     case shell.core.phase do
       {:calling_provider, _, _} -> feed(:steer, abort_running_tasks(shell))
+      {:awaiting_retry, _, _, _, _} -> feed(:steer, shell)
       {:running_tool, _, _, _, _} -> feed(:steer, shell)
       _ -> shell
     end
@@ -2762,6 +2807,9 @@ defmodule Elara.Session do
 
   defp current_effect(:idle), do: nil
   defp current_effect({:calling_provider, ref, _}), do: %{kind: :provider, ref: ref}
+
+  defp current_effect({:awaiting_retry, ref, _, attempt, delay_ms}),
+    do: %{kind: :provider_retry, ref: ref, attempt: attempt, delay_ms: delay_ms}
 
   defp current_effect({:running_tool, ref, call, _rest, _}),
     do: %{kind: :tool, ref: ref, name: call.name}

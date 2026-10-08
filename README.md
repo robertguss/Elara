@@ -192,6 +192,27 @@ export ELARA_BASE_URL='https://api.x.ai/v1'
 environment variables apply to API-key authentication; saved Grok login uses the
 xAI endpoint and `grok-4`.
 
+### Transient provider failures
+
+Every provider shares one retry policy. A rate limit, an overload, a 5xx, or a
+connection dropped before the attempt published anything is retried with
+jittered exponential backoff; a server `Retry-After` is waited out exactly.
+Authentication, invalid requests, context limits and malformed responses are
+not retried. Once an attempt has streamed text or a typed part, its failure is
+surfaced instead of replayed, so nothing is duplicated. Interrupting the turn
+abandons a pending wait at once, and `mix elara.ask`/`mix elara.chat` print a
+`[retry]` line while the TUI status row shows the attempt.
+
+```bash
+# Optional; these are the defaults. 1 attempt turns retries off.
+export ELARA_PROVIDER_RETRY_ATTEMPTS='4'
+export ELARA_PROVIDER_RETRY_MAX_WAIT_MS='60000'
+```
+
+The Elixir API takes `provider_retry:` with a policy or policy options
+(`Elara.start_session(provider_retry: [max_attempts: 2])`), which children and
+handoff successors inherit.
+
 ## Ask or chat
 
 Run one turn and exit:

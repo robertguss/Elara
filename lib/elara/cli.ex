@@ -109,6 +109,20 @@ defmodule Elara.CLI do
   def render({:message_appended, %Assistant{}}), do: []
   def render({:message_appended, %User{}}), do: []
 
+  def render({:provider_retry, retry}) do
+    [
+      "[retry] attempt ",
+      Integer.to_string(retry.attempt),
+      " of ",
+      Integer.to_string(retry.max_attempts),
+      " in ",
+      seconds(retry.delay_ms),
+      "s · ",
+      retry.error.message,
+      "\n"
+    ]
+  end
+
   def render({:turn_ended, {:completed, _text}}), do: ["[done]\n"]
   def render({:turn_ended, :turn_limit}), do: ["[done] turn limit\n"]
   def render({:turn_ended, :interrupted}), do: ["[done] interrupted\n"]
@@ -118,6 +132,8 @@ defmodule Elara.CLI do
   end
 
   def render({:turn_ended, outcome, :streamed}), do: ["\n", render({:turn_ended, outcome})]
+
+  defp seconds(milliseconds), do: :erlang.float_to_binary(milliseconds / 1000, decimals: 1)
 
   defp run_ask(prompt, provider, opts) do
     {:ok, session} = Elara.start_session(opts ++ [provider: provider, persist: false])

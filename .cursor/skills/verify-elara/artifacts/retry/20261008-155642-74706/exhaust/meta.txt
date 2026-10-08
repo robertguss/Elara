@@ -1,0 +1,10 @@
+mode=scripted-ask
+feature=retry
+run_id=20261008-155642-74706
+home=/tmp/elara-verify-20261008-155642-74706/home
+workspace=/tmp/elara-verify-20261008-155642-74706/workspace
+worktree=/tmp/elara-verify-20261008-155642-74706/worktree
+port=34165
+exit=1
+elapsed_ms=1141
+evidence=/workspace/.cursor/skills/verify-elara/artifacts/retry/20261008-155642-74706

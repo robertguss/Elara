@@ -8,6 +8,7 @@ defmodule Elara.Provider.OpenAICodex do
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
   alias Elara.Provider
   alias Elara.Provider.Error
+  alias Elara.Provider.Retry
   alias Elara.Tool
 
   @default_base_url "https://chatgpt.com/backend-api"
@@ -456,8 +457,14 @@ defmodule Elara.Provider.OpenAICodex do
     {:error, %Error{kind: :transport, message: Exception.message(exception)}}
   end
 
-  defp finish_stream({:ok, %Req.Response{status: status}}, state) when status != 200 do
-    {:error, %Error{kind: :http, status: status, message: "HTTP #{status}: #{state.error_body}"}}
+  defp finish_stream({:ok, %Req.Response{status: status} = response}, state) when status != 200 do
+    {:error,
+     %Error{
+       kind: :http,
+       status: status,
+       message: "HTTP #{status}: #{state.error_body}",
+       retry_after_ms: Retry.from_response(response)
+     }}
   end
 
   defp finish_stream({:ok, %Req.Response{status: 200}}, %{error: %Error{} = error}),

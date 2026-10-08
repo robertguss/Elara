@@ -1647,6 +1647,7 @@ fn activity_label(model: &Model, state: &str) -> String {
         .and_then(|call| call["name"].as_str());
     match (state, running) {
         ("running_tool", Some(name)) => format!("Running {name}"),
+        ("awaiting_retry", _) => retry_label(model),
         _ => {
             let mut label = state.replace('_', " ");
             if let Some(first) = label.get(..1) {
@@ -1657,6 +1658,20 @@ fn activity_label(model: &Model, state: &str) -> String {
         }
     }
 }
+
+/// Status for a provider call waiting out a transient failure. The delay is the
+/// upper bound the session scheduled, not a live countdown.
+fn retry_label(model: &Model) -> String {
+    let turn = &model.projection.view["turn"];
+    match (turn["attempt"].as_u64(), turn["delay_ms"].as_u64()) {
+        (Some(attempt), Some(delay_ms)) => format!(
+            "Retrying provider · attempt {attempt} in {:.1}s",
+            delay_ms as f64 / 1000.0
+        ),
+        _ => "Retrying provider".to_string(),
+    }
+}
+
 fn draw_activity(
     frame: &mut ratatui::Frame<'_>,
     model: &Model,
@@ -2295,7 +2310,7 @@ fn valid_outcome(outcome: &Value) -> bool {
 
 fn validate_turn(turn: &Value) -> Result<(), String> {
     match turn["state"].as_str() {
-        Some("idle" | "calling_provider" | "running_tool") => Ok(()),
+        Some("idle" | "calling_provider" | "running_tool" | "awaiting_retry") => Ok(()),
         _ => Err("snapshot has invalid turn".to_string()),
     }
 }
@@ -2777,6 +2792,32 @@ mod tests {
         assert!(model.prepare_submit().is_none());
         assert!(model.notice.as_deref().unwrap().contains("uncertain"));
         assert_eq!(model.editor.text(), "draft changed while waiting");
+    }
+
+    /// ROB-1343: a provider retry is an accepted turn state and names its attempt.
+    #[test]
+    fn awaiting_retry_turn_state_is_accepted_and_shown() {
+        let mut model = fixture_model("idle");
+        let ops = json!([{"op": "set_turn_state", "turn": {
+            "state": "awaiting_retry", "iteration": 1, "attempt": 2, "delay_ms": 1500
+        }}]);
+        assert_eq!(
+            model.projection.ingest_patch("inc-demo", 5, &ops),
+            Ingest::Applied
+        );
+        assert_eq!(model.turn_state(), "awaiting_retry");
+
+        let row = activity_row(&render_frame(&model, 80, 24).unwrap()).to_string();
+        assert!(row.contains("Retrying provider"), "{row}");
+        assert!(row.contains("attempt 2 in 1.5s"), "{row}");
+
+        // A turn state without the retry detail still renders rather than failing.
+        let bare = json!([{"op": "set_turn_state", "turn": {"state": "awaiting_retry"}}]);
+        assert_eq!(
+            model.projection.ingest_patch("inc-demo", 6, &bare),
+            Ingest::Applied
+        );
+        assert!(activity_row(&render_frame(&model, 80, 24).unwrap()).contains("Retrying provider"));
     }
 
     #[test]

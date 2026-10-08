@@ -59,6 +59,7 @@ defmodule Elara.Session.Handoff do
         allowed_capabilities: shell.allowed_capabilities,
         max_iterations: shell.core.config.max_iterations,
         max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
+        provider_retry: shell.core.config.retry,
         tool_timeout_ms: shell.tool_timeout_ms,
         context_limit: shell.context_limit
       ]
@@ -69,7 +70,10 @@ defmodule Elara.Session.Handoff do
          {:ok, store} <- Store.open(path),
          encoded when is_binary(encoded) <- store.context["options"],
          {:ok, bytes} <- Base.decode64(encoded) do
+      # The saved options carry a retry policy struct, so its atoms must exist
+      # before a fresh VM decodes them safely.
       Elara.Tool.builtins()
+      Elara.Provider.Retry.default()
       saved = :erlang.binary_to_term(bytes, [:safe])
 
       provider =

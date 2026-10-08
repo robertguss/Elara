@@ -1,0 +1,3 @@
+{"cwd":"/tmp/elara-verify-20261008-155642-74706/workspace","id":"-nNYOwOl5PaII9Sr7gqmGg","leaf":"JnquyiuCE4WEsiEqjnE7cA","name":"retry proof","version":1}
+{"id":"KTRUczC6VQPBfrI3vJYBIQ","parentId":null,"timestamp":1791475039539,"user":{"text":"summarize this workspace"}}
+{"assistant":{"interrupted":false,"publicContent":[],"text":"workspace contains README.md","toolCalls":[]},"id":"JnquyiuCE4WEsiEqjnE7cA","parentId":"KTRUczC6VQPBfrI3vJYBIQ","timestamp":1791475039750}

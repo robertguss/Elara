@@ -3,6 +3,7 @@ defmodule Elara.FlightRecorder do
 
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
   alias Elara.Provider
+  alias Elara.Provider.Retry
   alias Elara.Session.Core
   alias Elara.Tool
   alias Elara.Tool.PluginRef
@@ -527,7 +528,8 @@ defmodule Elara.FlightRecorder do
         tools: tools,
         max_iterations: state.config.max_iterations,
         max_tool_output_bytes: state.config.max_tool_output_bytes,
-        provider_settings: Map.get(state.config, :provider_settings)
+        provider_settings: Map.get(state.config, :provider_settings),
+        retry: normalize_retry_policy(state.config.retry)
       },
       history: Enum.map(state.history, &normalize_message/1),
       phase: normalize_phase(state.phase),
@@ -543,6 +545,8 @@ defmodule Elara.FlightRecorder do
       if state.tool_usage,
         do: Map.put(normalized, :tool_usage, state.tool_usage),
         else: normalized
+
+    normalized = if state.retry, do: Map.put(normalized, :retry, state.retry), else: normalized
 
     case state.streaming do
       nil -> normalized
@@ -560,16 +564,38 @@ defmodule Elara.FlightRecorder do
         tools: tools,
         max_iterations: state.config.max_iterations,
         max_tool_output_bytes: state.config.max_tool_output_bytes,
-        provider_settings: Map.get(state.config, :provider_settings)
+        provider_settings: Map.get(state.config, :provider_settings),
+        retry: denormalize_retry_policy(Map.get(state.config, :retry))
       },
       history: Enum.map(state.history, &denormalize_message/1),
       phase: denormalize_phase(state.phase),
       streaming: Map.get(state, :streaming),
       tool_usage: Map.get(state, :tool_usage),
+      retry: Map.get(state, :retry),
       deferred_calls: Map.get(state, :deferred_calls, []),
       next_ref: state.next_ref
     }
   end
+
+  # Spelled out rather than taken from the struct so a plain load that never
+  # reaches the policy module still has every key atom a recording can hold.
+  defp normalize_retry_policy(%Retry.Policy{} = policy),
+    do: %{
+      max_attempts: policy.max_attempts,
+      base_delay_ms: policy.base_delay_ms,
+      max_delay_ms: policy.max_delay_ms,
+      max_total_wait_ms: policy.max_total_wait_ms
+    }
+
+  defp denormalize_retry_policy(nil), do: %Retry.Policy{}
+
+  defp denormalize_retry_policy(policy),
+    do: %Retry.Policy{
+      max_attempts: policy.max_attempts,
+      base_delay_ms: policy.base_delay_ms,
+      max_delay_ms: policy.max_delay_ms,
+      max_total_wait_ms: policy.max_total_wait_ms
+    }
 
   defp normalize_fact({:provider_settings, settings}),
     do: %{kind: :provider_settings, settings: settings}
@@ -586,6 +612,8 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_fact({:provider_result, ref, {:error, error}}),
     do: %{kind: :provider_result, ref: ref, outcome: :error, error: normalize_error(error)}
+
+  defp normalize_fact({:retry_elapsed, ref}), do: %{kind: :retry_elapsed, ref: ref}
 
   defp normalize_fact({:tool_result, ref, outcome}),
     do: %{kind: :tool_result, ref: ref, outcome: normalize_outcome(outcome)}
@@ -624,6 +652,8 @@ defmodule Elara.FlightRecorder do
   defp denormalize_fact(%{kind: :provider_result, ref: ref, outcome: :error, error: error}),
     do: {:provider_result, ref, {:error, denormalize_error(error)}}
 
+  defp denormalize_fact(%{kind: :retry_elapsed, ref: ref}), do: {:retry_elapsed, ref}
+
   defp denormalize_fact(%{kind: :tool_result, ref: ref, outcome: outcome}),
     do: {:tool_result, ref, denormalize_outcome(outcome)}
 
@@ -661,6 +691,9 @@ defmodule Elara.FlightRecorder do
     }
   end
 
+  defp normalize_effect({:await_retry, ref, min_ms, max_ms}, _tools),
+    do: %{kind: :await_retry, ref: ref, min_ms: min_ms, max_ms: max_ms}
+
   defp normalize_effect({:run_tool, ref, call, tool}, tools) do
     %{kind: :run_tool, ref: ref, call: normalize_call(call), tool: Map.fetch!(tools, tool.name)}
   end
@@ -669,6 +702,15 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_phase({:calling_provider, ref, iteration}),
     do: %{kind: :calling_provider, ref: ref, iteration: iteration}
+
+  defp normalize_phase({:awaiting_retry, ref, iteration, attempt, delay_ms}),
+    do: %{
+      kind: :awaiting_retry,
+      ref: ref,
+      iteration: iteration,
+      attempt: attempt,
+      delay_ms: delay_ms
+    }
 
   defp normalize_phase({:running_tool, ref, call, rest, iteration}) do
     %{
@@ -684,6 +726,9 @@ defmodule Elara.FlightRecorder do
 
   defp denormalize_phase(%{kind: :calling_provider, ref: ref, iteration: iteration}),
     do: {:calling_provider, ref, iteration}
+
+  defp denormalize_phase(%{kind: :awaiting_retry} = phase),
+    do: {:awaiting_retry, phase.ref, phase.iteration, phase.attempt, phase.delay_ms}
 
   defp denormalize_phase(%{kind: :running_tool} = phase) do
     {:running_tool, phase.ref, denormalize_call(phase.call),
@@ -770,10 +815,20 @@ defmodule Elara.FlightRecorder do
   defp denormalize_outcome(%{status: status, text: text}), do: {status, text}
 
   defp normalize_error(%Provider.Error{} = error),
-    do: %{kind: error.kind, message: error.message, status: error.status}
+    do: %{
+      kind: error.kind,
+      message: error.message,
+      status: error.status,
+      retry_after_ms: error.retry_after_ms
+    }
 
   defp denormalize_error(error),
-    do: %Provider.Error{kind: error.kind, message: error.message, status: error.status}
+    do: %Provider.Error{
+      kind: error.kind,
+      message: error.message,
+      status: error.status,
+      retry_after_ms: Map.get(error, :retry_after_ms)
+    }
 
   defp normalize_event(:provider_view_changed), do: %{kind: :provider_view_changed}
   defp normalize_event(:inbox_changed), do: %{kind: :inbox_changed}
@@ -791,6 +846,15 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_event({:tool_started, call}),
     do: %{kind: :tool_started, call: normalize_call(call)}
+
+  defp normalize_event({:provider_retry, retry}),
+    do: %{
+      kind: :provider_retry,
+      attempt: retry.attempt,
+      max_attempts: retry.max_attempts,
+      delay_ms: retry.delay_ms,
+      error: normalize_error(retry.error)
+    }
 
   defp normalize_event({:turn_ended, outcome}),
     do: %{kind: :turn_ended, outcome: normalize_turn_outcome(outcome)}

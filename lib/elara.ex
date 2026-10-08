@@ -4,6 +4,7 @@ defmodule Elara do
   alias Elara.Effect.LocalExecutor
   alias Elara.Plugin
   alias Elara.Prompt
+  alias Elara.Provider.Retry
   alias Elara.Session
   alias Elara.Session.Core
   alias Elara.Session.Store
@@ -48,6 +49,7 @@ defmodule Elara do
     system = Prompt.render(base_system, instructions, Elara.Skills.summary(skills))
     max_iterations = Keyword.get(opts, :max_iterations, 12)
     max_tool_output_bytes = Keyword.get(opts, :max_tool_output_bytes, 16_384)
+    provider_retry = provider_retry(opts)
     tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
     plugin_paths = Keyword.get_lazy(opts, :plugins, fn -> Plugin.discover(cwd) end)
     router = Keyword.get(opts, :router, Elara.Executor.Router)
@@ -63,7 +65,8 @@ defmodule Elara do
         system: system,
         tools: Tool.table(tools),
         max_iterations: max_iterations,
-        max_tool_output_bytes: max_tool_output_bytes
+        max_tool_output_bytes: max_tool_output_bytes,
+        retry: provider_retry
       }
 
       child_opts = [
@@ -303,6 +306,15 @@ defmodule Elara do
     case Keyword.fetch(opts, :provider) do
       {:ok, provider} -> {:ok, provider}
       :error -> Elara.Config.resolve()
+    end
+  end
+
+  # `provider_retry:` takes a policy or policy options; absent, the environment decides.
+  defp provider_retry(opts) do
+    case Keyword.fetch(opts, :provider_retry) do
+      {:ok, %Retry.Policy{} = policy} -> policy
+      {:ok, policy_opts} when is_list(policy_opts) -> Retry.new(policy_opts)
+      :error -> Retry.from_env(System.get_env())
     end
   end
 

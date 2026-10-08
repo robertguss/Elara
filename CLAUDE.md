@@ -96,7 +96,8 @@ Provider selection lives in `Elara.Config.resolve/1`:
 else saved Grok OAuth. Other env vars: `ELARA_MODEL`, `ELARA_BASE_URL`,
 `ELARA_REASONING_EFFORT`, `ELARA_CODEX_AUTH_SOURCE`, `ELARA_SERVER_PORT`
 (default 4048), `ELARA_WORKER_TOKEN`, `ELARA_SKILL_PATHS`,
-`ELARA_TUI_STATE_DIR`, `ELARA_TUI_APPEARANCE_FILE`.
+`ELARA_TUI_STATE_DIR`, `ELARA_TUI_APPEARANCE_FILE`,
+`ELARA_PROVIDER_RETRY_ATTEMPTS`, `ELARA_PROVIDER_RETRY_MAX_WAIT_MS`.
 
 State lives under `~/.elara/`: `sessions/<cwd-key>/` (JSONL transcripts),
 `sessions/_threads/` (delegated children), `sessions/_thread_messages/`
@@ -131,6 +132,18 @@ snapshot so a fresh client gets state rather than only missed events.
 (`native/elara-tui`) is a pure projection over it. `mix elara.tui` starts an
 _embedded_ server (dies with the command) when the port is free;
 `mix elara.server` is the long-lived one.
+
+**Provider retries (`lib/elara/provider/retry.ex`).** One policy for every
+provider, because Core owns the only `{:call_provider, ...}` effect. `Retry` is
+pure: it classifies a `Provider.Error` by kind and status and sizes a backoff
+window; Core decides whether to replay and emits `{:await_retry, ...}`; the
+shell picks the jittered wait inside that window and arms the timer. An attempt
+that already streamed text or a typed part is never replayed — the error
+surfaces, so nothing is duplicated. `Retry-After` is honored exactly, and
+refused rather than shortened when it exceeds the remaining wait budget.
+Retries re-dispatch one iteration and never consume `max_iterations`. Lab
+scenarios that inject provider faults disable retries so their accounting keeps
+its meaning.
 
 **Execution.** `Elara.Exec` supervises the Rust execution stub
 (`native/exec-stub`) over an Erlang Port; each command runs in its own process

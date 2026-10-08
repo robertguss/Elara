@@ -27,9 +27,10 @@ common:
 mix-ask / scripted-ask:
   --prompt TEXT
   --reply TEXT         scripted only
-  --tool write|read|bash
-  --path REL           tool path or read target
+  --tool write|read|bash|grep|glob
+  --path REL           tool path, read target, or search scope
   --content TEXT       write body or bash command
+  --pattern TEXT       grep regex or glob pattern
   --persist            persist the session under isolated HOME
   --name TEXT
 
@@ -63,6 +64,7 @@ LINES="/help,/quit"
 TOOL=""
 TOOL_PATH=""
 CONTENT=""
+PATTERN=""
 NAME=""
 ASK=""
 PERSIST=0
@@ -79,6 +81,7 @@ while [ $# -gt 0 ]; do
     --tool) TOOL="${2:?}"; shift 2 ;;
     --path) TOOL_PATH="${2:?}"; shift 2 ;;
     --content) CONTENT="${2:?}"; shift 2 ;;
+    --pattern) PATTERN="${2:?}"; shift 2 ;;
     --name) NAME="${2:?}"; shift 2 ;;
     --ask) ASK="${2:?}"; shift 2 ;;
     --persist) PERSIST=1; shift ;;
@@ -176,6 +179,7 @@ case "$MODE" in
     export ELARA_VERIFY_TOOL="$TOOL"
     export ELARA_VERIFY_PATH="$TOOL_PATH"
     export ELARA_VERIFY_CONTENT="$CONTENT"
+    export ELARA_VERIFY_PATTERN="$PATTERN"
     run_and_capture "$REPO_ROOT" mix run "$SCRIPTS/scripted_ask.exs"
     ;;
   scripted-chat)

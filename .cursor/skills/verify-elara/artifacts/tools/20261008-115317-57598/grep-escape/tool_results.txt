@@ -1,0 +1,2 @@
+grep error
+search path must stay inside the working directory: ..

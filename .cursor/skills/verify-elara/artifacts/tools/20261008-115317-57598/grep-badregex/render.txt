@@ -1,0 +1,5 @@
+[turn] bad pattern
+  -> grep: pattern=@marker(
+  <- error: search failed (exit 2)
+invalid
+[done]

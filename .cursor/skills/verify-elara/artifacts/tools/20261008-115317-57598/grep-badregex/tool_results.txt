@@ -1,0 +1,7 @@
+grep error
+search failed (exit 2)
+rg: regex parse error:
+    (?:@marker()
+    ^
+error: unclosed group
+

@@ -1,0 +1,5 @@
+[turn] list the modules
+  -> glob: pattern=**/*.ex
+  <- ok (2 lines)
+listed them
+[done]

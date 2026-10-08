@@ -1,0 +1,6 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+[turn] find the marker
+  -> grep: pattern=@marker
+  <- ok (2 lines)
+found it
+[done]

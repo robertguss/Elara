@@ -1,0 +1,5 @@
+[turn] find absent
+  -> grep: pattern=absent-token
+  <- ok (1 lines)
+nothing
+[done]

@@ -1,0 +1,2 @@
+glob ok
+debug.log

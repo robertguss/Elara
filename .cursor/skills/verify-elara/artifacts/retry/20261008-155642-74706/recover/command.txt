@@ -1,0 +1,2 @@
+cwd=/workspace
+mix run /workspace/.cursor/skills/verify-elara/scripts/scripted_ask.exs

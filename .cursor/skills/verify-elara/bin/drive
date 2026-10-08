@@ -139,6 +139,8 @@ run_and_capture() {
   shift
   printf '%s\n' "cwd=$cwd" >"$CMD_FILE"
   printf '%s\n' "$*" >>"$CMD_FILE"
+  local started
+  started="$(date +%s%3N)"
   set +e
   (
     cd "$cwd"
@@ -147,6 +149,7 @@ run_and_capture() {
   local code=$?
   set +e
   printf '%s\n' "$code" >"$CODE_FILE"
+  ELAPSED_MS="$(( $(date +%s%3N) - started ))"
   return 0
 }
 
@@ -236,6 +239,7 @@ code="$(cat "$CODE_FILE")"
   echo "worktree=$WORKTREE"
   echo "port=$ELARA_SERVER_PORT"
   echo "exit=$code"
+  echo "elapsed_ms=${ELAPSED_MS:-}"
   echo "evidence=$DEST"
 } >"$META_FILE"
 

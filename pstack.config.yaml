@@ -1,0 +1,97 @@
+# pstack.config.yaml: which model each pstack role uses, per harness.
+# Yours to edit; pstack-portable sync never overwrites a value, it only appends roles upstream adds.
+# Edits apply on the next subagent spawn, no re-sync needed.
+#
+# Keys are pstack's role labels slugged: "feature, refactoring" -> feature-refactoring.
+# Values: a model id, "model@effort" (effort: low|medium|high|xhigh|max), or "inherit"
+# (run on the thread's own model). List values are panels: one subagent per entry.
+#   amp:         provider/model ids from `amp plugins show-agent-options`
+#   claude-code: opus | sonnet | haiku | fable, or a full claude-* id (effort is ignored)
+#   codex:       a Codex model id, e.g. the one `codex` prints at startup
+#   grok:        a Grok Build model id from `grok models` (effort is ignored)
+roles:
+  feature-refactoring: # pstack role "feature, refactoring" (Cursor default: grok-4.7-xhigh-fast)
+    amp: xai/grok-4.6
+    claude-code: sonnet
+    codex: inherit
+    grok: grok-4.7-build-fast
+  bug-fix: # pstack role "bug-fix" (Cursor default: grok-4.7-xhigh-fast)
+    amp: xai/grok-4.6
+    claude-code: sonnet
+    codex: inherit
+    grok: grok-4.7-build-fast
+  perf-issue: # pstack role "perf-issue" (Cursor default: grok-4.7-xhigh-fast)
+    amp: xai/grok-4.6
+    claude-code: sonnet
+    codex: inherit
+    grok: grok-4.7-build-fast
+  hillclimb: # pstack role "hillclimb" (Cursor default: grok-4.7-xhigh-fast)
+    amp: xai/grok-4.6
+    claude-code: sonnet
+    codex: inherit
+    grok: grok-4.7-build-fast
+  judgment-and-prose: # pstack role "judgment and prose" (Cursor default: claude-opus-5-5-xhigh)
+    amp: anthropic/claude-opus-5@xhigh
+    claude-code: opus
+    codex: inherit
+    grok: grok-4.7
+  hardest-tasks: # pstack role "hardest tasks" (Cursor default: claude-opus-5-5-xhigh)
+    amp: anthropic/claude-opus-5@xhigh
+    claude-code: opus
+    codex: inherit
+    grok: grok-4.7
+  how-explorer: # pstack role "how explorer" (Cursor default: grok-4.7-xhigh-fast)
+    amp: xai/grok-4.6
+    claude-code: sonnet
+    codex: inherit
+    grok: grok-4.7-build-fast
+  how-explainer: # pstack role "how explainer" (Cursor default: claude-opus-5-5-xhigh)
+    amp: anthropic/claude-opus-5@xhigh
+    claude-code: opus
+    codex: inherit
+    grok: grok-4.7
+  why-investigators: # pstack role "why investigators" (Cursor default: grok-4.7-xhigh-fast)
+    amp: xai/grok-4.6
+    claude-code: sonnet
+    codex: inherit
+    grok: grok-4.7-build-fast
+  why-synthesizer: # pstack role "why synthesizer" (Cursor default: claude-opus-5-5-xhigh)
+    amp: anthropic/claude-opus-5@xhigh
+    claude-code: opus
+    codex: inherit
+    grok: grok-4.7
+  reflect-tooling: # pstack role "reflect tooling" (Cursor default: grok-4.7-xhigh-fast)
+    amp: xai/grok-4.6
+    claude-code: sonnet
+    codex: inherit
+    grok: grok-4.7-build-fast
+  reflect-judgment-divergent-synthesizer: # pstack role "reflect judgment, divergent, synthesizer" (Cursor default: claude-opus-5-5-xhigh)
+    amp: anthropic/claude-opus-5@xhigh
+    claude-code: opus
+    codex: inherit
+    grok: grok-4.7
+  arena-runners: # pstack role "arena runners" (Cursor default: claude-opus-5-5-xhigh, grok-4.7-xhigh-fast)
+    amp: [anthropic/claude-opus-5@xhigh, xai/grok-4.6]
+    claude-code: [opus, sonnet]
+    codex: [inherit, inherit]
+    grok: [grok-4.7, grok-4.7-build-fast]
+  arena-cross-judge-pool: # pstack role "arena cross-judge pool" (Cursor default: claude-opus-5-5-xhigh, grok-4.7-xhigh-fast)
+    amp: [anthropic/claude-opus-5@xhigh, xai/grok-4.6]
+    claude-code: [opus, sonnet]
+    codex: [inherit, inherit]
+    grok: [grok-4.7, grok-4.7-build-fast]
+  swarm-workers: # pstack role "swarm workers" (Cursor default: grok-4.7-xhigh-fast)
+    amp: xai/grok-4.6
+    claude-code: sonnet
+    codex: inherit
+    grok: grok-4.7-build-fast
+  architect-runners: # pstack role "architect runners" (Cursor default: claude-opus-5-5-xhigh, grok-4.7-xhigh-fast)
+    amp: [anthropic/claude-opus-5@xhigh, xai/grok-4.6]
+    claude-code: [opus, sonnet]
+    codex: [inherit, inherit]
+    grok: [grok-4.7, grok-4.7-build-fast]
+  interrogate-reviewers: # pstack role "interrogate reviewers" (Cursor default: claude-opus-5-5-xhigh, grok-4.7-xhigh-fast)
+    amp: [anthropic/claude-opus-5@xhigh, xai/grok-4.6]
+    claude-code: [opus, sonnet]
+    codex: [inherit, inherit]
+    grok: [grok-4.7, grok-4.7-build-fast]

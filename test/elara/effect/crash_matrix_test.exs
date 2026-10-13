@@ -316,37 +316,43 @@ defmodule Elara.Effect.CrashMatrixTest do
     started = now_ms()
     reopened = start_executor(context.executor_path)
 
-    assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0}} =
+    assert {:indeterminate, %Record{callback_attempt_count: 1, terminal_count: 1}} =
              Executor.query(reopened, job.job_id)
 
     assert :ok = Elara.replace_effect_executor(session, reopened)
     assert_receive {:ask_result, {:ok, "done"}}, @bound_ms
     elapsed = elapsed_ms(started)
 
-    assert {:accepted,
+    assert {:indeterminate,
             %Record{
               admission_count: 1,
               callback_attempt_count: 1,
-              terminal_count: 0
+              terminal_count: 1
             } = attempted} = Executor.query(reopened, job.job_id)
 
-    assert {1, 1, 0} = executor_totals(context.executor_path)
+    assert {1, 1, 1} = executor_totals(context.executor_path)
     assert [^marker] = marker_records(context.marker_path)
 
     results = tool_results(session)
     assert [%ToolResult{outcome: {:indeterminate, message}}] = results
-    assert message =~ "last_proven=callback_invoked"
-    assert message =~ "missing=completed_or_failed"
+    assert message =~ "effect outcome unknown: orphaned at startup"
     assert message =~ "action=do_not_retry_or_fail_over"
 
-    assert_manifest_counts(fixture, %{
-      controller_intent_count: 1,
-      executor_admission_count: attempted.admission_count,
-      executor_callback_attempt_count: attempted.callback_attempt_count,
-      external_mutation_count: length(marker_records(context.marker_path)),
-      executor_terminal_result_count: attempted.terminal_count,
-      session_tool_result_count: length(results)
-    })
+    assert_manifest_counts(
+      Map.put(
+        fixture,
+        "expected_counts",
+        Map.put(fixture["expected_counts"], "executor_terminal_result_count", 1)
+      ),
+      %{
+        controller_intent_count: 1,
+        executor_admission_count: attempted.admission_count,
+        executor_callback_attempt_count: attempted.callback_attempt_count,
+        external_mutation_count: length(marker_records(context.marker_path)),
+        executor_terminal_result_count: attempted.terminal_count,
+        session_tool_result_count: length(results)
+      }
+    )
 
     assert %Observation{executor_record: ^attempted, result_persisted?: true} =
              observation(context.journal_path, job.job_id)

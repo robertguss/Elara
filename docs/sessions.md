@@ -64,6 +64,36 @@ Current file contents can prove that desired bytes are present, but cannot by
 themselves prove which job wrote them. Elara therefore fails closed when causal
 evidence is missing.
 
+Under R7, executor startup records an `indeterminate` terminal for an orphaned
+attempt only under both exclusive ownership locks plus durable VM/writer/callback
+identity proving the old owners are dead. A different live VM refuses takeover,
+naming its OS PID, node and start time: stop it first. Startup never replays the
+callback. A live callback timeout leaves the queue barrier in place until a
+durable terminal exists.
+
+Ledger schema 3 migrates schemas 1 and 2 in place. Legacy attempts retain
+`attempt_incarnation: nil`, so startup never auto-terminalizes them. A session
+blocked by a legacy attempt stays idle and refuses a new turn for missing proof.
+Use `/clone` or `/fork` to continue in a separate session. Neither command repairs
+the original receipt or proves that the old effect completed.
+
+### Why recovery uses two lockfiles
+
+The executor uses separate `.writer.lock` and `.callbacks.lock` files beside
+the ledger. The writer holds an exclusive lock for its lifetime. Before
+`begin_attempt`, the linked worker acquires a shared callback lock and confirms
+that acquisition to the writer. Every new attempt records the VM's incarnation
+and its writer/callback PIDs. Startup holds both locks exclusively and checks
+the durable owner identities while it repairs orphaned attempts. Loss of a lock
+Port alone is not proof that its Erlang callback stopped.
+
+A guardian alone cannot supply durable ownership proof across writer or VM
+loss. A single lock changed from exclusive to shared would leave a gap during
+the ownership change. Two lockfiles keep writer ownership separate from callback
+lifetime without that gap. Recovery uses neither elapsed-time guesses nor lockfile
+unlinking. The files remain in place; releasing the operating-system locks does
+not require deleting them.
+
 ## Branch conversation history
 
 Elara stores a tree of messages rather than only a linear transcript.

@@ -510,8 +510,9 @@ under the TUI state directory. Reconnect queries the original ID rather than
 resending; an unknown ID retains the draft for explicit submission. Accepted
 inputs and immutable attachments persist with the session. Consumed means
 delivered once, not that a tool effect succeeded. Unsettled durable executor
-receipts block subsequent queued work, including after restart. This does not
-make external commands exactly-once. Legacy servers without `input_queue_v1`
+receipts block subsequent queued work, including after restart, until a durable
+terminal exists. A live callback timeout does not remove this barrier. This does
+not make external commands exactly-once. Legacy servers without `input_queue_v1`
 retain the earlier non-queued ask behavior.
 
 Ctrl-C detaches. Esc closes search/help or returns transcript focus to the
@@ -893,9 +894,19 @@ callback never started, and reports `indeterminate` rather than retrying after a
 callback started without durable terminal evidence.
 The executor runs each callback in a linked worker while keeping one serial
 ledger writer. If the callback worker stops while that writer survives, it
-records an indeterminate terminal and never invokes the job again. Losing the
-writer still leaves an attempted receipt unresolved; restarting or observing
-workspace bytes does not manufacture a terminal result.
+records an indeterminate terminal and never invokes the job again. Under R7,
+startup records an indeterminate terminal for an orphaned attempt with an
+incarnation only under exclusive writer and callback locks plus durable
+VM/writer/callback identity proving the old owners are dead. A different live
+VM refuses takeover, naming its OS PID, node and start time: stop it first.
+No callback is replayed, and workspace bytes still
+cannot prove causal completion.
+
+Schema 3 migrates schema 1 and 2 ledgers in place. Legacy attempts retain
+`attempt_incarnation: nil` and never auto-terminalize. A session blocked by such
+an attempt stays idle and refuses a new turn for missing proof. Use `/clone` or
+`/fork` to continue in a new session without changing the original receipt.
+See [interrupted-write recovery](docs/sessions.md#recover-an-interrupted-write).
 
 Each turn allows 100 model calls by default. Tools have a 10-minute default
 timeout; the model may give `bash` a per-call `timeout_ms` up to a 60-minute

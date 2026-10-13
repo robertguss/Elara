@@ -207,13 +207,17 @@ defmodule Elara.Effect.ExecutorProtocolTest do
     assert_receive {:DOWN, ^monitor, :process, ^executor, :killed}
 
     reopened = start_executor(context.path)
-    assert {:accepted, %Record{} = attempted} = Executor.query(reopened, "job-1")
+    assert {:indeterminate, %Record{} = attempted} = Executor.query(reopened, "job-1")
     assert attempted.callback_attempt_count == 1
-    assert attempted.terminal_count == 0
-    assert attempted.result == nil
-    assert ExecutorLedger.last_proven_fact(attempted) == :callback_invoked
+    assert attempted.terminal_count == 1
+    assert {:indeterminate, reason} = attempted.result
+    assert reason =~ "orphaned at startup"
+    assert reason =~ "last_known_incarnation="
+    assert reason =~ "VM OS PID=#{System.pid()}"
+    assert reason =~ "attempt_count=1"
+    assert ExecutorLedger.last_proven_fact(attempted) == :indeterminate
 
-    assert {:error, :callback_already_attempted} =
+    assert {:error, :already_terminal} =
              Executor.continue(reopened, "job-1", digest("a"), operation)
 
     refute_receive {:elara_effect_executor, _, _, _}
@@ -372,7 +376,7 @@ defmodule Elara.Effect.ExecutorProtocolTest do
                    5_000
   end
 
-  test "writer loss kills its callback but does not invent a receipt on reopen", context do
+  test "writer loss kills its callback and startup records uncertainty without replay", context do
     parent = self()
     executor = owned_executor(context.path)
 
@@ -398,13 +402,124 @@ defmodule Elara.Effect.ExecutorProtocolTest do
 
     reopened = owned_executor(context.path)
 
-    assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0, result: nil}} =
+    assert {:indeterminate, %Record{callback_attempt_count: 1, terminal_count: 1}} =
              Executor.query(reopened, "lost-writer")
 
-    assert {:error, :callback_already_attempted} =
+    assert {:error, :already_terminal} =
              Executor.continue(reopened, "lost-writer", digest("a"), operation)
 
     refute_receive {:callback_worker, _}
+  end
+
+  test "a surviving callback hold prevents startup from declaring an orphan", context do
+    parent = self()
+    executor = owned_executor(context.path)
+
+    operation = fn ->
+      Process.flag(:trap_exit, true)
+      send(parent, {:held_callback, self()})
+
+      receive do
+        :release -> {:ok, "done"}
+      end
+    end
+
+    assert {:accepted, _} = Executor.submit(executor, "held", digest("a"), operation)
+    assert :ok = Executor.continue(executor, "held")
+    assert_receive {:held_callback, worker}, 5_000
+    on_exit(fn -> stop_owned_process(worker) end)
+    writer_ref = Process.monitor(executor)
+    Process.exit(executor, :kill)
+    assert_receive {:DOWN, ^writer_ref, :process, ^executor, :killed}, 5_000
+
+    spawn(fn ->
+      Process.flag(:trap_exit, true)
+      send(parent, {:blocked_start, Executor.start_link(id: "executor-1", path: context.path)})
+    end)
+
+    assert_receive {:blocked_start, {:error, :locked}}, 5_000
+    assert Process.alive?(worker)
+    {:ok, ledger} = ExecutorLedger.open(context.path)
+
+    assert {:ok, %Record{state: :accepted, callback_attempt_count: 1, terminal_count: 0}} =
+             ExecutorLedger.query(ledger, "held")
+
+    :ok = ExecutorLedger.close(ledger)
+
+    callback_port =
+      Enum.find(Port.list(), fn port -> Port.info(port, :connected) == {:connected, worker} end)
+
+    assert is_port(callback_port)
+    Port.close(callback_port)
+    assert Process.alive?(worker)
+
+    # Wait for the external holder to exit, not for the callback to die. The
+    # durable PID proof must still refuse even when flock is now obtainable.
+    lock_path = context.path <> ".callbacks.lock"
+
+    Enum.reduce_while(1..100, nil, fn _, _ ->
+      case System.cmd("flock", ["-n", "-x", lock_path, "true"]) do
+        {_, 0} ->
+          {:halt, :ok}
+
+        _ ->
+          Process.sleep(10)
+          {:cont, nil}
+      end
+    end)
+
+    assert {_, 0} = System.cmd("flock", ["-n", "-x", lock_path, "true"])
+
+    blocked =
+      Task.async(fn ->
+        Process.flag(:trap_exit, true)
+        Executor.start_link(id: "executor-1", path: context.path)
+      end)
+
+    assert {:error, {:effect_owner_alive, message}} = Task.await(blocked)
+    assert message =~ "VM OS PID="
+    assert message =~ "stop it first"
+
+    worker_ref = Process.monitor(worker)
+    Process.exit(worker, :kill)
+    assert_receive {:DOWN, ^worker_ref, :process, ^worker, :killed}, 5_000
+    reopened = owned_executor(context.path)
+
+    assert {:indeterminate, %Record{callback_attempt_count: 1, terminal_count: 1}} =
+             Executor.query(reopened, "held")
+  end
+
+  test "ledger symlink aliases cannot take over a live callback", context do
+    executor = owned_executor(context.path)
+    parent = self()
+
+    operation = fn ->
+      send(parent, :alias_callback_running)
+
+      receive do
+        :release -> {:ok, "done"}
+      end
+    end
+
+    assert {:accepted, _} = Executor.submit(executor, "alias", digest("a"), operation)
+    assert :ok = Executor.continue(executor, "alias")
+    assert_receive :alias_callback_running, 5_000
+
+    file_alias = context.path <> ".alias"
+    dir_alias = Path.dirname(context.path) <> "-alias"
+    File.ln_s!(context.path, file_alias)
+    File.ln_s!(Path.dirname(context.path), dir_alias)
+    on_exit(fn -> File.rm(dir_alias) end)
+
+    for alias_path <- [file_alias, Path.join(dir_alias, Path.basename(context.path))] do
+      blocked =
+        Task.async(fn ->
+          Process.flag(:trap_exit, true)
+          Executor.start_link(id: "executor-1", path: alias_path)
+        end)
+
+      assert {:error, :locked} = Task.await(blocked)
+    end
   end
 
   defp owned_executor(path) do

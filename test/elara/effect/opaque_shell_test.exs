@@ -181,7 +181,11 @@ defmodule Elara.TestFixtures.OpaqueShellTest do
              causal: :unproven,
              historical: :invoked,
              safe_action: :manual_investigation,
-             executor_record: %Record{callback_attempt_count: 1, terminal_count: 0}
+             executor_record: %Record{
+               state: :indeterminate,
+               callback_attempt_count: 1,
+               terminal_count: 1
+             }
            } =
              OpaqueShell.reconcile(reopened, journal, job, context.cwd,
                process_observer: process_observer(pid)
@@ -352,6 +356,9 @@ defmodule Elara.TestFixtures.OpaqueShellTest do
                end)
     end
 
+    send(task.pid, {:continue, :after_accept_observation_before_continue})
+    assert_completed(Task.await(task, @bound_ms), executor, job)
+    assert :ok = Executor.close(executor)
     replacement = start_executor(context.executor_path, no_fault(), "executor-2")
 
     assert {:error, :wrong_executor} =
@@ -360,9 +367,7 @@ defmodule Elara.TestFixtures.OpaqueShellTest do
              end)
 
     assert :ok = Executor.close(replacement)
-    send(task.pid, {:continue, :after_accept_observation_before_continue})
-    assert_completed(Task.await(task, @bound_ms), executor, job)
-    close(executor, journal)
+    assert :ok = ControllerJournal.close(journal)
   end
 
   @tag repeated_cross_class: true
@@ -539,7 +544,11 @@ defmodule Elara.TestFixtures.OpaqueShellTest do
                causal: :unproven,
                historical: :invoked,
                safe_action: :postcondition_satisfied_no_retry,
-               executor_record: %Record{callback_attempt_count: 1, terminal_count: 0}
+               executor_record: %Record{
+                 state: :indeterminate,
+                 callback_attempt_count: 1,
+                 terminal_count: 1
+               }
              } = result
 
       assert :atomics.get(counter, 1) == 1

@@ -187,11 +187,12 @@ defmodule Elara.Session do
             plugins: plugins
           }
 
+          shell = %{shell | effect_recovery_pending: pending_receipt_effects(shell)}
           {shell, recovered?} = finish_restart_recovery(shell)
           recorder = FlightRecorder.new(shell.core, shell.id, incarnation, store.path)
           if recovered?, do: send(self(), :inbox_changed)
-          if effect_recovery_pending == [], do: send(self(), :drain_inputs)
-          if effect_recovery_pending != [], do: send(self(), :check_effect_recovery)
+          if shell.effect_recovery_pending == [], do: send(self(), :drain_inputs)
+          if shell.effect_recovery_pending != [], do: send(self(), :check_effect_recovery)
           if Handoff.frozen?(store), do: send(self(), :advance_handoff)
           {:ok, %{shell | recorder: recorder}}
         else
@@ -221,10 +222,10 @@ defmodule Elara.Session do
   end
 
   def handle_call({:ask, prompt}, from, shell) do
-    if Core.idle?(shell.core) do
+    with :ok <- input_ready(shell, []) do
       {:noreply, feed({:ask, prompt}, %{shell | pending_reply: from})}
     else
-      {:reply, {:error, :busy}, shell}
+      {:error, reason} -> {:reply, {:error, reason}, shell}
     end
   end
 
@@ -293,10 +294,10 @@ defmodule Elara.Session do
   end
 
   def handle_call({:ask_async, prompt}, _from, shell) do
-    if Core.idle?(shell.core) do
+    with :ok <- input_ready(shell, []) do
       {:reply, :ok, feed({:ask, prompt}, shell)}
     else
-      {:reply, {:error, :busy}, shell}
+      {:error, reason} -> {:reply, {:error, reason}, shell}
     end
   end
 
@@ -1213,7 +1214,7 @@ defmodule Elara.Session do
         recover_generic_tool_call(store, call, job, tools, journal, recovery)
 
       true ->
-        {:error, {:unrecoverable_effect, job.job_id}}
+        {:ok, store}
     end
   end
 
@@ -1461,7 +1462,25 @@ defmodule Elara.Session do
         {:ok, store, prompt} ->
           case Store.claim(store) do
             {:ok, store} ->
-              if store.path != shell.store.path, do: Store.release(shell.store)
+              shell =
+                if store.path != shell.store.path do
+                  Store.release(shell.store)
+                  close_effect_journal(shell.effect_journal)
+
+                  if shell.effect_recovery_task,
+                    do: Task.shutdown(shell.effect_recovery_task, :brutal_kill)
+
+                  %{
+                    shell
+                    | effect_journal: nil,
+                      effect_journal_path: Path.rootname(store.path) <> ".effects.sqlite3",
+                      effect_recovery_pending: [],
+                      effect_recovery_task: nil
+                  }
+                else
+                  shell
+                end
+
               core = Core.rebase_history(shell.core, Store.history(store))
               recorder = FlightRecorder.segment(shell.recorder, core, :history_rebased)
 
@@ -2293,17 +2312,60 @@ defmodule Elara.Session do
 
   defp handle_attached_command(_command, shell), do: {:reply, {:error, :invalid_command}, shell}
 
-  defp input_ready(shell, images) do
+  defp input_ready(shell, images, queue? \\ false) do
+    with :ok <- effect_input_ready(shell, queue?) do
+      cond do
+        Handoff.frozen?(shell.store) ->
+          {:error, :handoff_source_open_successor}
+
+        not Core.idle?(shell.core) ->
+          {:error, :busy}
+
+        images != [] and
+            elem(shell.provider, 0) not in [Elara.Provider.OpenAICodex, Elara.Provider.Scripted] ->
+          {:error, :images_unsupported_by_provider}
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  defp effect_input_ready(shell, queue?) do
+    legacy =
+      Enum.find(shell.effect_recovery_pending, fn
+        %Job{} = job ->
+          case ControllerJournal.observation(shell.effect_journal, job.job_id) do
+            {:ok,
+             %{
+               executor_record: %Record{
+                 state: :accepted,
+                 callback_attempt_count: 1,
+                 attempt_incarnation: nil,
+                 operation_digest: digest
+               }
+             }}
+            when digest == job.operation_digest ->
+              true
+
+            _ ->
+              false
+          end
+
+        _ ->
+          false
+      end)
+
     cond do
-      Handoff.frozen?(shell.store) ->
-        {:error, :handoff_source_open_successor}
+      legacy ->
+        {:error,
+         {:legacy_effect_ownership_unknown, legacy.job_id,
+          "Cannot prove earlier writer/callback ownership ended: this legacy attempted job has no " <>
+            "recorded incarnation or callback lifetime lock. Its outcome stays unknown and it will not be retried. " <>
+            "Use /clone to carry this history into a usable session, or /fork before an earlier turn."}}
 
-      not Core.idle?(shell.core) ->
-        {:error, :busy}
-
-      images != [] and
-          elem(shell.provider, 0) not in [Elara.Provider.OpenAICodex, Elara.Provider.Scripted] ->
-        {:error, :images_unsupported_by_provider}
+      not queue? and shell.effect_recovery_pending != [] ->
+        {:error, :effect_recovery_pending}
 
       true ->
         :ok
@@ -2750,7 +2812,7 @@ defmodule Elara.Session do
 
   defp input_admissible(shell, user) do
     images = Enum.filter(user.attachments, &(&1["kind"] == "image"))
-    input_ready(%{shell | core: %{shell.core | phase: :idle}}, images)
+    input_ready(%{shell | core: %{shell.core | phase: :idle}}, images, true)
   end
 
   defp durable_input_size(shell, inbox) do

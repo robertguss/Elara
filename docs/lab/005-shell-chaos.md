@@ -1,5 +1,19 @@
 # 005 — Bounded session recovery pilot
 
+> Current behavior note, 2026-10-13 (R7): startup can now terminalize an orphaned
+> attempted receipt as indeterminate, never replay it, when its incarnation and
+> exclusive writer and callback locks plus durable VM/writer/callback identity
+> prove the old owners are dead. A different live VM refuses takeover.
+> Schema 3 preserves legacy attempts with `attempt_incarnation: nil`;
+> those attempts never auto-terminalize. Their sessions stay idle and refuse new
+> turns for missing proof, with `/clone` or `/fork` as a separate-session workaround.
+> Live timeout barriers remain until terminal. The optional receipt-client
+> diagnostic below records the older behavior, not a current startup guarantee.
+> All original registrations, findings, results, pinned builds and raw evidence
+> remain unchanged, including the registered matrix at `15e000c15321a545d087ed85255d209c50f1cfd4`.
+> That matrix excludes the optional receipt-client path. R7 does not revise its
+> 1200-row result or add receipt-backed whole-VM coverage to the historical claim.
+
 - **Question:** RQ-1 / LAB-5 first candidate. After one accepted input is
   faulted at a named point, do two positively witnessed queued inputs drain
   with stable identities, or does recovery misclassify a started mutation?

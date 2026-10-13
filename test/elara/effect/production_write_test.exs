@@ -123,10 +123,10 @@ defmodule Elara.Effect.ProductionWriteTest do
     restart_executor(writer, executor)
     assert_receive {:DOWN, ^worker_ref, :process, ^worker, :killed}, @lifecycle_wait_ms
 
-    assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0}} =
+    assert {:indeterminate, %Record{callback_attempt_count: 1, terminal_count: 1}} =
              Executor.query(executor, "job-attempted")
 
-    assert {:error, :callback_already_attempted} =
+    assert {:error, :already_terminal} =
              Executor.continue(executor, "job-attempted", attempted_digest, fn ->
                {:ok, "must not run"}
              end)
@@ -272,25 +272,114 @@ defmodule Elara.Effect.ProductionWriteTest do
     restart_executor(writer, executor)
     assert_receive {:DOWN, ^worker_ref, :process, ^worker, :killed}, @lifecycle_wait_ms
 
-    assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0}} =
+    assert {:indeterminate,
+            %Record{
+              callback_attempt_count: 1,
+              terminal_count: 1,
+              result: {:indeterminate, reason}
+            }} =
              Executor.query(executor, job.job_id)
+
+    assert reason =~ "orphaned at startup"
+    assert reason =~ "last_known_incarnation="
 
     refute File.exists?(context.target)
 
-    assert {:ok, resumed} = start_session(context, script([]), resume: session_path)
+    assert {:ok, resumed} =
+             start_session(context, script([{:ok, assistant("next turn works")}]),
+               resume: session_path
+             )
 
     assert %ToolResult{
              call_id: "attempted-write",
              outcome: {:indeterminate, message}
            } = List.last(Elara.transcript(resumed))
 
-    assert message =~ "last_proven=callback_invoked"
-    assert message =~ "action=do_not_retry_or_fail_over"
+    assert message =~ "orphaned at startup"
+    assert message =~ "unknown"
+
+    assert {:ok, "next turn works"} =
+             Elara.ask(resumed, "continue without retrying the write", 2_000)
+
     refute File.exists?(context.target)
 
     {_job, observation} = controller_evidence(context.journal_path)
     assert observation.result_persisted?
     assert observation.executor_record.callback_attempt_count == 1
+
+    stop_session(resumed)
+    stop_local_executor(executor)
+  end
+
+  test "legacy attempts stay unknown while clone and fork provide usable sessions", context do
+    parent = self()
+    call = write_call("legacy-write", "nested/output.txt", "must not replay")
+
+    hook = fn
+      :after_accept_observation_before_continue = point -> block(context, parent, point)
+      _ -> :ok
+    end
+
+    assert {:ok, session} =
+             start_session(context, script([{:ok, assistant(nil, [call])}]),
+               effect_fault_hook: hook
+             )
+
+    ask_unlinked(context, session)
+
+    assert_receive {:blocked, :after_accept_observation_before_continue, effect_task},
+                   @lifecycle_wait_ms
+
+    path = newest_session_path(context.cwd)
+    kill_session(session)
+    Process.exit(effect_task, :kill)
+    {job, _} = controller_evidence(context.journal_path)
+    executor = local_executor(context)
+    assert {:accepted, accepted} = Executor.query(executor, job.job_id)
+    ledger_path = LocalExecutor.ledger_path(context.cwd, accepted.executor_id)
+    stop_local_executor(executor)
+
+    {:ok, ledger} = Elara.Effect.ExecutorLedger.open(ledger_path)
+
+    assert {:ok, %Record{attempt_incarnation: nil}} =
+             Elara.Effect.ExecutorLedger.begin_attempt(
+               ledger,
+               accepted.executor_id,
+               job.job_id,
+               job.operation_digest
+             )
+
+    :ok = Elara.Effect.ExecutorLedger.close(ledger)
+
+    assert {:ok, resumed} =
+             start_session(
+               context,
+               script([{:ok, assistant("clone works")}, {:ok, assistant("fork works")}]),
+               resume: path
+             )
+
+    assert Elara.status(resumed).phase == :idle
+
+    assert {:error, {:legacy_effect_ownership_unknown, job_id, refusal}} =
+             Elara.ask(resumed, "do not wait")
+
+    assert job_id == job.job_id
+    assert refusal =~ "no recorded incarnation or callback lifetime lock"
+    assert refusal =~ "/clone"
+    assert refusal =~ "/fork"
+    assert %ToolResult{outcome: {:indeterminate, _}} = List.last(Elara.transcript(resumed))
+    [%{id: first}] = Elara.user_entries(resumed)
+
+    assert {:ok, nil, history} = Elara.clone_session(resumed)
+    assert Enum.any?(history, &match?(%ToolResult{outcome: {:indeterminate, _}}, &1))
+    assert {:ok, "clone works"} = Elara.ask(resumed, "continue in clone", 2_000)
+    assert {:ok, "write it", []} = Elara.fork(resumed, first)
+    assert {:ok, "fork works"} = Elara.ask(resumed, "continue in fork", 2_000)
+    refute File.exists?(context.target)
+
+    assert {:accepted,
+            %Record{callback_attempt_count: 1, terminal_count: 0, attempt_incarnation: nil}} =
+             Executor.query(local_executor(context), job.job_id)
 
     stop_session(resumed)
     stop_local_executor(executor)

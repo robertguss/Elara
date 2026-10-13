@@ -407,7 +407,7 @@ defmodule Elara.Protocol do
        do: {:ok, Map.put(view, "usage", usage)}
 
   defp apply_op(view, %{"op" => "set_runtime_limits", "runtime_limits" => limits})
-       when is_map(limits),
+       when is_map(limits) or is_nil(limits),
        do: {:ok, Map.put(view, "runtime_limits", limits)}
 
   defp apply_op(
@@ -429,7 +429,7 @@ defmodule Elara.Protocol do
 
   defp clear_superseded(_view, _id), do: {:error, :invalid_patch}
 
-  defp runtime_limits_view(core) do
+  def runtime_limits_view(core) do
     next = Core.runtime_limits(core)
     encode = fn limits -> Map.new(limits, fn {key, value} -> {Atom.to_string(key), value} end) end
 

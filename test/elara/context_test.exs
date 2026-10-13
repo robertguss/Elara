@@ -150,6 +150,8 @@ defmodule Elara.ContextTest do
         cwd: root,
         provider: {Elara.Provider.Scripted, agent},
         context_limit: 100_000,
+        max_iterations: 7,
+        tool_timeout_ms: 60_000,
         max_tool_output_bytes: 1024,
         system: "test",
         tools: [],
@@ -212,6 +214,46 @@ defmodule Elara.ContextTest do
              Elara.FlightRecorder.ContextCensus.compare(Elara.recording(source), 100_000)
 
     assert [%{branch: :attempt_dispatch}] = Elara.recording(h["id"]).context_decisions
+
+    assert %{max_iterations: 7, tool_timeout_ms: 60_000} = Elara.child_config(h["id"])
+    {:ok, _} = Elara.attach(source, :control)
+    assert {:ok, false} = Elara.attached_command(source, {:runtime_limits, %{max_iterations: 2}})
+
+    assert Elara.materialized_view(source)["runtime_limits"] ==
+             Elara.materialized_view(h["id"])["runtime_limits"]
+
+    assert Elara.snapshot(source).snapshot["runtime_limits"]["next_turn"]["max_iterations"] == 2
+    assert_receive {:elara_patch, ^source, _, _, ops}
+
+    assert Enum.any?(
+             ops,
+             &(&1["op"] == "set_runtime_limits" and
+                 &1["runtime_limits"]["next_turn"]["max_iterations"] == 2)
+           )
+
+    {:ok, _} = Elara.attach(h["id"], :control)
+
+    assert {:ok, false} =
+             Elara.attached_command(h["id"], {:runtime_limits, %{tool_timeout_ms: 120_000}})
+
+    assert Elara.snapshot(source).snapshot["runtime_limits"]["next_turn"]["tool_timeout_ms"] ==
+             120_000
+
+    {:ok, pid} = Elara.session_pid(h["id"])
+    :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+    assert Elara.materialized_view(source)["runtime_limits"] == nil
+
+    {:ok, restarted} =
+      Elara.start_session(
+        cwd: root,
+        resume: successor.path,
+        provider: {Elara.Provider.Scripted, agent},
+        max_iterations: 9,
+        tool_timeout_ms: 180_000
+      )
+
+    assert %{max_iterations: 9, tool_timeout_ms: 180_000} = Elara.child_config(restarted)
+    assert Elara.materialized_view(source)["runtime_limits"]["next_turn"]["max_iterations"] == 9
   end
 
   test "blocked handoff is recorded as an attempt, not a successful handoff", %{root: root} do

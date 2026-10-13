@@ -50,6 +50,16 @@ pub(super) fn open(model: &mut Model) -> InputAction {
 
 pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
     match frame["type"].as_str() {
+        Some("runtime_limits") if frame["version"] == 2 => {
+            if crate::limits::validate(&frame["runtime_limits"]).is_err() {
+                model.notice = Some("Server returned invalid runtime limits.".into());
+                return true;
+            }
+            model.projection.view["runtime_limits"] = frame["runtime_limits"].clone();
+            model.session_detail = Some(crate::limits::summary(&model.projection.view).join("\n"));
+            model.session_detail_scroll = 0;
+            true
+        }
         Some("runtime_limits_changed") if frame["version"] == 2 => {
             model.notice = Some(if frame["pending"] == true {
                 "Limits updated; applies from the next turn.".into()

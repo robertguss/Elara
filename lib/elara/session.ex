@@ -328,6 +328,12 @@ defmodule Elara.Session do
   def handle_call({:provider_settings, settings}, _from, shell),
     do: change_provider_settings(shell, settings)
 
+  def handle_call({:runtime_limits, changes}, _from, shell),
+    do: change_runtime_limits(shell, changes)
+
+  def handle_call(:runtime_limits_view, _from, shell),
+    do: {:reply, runtime_limits_view(shell), shell}
+
   def handle_call(:recording, _from, shell) do
     {:reply, FlightRecorder.snapshot(shell.recorder), shell}
   end
@@ -1958,6 +1964,18 @@ defmodule Elara.Session do
     patch_ops = Protocol.patch_ops(event, shell.core, patch_context)
 
     patch_ops =
+      if Handoff.frozen?(shell.store) do
+        limits = runtime_limits_view(shell)
+
+        Enum.map(patch_ops, fn
+          %{"op" => "set_runtime_limits"} = op -> Map.put(op, "runtime_limits", limits)
+          op -> op
+        end)
+      else
+        patch_ops
+      end
+
+    patch_ops =
       if event == :inbox_changed or match?({:message_appended, _}, event) or
            match?({:message_appended, _, :streamed}, event),
          do: patch_ops ++ [%{"op" => "set_inbox", "inbox" => inbox_view(shell)}],
@@ -2378,7 +2396,14 @@ defmodule Elara.Session do
   end
 
   defp change_runtime_limits(%{store: %{context: %{"handoff" => _}}} = shell, changes) do
-    {:reply, forward_handoff(shell, {:runtime_limits, changes}), shell}
+    result = forward_handoff(shell, {:runtime_limits, changes})
+
+    shell =
+      if match?({:ok, _}, result),
+        do: feed(:runtime_limits_changed, shell),
+        else: shell
+
+    {:reply, result, shell}
   end
 
   defp change_runtime_limits(shell, changes) do
@@ -2467,6 +2492,18 @@ defmodule Elara.Session do
 
   defp materialized_view(shell) do
     Protocol.snapshot(shell.id, shell.incarnation, shell.core)
+    |> Map.put("runtime_limits", runtime_limits_view(shell))
+  end
+
+  defp runtime_limits_view(shell) do
+    if Handoff.frozen?(shell.store) do
+      case forward_handoff(shell, :runtime_limits_view) do
+        %{} = limits -> limits
+        _ -> nil
+      end
+    else
+      Protocol.runtime_limits_view(shell.core)
+    end
   end
 
   defp submit_input(

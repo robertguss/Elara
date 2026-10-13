@@ -56,7 +56,7 @@ defmodule Elara.ProtocolV2Test do
       send_json(socket, %{
         "version" => 2,
         "command" => "attach",
-        "extensions" => ["provider_visibility_v1"],
+        "extensions" => ["provider_visibility_v1", "runtime_limits_v1"],
         "session_id" => session,
         "mode" => mode,
         "cursor" => cursor,

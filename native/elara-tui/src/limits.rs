@@ -5,6 +5,9 @@ pub(crate) const EXTENSION: &str = "runtime_limits_v1";
 const KEYS: [&str; 3] = ["max_iterations", "tool_timeout_ms", "max_tool_timeout_ms"];
 
 pub(crate) fn validate(value: &Value) -> Result<(), String> {
+    if value.is_null() {
+        return Ok(());
+    }
     for key in ["next_turn", "active_turn"] {
         let limits = &value[key];
         if limits.is_null() && key == "active_turn" {
@@ -82,6 +85,11 @@ pub(crate) fn summary(view: &Value) -> Vec<String> {
 
 pub(crate) fn command(model: &mut Model, argument: &str) -> InputAction {
     if argument.is_empty() {
+        if model.projection.view.get("runtime_limits").is_some() {
+            return InputAction::Session(
+                json!({"version":2,"extension":EXTENSION,"command":"runtime_limits"}),
+            );
+        }
         model.session_detail = Some(summary(&model.projection.view).join("\n"));
         model.session_detail_scroll = 0;
         model.editor.clear();

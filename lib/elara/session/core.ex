@@ -93,6 +93,7 @@ defmodule Elara.Session.Core do
           | {:provider_delta, ref(), Provider.delta()}
           | {:provider_settings, Elara.Provider.Visibility.settings()}
           | {:runtime_limits, runtime_limits(), [runtime_limit_key()]}
+          | :runtime_limits_changed
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
           | {:retry_elapsed, ref()}
           | {:tool_result, ref(), Tool.outcome()}
@@ -244,6 +245,7 @@ defmodule Elara.Session.Core do
   end
 
   def step(state, :inbox_changed), do: {state, [{:emit, :inbox_changed}]}
+  def step(state, :runtime_limits_changed), do: {state, [{:emit, :runtime_limits_changed}]}
 
   def step(%State{phase: :idle} = state, _fact), do: {state, []}
 

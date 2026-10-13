@@ -463,6 +463,24 @@ defmodule Elara.Server do
   defp handle_versioned_command(
          session,
          2,
+         %{"command" => "runtime_limits", "extension" => "runtime_limits_v1"},
+         _provider,
+         _lifetime
+       ) do
+    if Process.get(:runtime_limits) do
+      %{
+        "type" => "runtime_limits",
+        "version" => 2,
+        "runtime_limits" => Elara.materialized_view(session)["runtime_limits"]
+      }
+    else
+      error_message(:unsupported_extension, 2)
+    end
+  end
+
+  defp handle_versioned_command(
+         session,
+         2,
          %{"command" => "set_runtime_limits", "extension" => "runtime_limits_v1"} = request,
          _provider,
          _lifetime

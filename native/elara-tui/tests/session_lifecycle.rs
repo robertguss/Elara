@@ -180,7 +180,16 @@ fn limits_use_authoritative_projection_and_parse_human_forms_without_sending_pro
         "sources":{"max_iterations":"session","tool_timeout_ms":"session","max_tool_timeout_ms":"config"}
     });
     model.editor.insert("/limits");
-    assert_eq!(key(&mut model, KeyCode::Enter), InputAction::None);
+    assert_eq!(
+        key(&mut model, KeyCode::Enter),
+        InputAction::Session(
+            json!({"version":2,"extension":"runtime_limits_v1","command":"runtime_limits"})
+        )
+    );
+    let limits = model.projection.view["runtime_limits"].clone();
+    assert!(
+        model.session_reply(&json!({"type":"runtime_limits","version":2,"runtime_limits":limits}))
+    );
     let frame = elara_tui::render_frame(&model, 120, 40).unwrap();
     for text in [
         "Calls: 150 (set this session)",

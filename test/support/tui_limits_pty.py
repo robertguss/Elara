@@ -32,6 +32,8 @@ def wait_for(*parts):
             try:
                 chunk = os.read(master, 65536)
             except OSError:
+                if all(part in output[start:] for part in parts):
+                    return
                 break
             output.extend(chunk)
             if recording:

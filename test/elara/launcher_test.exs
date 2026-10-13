@@ -76,6 +76,87 @@ defmodule Elara.LauncherTest do
     message
   end
 
+  test "daily updates isolate builds and leave the previous selection on failure", ctx do
+    source = Path.join(ctx.caller, "source")
+    stable = Path.join(ctx.home, "daily builds")
+    mock_bin = Path.join(ctx.caller, "mock bin")
+    File.mkdir_p!(Path.join(source, "bin"))
+    File.mkdir_p!(mock_bin)
+
+    for script <- ["elara-update", "elara-stable"] do
+      File.cp!(Path.join(@root, "bin/#{script}"), Path.join(source, "bin/#{script}"))
+    end
+
+    File.write!(Path.join(source, "bin/elara"), """
+    #!/bin/sh
+    printf '%s\\000' "$PWD" "$@"
+    exit 17
+    """)
+
+    File.chmod!(Path.join(source, "bin/elara"), 0o755)
+
+    File.write!(Path.join(mock_bin, "mix"), """
+    #!/bin/sh
+    [ -z "${MIX_BUILD_PATH+x}" ] || exit 91
+    [ "$MIX_ENV" = dev ] || exit 92
+    [ "${FAIL_BUILD:-}" != yes ] || exit 93
+    mkdir -p _build
+    """)
+
+    File.chmod!(Path.join(mock_bin, "mix"), 0o755)
+
+    for args <- [
+          ["init", "-b", "main"],
+          ["add", "."],
+          [
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.org",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            "fixture"
+          ],
+          ["remote", "add", "origin", source]
+        ] do
+      assert {_, 0} = System.cmd("git", args, cd: source, stderr_to_stdout: true)
+    end
+
+    env =
+      Map.merge(ctx.env, %{
+        "ELARA_STABLE_DIR" => stable,
+        "PATH" => mock_bin <> ":" <> System.fetch_env!("PATH"),
+        "MIX_BUILD_PATH" => Path.join(source, "_build"),
+        "MIX_ENV" => "prod"
+      })
+
+    update = Path.join(source, "bin/elara-update")
+    assert {_, 0} = System.cmd(update, [], env: env, stderr_to_stdout: true)
+    first = File.read!(Path.join(stable, "current")) |> String.trim()
+    assert File.dir?(Path.join(first, "_build"))
+    refute File.exists?(Path.join(source, "_build"))
+    assert {_, 0} = System.cmd(update, [], env: env, stderr_to_stdout: true)
+    second = File.read!(Path.join(stable, "current")) |> String.trim()
+    refute first == second
+    assert File.dir?(first)
+
+    assert {_, 93} =
+             System.cmd(update, [],
+               env: Map.put(env, "FAIL_BUILD", "yes"),
+               stderr_to_stdout: true
+             )
+
+    assert String.trim(File.read!(Path.join(stable, "current"))) == second
+    args = ["--ask", "a prompt\nwith spaces", "--", "-session"]
+
+    assert {output, 17} =
+             System.cmd(Path.join(source, "bin/elara-stable"), args, cd: ctx.caller, env: env)
+
+    assert String.split(output, <<0>>, trim: true) == [ctx.caller | args]
+  end
+
   test "wrapper preserves argv and exit status without leaking MIX_EXS into tools", ctx do
     mock_bin = Path.join(ctx.caller, "mock bin")
     File.mkdir_p!(mock_bin)

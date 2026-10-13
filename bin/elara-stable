@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+stable="${ELARA_STABLE_DIR:-$HOME/.elara/daily}"
+if [[ ! -f "$stable/current" ]]; then
+  echo "No daily build. Run bin/elara-update from the Elara checkout first." >&2
+  exit 1
+fi
+IFS= read -r build < "$stable/current"
+# Do not allow checkout build overrides to reconnect the two builds.
+unset MIX_EXS MIX_BUILD_PATH MIX_BUILD_ROOT MIX_DEPS_PATH CARGO_TARGET_DIR
+export MIX_ENV=dev
+exec "$build/bin/elara" "$@"

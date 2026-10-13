@@ -5,10 +5,12 @@ is the sole planning and status source. Read its page first: "You are here",
 "This week" and "Decisions waiting for Robert" are kept current. Tasks live in
 Dev Hub's Tasks database with Project set to Elara.
 
-The next session is the **Phase 1 lead** (D20). Start by reading the Phase 1
-spec and the Working Agreement in Notion, then plan Phase 1 into tasks for the
-three streams below, and ask Robert whether he wants to start the stream
-threads himself before any are started.
+Phase 1 runs in three streams under the lead (D20). Read the
+[Phase 1 plan](https://app.notion.com/p/3f8700320c45817e807fc65b894b9013)
+and [Working Agreement](https://app.notion.com/p/3f8700320c4581818358c50f271e494f)
+before continuing. Stream task order and current delivery status live there,
+not in this handoff. The runtime stream starts with the stable daily build;
+its launch and update commands are documented in README.md.
 
 ## Where Elara stands
 

@@ -22,6 +22,9 @@ operator startup config, never an agent-editable project file.
 The TUI's shared code colors live in `native/elara-tui/src/syntax.rs`.
 Colored Elixir and edit frames for all four themes live in
 `native/elara-tui/tests/goldens/syntax-*.txt`.
+New coding worktrees are kept outside protected Elara state; the location and
+operator override are documented under "Persistent delegated children".
+Existing children keep their recorded paths, without relocation or deletion.
 
 ## Where Elara stands
 

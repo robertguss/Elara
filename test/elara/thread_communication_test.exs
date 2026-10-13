@@ -23,6 +23,8 @@ defmodule Elara.ThreadCommunicationTest do
     File.mkdir_p!(root)
     previous = Application.get_env(:elara, :sessions_root)
     Application.put_env(:elara, :sessions_root, Path.join(root, "sessions"))
+    previous_worktrees = System.get_env("ELARA_WORKTREES_ROOT")
+    System.put_env("ELARA_WORKTREES_ROOT", Path.join(root, "worktrees"))
 
     on_exit(fn ->
       for s <- Elara.live_sessions(), s.cwd == root or String.starts_with?(s.cwd, root <> "/") do
@@ -31,6 +33,11 @@ defmodule Elara.ThreadCommunicationTest do
       end
 
       Application.put_env(:elara, :sessions_root, previous)
+
+      if previous_worktrees,
+        do: System.put_env("ELARA_WORKTREES_ROOT", previous_worktrees),
+        else: System.delete_env("ELARA_WORKTREES_ROOT")
+
       File.rm_rf!(root)
     end)
 

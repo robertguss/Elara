@@ -588,6 +588,14 @@ or line-number options.
 Use a long-lived `mix elara.server` for work that must continue after detaching
 the TUI. `/delegate coding TASK` starts an independent persisted session on a
 managed Git branch/worktree at the parent's committed HEAD.
+New coding worktrees live under
+`~/.elara-worktrees/<repo-name>-<short-hash>/<token>`, separate from protected
+Elara state. Set `ELARA_WORKTREES_ROOT` in operator startup configuration to
+choose another root, for example `export ELARA_WORKTREES_ROOT=/Volumes/Code/elara-worktrees`.
+Restart an existing server after changing it. Records and receipts remain
+under `~/.elara`; existing children use their recorded workspace location,
+including the old location inside session storage. No worktree is relocated
+or deleted automatically.
 `/delegate research TASK` shares the checkout with only the parent's available
 built-in `read` and `skill` tools and read capabilities. This is trusted-local
 capability restriction, not an OS sandbox. Coding tools can still access paths

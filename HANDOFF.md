@@ -37,6 +37,11 @@ separate; the fence is not an OS sandbox.
 The TUI's `/limits` and session-local overrides are documented in README.md's
 execution section. They follow delivery ownership and reset to startup config
 when a session restarts, including children and handoff successors.
+The lab's current async-site inventory is pinned in
+`lab/test/elara/lab_profile_test.exs`; its classifier distinguishes server
+connections from session handoff relay tasks. Historical registrations stay
+unchanged. The Phase 1 lab adaptation follow-up is tracked in
+[Dev Hub](https://app.notion.com/p/3f8700320c4581a59c2cdf3a839a5ae0).
 
 ## Where Elara stands
 

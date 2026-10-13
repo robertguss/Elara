@@ -956,7 +956,7 @@ defmodule Elara.Lab.ProfileTest do
     end
   end
 
-  test "the audited spawn paths hold: the only TaskSup start_child is the server's closure" do
+  test "the audited spawn paths hold: server connections and handoff relays use closures" do
     # Product and lab source, as paths relative to the repository root.
     repo = Path.expand("../../..", __DIR__)
 
@@ -967,11 +967,16 @@ defmodule Elara.Lab.ProfileTest do
           line =~ ~r/Task\.Supervisor\.start_child\(/,
           do: {Path.relative_to(path, repo), n, line}
 
-    assert [{"lib/elara/server.ex", _n, line}] = sites,
-           "Elara.Lab.Profile classifies TaskSup spawns on the reply path as tasks; " <>
-             "a new start_child site breaks that audit: #{inspect(sites)}"
+    assert [
+             {"lib/elara/server.ex", _server_n, server_line},
+             {"lib/elara/session.ex", _relay_n, relay_line}
+           ] = sites,
+           "Elara.Lab.Profile classifies server closures as connections and handoff relay " <>
+             "closures as tasks; audit any new start_child site: #{inspect(sites)}"
 
-    assert line =~ ~r/Task\.Supervisor\.start_child\(Elara\.TaskSup, fn ->/,
-           "the server connection must stay closure-based for Elara.Lab.Profile: #{line}"
+    for line <- [server_line, relay_line] do
+      assert line =~ ~r/Task\.Supervisor\.start_child\(Elara\.TaskSup, fn ->/,
+             "the audited site must stay closure-based for Elara.Lab.Profile: #{line}"
+    end
   end
 end

@@ -14,7 +14,11 @@ delivery for the current phase in the current session, following the Notion
 Working Agreement. Robert decides direction and anything he would notice as a
 user; agents decide the rest. Ask Robert one question at a time, with real
 options and one recommendation, and send nothing else while a question waits.
-Record his answers in the Decision Log with his own words.
+Record his answers in the Decision Log with his own words. Robert starts new
+Amp threads himself, choosing their model, effort and orb size: when work
+should continue in another thread (for example a phase lead or a stream), give
+him a copy-paste prompt instead of creating the thread, unless he says
+otherwise.
 
 Deliver one task per branch (`work/<slug>`) and one pull request, kept small.
 Run `bin/check` before every push. A reviewer agent checks every pull request;

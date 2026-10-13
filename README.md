@@ -299,9 +299,9 @@ plugins can still read credential files through ordinary filesystem access.
 
 ## File-tool fence
 
-The model's `read`, `write`, and `edit` tools stay inside the session workspace
-and any extra folders you name in the startup environment. To allow another
-checkout or shared source directory, use existing absolute folder paths:
+The model's `read`, `write`, `edit`, `grep`, and `glob` tools stay inside the
+session workspace and any extra folders you name in the startup environment.
+To allow another checkout or shared source directory, use existing absolute folder paths:
 
 ```bash
 export ELARA_FILE_ROOTS='/Users/robert/shared:/Users/robert/other-app'
@@ -1042,9 +1042,18 @@ pattern. Ripgrep applies the requested glob with higher precedence than ignore
 files, so a pattern naming an ignored file does match it; an ignored directory
 stays pruned unless the pattern matches that directory's own path. Results are
 sorted by path, so repeated calls agree. An optional `path` scopes the search to a
-workspace-relative file or directory; absolute paths, `..`, and non-canonical
-paths are rejected. That scope is lexical, like the rest of relative path
-handling, and is not a filesystem boundary.
+file or directory inside the workspace or an operator-approved extra root.
+Both tools use the [file-tool fence](#file-tool-fence): explicit protected or
+escaping scopes are refused, including resolved symlinks. Recursive searches
+skip protected files before reading contents. Search results name resolved
+targets, with absolute paths for files outside the cwd. Recursive traversal
+does not follow directory symlinks; an explicit allowed alias works.
+
+Elara first enumerates filenames with ripgrep, then authorizes each target
+through the same policy as `read`. The filename list is bounded at 8 MiB;
+exceeding it returns an error asking for a narrower path, never a partial list
+presented as complete. Content searches use bounded batches with one shared
+timeout and output byte budget. The fence is not an OS sandbox.
 
 `grep` returns at most 100 matching lines and `glob` at most 200 paths, each
 overridable up to 1000 with `limit`. Long lines are clipped and the session's

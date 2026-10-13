@@ -230,7 +230,8 @@ defmodule Elara.Tool do
     }
   end
 
-  @search_scope "Read-only, rooted at the working directory. Honours .gitignore, " <>
+  @search_scope "Read-only, fenced to the working directory and operator-approved roots; " <>
+                  "protected files and escaping symlinks are skipped or refused. Honours .gitignore, " <>
                   "skips VCS and build directories, orders results deterministically, " <>
                   "and bounds them with a truncation notice. Requires ripgrep."
 
@@ -250,7 +251,7 @@ defmodule Elara.Tool do
           "path" => %{
             "type" => "string",
             "description" =>
-              "Optional workspace-relative file or directory to search; defaults to the whole workspace"
+              "Optional file or directory inside the workspace or an operator-approved root; defaults to the whole workspace"
           },
           "glob" => %{
             "type" => "string",
@@ -290,7 +291,7 @@ defmodule Elara.Tool do
           "path" => %{
             "type" => "string",
             "description" =>
-              "Optional workspace-relative directory to list; defaults to the whole workspace"
+              "Optional file or directory inside the workspace or an operator-approved root; defaults to the whole workspace"
           },
           "limit" => %{
             "type" => "integer",

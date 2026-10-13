@@ -129,6 +129,13 @@ defmodule Elara.WorkspaceSearchTest do
     assert message =~ "search failed (exit 2)"
     assert message =~ "regex parse error"
 
+    File.mkdir_p!(Path.join(ctx.cwd, "empty"))
+
+    assert {:error, empty_message} =
+             Search.grep(%{"pattern" => "needle(", "path" => "empty"}, ctx)
+
+    assert empty_message =~ "regex parse error"
+
     assert {:error, glob_message} = Search.glob(%{"pattern" => "lib/["}, ctx)
     assert glob_message =~ "search failed (exit 2)"
     assert glob_message =~ "error parsing glob"
@@ -141,7 +148,7 @@ defmodule Elara.WorkspaceSearchTest do
 
     for path <- ["..", "../outside", "../", outside, "/etc", "lib/../../outside", "/"] do
       assert {:error, message} = Search.grep(%{"pattern" => "needle", "path" => path}, ctx)
-      assert message =~ "must stay inside the working directory", "accepted #{inspect(path)}"
+      assert message == "file access refused: path_outside_workspace", "accepted #{inspect(path)}"
       assert {:error, _} = Search.glob(%{"pattern" => "**/*.ex", "path" => path}, ctx)
     end
 
@@ -160,6 +167,15 @@ defmodule Elara.WorkspaceSearchTest do
 
     assert Search.glob(%{"pattern" => "**/*", "path" => "lib/nested dir"}, ctx) ==
              {:ok, "lib/nested dir/beta file.ex"}
+
+    for path <- ["-", "--follow"] do
+      File.write!(Path.join(ctx.cwd, path), "operand_marker\n")
+
+      assert Search.grep(%{"pattern" => "operand_marker", "path" => path}, ctx) ==
+               {:ok, "#{path}:1:operand_marker"}
+
+      assert Search.glob(%{"pattern" => "**/*", "path" => path}, ctx) == {:ok, path}
+    end
   end
 
   test "ripgrep's documented glob precedence over ignore files stays deliberate", %{ctx: ctx} do
@@ -184,6 +200,32 @@ defmodule Elara.WorkspaceSearchTest do
 
     assert length(shown) == 3
     assert List.last(shown) == "[truncated at the 2-files cap; narrow the pattern or path]"
+  end
+
+  test "grep preserves ordering and one output budget across many files", %{ctx: ctx, dir: dir} do
+    File.mkdir_p!(Path.join(dir, "many"))
+
+    paths =
+      for index <- 0..128, do: "many/#{String.pad_leading(Integer.to_string(index), 3, "0")}.ex"
+
+    for path <- paths, do: File.write!(Path.join(dir, path), "absent\n")
+    File.write!(Path.join(dir, hd(paths)), "unique_marker first\n")
+    File.write!(Path.join(dir, List.last(paths)), String.duplicate("unique_marker last\n", 100))
+
+    expected =
+      ["many/000.ex:1:unique_marker first"] ++
+        for line <- 1..100, do: "many/128.ex:#{line}:unique_marker last"
+
+    assert lines(Search.grep(%{"pattern" => "unique_marker", "limit" => 200}, ctx)) == expected
+
+    {:ok, output} =
+      Search.grep(%{"pattern" => "unique_marker", "limit" => 200}, %{ctx | max_output_bytes: 1024})
+
+    {notice, shown} = output |> String.split("\n") |> List.pop_at(-1)
+    assert notice == "[truncated at the output byte cap; narrow the pattern or path]"
+    assert byte_size(Enum.join(shown, "\n")) <= 1024
+    assert length(shown) > 1
+    assert shown == Enum.take(expected, length(shown))
   end
 
   test "argument validation rejects malformed calls", %{ctx: ctx} do

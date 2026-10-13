@@ -56,7 +56,9 @@ operator override are documented under "Persistent delegated children".
 Existing children keep their recorded paths, without relocation or deletion.
 File-tool roots, protected paths, and resolved symlinks are documented in
 README.md's "File-tool fence" section. Internal skill/session/plugin reads are
-separate; the fence is not an OS sandbox.
+separate; the fence is not an OS sandbox. Grep and glob share that policy:
+explicit scopes are resolved and recursive filenames authorized before any
+content search. README.md's "Workspace search" section describes their limits.
 The TUI's `/read-only` changes model-tool mutation permission from the next call,
 including mid-turn. Its authoritative footer mode, transcript transition positions,
 copy/child/handoff inheritance and trusted plugin declarations are documented in

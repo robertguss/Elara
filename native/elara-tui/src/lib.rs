@@ -156,6 +156,7 @@ pub struct Model {
     safe_paste_cr: bool,
     pub enhanced_keyboard: bool,
     pub show_help: bool,
+    help_scroll: u16,
     quit_armed: bool,
     quit_confirmation: bool,
     pub appearance: Appearance,
@@ -200,6 +201,7 @@ impl Model {
             safe_paste_cr: false,
             enhanced_keyboard: false,
             show_help: false,
+            help_scroll: 0,
             quit_armed: false,
             quit_confirmation: false,
             appearance: Appearance::default(),
@@ -593,6 +595,7 @@ pub enum InputAction {
     Interrupt,
     Detach,
     ExternalEditor,
+    Paste,
     ProviderSettings(Value),
     Attachment(Value),
     Session(Value),
@@ -685,6 +688,40 @@ fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<
     Some(InputAction::None)
 }
 
+pub fn paste_clipboard(model: &mut Model) -> InputAction {
+    match clipboard::paste() {
+        Ok(clipboard::Content::Text(text)) => {
+            model.notice = Some(if model.editor.insert(&text) {
+                "Clipboard text pasted; draft not sent.".into()
+            } else {
+                "Draft limit: 64 KiB. Paste rejected; existing text retained.".into()
+            });
+            InputAction::None
+        }
+        Ok(clipboard::Content::Image(data)) => {
+            if model.mode != "control"
+                || !model.attachments.supported
+                || model.connection != ConnectionState::Connected
+            {
+                model.notice = Some(
+                    "Image paste requires a connected control session with attachment support."
+                        .into(),
+                );
+                return InputAction::None;
+            }
+            let action = model.attachments.paste_image(data);
+            model.notice = Some(model.attachments.status().into());
+            action
+        }
+        Err(error) => {
+            model.safe_paste = true;
+            model.safe_paste_cr = false;
+            model.notice = Some(error);
+            InputAction::None
+        }
+    }
+}
+
 pub fn handle_input(
     model: &mut Model,
     event: crossterm::event::Event,
@@ -725,6 +762,26 @@ pub fn handle_input(
         } else if matches!(event, Event::Paste(_)) {
             model.quit_armed = false;
         }
+    }
+    if let Event::Key(key) = &event
+        && key.kind == KeyEventKind::Press
+        && actions::lookup(*key, false) == Some(actions::Action::Paste)
+    {
+        if model.safe_paste {
+            model.safe_paste = false;
+            model.safe_paste_cr = false;
+            return InputAction::None;
+        }
+        model.close_tool();
+        model.appearance_picker = None;
+        model.presentation_overlay = None;
+        model.show_help = false;
+        model.provider_picker = None;
+        model.session_picker = None;
+        model.session_detail = None;
+        model.inbox.selected = None;
+        model.attachments.close_picker();
+        return InputAction::Paste;
     }
     if !model.safe_paste
         && let Some(action) = inbox::input(model, &event)
@@ -913,14 +970,6 @@ pub fn handle_input(
             use actions::Action;
             let focused = model.transcript.borrow().focused;
             let action = actions::lookup(key, focused);
-            if action == Some(Action::SafePaste) && key.kind == KeyEventKind::Press {
-                if !model.safe_paste {
-                    model.close_tool();
-                }
-                model.safe_paste = !model.safe_paste;
-                model.safe_paste_cr = false;
-                return InputAction::None;
-            }
             // Unframed pasted controls must never invoke application commands.
             if model.safe_paste {
                 let lf = key.code == KeyCode::Char('j') && key.modifiers == KeyModifiers::CONTROL;
@@ -947,13 +996,20 @@ pub fn handle_input(
                 }
                 return InputAction::None;
             }
-            if action == Some(Action::Help) {
+            if action == Some(Action::Help) && model.editor.text().is_empty() && !focused {
                 model.show_help = !model.show_help;
+                model.help_scroll = 0;
                 return InputAction::None;
             }
             if model.show_help {
-                if key.code == KeyCode::Esc {
-                    model.show_help = false;
+                match key.code {
+                    KeyCode::Esc => model.show_help = false,
+                    KeyCode::Up => model.help_scroll = model.help_scroll.saturating_sub(1),
+                    KeyCode::Down => model.help_scroll = model.help_scroll.saturating_add(1),
+                    KeyCode::PageUp => model.help_scroll = model.help_scroll.saturating_sub(10),
+                    KeyCode::PageDown => model.help_scroll = model.help_scroll.saturating_add(10),
+                    KeyCode::Home => model.help_scroll = 0,
+                    _ => {}
                 }
                 return InputAction::None;
             }
@@ -1422,12 +1478,13 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
         frame.render_widget(
             Paragraph::new(composer_help(model))
                 .wrap(Wrap { trim: false })
+                .scroll((model.help_scroll, 0))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(presentation::line_style())
                         .title(Span::styled(
-                            " Composer help · F1/Esc close ",
+                            " Composer help · ↑/↓ scroll · Esc close ",
                             presentation::muted(),
                         )),
                 ),
@@ -1620,7 +1677,7 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
     let (title, hint) = if model.safe_paste {
         (
             " SAFE PASTE ",
-            " Enter newline · F2 finish (does not send) ".to_owned(),
+            " Enter newline · Ctrl-V finish (does not send) ".to_owned(),
         )
     } else {
         (" PROMPT ", prompt_hint)
@@ -1638,7 +1695,7 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             || continuity["handoff"].is_object()
             || continuity["source"].is_string())
     {
-        " Ctrl-X stop · F12 queue · Ctrl-J newline · F1 all bindings "
+        " Esc stop · Ctrl-Q queue · Ctrl-J newline · ? all bindings "
     } else if model.enhanced_keyboard {
         " Alt/Shift-Enter or Ctrl-J newline · Alt-↑/↓ history "
     } else {
@@ -1857,7 +1914,7 @@ fn draw_footer(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
         presentation::muted(),
     )];
     let center = format!(
-        "{} / {} · Thinking {} · F1 help",
+        "{} / {} · Thinking {} · ? help",
         model.appearance.layout.name(),
         model.appearance.theme.name(),
         if model.thinking_visible {
@@ -1926,20 +1983,22 @@ fn draw_diagnostics(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
 }
 
 fn composer_help(model: &Model) -> Vec<Line<'static>> {
-    let mut lines = vec![
+    let mut lines = actions::help();
+    lines.extend([
         Line::from("Enter sends when idle; rejected/uncertain sends retain the draft."),
         Line::from("Prompt: arrows move; Shift selects; Ctrl-A selects all."),
         Line::from("Ctrl/Alt arrows/delete: words. Home/End: line; Ctrl: whole draft."),
         Line::from("Alt-Up/Down prompt history restores the original draft at newest."),
-        Line::from("F2 BEFORE unframed paste: commands disabled, Enter inserts newline."),
-        Line::from("F2 finishes safe paste without sending. Draft limit 64 KiB."),
+        Line::from("Ctrl-V pastes clipboard text or PNG without sending."),
+        Line::from("/paste safe BEFORE unframed paste: Enter inserts newline; commands disabled."),
+        Line::from("Ctrl-V finishes safe paste without sending. Draft limit 64 KiB."),
         Line::from("Tabs/line breaks retained; other control bytes removed."),
         Line::from(if model.enhanced_keyboard {
             "Enhanced keys: modified Enter available."
         } else {
             "Legacy keys: Ctrl-J fallback; Alt-Enter depends on terminal mapping."
         }),
-    ];
+    ]);
     lines.push(Line::from(
         "/limits · /limits calls 150 · /limits timeout 20m (s/m/h)",
     ));
@@ -1948,7 +2007,6 @@ fn composer_help(model: &Model) -> Vec<Line<'static>> {
             .into_iter()
             .map(Line::from),
     );
-    lines.extend(actions::help());
     lines.push(Line::from(
         "Mouse wheel/drag: scroll/select; native selection: terminal modifier.",
     ));
@@ -2770,7 +2828,12 @@ mod tests {
             InputAction::None
         );
         assert_eq!(model.editor.text(), "a\nb\t👩‍💻[31m");
-        handle_input(&mut model, key(KeyCode::F(2), KeyModifiers::NONE), 78);
+        handle_input(
+            &mut model,
+            key(KeyCode::Char('v'), KeyModifiers::CONTROL),
+            78,
+        );
+        model.safe_paste = true;
         assert_eq!(
             handle_input(&mut model, key(KeyCode::Enter, KeyModifiers::NONE), 78),
             InputAction::None
@@ -2793,7 +2856,11 @@ mod tests {
             78,
         );
         assert!(model.editor.text().ends_with("\n\n"));
-        handle_input(&mut model, key(KeyCode::F(2), KeyModifiers::NONE), 78);
+        handle_input(
+            &mut model,
+            key(KeyCode::Char('v'), KeyModifiers::CONTROL),
+            78,
+        );
         for modifiers in [KeyModifiers::ALT, KeyModifiers::SHIFT] {
             assert_eq!(
                 handle_input(&mut model, key(KeyCode::Enter, modifiers), 78),
@@ -2845,7 +2912,7 @@ mod tests {
         assert!(cursor.x > 0 && cursor.x < 79 && cursor.y > 0 && cursor.y < 23);
         let rendered = render_frame(&model, 80, 24).unwrap();
         assert!(rendered.contains("▌ inspect the build"));
-        assert!(rendered.contains("F2 safe paste"));
+        assert!(rendered.contains("Ctrl-V paste"));
     }
 
     #[test]
@@ -3173,12 +3240,14 @@ mod transcript_input_tests {
     use crossterm::event::{
         Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
     };
-    fn key(model: &mut Model, code: KeyCode) -> InputAction {
-        handle_input(
-            model,
-            Event::Key(KeyEvent::new(code, KeyModifiers::NONE)),
-            78,
-        )
+    fn key(model: &mut Model, code: impl Into<KeyEvent>) -> InputAction {
+        let action = handle_input(model, Event::Key(code.into()), 78);
+        if action == InputAction::Paste {
+            model.safe_paste = true;
+            InputAction::None
+        } else {
+            action
+        }
     }
     #[test]
     fn focus_search_and_safe_paste_preserve_local_draft() {
@@ -3195,10 +3264,16 @@ mod transcript_input_tests {
         assert_eq!(key(&mut model, KeyCode::Enter), InputAction::None);
         key(&mut model, KeyCode::Esc);
         assert!(model.transcript.borrow().focused);
-        key(&mut model, KeyCode::F(2));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL),
+        );
         key(&mut model, KeyCode::Tab);
         key(&mut model, KeyCode::Enter);
-        key(&mut model, KeyCode::F(2));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL),
+        );
         assert_eq!(model.editor.text(), "unsent draft\t\n");
         key(&mut model, KeyCode::Tab);
         assert!(!model.transcript.borrow().focused);
@@ -3305,18 +3380,26 @@ mod transcript_input_tests {
         }
     }
     #[test]
-    fn control_x_interrupts_search_unless_safe_paste() {
-        let mut model = fixture_model("idle");
+    fn escape_closes_search_before_interrupting_and_safe_paste_suppresses_it() {
+        let mut model = fixture_model("streaming");
         render_frame(&model, 80, 24).unwrap();
         key(&mut model, KeyCode::Tab);
         key(&mut model, KeyCode::Char('/'));
-        let control_x = Event::Key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL));
+        let escape = Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert_eq!(
-            handle_input(&mut model, control_x.clone(), 78),
+            handle_input(&mut model, escape.clone(), 78),
+            InputAction::None
+        );
+        assert!(!model.transcript.borrow().searching);
+        assert_eq!(
+            handle_input(&mut model, escape.clone(), 78),
             InputAction::Interrupt
         );
-        key(&mut model, KeyCode::F(2));
-        assert_eq!(handle_input(&mut model, control_x, 78), InputAction::None);
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL),
+        );
+        assert_eq!(handle_input(&mut model, escape, 78), InputAction::None);
     }
     #[test]
     fn help_exposes_transcript_bindings_in_standard_window() {
@@ -3368,7 +3451,10 @@ mod transcript_input_tests {
         );
         assert!(model.editor.text().is_empty());
         model.editor.insert("safe draft");
-        key(&mut model, KeyCode::F(2));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL),
+        );
         assert_eq!(handle_input(&mut model, control_c, 78), InputAction::None);
         assert_eq!(model.editor.text(), "safe draft");
     }
@@ -3407,12 +3493,10 @@ mod tool_inspection_tests {
     use crossterm::event::{
         Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
     };
-    fn key(model: &mut Model, code: KeyCode) {
-        handle_input(
-            model,
-            Event::Key(KeyEvent::new(code, KeyModifiers::NONE)),
-            78,
-        );
+    fn key(model: &mut Model, code: impl Into<KeyEvent>) {
+        if handle_input(model, Event::Key(code.into()), 78) == InputAction::Paste {
+            model.safe_paste = true;
+        }
     }
     fn model() -> Model {
         let mut model = fixture_model("idle");
@@ -3480,11 +3564,17 @@ mod tool_inspection_tests {
         let mut model = model();
         model.editor.insert("draft ");
         key(&mut model, KeyCode::Char('f'));
-        key(&mut model, KeyCode::F(2));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL),
+        );
         assert!(model.viewer.is_none());
         assert!(render_frame(&model, 80, 24).unwrap().contains("SAFE PASTE"));
         handle_input(&mut model, Event::Paste("pasted".into()), 78);
-        key(&mut model, KeyCode::F(2));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL),
+        );
         assert_eq!(model.editor.text(), "draft pasted");
         model.transcript.borrow_mut().selected = Some(format!("{}:tool:inspect", model.session_id));
         model.open_tool();

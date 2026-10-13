@@ -28,6 +28,9 @@ to schema 4 without losing receipt or ownership evidence.
 The TUI's shared code colors live in `native/elara-tui/src/syntax.rs`.
 Colored Elixir and edit frames for all four themes live in
 `native/elara-tui/tests/goldens/syntax-*.txt`.
+The confirmed TUI controls and clipboard fallback are documented in README.md's
+TUI section. `native/elara-tui/src/actions.rs` owns action bindings and help;
+Esc closes panels or interrupts, and consecutive Ctrl-C requests a safe quit.
 New coding worktrees are kept outside protected Elara state; the location and
 operator override are documented under "Persistent delegated children".
 Existing children keep their recorded paths, without relocation or deletion.

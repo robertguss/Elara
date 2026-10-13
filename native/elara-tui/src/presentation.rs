@@ -36,7 +36,7 @@ pub(super) fn input(model: &mut Model, event: &Event) -> bool {
         return false;
     }
     let action = actions::lookup(*key, model.transcript.borrow().focused);
-    if action == Some(actions::Action::SafePaste) {
+    if action == Some(actions::Action::Paste) {
         model.appearance_picker = None;
         model.presentation_overlay = None;
         model.show_help = false;
@@ -46,6 +46,9 @@ pub(super) fn input(model: &mut Model, event: &Event) -> bool {
         return false;
     }
     if let Some(mut choice) = model.appearance_picker {
+        if matches!(key.code, KeyCode::Char(_)) && !key.modifiers.is_empty() {
+            return true;
+        }
         match key.code {
             _ if key.code == KeyCode::Esc || action == Some(actions::Action::Appearance) => {
                 model.appearance_picker = None;
@@ -206,9 +209,9 @@ fn thinking_heading(model: &Model, width: u16) -> Line<'static> {
         format!(" · turn {}", model.transcript.borrow().selected_user_turn())
     };
     let tail = if model.thinking_visible {
-        vec![Span::styled("Hide − F4", muted())]
+        vec![Span::styled("Hide − Ctrl-T", muted())]
     } else {
-        vec![Span::styled("F4 show", muted())]
+        vec![Span::styled("Ctrl-T show", muted())]
     };
     row(
         vec![
@@ -242,7 +245,10 @@ fn thinking_lines(model: &Model, width: u16) -> Vec<Line<'static>> {
         }
     };
     if !model.thinking_visible {
-        lines.push(Line::from(Span::styled("Hidden by you · F4 show", muted())));
+        lines.push(Line::from(Span::styled(
+            "Hidden by you · Ctrl-T show",
+            muted(),
+        )));
         lines.push(divider());
         lines.extend(footer(None));
     } else if model.preview_reasoning {
@@ -468,9 +474,9 @@ pub(super) fn inline_thinking(
         0,
         vec![Span::styled(
             if model.thinking_visible {
-                "Hide − F4"
+                "Hide − Ctrl-T"
             } else {
-                "F4 show"
+                "Ctrl-T show"
             },
             muted(),
         )],
@@ -520,7 +526,7 @@ fn turn_lines(model: &Model, skip: usize, rows: usize) -> Vec<Line<'_>> {
         }))
         .chain(std::iter::once(Line::default()))
         .chain(std::iter::once(Line::from(Span::styled(
-            format!("{} · F6 turns · End live", model.thinking_source()),
+            format!("{} · Ctrl-R turns · End live", model.thinking_source()),
             muted(),
         ))))
         .skip(skip)
@@ -930,15 +936,13 @@ pub(super) fn paint(frame: &mut ratatui::Frame<'_>, model: &Model) {
 pub(crate) mod tests {
     use super::*;
     use crossterm::event::{KeyEvent, KeyModifiers};
-    fn key(model: &mut Model, code: KeyCode) {
-        assert_eq!(
-            handle_input(
-                model,
-                Event::Key(KeyEvent::new(code, KeyModifiers::NONE)),
-                78
-            ),
-            InputAction::None
-        );
+    fn key(model: &mut Model, code: impl Into<KeyEvent>) {
+        let action = handle_input(model, Event::Key(code.into()), 78);
+        if action == InputAction::Paste {
+            model.safe_paste = true;
+        } else {
+            assert_eq!(action, InputAction::None);
+        }
     }
     pub(crate) fn preview() -> Model {
         let mut model = fixture_model("streaming");
@@ -973,11 +977,17 @@ pub(crate) mod tests {
             });
             assert_eq!(reasoning_for_turn(&model, 1)[0]["text"], "ACTUAL_HISTORY");
             assert_eq!(reasoning_for_turn(&model, 2)[0]["text"], "ACTUAL_LIVE");
-            key(&mut model, KeyCode::F(4));
+            key(
+                &mut model,
+                KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
+            );
             let frame = render_frame(&model, 120, 40).unwrap();
             assert!(!frame.contains("ACTUAL_HISTORY") && !frame.contains("ACTUAL_LIVE"));
             assert!(frame.contains("COMMENTARY_ONLY") && frame.contains("ANSWER_ONLY"));
-            key(&mut model, KeyCode::F(4));
+            key(
+                &mut model,
+                KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
+            );
             let frame = render_frame(&model, 120, 40).unwrap();
             assert!(frame.contains("ACTUAL_LIVE"));
             assert!(!frame.contains("PREVIEW"));
@@ -1130,20 +1140,38 @@ pub(crate) mod tests {
         model.projection.view["provider_view"] =
             json!({"catalog":[{"model":"gpt-5.5","efforts":["low"]}]});
         model.provider_picker = Some((0, 0));
-        for (key, expected) in [('x', InputAction::Interrupt), ('c', InputAction::None)] {
-            let event = Event::Key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::CONTROL));
-            assert_eq!(handle_input(&mut model, event.clone(), 78), expected);
-            model.safe_paste = true;
-            assert_eq!(handle_input(&mut model, event, 78), InputAction::None);
-            model.safe_paste = false;
-        }
+        let escape = Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(
+            handle_input(&mut model, escape.clone(), 78),
+            InputAction::None
+        );
+        assert!(model.provider_picker.is_none());
+        assert_eq!(
+            handle_input(&mut model, escape.clone(), 78),
+            InputAction::Interrupt
+        );
+        model.safe_paste = true;
+        assert_eq!(handle_input(&mut model, escape, 78), InputAction::None);
+        model.safe_paste = false;
+        assert_eq!(
+            handle_input(
+                &mut model,
+                Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+                78
+            ),
+            InputAction::None
+        );
+        assert!(model.editor.text().is_empty());
     }
 
     #[test]
     fn provider_picker_clamps_effort_when_switching_to_a_smaller_catalog_entry() {
         let mut model = preview();
         model.projection.view["provider_view"] = json!({"extension":"provider_visibility_v1", "catalog":[{"model":"large","efforts":["low","high"]},{"model":"small","efforts":["low"]}],"next_request":{"model":"large","effort":"high"}});
-        key(&mut model, KeyCode::F(7));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
+        );
         assert_eq!(model.provider_picker, Some((0, 1)));
         key(&mut model, KeyCode::Down);
         assert_eq!(model.provider_picker, Some((1, 0)));
@@ -1165,7 +1193,10 @@ pub(crate) mod tests {
         let mut model = preview();
         model.projection.view["provider_view"] = json!({"extension":"provider_visibility_v1", "catalog":[{"model":"gpt-5.5","efforts":["low","high"]},{"model":"gpt-5.4-mini","efforts":["low","high"]}],"next_request":{"model":"gpt-5.5","effort":"low"}});
         let draft = model.editor.text().to_owned();
-        key(&mut model, KeyCode::F(7));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
+        );
         key(&mut model, KeyCode::Down);
         key(&mut model, KeyCode::Right);
         let result = handle_input(
@@ -1215,14 +1246,18 @@ pub(crate) mod tests {
     #[test]
     fn short_modals_always_show_escape_and_restore_draft() {
         for height in 4..=10 {
-            for code in [KeyCode::F(3), KeyCode::F(5), KeyCode::F(6)] {
+            for action in [
+                actions::Action::Appearance,
+                actions::Action::ThinkingView,
+                actions::Action::Turns,
+            ] {
                 let mut model = preview();
                 let draft = model.editor.text().to_owned();
-                key(&mut model, code);
+                activate(&mut model, action);
                 let frame = render_frame(&model, 80, height).unwrap();
                 assert!(
                     frame.contains("Esc"),
-                    "{code:?} at height {height}: {frame}"
+                    "{action:?} at height {height}: {frame}"
                 );
                 assert!(
                     frame.contains("Resize")
@@ -1246,7 +1281,10 @@ pub(crate) mod tests {
             {"role":"user", "text":first},
             {"role":"user", "text":"DISTINCT SECOND PROMPT"}
         ]);
-        key(&mut model, KeyCode::F(6));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL),
+        );
         key(&mut model, KeyCode::PageDown);
         let frame = render_frame(&model, 80, 24).unwrap();
         assert!(frame.contains("DISTINCT SECOND PROMPT"));
@@ -1268,14 +1306,20 @@ pub(crate) mod tests {
     #[test]
     fn thinking_overlay_honors_its_f4_show_control() {
         let mut model = preview();
-        key(&mut model, KeyCode::F(4));
-        key(&mut model, KeyCode::F(5));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
+        );
+        activate(&mut model, actions::Action::ThinkingView);
         assert!(
             render_frame(&model, 80, 24)
                 .unwrap()
                 .contains("Hidden by you")
         );
-        key(&mut model, KeyCode::F(4));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
+        );
         assert!(model.thinking_visible);
         assert_eq!(model.presentation_overlay, Some(Overlay::Thinking));
         assert!(model.transcript.borrow().source_key.is_none());
@@ -1294,12 +1338,15 @@ pub(crate) mod tests {
                 .map(|i| json!({"role":"user", "text":format!("QUESTION {i:02}")}))
                 .collect::<Vec<_>>()
         );
-        key(&mut model, KeyCode::F(5));
+        activate(&mut model, actions::Action::ThinkingView);
         for _ in 0..3 {
             key(&mut model, KeyCode::PageDown);
         }
         key(&mut model, KeyCode::Esc);
-        key(&mut model, KeyCode::F(6));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL),
+        );
         assert_eq!(model.overlay_scroll, 0);
         assert!(
             render_frame(&model, 80, 24)
@@ -1337,7 +1384,10 @@ pub(crate) mod tests {
         );
         let selection = model.transcript.borrow().selection.clone();
         let anchor = model.transcript.borrow().anchor.clone();
-        key(&mut model, KeyCode::F(4));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
+        );
         for layout in ViewLayout::ALL {
             for theme in Theme::ALL {
                 model.set_appearance(Appearance {
@@ -1368,7 +1418,7 @@ pub(crate) mod tests {
                     json!("Another live answer chunk");
                 render_frame(&model, 80, 24).unwrap();
                 assert_eq!(model.thinking_source(), "turn 1 · historical");
-                key(&mut model, KeyCode::F(5));
+                activate(&mut model, actions::Action::ThinkingView);
                 assert!(
                     render_frame(&model, 80, 24)
                         .unwrap()
@@ -1384,15 +1434,25 @@ pub(crate) mod tests {
         assert!(!model.thinking_visible);
         model.transcript.borrow_mut().tail();
         assert_eq!(model.thinking_source(), "turn 2 · live follow · complete");
-        key(&mut model, KeyCode::F(4));
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
+        );
         assert!(model.thinking_visible);
     }
     #[test]
     fn modal_safe_paste_closes_overlays_and_preserves_draft_focus() {
-        for modal in [KeyCode::F(3), KeyCode::F(5), KeyCode::F(6), KeyCode::F(1)] {
+        for modal in [
+            actions::Action::Appearance,
+            actions::Action::ThinkingView,
+            actions::Action::Turns,
+        ] {
             let mut model = preview();
-            key(&mut model, modal);
-            key(&mut model, KeyCode::F(2));
+            activate(&mut model, modal);
+            key(
+                &mut model,
+                KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL),
+            );
             assert!(model.safe_paste);
             assert!(
                 model.appearance_picker.is_none()
@@ -1402,21 +1462,27 @@ pub(crate) mod tests {
             let frame = render_frame(&model, 80, 24).unwrap();
             assert!(frame.contains("SAFE PASTE"));
             assert!(frame.contains("Preserve"));
-            key(&mut model, KeyCode::F(3));
+            key(
+                &mut model,
+                KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
+            );
             assert!(model.appearance_picker.is_none());
-            key(&mut model, KeyCode::F(2));
+            key(
+                &mut model,
+                KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL),
+            );
         }
     }
     #[test]
     fn appearance_cancel_preserves_choices_and_paste_is_never_hidden() {
         let mut model = preview();
         let original = model.appearance;
-        key(&mut model, KeyCode::F(3));
+        activate(&mut model, actions::Action::Appearance);
         key(&mut model, KeyCode::Right);
         key(&mut model, KeyCode::Down);
         key(&mut model, KeyCode::Esc);
         assert_eq!(model.appearance, original);
-        key(&mut model, KeyCode::F(3));
+        activate(&mut model, actions::Action::Appearance);
         key(&mut model, KeyCode::Left);
         key(&mut model, KeyCode::Up);
         key(&mut model, KeyCode::Enter);
@@ -1429,7 +1495,7 @@ pub(crate) mod tests {
                 ..Appearance::default()
             }
         );
-        key(&mut model, KeyCode::F(5));
+        activate(&mut model, actions::Action::ThinkingView);
         handle_input(&mut model, Event::Paste("visible paste".into()), 78);
         assert!(model.presentation_overlay.is_none());
         assert!(
@@ -1480,11 +1546,15 @@ pub(crate) mod tests {
     }
     #[test]
     fn overlays_keep_pending_and_disconnect_visible_and_honor_controls() {
-        for code in [KeyCode::F(3), KeyCode::F(5), KeyCode::F(6)] {
+        for action in [
+            actions::Action::Appearance,
+            actions::Action::ThinkingView,
+            actions::Action::Turns,
+        ] {
             let mut model = fixture_model("idle");
             model.editor.insert("unsent");
             model.prepare_submit().unwrap();
-            key(&mut model, code);
+            activate(&mut model, action);
             assert!(
                 render_frame(&model, 80, 24)
                     .unwrap()
@@ -1496,12 +1566,13 @@ pub(crate) mod tests {
                     .unwrap()
                     .contains("Acceptance uncertain")
             );
-            let interrupt = handle_input(
+            let closed = handle_input(
                 &mut model,
-                Event::Key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
+                Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
                 78,
             );
-            assert_eq!(interrupt, InputAction::Interrupt);
+            assert_eq!(closed, InputAction::None);
+            assert!(model.appearance_picker.is_none() && model.presentation_overlay.is_none());
             let clear = handle_input(
                 &mut model,
                 Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),

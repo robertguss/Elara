@@ -44,6 +44,7 @@ if pid == 0:
     os.execv(binary, [binary, "--port", server_port, "--", session])
 
 output = bytearray()
+started = time.monotonic()
 
 
 def drain(seconds=0.2):
@@ -57,6 +58,10 @@ def drain(seconds=0.2):
             if not chunk:
                 break
             output.extend(chunk)
+            if directory := os.environ.get("ELARA_TUI_PTY_CAPTURE"):
+                os.makedirs(directory, exist_ok=True)
+                with open(os.path.join(directory, "frames.jsonl"), "a") as frames:
+                    frames.write(json.dumps({"t": time.monotonic() - started, "bytes": chunk.hex()}) + "\n")
             # Minimal legacy terminal query replies; no enhanced-key support claim.
             if b"\x1b[c" in chunk:
                 os.write(master, b"\x1b[?1;2c")
@@ -88,6 +93,8 @@ def capture(name):
     directory = os.environ.get("ELARA_TUI_PTY_CAPTURE")
     if directory:
         os.makedirs(directory, exist_ok=True)
+        if name in ("help", "quit-confirmation", "quit-cancelled"):
+            drain(1.2)  # Hold review states long enough to inspect the recording.
         with open(os.path.join(directory, name + ".ansi"), "wb") as file:
             file.write(output)
         with open(os.path.join(directory, name + ".json"), "w") as file:
@@ -118,8 +125,8 @@ try:
     resize(180, 45)
     resize(80, 24)
     send(b"X")
-    # Closing help leaves the turn running; the next Esc interrupts and pauses.
-    send(b"\x1bOP\x1b")
+    # Closing turns leaves the draft and running turn intact.
+    send(b"\x12\x1b")
     assert snapshot()["turn"]["state"] != "idle", "panel Esc does not interrupt"
     send(b"\r\x1b")
     wait_for(lambda: snapshot()["turn"]["state"] == "idle", "interrupt reaches idle")
@@ -132,16 +139,19 @@ try:
     send(b"\x1b[1;3A\x1b[1;3B")  # history older/newest restores draft
     send(b"/resume-inputs\r")
     wait_for(lambda: prompts() == [expected, "draft while streaminX"], "selected draft survives resize/history/interrupt")
-    send(b"\x18")
+    send(b"\x1b")
     wait_for(lambda: snapshot()["turn"]["state"] == "idle", "second interrupt")
-    send(b"\x1bOQ")  # F2 enters explicit safe paste
-    send(b"safe\nsecond\rthird\r\nfourth\x18\x03")
+    send(b"\x16")  # Ctrl-V enters explicit safe paste
+    send(b"safe\nsecond\rthird\r\nfourth\x1b\x03")
     assert len(prompts()) == 2, "safe paste controls never submit, interrupt or detach"
-    send(b"\x1bOQ\r")
+    send(b"\x16\r")
     wait_for(lambda: prompts()[-1] == "safe\nsecond\nthird\nfourth", "safe paste exact text")
-    send(b"\x18")
-    send(b"\x1bOP")  # F1 opens help
+    send(b"\x1b")
+    send(b"/help\r")  # ? opens help
     assert b"Composer" in output
+    resize(81, 24)
+    resize(80, 24)
+    capture("help")
     send(b"\x1b")  # close help
     send(b"\x03\x03")  # Request quit through either launcher or native client.
     if attached["lifetime"] == "embedded":

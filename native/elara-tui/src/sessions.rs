@@ -396,9 +396,9 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
                     " Branch points · read-only · Esc close "
                 }
             } else if model.mode == "control" {
-                " Sessions · F11 refresh · Enter switch · Delete remove "
+                " Sessions · Ctrl-O refresh · Enter switch · Delete remove "
             } else {
-                " Sessions · F11 refresh · Enter observe · read-only "
+                " Sessions · Ctrl-O refresh · Enter observe · read-only "
             },
         )),
         rect,
@@ -549,6 +549,7 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
         "help" => {
             model.editor.clear();
             model.show_help = true;
+            model.help_scroll = 0;
             InputAction::None
         }
         "appearance" => {
@@ -577,9 +578,13 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
         }
         "paste" => {
             model.editor.clear();
-            model.safe_paste = true;
-            model.safe_paste_cr = false;
-            InputAction::None
+            if argument == "safe" {
+                model.safe_paste = true;
+                model.safe_paste_cr = false;
+                InputAction::None
+            } else {
+                InputAction::Paste
+            }
         }
         "notifications" => {
             let enabled = match argument {

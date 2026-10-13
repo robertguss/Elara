@@ -410,7 +410,7 @@ when none is configured. Before loading repository plugins, review their
 source and run `mix elara.trust WORKSPACE` from the Elara checkout. Approval
 covers exact file bytes; changed or new plugins need approval again.
 
-Press **F11** or enter `/sessions` to find live and saved sessions in the
+Press **Ctrl-O** or enter `/sessions` to find live and saved sessions in the
 current workspace. Type a fuzzy name/ID filter, use arrows to select, and Enter
 to switch. `/new` creates and opens another session; `/name TEXT` names the
 current one. Switching preserves each session's unsent draft, attachments, and
@@ -429,19 +429,19 @@ a literal slash.
 
 Saved startup also works without a running server:
 `mix elara.tui -- SESSION_ID`. The footer explicitly identifies an embedded
-server (exits with the TUI) versus a long-lived server. F11 retries attachment
+server (exits with the TUI) versus a long-lived server. Ctrl-O retries attachment
 after a disconnect; press it again after reconnecting to open the picker.
 
 Choose appearance before attaching with `mix elara.tui new --appearance`, or
-press **F3** during a session. Left/Right chooses the layout (Ember inline,
+enter `/appearance` during a session. Left/Right chooses the layout (Ember inline,
 Observatory side pane, Workbench turn rail and strip); Up/Down chooses one of
 four independent themes (Ember, Observatory, Workbench, Forest). Enter applies;
 **s** applies and saves defaults to `~/.elara/tui-appearance.json`; Esc cancels.
 `--layout workbench --theme forest` overrides defaults for one launch.
 `ELARA_TUI_APPEARANCE_FILE` selects a separate preferences file.
 
-**F4** hides/shows thinking and retains that choice through layout switches.
-**F5** opens its full view; **F6** opens turn navigation. Esc closes either view
+**Ctrl-T** hides/shows thinking and retains that choice through layout switches.
+`/thinking-view` opens its full view; **Ctrl-R** opens turn navigation. Esc closes either view
 and restores focus. Turn navigation shows short summaries; the transcript
 retains each full prompt. Optional side panes collapse on narrow terminals;
 these keys keep them accessible. Thinking identifies the inspected historical turn
@@ -450,7 +450,7 @@ commentary, and final answers separately; missing summaries are labeled
 unavailable. `--preview-reasoning` explicitly shows a labeled, synthetic
 presentation fixture; it is not saved in preferences or conversation history.
 
-**F7** opens Codex model and reasoning-effort controls. Up/Down chooses a model;
+**Ctrl-P** opens Codex model and reasoning-effort controls. Up/Down chooses a model;
 Left/Right chooses effort; Enter accepts and Esc cancels. Accepted settings apply
 to the next provider request, including the next tool-loop iteration. The view
 distinguishes the active request from next-request settings, which survive resume
@@ -459,13 +459,13 @@ subscription catalog; advertised choices may still be rejected by the provider.
 Sessions saved with provider settings require a build with provider-visibility
 support; older builds reject the expanded session header.
 
-F7 also shows provider-reported request usage and session totals when available.
+Ctrl-P also shows provider-reported request usage and session totals when available.
 Context size is a labeled conservative byte estimate, with an advertised model
 limit; it is not exact tokenizer occupancy. See the [subscription evidence](docs/subscription-capability-preflight.md)
 for tested capabilities and limitations.
 
-Use **F8** to find workspace text files, **F9** to attach a PNG from a local disk
-path, and **F10** to inspect or remove draft selections. Typing `@` at a word
+Use **Ctrl-F** to find workspace text files, `/image` to attach a PNG from a local disk
+path, and `/attachments` to inspect or remove draft selections. Typing `@` at a word
 boundary also offers file discovery; Enter or a mouse click explicitly selects
 a reference. Esc keeps literal `@query` text. Ordinary mentions and pasted `@`
 text do not cause file reads. File discovery supports fuzzy matching, spaces,
@@ -478,7 +478,7 @@ the workspace and are limited to 2 MiB, 4096 pixels per dimension, and 16M
 pixels. Supported PNGs are 8-bit, non-interlaced grayscale, RGB, gray-alpha, or
 RGBA. Invalid, missing, or oversized inputs leave the draft intact. Selecting
 images requires a connected controlling client; disconnected drafts remain
-visible. F11 reconnects and revalidates retained images without resending
+visible. Ctrl-O reconnects and revalidates retained images without resending
 prompts.
 
 Accepted content is immutable in the saved conversation, so moving or editing
@@ -498,7 +498,7 @@ keyboard modes. Alt-Enter works when the terminal transmits it distinctly
 (for example, Escape followed by Enter). Shift-Enter works with enhanced keys;
 the client probes support and shows the bindings it can advertise. Ghostty and
 WezTerm settings can change what modified keys send: use Ctrl-J if they arrive
-as plain Enter. Press F1 for all bindings, including word movement/deletion,
+as plain Enter. Press **? on an empty prompt**, or enter `/help`, for all bindings, including word movement/deletion,
 Home/End, Shift-selection, and Alt-Up/Down history. Returning past the newest
 history prompt restores your original draft, cursor, and selection.
 
@@ -519,9 +519,15 @@ and desktop notifications; `/notifications on` enables them. These commands
 save the local preference. The appearance picker also has an `n` toggle; use
 `s` there to save it as the default. Reattaching does not notify for old turns.
 
-Bracketed clipboard paste preserves newlines without sending. If paste framing
-is unavailable, press **F2 before pasting**: safe paste mode inserts Enter as a
-newline and disables application commands; F2 exits that mode without sending.
+**Ctrl-V** (or `/paste`) inserts local clipboard text or attaches a clipboard PNG,
+never sends it. macOS uses `pbpaste` and AppleScript; Linux uses `wl-paste`,
+`xclip`, or `xsel`. PNGs use the existing 2 MiB limit and server validation.
+Clipboard access is bounded; an unavailable clipboard enables protected terminal
+paste instead. `/image` remains available for PNGs from disk.
+
+Bracketed terminal paste preserves newlines without sending. Before unframed
+paste, enter `/paste safe`: Enter inserts a newline and application commands
+are disabled. Ctrl-V exits that mode without sending.
 In safe mode adjacent Enter/Ctrl-J events normalize CRLF to one newline.
 Review the draft, then Enter to send. Unframed pasted Enter is indistinguishable
 from typed Enter, so this mode must be enabled in advance. This fallback handles
@@ -530,11 +536,11 @@ at four-column stops), CRLF/CR become LF, and other C0/C1 controls are removed.
 An insert over the 64 KiB draft limit is rejected as a whole.
 
 Drafts stay editable while the session streams. **Enter** durably queues normal
-follow-ups FIFO. **F12** (or `/queue`) opens the inbox; Delete cancels the
+follow-ups FIFO. **Ctrl-Q** (or `/queue`) opens the inbox; Delete cancels the
 selected pending entry. **Ctrl-S** (or `/steer TEXT`) prioritizes an instruction
 at the next safe boundary: an active provider request is interrupted, but an
 already-started tool settles before steering and unstarted sibling calls are
-suppressed. **Ctrl-X** stops and pauses queue draining without deleting pending
+suppressed. **Esc** stops and pauses queue draining without deleting pending
 inputs. Resume with **r** in the inbox, `/resume-inputs`, or a new normal
 submission. The inbox shows effective execution capabilities; trusted local
 execution adds no approval prompts. Observers can inspect the inbox but cannot
@@ -563,8 +569,9 @@ prompts that fit the editor limit; it does not change persisted history.
 
 The picker and presentation actions also have slash commands: `/files`,
 `/image`, `/attachments`, `/model`, `/effort`, `/thinking`, `/thinking-view`,
-`/turns`, `/appearance`, `/help`, `/sessions` and `/queue`. `/paste` enters safe
-paste mode; the safe-paste key finishes it without sending.
+`/turns`, `/appearance`, `/help`, `/sessions` and `/queue`. `/paste` reads the
+clipboard; `/paste safe` enters protected terminal paste, and Ctrl-V finishes
+that mode without sending.
 
 Press **Tab** to move between the prompt and transcript. With transcript focus,
 Up/Down scroll by line, PageUp/PageDown by page, Home goes to the beginning, and
@@ -590,7 +597,13 @@ utilities on Linux. A failed or unavailable clipboard command produces a notice;
 the app does not claim success. Mouse reporting supports wheel scrolling and
 selection. Terminal-native selection remains available through the terminal's
 mouse-reporting bypass modifier (typically Shift; check your terminal settings).
-F1 lists the current action bindings.
+`?` on an empty prompt and `/help` list the current action bindings. Arrow and
+page keys scroll help. All former F-key actions have slash commands: `/help`,
+`/paste`, `/appearance`, `/thinking`, `/thinking-view`, `/turns`, `/model`,
+`/files`, `/image`, `/attachments`, `/sessions`, and `/queue`. `/effort` is an
+alias for `/model`. F-keys are unbound. Ctrl-K, Ctrl-D, and Ctrl-L are also
+unbound; Ctrl-A selects the draft, Ctrl-J inserts a newline, Ctrl-S steers,
+and Ctrl-G opens the external editor.
 
 Tool calls appear as compact blocks with their canonical state, useful argument
 summary, and result preview. Select a block and press **Space** to expand or
@@ -663,7 +676,7 @@ VM**. Filter by assignment/ID; Enter opens or resumes the selected child, and
 Tab opens scrollable metadata including full IDs, cwd, base revision,
 capabilities and integration receipts. Open children use the existing
 transcript, queue, model, reasoning and provider-reported usage views; there is
-no invented aggregate subscription accounting. F11 remains ordinary workspace
+no invented aggregate subscription accounting. Ctrl-O remains ordinary workspace
 session discovery. Observers can inspect/open but cannot delegate, integrate,
 clean up or stop work.
 
@@ -720,7 +733,7 @@ that do not enforce this metadata.
 `/threads` (also `/children`) opens the compact parent/child list in every
 layout. Enter opens a thread, Tab inspects its full metadata, `/return` opens
 the parent, and `/open THREAD_ID` opens a known session. Opening a child uses
-the ordinary transcript, tool inspector, F12 queue, F7 model/effort and
+the ordinary transcript, tool inspector, Ctrl-Q queue, Ctrl-P model/effort and
 reasoning views. Switching retains each thread's draft and local view state and
 preserves control versus observation. An observer never gains control by
 navigating.
@@ -787,7 +800,7 @@ retains its receipt and error. Interrupt cancels waiting without cancelling a
 job. Caller, target or transport loss retires subscriptions; VM restart never
 replays uncertain tools.
 Eight consecutive automatic agent/report turns exhaust a durable wake budget;
-F12 then `r`, `/resume-inputs`, or a new owner submission resets it. Empty sends
+Ctrl-Q then `r`, `/resume-inputs`, or a new owner submission resets it. Empty sends
 are rejected, report responses do not generate ancestor reports, pending
 transport is limited to 64 entries per recipient, and delegation depth is
 limited to three (in addition to four concurrently running children).

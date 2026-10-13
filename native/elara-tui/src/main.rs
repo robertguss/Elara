@@ -577,9 +577,15 @@ fn run_interactive(
             }
             let width = terminal.size().map_err(|error| error.to_string())?.width;
             dirty = true;
-            let request = match handle_input(model, event, width.saturating_sub(2).max(1) as usize)
-            {
+            let action = handle_input(model, event, width.saturating_sub(2).max(1) as usize);
+            let action = if action == InputAction::Paste {
+                elara_tui::paste_clipboard(model)
+            } else {
+                action
+            };
+            let request = match action {
                 InputAction::Detach => return Ok(()),
+                InputAction::Paste => unreachable!("paste resolved locally"),
                 InputAction::ExternalEditor => {
                     let result = edit_prompt(&mut guard, model.editor.text());
                     if guard.is_none() {

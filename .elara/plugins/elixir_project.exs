@@ -14,12 +14,14 @@ defmodule ElixirProjectPlugin do
     [
       %ToolSpec{
         name: "elixir_project_info",
+        capabilities: ["shell"],
         description:
           "Inspect the current Mix project. Returns its application, version, Elixir requirement, source paths, and dependencies.",
         parameters: empty_schema()
       },
       %ToolSpec{
         name: "elixir_check",
+        capabilities: ["shell", "filesystem:read"],
         description:
           "Run Elixir project checks with compact output. Select up to four evidence_paths before running to retain source excerpts for diagnose_check. Use 'all' before completing a code change.",
         parameters: %{
@@ -37,6 +39,7 @@ defmodule ElixirProjectPlugin do
       },
       %ToolSpec{
         name: "elixir_test",
+        capabilities: ["shell", "filesystem:read"],
         description:
           "Run the whole ExUnit suite or a focused test file/path:line. Select up to four evidence_paths to capture source before running; the focused test file is captured by default. Returns an evidence_run_id for check_evidence and diagnose_check.",
         parameters: %{
@@ -53,18 +56,23 @@ defmodule ElixirProjectPlugin do
       },
       %ToolSpec{
         name: "elixir_last_run",
+        capabilities: [],
+        mutating: false,
         description:
           "Show the last check or test run recorded by this session, useful after reloading the plugin.",
         parameters: empty_schema()
       },
       %ToolSpec{
         name: "elixir_rerun_last",
+        capabilities: ["shell", "filesystem:read"],
         description:
           "Repeat this session's last Mix invocation, including its focused test target, using the current project files.",
         parameters: empty_schema()
       },
       %ToolSpec{
         name: "check_evidence",
+        capabilities: [],
+        mutating: false,
         description:
           "Inspect the last captured project check and its immutable source/output excerpts. With no arguments, returns the run ID and artifact manifest. Supply artifact_id and optional start_line to read up to 20 captured lines.",
         parameters: %{
@@ -80,6 +88,8 @@ defmodule ElixirProjectPlugin do
       },
       %ToolSpec{
         name: "diagnose_check",
+        capabilities: [],
+        mutating: false,
         description:
           "Diagnose a captured failed project check using one additional model request and no tools. Get run_id from check_evidence. Returns observations, a cause hypothesis, validated source references, unknowns and a suggested next check. Interrupt cancels the diagnosis.",
         parameters: %{

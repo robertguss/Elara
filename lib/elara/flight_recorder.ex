@@ -562,6 +562,8 @@ defmodule Elara.FlightRecorder do
       next_ref: state.next_ref
     }
 
+    normalized = if state.read_only, do: Map.put(normalized, :read_only, true), else: normalized
+
     normalized =
       if map_size(state.cleared_tools) > 0,
         do:
@@ -636,6 +638,7 @@ defmodule Elara.FlightRecorder do
       runtime_limit_sources: Map.get(state, :runtime_limit_sources, %{}),
       cleared_tools: Map.get(state, :cleared_tools, %{}),
       context_usage_after: Map.get(state, :context_usage_after, 0),
+      read_only: Map.get(state, :read_only, false),
       deferred_calls: Map.get(state, :deferred_calls, []),
       next_ref: state.next_ref
     }
@@ -669,6 +672,8 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_fact({:clear_tool_results, ref, entries, bytes_freed}),
     do: %{kind: :clear_tool_results, ref: ref, entries: entries, bytes_freed: bytes_freed}
+
+  defp normalize_fact({:read_only, enabled}), do: %{kind: :read_only, enabled: enabled}
 
   defp normalize_fact({:ask_input, user}), do: %{kind: :ask_input, user: normalize_message(user)}
 
@@ -715,6 +720,8 @@ defmodule Elara.FlightRecorder do
   defp denormalize_fact(%{kind: :clear_tool_results} = fact),
     do: {:clear_tool_results, fact.ref, fact.entries, fact.bytes_freed}
 
+  defp denormalize_fact(%{kind: :read_only, enabled: enabled}), do: {:read_only, enabled}
+
   defp denormalize_fact(%{kind: :ask_input, user: user}),
     do: {:ask_input, denormalize_message(user)}
 
@@ -755,6 +762,8 @@ defmodule Elara.FlightRecorder do
   defp normalize_effect({:emit, event}, _tools), do: %{kind: :emit, event: normalize_event(event)}
 
   defp normalize_effect(:persist_context_clearing, _tools), do: %{kind: :persist_context_clearing}
+
+  defp normalize_effect(:persist_read_only, _tools), do: %{kind: :persist_read_only}
 
   defp normalize_effect({:call_provider, ref, request}, tools) do
     %{

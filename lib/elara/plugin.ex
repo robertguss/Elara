@@ -15,10 +15,19 @@ defmodule Elara.Plugin do
             name: String.t(),
             description: String.t(),
             parameters: map(),
+            capabilities: [String.t()] | nil,
+            mutating: boolean(),
             cancel_on_interrupt: boolean()
           }
 
-    defstruct [:name, :description, :parameters, cancel_on_interrupt: false]
+    defstruct [
+      :name,
+      :description,
+      :parameters,
+      :capabilities,
+      mutating: true,
+      cancel_on_interrupt: false
+    ]
   end
 
   defmodule Info do

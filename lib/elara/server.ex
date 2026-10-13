@@ -463,6 +463,22 @@ defmodule Elara.Server do
   defp handle_versioned_command(
          session,
          2,
+         %{"command" => "read_only"} = request,
+         _provider,
+         _lifetime
+       ) do
+    case Elara.attached_command(session, {:read_only, Map.get(request, "enabled", :toggle)}) do
+      {:ok, enabled} ->
+        %{"type" => "read_only_changed", "version" => 2, "enabled" => enabled}
+
+      {:error, reason} ->
+        error_message(reason, 2)
+    end
+  end
+
+  defp handle_versioned_command(
+         session,
+         2,
          %{"command" => "runtime_limits", "extension" => "runtime_limits_v1"},
          _provider,
          _lifetime

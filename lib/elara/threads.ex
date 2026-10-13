@@ -111,7 +111,13 @@ defmodule Elara.Threads do
          {:ok, provider} <- provider(opts),
          true <- inspect(elem(provider, 0)) == r["provider"],
          {:ok, saved} <- decode_options(r["options"]) do
-      saved = Keyword.drop(saved, [:max_iterations, :tool_timeout_ms, :max_tool_timeout_ms])
+      saved =
+        Keyword.drop(saved, [
+          :max_iterations,
+          :tool_timeout_ms,
+          :max_tool_timeout_ms,
+          :approval_wait
+        ])
 
       {:ok,
        opts
@@ -607,6 +613,7 @@ defmodule Elara.Threads do
             system: config.system,
             allowed_capabilities: caps,
             read_only: config.read_only,
+            approval_wait: config.approval_wait,
             max_iterations: config.max_iterations,
             max_tool_output_bytes: config.max_tool_output_bytes,
             context_keep_results: config.context_keep_results,
@@ -623,7 +630,11 @@ defmodule Elara.Threads do
 
       with {:ok, store} <-
              Store.set_provider_settings(
-               %{store | parent_session: parent},
+               %{
+                 store
+                 | parent_session: parent,
+                   context: Map.put(store.context, "command_rules", config.command_rules)
+               },
                Elara.Provider.Visibility.settings(config.provider)
              ) do
         record = %{

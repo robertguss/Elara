@@ -91,6 +91,125 @@ defmodule Elara.ServerTest do
       view["turn"]["state"] == "idle" and
         Enum.any?(view["messages"], &(&1["text"] == "continued"))
 
+  @tag :tmp_dir
+  test "command approvals negotiate pending state and require the controlling connection", %{
+    tmp_dir: cwd
+  } do
+    File.mkdir_p!(Path.join(cwd, ".elara"))
+    File.write!(Path.join(cwd, ".elara/command-rules.json"), ~s({"ask":["printf approved"]}))
+
+    call = %ToolCall{
+      id: "approve",
+      name: "bash",
+      args: {:ok, %{"command" => "printf approved > output"}}
+    }
+
+    {:ok, session} =
+      Elara.start_session(
+        cwd: cwd,
+        plugins: [],
+        provider: script([{:ok, asst(nil, [call])}, {:ok, asst("continued")}])
+      )
+
+    server = start_supervised!({Elara.Server, port: 0, provider: script([])})
+    port = Elara.Server.port(server)
+    controller = connect(port)
+    on_exit(fn -> :gen_tcp.close(controller) end)
+
+    :ok =
+      send_json(controller, %{
+        "version" => 2,
+        "command" => "attach",
+        "mode" => "control",
+        "session_id" => session,
+        "extensions" => ["command_approvals_v1"]
+      })
+
+    attached = recv_json(controller)
+    assert "command_approvals_v1" in attached["extensions"]
+    legacy = connect(port)
+    on_exit(fn -> :gen_tcp.close(legacy) end)
+    legacy_view = projector(attach(legacy, session, "observe"))
+    :ok = Elara.ask_async(session, "execute")
+
+    pending =
+      ingest_until(controller, projector(attached), &(&1["turn"]["state"] == "approval_waiting"))
+
+    Enum.reduce((legacy_view.head + 1)..pending.head, legacy_view, fn _, view ->
+      frame = recv_json(legacy)
+
+      {:applied, view} =
+        Elara.Protocol.Projector.ingest_patch(
+          view,
+          frame["incarnation"],
+          frame["seq"],
+          frame["ops"]
+        )
+
+      assert view.view["turn"]["state"] in [
+               "idle",
+               "calling_provider",
+               "running_tool",
+               "awaiting_retry"
+             ]
+
+      refute Map.has_key?(view.view["turn"], "approval")
+      view
+    end)
+
+    id = pending.view["turn"]["approval"]["id"]
+    refute File.exists?(Path.join(cwd, "output"))
+
+    for {extensions, expected} <- [
+          {[], "unsupported_extension"},
+          {["command_approvals_v1"], "not_controller"}
+        ] do
+      observer = connect(port)
+      on_exit(fn -> :gen_tcp.close(observer) end)
+
+      :ok =
+        send_json(observer, %{
+          "version" => 2,
+          "command" => "attach",
+          "mode" => "observe",
+          "session_id" => session,
+          "extensions" => extensions
+        })
+
+      view = recv_json(observer)["snapshot"]
+
+      if extensions == [] do
+        assert view["turn"]["state"] == "calling_provider"
+        refute Map.has_key?(view["turn"], "approval")
+      else
+        assert view["turn"]["approval"]["id"] == id
+      end
+
+      :ok =
+        send_json(observer, %{
+          "version" => 2,
+          "command" => "approve",
+          "extension" => "command_approvals_v1",
+          "approval_id" => id
+        })
+
+      assert recv_json(observer)["error"] == expected
+      refute File.exists?(Path.join(cwd, "output"))
+    end
+
+    :ok =
+      send_json(controller, %{
+        "version" => 2,
+        "command" => "approve",
+        "extension" => "command_approvals_v1",
+        "approval_id" => id
+      })
+
+    assert recv_json(controller)["type"] == "approval_accepted"
+    ingest_until(controller, pending, &finished?/1)
+    assert File.read!(Path.join(cwd, "output")) == "approved"
+  end
+
   test "limits extension is negotiated, controller-only and retained on reattach" do
     {:ok, session} = Elara.start_session(provider: script([]), tools: [], persist: false)
     server = start_supervised!({Elara.Server, port: 0, provider: script([])})

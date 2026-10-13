@@ -245,7 +245,8 @@ defmodule Elara.Session.Store do
             "clearing",
             "read_only",
             "read_only_changes",
-            "read_only_notice"
+            "read_only_notice",
+            "command_rules"
           ])
     }
 

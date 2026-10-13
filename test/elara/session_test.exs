@@ -115,6 +115,302 @@ defmodule Elara.SessionTest do
     )
   end
 
+  test "base command rules deny production and ask for destructive Git and Ecto variants" do
+    rules = Elara.CommandRules.startup()
+
+    assert Elara.CommandRules.classify(rules, "MIX_ENV=prod mix compile") ==
+             {:deny, "MIX_ENV=prod"}
+
+    for command <- [
+          "git push --force origin main",
+          "git push origin main -f",
+          "git push origin main -vf",
+          "git push origin --force-with-lease",
+          "git push origin --force-with-lease=main:expected",
+          "git -C 'nested workspace' push origin -f",
+          "git reset HEAD~1 --hard",
+          "git -c advice.detachedHead=false reset HEAD~1 --hard",
+          "git clean -fdx",
+          "git clean -fxd",
+          "git clean -dfx",
+          "git clean -dxf",
+          "git clean -xfd",
+          "git clean -xdf",
+          "git clean -d -x -f",
+          "git -C nested clean --force -dx",
+          "mix ecto.drop --force",
+          "mix   ecto.drop --force"
+        ] do
+      assert {:ask, _} = Elara.CommandRules.classify(rules, command), command
+    end
+
+    for command <- ["MIX_ENV=test mix compile", "git push --follow-tags", "git clean -fd"] do
+      assert Elara.CommandRules.classify(rules, command) == :allow
+    end
+
+    previous = System.get_env("ELARA_COMMAND_RULES")
+
+    on_exit(fn ->
+      if previous,
+        do: System.put_env("ELARA_COMMAND_RULES", previous),
+        else: System.delete_env("ELARA_COMMAND_RULES")
+    end)
+
+    System.put_env("ELARA_COMMAND_RULES", "{}")
+    assert Elara.CommandRules.startup() == rules
+    System.put_env("ELARA_COMMAND_RULES", ~s({"deny":["git push --force"]}))
+
+    assert Elara.CommandRules.classify(Elara.CommandRules.startup(), "git push origin -f") ==
+             {:deny, "git push --force"}
+  end
+
+  @tag :tmp_dir
+  test "reopening chooses the client's approval mode rather than saved handoff options", %{
+    tmp_dir: cwd
+  } do
+    for wait? <- [false, true] do
+      store = Elara.Session.Store.new(cwd)
+      options = Base.encode64(:erlang.term_to_binary(approval_wait: not wait?))
+      {:ok, store} = Elara.Session.Store.save(%{store | context: %{"options" => options}})
+
+      call = %ToolCall{
+        id: "drop",
+        name: "bash",
+        args: {:ok, %{"command" => "mix ecto.drop"}}
+      }
+
+      {:ok, session} =
+        Elara.start_session(
+          cwd: cwd,
+          resume: store.path,
+          approval_wait: wait?,
+          provider: script([{:ok, asst(nil, [call])}, {:ok, asst("refused")}]),
+          plugins: []
+        )
+
+      :ok = Elara.subscribe(session)
+      {:ok, _} = Elara.attach(session, :control)
+      :ok = Elara.ask_async(session, "drop")
+
+      if wait? do
+        assert_receive {:elara, ^session, {:approval_required, _}}, 2_000
+        :ok = Elara.interrupt(session)
+      else
+        assert_receive {:elara, ^session,
+                        {:message_appended,
+                         %Message.ToolResult{
+                           outcome: {:error, "approval required:" <> _}
+                         }}},
+                       2_000
+
+        assert_receive {:elara, ^session, {:turn_ended, {:completed, "refused"}}}, 2_000
+      end
+
+      GenServer.stop(session_pid(session))
+    end
+  end
+
+  @tag :tmp_dir
+  test "project deny rules are captured before the model can rewrite them", %{tmp_dir: cwd} do
+    File.mkdir_p!(Path.join(cwd, ".elara"))
+    File.write!(Path.join(cwd, ".elara/command-rules.json"), ~s({"deny":["printf forbidden"]}))
+
+    calls = [
+      %ToolCall{
+        id: "loosen",
+        name: "write",
+        args: {:ok, %{"path" => ".elara/command-rules.json", "content" => "{}"}}
+      },
+      %ToolCall{
+        id: "forbidden",
+        name: "bash",
+        args: {:ok, %{"command" => "printf forbidden > forbidden"}}
+      }
+    ]
+
+    {:ok, session} =
+      Elara.start_session(
+        cwd: cwd,
+        plugins: [],
+        provider: script([{:ok, asst(nil, calls)}, {:ok, asst("refused")}])
+      )
+
+    assert {:ok, "refused"} = Elara.ask(session, "rewrite then execute")
+    assert File.read!(Path.join(cwd, ".elara/command-rules.json")) == "{}"
+    refute File.exists?(Path.join(cwd, "forbidden"))
+
+    assert Enum.any?(Elara.transcript(session), fn
+             %Message.ToolResult{call_id: "forbidden", outcome: {:error, reason}} ->
+               reason =~ "deny rule" and reason =~ "printf forbidden"
+
+             _ ->
+               false
+           end)
+  end
+
+  @tag :tmp_dir
+  test "command approvals bind exact calls and rule bytes without bypassing later asks", %{
+    tmp_dir: cwd
+  } do
+    File.mkdir_p!(Path.join(cwd, ".elara"))
+    path = Path.join(cwd, ".elara/command-rules.json")
+
+    File.write!(
+      path,
+      JSON.encode!(%{"deny" => ["printf deny"], "ask" => ["printf yes", "retired"]})
+    )
+
+    calls =
+      for {id, command} <- [{"deny", "printf deny > denied"}, {"ask", "printf yes > accepted"}],
+          do: %ToolCall{id: id, name: "bash", args: {:ok, %{"command" => command}}}
+
+    {:ok, session} =
+      Elara.start_session(
+        cwd: cwd,
+        plugins: [],
+        provider: script([{:ok, asst(nil, calls)}, {:ok, asst("done")}])
+      )
+
+    :ok = Elara.subscribe(session)
+    {:ok, _} = Elara.attach(session, :control)
+    assert :ok = Elara.ask_async(session, "execute")
+    assert_receive {:elara, ^session, {:approval_required, call}}, 2_000
+    assert call["kind"] == "call"
+    refute File.exists?(Path.join(cwd, "denied"))
+    refute File.exists?(Path.join(cwd, "accepted"))
+    assert Elara.materialized_view(session)["turn"]["state"] == "approval_waiting"
+    assert {:error, :stale_approval} = Elara.attached_command(session, {:approve, "old"})
+
+    observer =
+      Task.async(fn ->
+        {:ok, _} = Elara.attach(session, :observe)
+
+        assert {:error, :not_controller} =
+                 GenServer.call(session_pid(session), {:approve, call["id"]})
+
+        Elara.attached_command(session, {:approve, call["id"]})
+      end)
+
+    assert {:error, :not_controller} = Task.await(observer)
+
+    bytes = JSON.encode!(%{"deny" => ["printf deny"], "ask" => ["printf yes"]})
+    File.write!(path, bytes)
+    assert {:error, :approval_changed} = Elara.attached_command(session, {:approve, call["id"]})
+    assert_receive {:elara, ^session, {:approval_required, rules}}
+    assert rules["kind"] == "rules"
+    assert rules["rule_bytes"] == bytes
+    File.write!(path, bytes <> " ")
+    assert {:error, :approval_changed} = Elara.attached_command(session, {:approve, rules["id"]})
+    assert_receive {:elara, ^session, {:approval_required, changed}}
+    assert changed["rule_bytes"] == bytes <> " "
+    assert :ok = Elara.attached_command(session, {:approve, changed["id"]})
+    assert_receive {:elara, ^session, {:approval_required, still_ask}}
+    assert still_ask["kind"] == "call"
+    refute File.exists?(Path.join(cwd, "accepted"))
+    assert :ok = Elara.attached_command(session, {:approve, still_ask["id"]})
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, "done"}}}, 2_000
+    assert File.read!(Path.join(cwd, "accepted")) == "yes"
+
+    [%Message.ToolResult{outcome: {:error, denied}}, %Message.ToolResult{outcome: {:ok, _}}] =
+      Enum.filter(Elara.transcript(session), &is_struct(&1, Message.ToolResult))
+
+    assert denied =~ "deny rule"
+    assert {:ok, %{status: :match}} = Elara.replay(Elara.recording(session))
+    {:ok, info} = Store.newest(cwd)
+    {:ok, store} = Store.open(info.path, cwd)
+    events = store.context["command_approvals"]
+    assert Enum.any?(events, &(&1["event"] == "command_blocked"))
+
+    assert Enum.any?(
+             events,
+             &(&1["event"] == "approval_granted" and &1["rule_bytes"] == bytes <> " ")
+           )
+  end
+
+  @tag :tmp_dir
+  test "tightening and read-only still fence approved calls, and reopen never runs a waiting call",
+       %{tmp_dir: cwd} do
+    File.mkdir_p!(Path.join(cwd, ".elara"))
+    path = Path.join(cwd, ".elara/command-rules.json")
+    File.write!(path, JSON.encode!(%{"ask" => ["printf"]}))
+
+    call = %ToolCall{
+      id: "write",
+      name: "bash",
+      args: {:ok, %{"command" => "printf danger > output"}}
+    }
+
+    provider =
+      script([
+        {:ok, asst(nil, [call])},
+        {:ok, asst("refused")},
+        {:ok,
+         asst(nil, [%{call | id: "waiting", args: {:ok, %{"command" => "printf later > output"}}}])},
+        {:ok, asst("read-only refused")},
+        {:ok, asst(nil, [%{call | id: "restart"}])}
+      ])
+
+    {:ok, session} = Elara.start_session(cwd: cwd, plugins: [], provider: provider)
+    :ok = Elara.subscribe(session)
+    {:ok, _} = Elara.attach(session, :control)
+    :ok = Elara.ask_async(session, "execute")
+    assert_receive {:elara, ^session, {:approval_required, pending}}, 2_000
+    File.write!(path, JSON.encode!(%{"deny" => ["danger"], "ask" => ["printf"]}))
+
+    assert {:error, :approval_changed} =
+             Elara.attached_command(session, {:approve, pending["id"]})
+
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, "refused"}}}, 2_000
+    refute File.exists?(Path.join(cwd, "output"))
+    File.write!(path, JSON.encode!(%{"ask" => ["printf"]}))
+    :ok = Elara.ask_async(session, "again")
+    assert_receive {:elara, ^session, {:approval_required, rules}}, 2_000
+    assert rules["kind"] == "rules"
+    assert :ok = Elara.attached_command(session, {:approve, rules["id"]})
+    assert_receive {:elara, ^session, {:approval_required, waiting}}
+    {:ok, true} = Elara.set_read_only(session, true)
+    assert :ok = Elara.attached_command(session, {:approve, waiting["id"]})
+    assert_receive {:elara, ^session, {:turn_ended, _}}, 2_000
+    refute File.exists?(Path.join(cwd, "output"))
+
+    assert Enum.any?(
+             Elara.transcript(session),
+             &match?(
+               %Message.ToolResult{
+                 outcome: {:error, "permission denied: session is read-only" <> _}
+               },
+               &1
+             )
+           )
+
+    {:ok, false} = Elara.set_read_only(session, false)
+    :ok = Elara.ask_async(session, "wait for restart")
+    assert_receive {:elara, ^session, {:approval_required, unapproved}}, 2_000
+    {:ok, info} = Store.newest(cwd)
+    GenServer.stop(session_pid(session))
+
+    {:ok, reopened} =
+      Elara.start_session(
+        cwd: cwd,
+        plugins: [],
+        resume: info.path,
+        provider: script([{:ok, asst("usable")}])
+      )
+
+    {:ok, _} = Elara.attach(reopened, :control)
+
+    assert {:error, :no_pending_approval} =
+             Elara.attached_command(reopened, {:approve, unapproved["id"]})
+
+    assert {:ok, "usable"} = Elara.ask(reopened, "continue")
+    refute File.exists?(Path.join(cwd, "output"))
+
+    assert Enum.any?(
+             Elara.transcript(reopened),
+             &match?(%Message.ToolResult{call_id: "restart", outcome: {:error, _}}, &1)
+           )
+  end
+
   test "read-only toggles mid-turn, preserves running calls, fences later calls and persists" do
     Process.register(self(), __MODULE__)
     cwd = Path.join(System.tmp_dir!(), "read-only-#{System.unique_integer([:positive])}")

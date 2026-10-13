@@ -8,6 +8,7 @@ defmodule Elara.Session do
   alias Elara.Effect.{ControllerJournal, DeclarativeWrite, Executor, Job, Sidecar}
   alias Elara.Effect.ExecutorLedger
   alias Elara.Effect.ExecutorLedger.Record
+  alias Elara.CommandRules
 
   require ExecutorLedger
   alias Elara.FlightRecorder
@@ -69,6 +70,8 @@ defmodule Elara.Session do
       :workspace_diff,
       :undo_preview,
       :undo_recovery,
+      :command_rules,
+      :approval_wait,
       skills: %{skills: %{}, diagnostics: []},
       skill_options: [],
       instructions: %{},
@@ -116,6 +119,7 @@ defmodule Elara.Session do
   @impl true
   def init(opts) do
     core_config = Keyword.fetch!(opts, :core_config)
+    core_config = %{core_config | command_preflight: true}
     provider = Keyword.fetch!(opts, :provider)
     cwd = Keyword.fetch!(opts, :cwd)
     store = Keyword.fetch!(opts, :store)
@@ -151,6 +155,23 @@ defmodule Elara.Session do
 
         with {:ok, store} <- Handoff.recover(store),
              {:ok, store} <- Store.set_provider_settings(store, core.config.provider_settings),
+             {:ok, rules} <-
+               CommandRules.review(
+                 cwd,
+                 store.context["command_rules"],
+                 Application.fetch_env!(:elara, :command_rules)
+               ),
+             {:ok, store} <-
+               if(
+                 rules.retained == %{"deny" => [], "ask" => []} and
+                   not Map.has_key?(store.context, "command_rules"),
+                 do: {:ok, store},
+                 else:
+                   Store.save(%{
+                     store
+                     | context: Map.put(store.context, "command_rules", rules.retained)
+                   })
+               ),
              {:ok, _} <- Registry.register(Elara.Sessions, store.id, nil),
              {:ok, plugins, tools} <- start_plugins(plugin_paths, cwd, core.config.tools) do
           incarnation = new_incarnation()
@@ -194,6 +215,8 @@ defmodule Elara.Session do
             context_limit: Keyword.get(opts, :context_limit),
             handoff_fault_hook: Keyword.fetch!(opts, :handoff_fault_hook),
             workspace_diff: Elara.WorkspaceDiff.open(store),
+            command_rules: Application.fetch_env!(:elara, :command_rules),
+            approval_wait: Keyword.fetch!(opts, :approval_wait),
             base_tools: core.config.tools,
             discover_plugins?: Keyword.get(opts, :discover_plugins?, false),
             plugins: plugins
@@ -354,6 +377,15 @@ defmodule Elara.Session do
 
   def handle_call({:read_only, enabled}, _from, shell),
     do: change_read_only(shell, enabled)
+
+  def handle_call({:approve, id}, {caller, _}, shell) do
+    source = shell.store.context["source"]
+    source_pid = if is_binary(source), do: Elara.session_pid(source), else: nil
+
+    if caller == shell.controller or source_pid == {:ok, caller},
+      do: approve_command(shell, id),
+      else: {:reply, {:error, :not_controller}, shell}
+  end
 
   def handle_call(:read_only_view, _from, shell),
     do: {:reply, Handoff.read_only_status(shell), shell}
@@ -579,6 +611,8 @@ defmodule Elara.Session do
       workspace_id: shell.workspace_id,
       allowed_capabilities: shell.allowed_capabilities,
       read_only: Handoff.read_only(shell),
+      command_rules: shell.store.context["command_rules"],
+      approval_wait: shell.approval_wait,
       context_limit: shell.context_limit
     }
 
@@ -1731,6 +1765,32 @@ defmodule Elara.Session do
     end
   end
 
+  defp run_effect({:emit, {kind, pending} = event}, effect_id, shell, patch_context)
+       when kind in [:approval_required, :approval_granted] do
+    shell = record_command_guard(shell, Map.put(pending, "event", Atom.to_string(kind)))
+    emit(event, effect_id, shell, patch_context)
+  end
+
+  defp run_effect(
+         {:emit, {:command_blocked, call, reason} = event},
+         effect_id,
+         shell,
+         patch_context
+       ) do
+    {:ok, args} = call.args
+
+    shell =
+      record_command_guard(shell, %{
+        "event" => "command_blocked",
+        "call_id" => call.id,
+        "tool" => call.name,
+        "args" => args,
+        "reason" => reason
+      })
+
+    emit(event, effect_id, shell, patch_context)
+  end
+
   defp run_effect({:emit, event}, effect_id, shell, patch_context) do
     emit(event, effect_id, shell, patch_context)
   end
@@ -1834,6 +1894,22 @@ defmodule Elara.Session do
         shell
       )
     end
+  end
+
+  defp run_effect({:check_tool, ref, call}, _effect_id, shell, _patch_context) do
+    {shell, decision} = command_decision(shell, ref, call)
+
+    decision =
+      case decision do
+        {:ask, pending} when not shell.approval_wait ->
+          {:deny,
+           "approval required: #{pending["reason"]}; call refused without executing. Run this task in the TUI and use /approve"}
+
+        other ->
+          other
+      end
+
+    feed({:tool_checked, ref, decision}, shell)
   end
 
   defp run_effect({:run_tool, core_ref, call, tool}, effect_id, shell, patch_context) do
@@ -2507,6 +2583,8 @@ defmodule Elara.Session do
   defp handle_attached_command({:read_only, enabled}, shell),
     do: change_read_only(shell, enabled)
 
+  defp handle_attached_command({:approve, id}, shell), do: approve_command(shell, id)
+
   defp handle_attached_command({:undo, _, _} = command, shell) do
     if Handoff.frozen?(shell.store),
       do: {:reply, forward_handoff(shell, {:undo_input, command}, :infinity), shell},
@@ -2617,6 +2695,121 @@ defmodule Elara.Session do
               "Undo notice recorded, but recovery cleanup failed; reopen before continuing."
         }
     end
+  end
+
+  defp command_decision(shell, ref, call) do
+    {:ok, args} = call.args
+
+    case CommandRules.review(shell.cwd, shell.store.context["command_rules"], shell.command_rules) do
+      {:ok, review} ->
+        shell = save_command_rules(shell, review.retained)
+
+        if is_binary(args["command"]) do
+          case {CommandRules.classify(review.effective, args["command"]), review.loosening} do
+            {{:deny, rule}, _} ->
+              {shell,
+               {:deny, "permission denied: command matches deny rule #{JSON.encode!(rule)}"}}
+
+            {_, true} ->
+              {shell, {:ask, command_pending(shell, ref, call, "rules", review.bytes)}}
+
+            {{:ask, rule}, false} ->
+              pending = command_pending(shell, ref, call, "call", nil)
+
+              pending =
+                Map.put(
+                  pending,
+                  "reason",
+                  "Command matches ask rule #{JSON.encode!(rule)}; approve this exact call"
+                )
+
+              {shell, {:ask, pending}}
+
+            {:allow, false} ->
+              {shell, :allow}
+          end
+        else
+          {shell, :allow}
+        end
+
+      {:error, reason} ->
+        {shell, {:deny, "permission denied: #{reason}"}}
+    end
+  end
+
+  defp command_pending(shell, ref, call, kind, bytes) do
+    {:ok, args} = call.args
+
+    digest =
+      :crypto.hash(:sha256, JSON.encode!([call.name, args, bytes])) |> Base.encode16(case: :lower)
+
+    %{
+      "id" => "#{shell.incarnation}:#{ref}:#{kind}:#{digest}",
+      "kind" => kind,
+      "call_id" => call.id,
+      "tool" => call.name,
+      "args" => args,
+      "rule_bytes" => bytes,
+      "reason" =>
+        if(kind == "rules",
+          do: "Repo rules loosen limits; approve these exact bytes",
+          else: "Command matches an ask rule; approve this exact call"
+        )
+    }
+  end
+
+  defp approve_command(%{store: %{context: %{"handoff" => _}}} = shell, id),
+    do: {:reply, forward_handoff(shell, {:approve, id}), shell}
+
+  defp approve_command(
+         %{core: %{phase: {:approval_waiting, ref, call, _, _, pending}}} = shell,
+         id
+       )
+       when is_binary(id) do
+    if id == pending["id"] do
+      {shell, decision} = command_decision(shell, ref, call)
+      expected_bytes = pending["rule_bytes"]
+
+      case {pending["kind"], decision} do
+        {"call", :allow} ->
+          {:reply, :ok, feed({:tool_approved, ref}, shell)}
+
+        {"call", {:ask, %{"kind" => "call"}}} ->
+          {:reply, :ok, feed({:tool_approved, ref}, shell)}
+
+        {"rules", {:ask, %{"kind" => "rules", "rule_bytes" => ^expected_bytes}}} ->
+          bytes = expected_bytes
+          {:ok, rules} = CommandRules.parse(bytes)
+          {:reply, :ok, feed({:tool_approved, ref}, save_command_rules(shell, rules))}
+
+        _ ->
+          {:reply, {:error, :approval_changed}, feed({:tool_checked, ref, decision}, shell)}
+      end
+    else
+      {:reply, {:error, :stale_approval}, shell}
+    end
+  end
+
+  defp approve_command(shell, _), do: {:reply, {:error, :no_pending_approval}, shell}
+
+  defp save_command_rules(shell, rules) do
+    if shell.store.context["command_rules"] == rules or
+         (not Map.has_key?(shell.store.context, "command_rules") and
+            rules == %{"deny" => [], "ask" => []}) do
+      shell
+    else
+      {:ok, store} =
+        Store.save(%{shell.store | context: Map.put(shell.store.context, "command_rules", rules)})
+
+      %{shell | store: store}
+    end
+  end
+
+  defp record_command_guard(shell, entry) do
+    entry = Map.put(entry, "after_entry", shell.store.leaf)
+    context = Map.update(shell.store.context, "command_approvals", [entry], &(&1 ++ [entry]))
+    {:ok, store} = Store.save(%{shell.store | context: context})
+    %{shell | store: store}
   end
 
   defp input_ready(shell, images, queue? \\ false) do
@@ -3115,6 +3308,8 @@ defmodule Elara.Session do
       {:calling_provider, _, _} -> feed(:steer, abort_running_tasks(shell))
       {:awaiting_retry, _, _, _, _} -> feed(:steer, shell)
       {:running_tool, _, _, _, _} -> feed(:steer, shell)
+      {:checking_tool, _, _, _, _} -> feed(:steer, shell)
+      {:approval_waiting, _, _, _, _, _} -> feed(:steer, shell)
       _ -> shell
     end
   end
@@ -3322,6 +3517,9 @@ defmodule Elara.Session do
 
   defp current_effect({:running_tool, ref, call, _rest, _}),
     do: %{kind: :tool, ref: ref, name: call.name}
+
+  defp current_effect({:checking_tool, _, _, _, _}), do: nil
+  defp current_effect({:approval_waiting, _, _, _, _, _}), do: nil
 
   defp new_incarnation do
     12 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)

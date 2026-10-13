@@ -20,6 +20,7 @@ defmodule Elara.Session.Core do
             max_tool_output_bytes: pos_integer(),
             context_keep_results: pos_integer(),
             context_keep_tokens: pos_integer(),
+            command_preflight: boolean(),
             retry: Elara.Provider.Retry.Policy.t()
           }
     defstruct [
@@ -32,6 +33,7 @@ defmodule Elara.Session.Core do
       max_tool_output_bytes: 16_384,
       context_keep_results: 5,
       context_keep_tokens: 20_000,
+      command_preflight: false,
       retry: %Elara.Provider.Retry.Policy{}
     ]
   end
@@ -43,6 +45,8 @@ defmodule Elara.Session.Core do
           | {:calling_provider, ref(), iteration :: pos_integer()}
           | {:awaiting_retry, ref(), iteration :: pos_integer(), attempt :: pos_integer(),
              delay_ms :: non_neg_integer()}
+          | {:checking_tool, ref(), ToolCall.t(), [ToolCall.t()], pos_integer()}
+          | {:approval_waiting, ref(), ToolCall.t(), [ToolCall.t()], pos_integer(), map()}
           | {:running_tool, ref(), current :: ToolCall.t(), remaining :: [ToolCall.t()],
              iteration :: pos_integer()}
 
@@ -109,6 +113,8 @@ defmodule Elara.Session.Core do
           | :runtime_limits_changed
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
           | {:retry_elapsed, ref()}
+          | {:tool_checked, ref(), :allow | {:deny, String.t()} | {:ask, map()}}
+          | {:tool_approved, ref()}
           | {:tool_result, ref(), Tool.outcome()}
           | {:tool_usage, ref(), Elara.Provider.Visibility.usage()}
           | {:tool_deferred, ref(), String.t()}
@@ -123,6 +129,7 @@ defmodule Elara.Session.Core do
           | :persist_read_only
           | :persist_context_clearing
           | {:await_retry, ref(), min_ms :: non_neg_integer(), max_ms :: non_neg_integer()}
+          | {:check_tool, ref(), ToolCall.t()}
           | {:run_tool, ref(), ToolCall.t(), Tool.t()}
           | {:emit, Elara.Event.t()}
 
@@ -361,6 +368,60 @@ defmodule Elara.Session.Core do
   def step(%State{phase: {:awaiting_retry, _, _, _, _}} = state, fact)
       when fact in [:interrupt, :steer] do
     {%{state | phase: :idle, streaming: nil, retry: nil}, [{:emit, {:turn_ended, :interrupted}}]}
+  end
+
+  def step(
+        %State{phase: {:checking_tool, r, call, rest, it}} = state,
+        {:tool_checked, r, :allow}
+      ) do
+    start_tool(state, r, call, rest, it)
+  end
+
+  def step(
+        %State{phase: {:checking_tool, r, call, rest, it}} = state,
+        {:tool_checked, r, {:deny, reason}}
+      ) do
+    {state, effects} = reject_call(%{state | phase: :idle}, call, rest, it, reason)
+    {state, [{:emit, {:command_blocked, call, reason}} | effects]}
+  end
+
+  def step(
+        %State{phase: {:checking_tool, r, call, rest, it}} = state,
+        {:tool_checked, r, {:ask, pending}}
+      ) do
+    {%{state | phase: {:approval_waiting, r, call, rest, it, pending}},
+     [{:emit, {:approval_required, pending}}]}
+  end
+
+  def step(
+        %State{phase: {:approval_waiting, r, call, rest, it, pending}} = state,
+        {:tool_approved, r}
+      ) do
+    {state, effects} =
+      if pending["kind"] == "rules" do
+        {%{state | phase: {:checking_tool, r, call, rest, it}}, [{:check_tool, r, call}]}
+      else
+        start_tool(state, r, call, rest, it)
+      end
+
+    {state, [{:emit, {:approval_granted, pending}} | effects]}
+  end
+
+  def step(
+        %State{phase: {:approval_waiting, r, call, rest, it, _}} = state,
+        {:tool_checked, r, decision}
+      ) do
+    step(%{state | phase: {:checking_tool, r, call, rest, it}}, {:tool_checked, r, decision})
+  end
+
+  def step(%State{phase: {:approval_waiting, _, call, rest, _, _}} = state, fact)
+      when fact in [:interrupt, :steer] do
+    cancel_unstarted(state, [call | rest])
+  end
+
+  def step(%State{phase: {:checking_tool, _, call, rest, _}} = state, fact)
+      when fact in [:interrupt, :steer] do
+    cancel_unstarted(state, [call | rest])
   end
 
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_deferred, r, system}) do
@@ -610,13 +671,31 @@ defmodule Elara.Session.Core do
         tool = Map.fetch!(state.config.tools, call.name)
         {ref, state} = take_ref(state)
 
-        effects = [
-          {:emit, {:tool_started, call}},
-          {:run_tool, ref, call, tool}
-        ]
-
-        {%{state | phase: {:running_tool, ref, call, rest, iteration}}, effects}
+        if state.config.command_preflight and tool.name == "bash" do
+          {%{state | phase: {:checking_tool, ref, call, rest, iteration}},
+           [{:check_tool, ref, call}]}
+        else
+          start_tool(state, ref, call, rest, iteration)
+        end
     end
+  end
+
+  defp start_tool(state, ref, call, rest, iteration) do
+    tool = Map.fetch!(state.config.tools, call.name)
+
+    {%{state | phase: {:running_tool, ref, call, rest, iteration}},
+     [{:emit, {:tool_started, call}}, {:run_tool, ref, call, tool}]}
+  end
+
+  defp cancel_unstarted(state, calls) do
+    {history, effects} =
+      Enum.reduce(calls, {state.history, []}, fn call, {history, effects} ->
+        result = Message.tool_result(call, {:error, "not started: interrupted before approval"})
+        {history ++ [result], effects ++ [{:emit, {:message_appended, result}}]}
+      end)
+
+    {%{state | history: history, phase: :idle, steering?: false},
+     effects ++ [{:emit, {:turn_ended, :interrupted}}]}
   end
 
   defp reject_call(state, call, rest, iteration, reason) do

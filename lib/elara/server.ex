@@ -146,6 +146,11 @@ defmodule Elara.Server do
       version == 2 and is_list(extensions) and "runtime_limits_v1" in extensions
     )
 
+    Process.put(
+      :command_approvals,
+      version == 2 and is_list(extensions) and "command_approvals_v1" in extensions
+    )
+
     case request do
       %{"version" => 2, "command" => "list"} = request ->
         case decode_cwd(Map.get(request, "cwd", File.cwd!())) do
@@ -168,6 +173,7 @@ defmodule Elara.Server do
               "extensions",
               Enum.filter(
                 [
+                  "command_approvals_v1",
                   "runtime_limits_v1",
                   "provider_visibility_v1",
                   "plugin_reload_v1",
@@ -176,6 +182,7 @@ defmodule Elara.Server do
                   "thread_communication_v1"
                 ],
                 fn
+                  "command_approvals_v1" -> Process.get(:command_approvals)
                   "runtime_limits_v1" -> Process.get(:runtime_limits)
                   "plugin_reload_v1" -> Process.get(:plugin_reload)
                   "thread_communication_v1" -> Process.get(:thread_communication)
@@ -286,6 +293,8 @@ defmodule Elara.Server do
   defp phase_name({:calling_provider, _ref, _iteration}), do: "calling_provider"
   defp phase_name({:awaiting_retry, _ref, _iteration, _attempt, _delay_ms}), do: "awaiting_retry"
   defp phase_name({:running_tool, _ref, _call, _remaining, _iteration}), do: "running_tool"
+  defp phase_name({:checking_tool, _, _, _, _}), do: "preparing_tool"
+  defp phase_name({:approval_waiting, _, _, _, _, _}), do: "approval_waiting"
 
   defp connection_loop(socket, session, version, line_buffer, provider, lifetime) do
     receive do
@@ -324,6 +333,15 @@ defmodule Elara.Server do
 
       {:elara_patch, ^session, incarnation, seq, ops} ->
         ops =
+          Enum.map(ops, fn
+            %{"op" => "set_turn_state", "turn" => turn} = op ->
+              Map.put(op, "turn", negotiated_turn(turn))
+
+            op ->
+              op
+          end)
+
+        ops =
           if Process.get(:runtime_limits),
             do: ops,
             else: Enum.reject(ops, &(&1["op"] == "set_runtime_limits"))
@@ -355,6 +373,8 @@ defmodule Elara.Server do
   end
 
   defp negotiated_snapshot(snapshot) do
+    snapshot = Map.update!(snapshot, "turn", &negotiated_turn/1)
+
     snapshot =
       if Process.get(:runtime_limits),
         do: snapshot,
@@ -368,6 +388,18 @@ defmodule Elara.Server do
     if Process.get(:input_queue),
       do: Map.update(snapshot, "inbox", %{}, &negotiated_inbox/1),
       else: Map.delete(snapshot, "inbox")
+  end
+
+  defp negotiated_turn(turn) do
+    if Process.get(:command_approvals) do
+      turn
+    else
+      turn = Map.drop(turn, ["approval", "event"])
+
+      if turn["state"] in ["preparing_tool", "approval_waiting"],
+        do: turn |> Map.delete("tool_call_id") |> Map.put("state", "calling_provider"),
+        else: turn
+    end
   end
 
   defp negotiated_inbox(inbox) do
@@ -457,6 +489,24 @@ defmodule Elara.Server do
       queue_command(session, command, request)
     else
       input_receipt(command, request["submission_id"], nil, :unsupported_extension)
+    end
+  end
+
+  defp handle_versioned_command(
+         session,
+         2,
+         %{"command" => "approve", "extension" => "command_approvals_v1", "approval_id" => id},
+         _provider,
+         _lifetime
+       )
+       when is_binary(id) do
+    if Process.get(:command_approvals) do
+      case Elara.attached_command(session, {:approve, id}) do
+        :ok -> %{"type" => "approval_accepted", "version" => 2, "approval_id" => id}
+        {:error, reason} -> error_message(reason, 2)
+      end
+    else
+      error_message(:unsupported_extension, 2)
     end
   end
 

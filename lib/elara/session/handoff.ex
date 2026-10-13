@@ -99,6 +99,7 @@ defmodule Elara.Session.Handoff do
         workspace_id: shell.workspace_id,
         allowed_capabilities: shell.allowed_capabilities,
         read_only: read_only(shell),
+        approval_wait: shell.approval_wait,
         max_iterations: limits.max_iterations,
         max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
         context_keep_results: shell.core.config.context_keep_results,
@@ -128,7 +129,14 @@ defmodule Elara.Session.Handoff do
       with {:ok, {module, _}} <- provider,
            true <-
              is_nil(store.context["provider"]) or inspect(module) == store.context["provider"] do
-        saved = Keyword.drop(saved, [:max_iterations, :tool_timeout_ms, :max_tool_timeout_ms])
+        saved =
+          Keyword.drop(saved, [
+            :max_iterations,
+            :tool_timeout_ms,
+            :max_tool_timeout_ms,
+            :approval_wait
+          ])
+
         {:ok, Keyword.merge(opts, saved)}
       else
         false -> {:error, :handoff_provider_mismatch}
@@ -309,6 +317,7 @@ defmodule Elara.Session.Handoff do
           "activated" => false,
           "provider" => shell.store.context["provider"],
           "read_only" => shell.core.read_only,
+          "command_rules" => shell.store.context["command_rules"],
           "options" => shell.store.context["options"]
         }
       }

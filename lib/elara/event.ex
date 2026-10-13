@@ -24,6 +24,9 @@ defmodule Elara.Event do
           | {:message_appended, Elara.Message.Assistant.t(), :streamed}
           | {:content_delta, String.t(), String.t()}
           | {:tool_started, Elara.Message.ToolCall.t()}
+          | {:command_blocked, Elara.Message.ToolCall.t(), String.t()}
+          | {:approval_required, map()}
+          | {:approval_granted, map()}
           | {:turn_ended, turn_outcome()}
           | {:turn_ended, turn_outcome(), :streamed}
 end

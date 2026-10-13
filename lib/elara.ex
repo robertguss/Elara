@@ -99,6 +99,7 @@ defmodule Elara do
         workspace_id: workspace_id,
         allowed_capabilities: allowed_capabilities,
         read_only: Keyword.get(opts, :read_only, false),
+        approval_wait: Keyword.get(opts, :approval_wait, true),
         effect_journal_path: effect_journal_path,
         effect_executor: effect_executor,
         effect_executor_explicit?: effect_executor_explicit?,

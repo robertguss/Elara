@@ -5,6 +5,8 @@ defmodule Elara.Application do
 
   @impl true
   def start(_type, _args) do
+    Application.put_env(:elara, :command_rules, Elara.CommandRules.startup())
+
     children = [
       {Registry, keys: :unique, name: Elara.SessionLocks},
       {Registry, keys: :unique, name: Elara.Sessions},

@@ -48,6 +48,25 @@ pub(super) fn open(model: &mut Model) -> InputAction {
     InputAction::Session(json!({"version":2,"command":"session_list"}))
 }
 
+pub(super) fn approval_detail(pending: &Value) -> String {
+    let mut detail = format!(
+        "Approval required\nEsc closes · /approve confirms\n\n{}\n\nExact tool arguments:\n{}",
+        display(pending["reason"].as_str().unwrap_or("")),
+        pretty(&pending["args"])
+    );
+    if pending["kind"] == "rules" {
+        detail.push_str(&format!(
+            "\n\nExact rule-file bytes (JSON string; null means deletion):\n{}",
+            pretty(&pending["rule_bytes"])
+        ));
+    }
+    detail.push_str(&format!(
+        "\n\nRequest ID:\n{}",
+        display(pending["id"].as_str().unwrap_or(""))
+    ));
+    detail
+}
+
 pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
     if crate::workspace_undo::reply(model, frame) {
         return true;
@@ -56,6 +75,11 @@ pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
         return true;
     }
     match frame["type"].as_str() {
+        Some("approval_accepted") if frame["version"] == 2 => {
+            model.notice =
+                Some("Exact request approved; later calls still use the guardrails.".into());
+            true
+        }
         Some("read_only_changed") if frame["version"] == 2 => {
             model.notice = Some(if frame["enabled"] == true {
                 format!(
@@ -465,6 +489,22 @@ pub(super) fn command_action(model: &mut Model, command: &str) -> Option<InputAc
             }
             InputAction::Session(request)
         }
+        "approve" if control => {
+            if !model.command_approvals_supported || model.turn_state() != "approval_waiting" {
+                model.notice =
+                    Some("No pending approval, or server lacks command_approvals_v1.".into());
+                return Some(InputAction::None);
+            }
+            let id = if argument.is_empty() {
+                model.projection.view["turn"]["approval"]["id"]
+                    .as_str()
+                    .unwrap_or("")
+            } else {
+                argument
+            };
+            InputAction::Session(json!({"version":2,"extension":"command_approvals_v1",
+                "command":"approve","approval_id":id}))
+        }
         "limits" => crate::limits::command(model, argument),
         "diff" => crate::workspace_diff::command(model, argument),
         "undo" => crate::workspace_undo::command(model, argument),
@@ -732,6 +772,48 @@ mod tests {
             mode.into(),
             Projection::new(empty_snapshot("current", "i"), "i".into(), 0).unwrap(),
         )
+    }
+
+    #[test]
+    fn approval_is_negotiated_controller_only_and_uses_authoritative_request_id() {
+        let mut current = model("control");
+        current.editor.insert("/approve");
+        assert_eq!(palette_command(&mut current), Some(InputAction::None));
+        current.command_approvals_supported = true;
+        assert_eq!(palette_command(&mut current), Some(InputAction::None));
+        let pending = json!({"id":"exact-id","kind":"call","tool":"bash",
+            "args":{"command":"printf approved > approved"},"reason":"Command matches ask rule"});
+        current.projection.view["turn"] = json!({"state":"approval_waiting","approval":pending});
+        let detail = approval_detail(&pending);
+        assert!(detail.contains("printf approved > approved"));
+        assert!(detail.contains("/approve confirms"));
+        assert_eq!(
+            palette_command(&mut current),
+            Some(InputAction::Session(
+                json!({"version":2,"extension":"command_approvals_v1",
+                "command":"approve","approval_id":"exact-id"})
+            ))
+        );
+        current.mode = "observe".into();
+        current.editor.insert("/approve exact-id");
+        assert_eq!(palette_command(&mut current), Some(InputAction::None));
+        current.editor.clear();
+        current.editor.insert(&"draft retained\n".repeat(9));
+        current.session_detail = Some(detail);
+        current.session_detail_scroll = 9;
+        current.projection.view["inbox"] = json!({"execution":{"read_only":true}});
+        for layout in crate::appearance::ViewLayout::ALL {
+            current.appearance.layout = *layout;
+            for (width, height) in [(40, 24), (120, 40)] {
+                let rendered = crate::render_frame(&current, width, height).unwrap();
+                assert!(rendered.contains("Approval required"), "{rendered}");
+                assert!(rendered.contains("draft retained"), "{rendered}");
+                assert!(
+                    rendered.lines().last().unwrap().contains("READ-ONLY"),
+                    "{rendered}"
+                );
+            }
+        }
     }
 
     #[test]

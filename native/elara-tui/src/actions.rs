@@ -39,6 +39,7 @@ pub(crate) enum Action {
     Queue,
     Steer,
     ReadOnly,
+    Approve,
     Undo,
     SelectAll,
 }
@@ -81,12 +82,18 @@ impl Action {
             Self::Queue => "queue",
             Self::Steer => "steer",
             Self::ReadOnly => "read_only",
+            Self::Approve => "approve",
             Self::Undo => "undo",
             Self::SelectAll => "select_all",
         }
     }
 }
 pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
+    (
+        "approve",
+        "[ID]: approve the exact pending call or rule bytes",
+        true,
+    ),
     (
         "read-only",
         "on|off: deny mutations from the next tool call",
@@ -250,6 +257,7 @@ static BINDINGS: &[Binding] = &[
 pub(crate) const SLASH_ONLY: &[(Action, &str)] = &[
     (Action::ReadOnly, "read-only"),
     (Action::Undo, "undo"),
+    (Action::Approve, "approve"),
     (Action::Appearance, "appearance"),
     (Action::Attachments, "attachments"),
     (Action::ThinkingView, "thinking-view"),

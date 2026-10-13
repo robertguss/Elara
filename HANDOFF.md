@@ -42,6 +42,8 @@ operator startup config, never an agent-editable project file.
 `native/exec-stub/src/main.rs` buffers each guardian's incomplete event before
 forwarding complete frames. `test/elara/exec_integration_test.exs` checks exact
 per-command heads and tails across concurrent large outputs.
+The worker-death proof in `test/elara/executor_test.exs` waits for the actual
+side effect before killing the worker; `tool_started` alone does not prove it.
 Crash-safe reopening and legacy receipt escape paths are documented in
 `docs/sessions.md` under "Recover an interrupted write". A different live VM
 that owns the ledger must stop before takeover; callbacks are never replayed.

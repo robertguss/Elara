@@ -417,7 +417,7 @@ defmodule Elara.ExecutorTest do
     :ok = Elara.subscribe(session)
     :ok = Elara.ask_async(session, "first")
     assert_receive {:elara, ^session, {:tool_started, %ToolCall{id: "bash-1"}}}, 1_000
-    Process.sleep(100)
+    wait_until(fn -> File.read(Path.join(context.worker, "marker")) == {:ok, "side-effect"} end)
     Process.exit(worker, :kill)
 
     assert_receive {:elara, ^session,

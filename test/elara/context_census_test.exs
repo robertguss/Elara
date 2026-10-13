@@ -21,7 +21,7 @@ defmodule Elara.ContextCensusTest do
 
   defp recording(observations) do
     %Recording{
-      header: %{format_version: 1, recording_id: "fixture", capabilities: %{context_gate: 1}},
+      header: %{format_version: 2, recording_id: "fixture", capabilities: %{context_gate: 1}},
       segments:
         observations
         |> Enum.map(& &1.segment)

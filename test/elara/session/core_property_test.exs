@@ -13,6 +13,7 @@ defmodule Elara.Session.CorePropertyTest do
 
   alias Elara.{FlightRecorder, Message, Provider, Tool}
   alias Elara.Message.{Assistant, ToolCall, ToolResult}
+  alias Elara.Provider.Retry
   alias Elara.Session.Core
 
   @max_iterations 3
@@ -35,7 +36,9 @@ defmodule Elara.Session.CorePropertyTest do
          {constant(:reply), list_of(call_spec(), max_length: 3),
           member_of([:match, :match, :mismatch]), text(0)}
        )},
-      {1, constant(:provider_error)},
+      {3, constant(:provider_error)},
+      {1, constant(:terminal_provider_error)},
+      {4, constant(:retry_elapsed)},
       {5, tuple({constant(:tool), member_of([:ok, :error, :indeterminate])})},
       {2, constant(:crash)},
       {2, constant(:timeout)},
@@ -46,7 +49,16 @@ defmodule Elara.Session.CorePropertyTest do
       {2,
        tuple(
          {constant(:stale),
-          member_of([:delta, :reply, :provider_error, :tool, :crash, :timeout, :deferred])}
+          member_of([
+            :delta,
+            :reply,
+            :provider_error,
+            :retry_elapsed,
+            :tool,
+            :crash,
+            :timeout,
+            :deferred
+          ])}
        )},
       {1, constant(:settings)},
       {1, constant(:instruction)},
@@ -71,10 +83,25 @@ defmodule Elara.Session.CorePropertyTest do
     }
   end
 
+  # One retry per provider call keeps both the replay and the exhausted path common.
+  @retry %Retry.Policy{
+    max_attempts: 2,
+    base_delay_ms: 1,
+    max_delay_ms: 2,
+    max_total_wait_ms: 4
+  }
+
   defp new_core,
-    do: Core.new(%Core.Config{system: "sys", tools: tools(), max_iterations: @max_iterations})
+    do:
+      Core.new(%Core.Config{
+        system: "sys",
+        tools: tools(),
+        max_iterations: @max_iterations,
+        retry: @retry
+      })
 
   defp live_ref(%Core.State{phase: {:calling_provider, ref, _}}), do: ref
+  defp live_ref(%Core.State{phase: {:awaiting_retry, ref, _, _, _}}), do: ref
   defp live_ref(%Core.State{phase: {:running_tool, ref, _, _, _}}), do: ref
   defp live_ref(%Core.State{}), do: 0
 
@@ -119,8 +146,16 @@ defmodule Elara.Session.CorePropertyTest do
 
   defp concrete(:reply, core, ref, n), do: concrete({:reply, [], :match, ""}, core, ref, n)
 
+  # A transport failure is retryable; a 400 never is.
   defp concrete(:provider_error, _core, ref, n),
     do: {{:provider_result, ref, {:error, %Provider.Error{kind: :transport, message: "x"}}}, n}
+
+  defp concrete(:terminal_provider_error, _core, ref, n),
+    do:
+      {{:provider_result, ref,
+        {:error, %Provider.Error{kind: :http, status: 400, message: "bad"}}}, n}
+
+  defp concrete(:retry_elapsed, _core, ref, n), do: {{:retry_elapsed, ref}, n}
 
   defp concrete({:tool, kind}, _core, ref, n), do: {{:tool_result, ref, {kind, "out"}}, n}
   defp concrete(:tool, core, ref, n), do: concrete({:tool, :ok}, core, ref, n)
@@ -170,6 +205,9 @@ defmodule Elara.Session.CorePropertyTest do
           text = if core.streaming.text == "", do: "final", else: core.streaming.text
           {:ok, assistant} = Message.assistant(text, [])
           {:provider_result, ref, {:ok, assistant}}
+
+        {:awaiting_retry, ref, _, _, _} ->
+          {:retry_elapsed, ref}
 
         {:running_tool, ref, _, _, _} ->
           {:tool_result, ref, {:ok, "drained"}}
@@ -332,13 +370,13 @@ defmodule Elara.Session.CorePropertyTest do
     end
   end
 
-  property "each turn calls the provider at most max_iterations times" do
+  property "each turn starts at most max_iterations provider calls" do
     check all(actions <- actions(), max_runs: @runs) do
       %{core: core, steps: steps} = run(actions)
       {_core, drained} = drain(core)
 
       (steps ++ drained)
-      |> emitted()
+      |> Enum.flat_map(&first_attempts/1)
       |> Enum.chunk_while(
         0,
         fn
@@ -351,6 +389,33 @@ defmodule Elara.Session.CorePropertyTest do
         fn count -> {:cont, count, 0} end
       )
       |> Enum.each(&assert(&1 <= @max_iterations))
+    end
+  end
+
+  # A retry re-dispatches the same iteration, so only an attempt that is not a
+  # replay counts against the iteration limit.
+  defp first_attempts(%{fact: {:retry_elapsed, _}, effects: effects}),
+    do: Enum.reject(effects, &match?({:call_provider, _, _}, &1))
+
+  defp first_attempts(%{effects: effects}), do: effects
+
+  property "retries stay inside the configured attempt and wait bounds" do
+    check all(actions <- actions(), max_runs: @runs) do
+      %{core: core, steps: steps} = run(actions)
+      {drained, drain_steps} = drain(core)
+
+      for step <- steps ++ drain_steps, retry = step.after.retry, retry != nil do
+        assert retry.attempts < @retry.max_attempts, inspect(retry)
+        assert retry.waited_ms <= @retry.max_total_wait_ms, inspect(retry)
+      end
+
+      for step <- steps ++ drain_steps,
+          {:await_retry, _ref, min_ms, max_ms} <- step.effects do
+        assert min_ms <= max_ms
+        assert max_ms <= @retry.max_delay_ms
+      end
+
+      assert drained.retry == nil
     end
   end
 
@@ -409,6 +474,14 @@ defmodule Elara.Session.CorePropertyTest do
            not step.stale?) &&
           :timeout_running_mutation,
         step.stale? && :stale_fact,
+        Enum.any?(step.effects, &match?({:await_retry, _, _, _}, &1)) && :provider_retry,
+        (match?({:awaiting_retry, _, _, _, _}, step.before.phase) and
+           match?({:retry_elapsed, _}, step.fact) and not step.stale?) && :retry_replayed,
+        (match?({:calling_provider, _, _}, step.before.phase) and step.before.retry != nil and
+           Enum.any?(
+             step.effects,
+             &match?({:emit, {:turn_ended, {:provider_error, _}}}, &1)
+           )) && :retry_exhausted,
         Enum.any?(step.effects, &match?({:emit, {:turn_ended, :turn_limit}}, &1)) && :turn_limit,
         Enum.any?(
           step.effects,
@@ -427,7 +500,7 @@ defmodule Elara.Session.CorePropertyTest do
   test "generated traces reach the states the properties depend on" do
     counts =
       actions()
-      |> Enum.take(1_000)
+      |> Enum.take(2_000)
       |> Enum.map(&reached(run(&1)))
       |> Enum.flat_map(&MapSet.to_list/1)
       |> Enum.frequencies()
@@ -440,6 +513,9 @@ defmodule Elara.Session.CorePropertyTest do
           :interrupt_running_mutation,
           :timeout_running_mutation,
           :stale_fact,
+          :provider_retry,
+          :retry_replayed,
+          :retry_exhausted,
           :turn_limit,
           :repeated_call_rejected
         ] do

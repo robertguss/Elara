@@ -44,6 +44,38 @@ defmodule Elara.FlightRecorderTest do
     }
   end
 
+  @tag :tmp_dir
+  test "pre-retry recordings are explicitly unsupported, not falsely divergent", %{tmp_dir: tmp} do
+    for result <- [
+          {:ok, asst("done")},
+          {:error, %Elara.Provider.Error{kind: :http, status: 503, message: "overloaded"}}
+        ] do
+      {:ok, session} =
+        Elara.start_session(
+          provider: script([result]),
+          tools: [],
+          persist: false,
+          provider_retry: Elara.Provider.Retry.disabled()
+        )
+
+      Elara.ask(session, "go")
+      recording = Elara.recording(session)
+      assert recording.header.format_version == 2
+      assert {:ok, %FlightRecorder.Report{status: :match}} = Elara.replay(recording)
+
+      legacy = %{recording | header: %{recording.header | format_version: 1}}
+      assert {:error, {:unsupported_format, 1, message}} = Elara.replay(legacy)
+      assert message =~ "pre-retry build at daa06f281368d0a532721695c6a656ec12ec14a5"
+    end
+
+    path = Path.join(tmp, "legacy.flight")
+    bytes = "ELARA-FLIGHT\0" <> <<1::unsigned-big-32>>
+    File.write!(path, bytes)
+    assert {:error, {:unsupported_format, 1, message}} = FlightRecorder.load(path)
+    assert message =~ "format 1 is unsupported"
+    assert File.read!(path) == bytes
+  end
+
   test "records causal transitions and replays without provider or tool effects" do
     provider =
       script([
@@ -357,6 +389,21 @@ defmodule Elara.FlightRecorderTest do
             branch == :interrupt_frozen,
             branch
           )
+
+        facts = [
+          {:provider_result, 1,
+           {:error, %Elara.Provider.Error{kind: :http, status: 503, message: "overloaded"}}},
+          {:retry_elapsed, 2},
+          {:provider_result, 3, {:ok, asst("recovered")}}
+        ]
+
+        {recorder, _core} =
+          Enum.reduce(facts, {recorder, core}, fn fact, {recorder, core} ->
+            {recorder, begin} = FlightRecorder.begin_transition(recorder, core, fact)
+            {core, effects} = Core.step(core, fact)
+            {recorder, _} = FlightRecorder.complete_transition(recorder, begin, core, effects)
+            {recorder, core}
+          end)
 
         :ok = FlightRecorder.close(recorder)
         FlightRecorder.path(recorder)

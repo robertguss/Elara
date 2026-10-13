@@ -12,6 +12,7 @@ defmodule Elara.Lab.Scenarios.Smoke do
 
   @behaviour Elara.Lab
 
+  alias Elara.Provider.Retry
   alias Elara.Provider.Simulated
 
   @impl true
@@ -54,6 +55,7 @@ defmodule Elara.Lab.Scenarios.Smoke do
             cwd: workspace,
             plugins: [],
             tools: tools,
+            provider_retry: Retry.disabled(),
             context_limit: 1_000_000
           )
 
@@ -124,6 +126,7 @@ defmodule Elara.Lab.Scenarios.Smoke do
             cwd: workspace,
             plugins: [],
             tools: tools,
+            provider_retry: Retry.disabled(),
             max_iterations: min(max_iterations, 12)
           )
 

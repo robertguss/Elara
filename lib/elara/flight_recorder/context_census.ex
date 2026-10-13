@@ -76,7 +76,7 @@ defmodule Elara.FlightRecorder.ContextCensus do
   end
 
   defp supported(%Recording{
-         header: %{format_version: 1, capabilities: %{context_gate: 1}},
+         header: %{format_version: 2, capabilities: %{context_gate: 1}},
          incomplete: []
        }),
        do: :ok
@@ -123,7 +123,7 @@ defmodule Elara.FlightRecorder.ContextCensus do
       |> Enum.with_index()
       |> Enum.reduce_while({:ok, [], sequence}, fn
         {%{index: index, value: %{kind: kind}}, index}, {:ok, gates, sequence}
-        when kind in [:call_provider, :run_tool, :emit] ->
+        when kind in [:call_provider, :await_retry, :run_tool, :emit] ->
           next =
             if kind == :call_provider,
               do: gates ++ [%{effect: Map.put(id, :effect_index, index), segment: segment}],

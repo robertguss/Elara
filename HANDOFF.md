@@ -34,6 +34,11 @@ Existing children keep their recorded paths, without relocation or deletion.
 File-tool roots, protected paths, and resolved symlinks are documented in
 README.md's "File-tool fence" section. Internal skill/session/plugin reads are
 separate; the fence is not an OS sandbox.
+The lab's current async-site inventory is pinned in
+`lab/test/elara/lab_profile_test.exs`; its classifier distinguishes server
+connections from session handoff relay tasks. Historical registrations stay
+unchanged. The Phase 1 lab adaptation follow-up is tracked in
+[Dev Hub](https://app.notion.com/p/3f8700320c4581a59c2cdf3a839a5ae0).
 
 ## Where Elara stands
 

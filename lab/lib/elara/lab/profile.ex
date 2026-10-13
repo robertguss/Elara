@@ -5,10 +5,11 @@ defmodule Elara.Lab.Profile do
   native code included, so it is not CPU time. Classes follow this code base's
   audited spawn paths, not a general classifier; it judges no bottleneck.
 
-  The audit: the one `Elara.TaskSup` spawn that is a server connection is the
-  closure-based `Task.Supervisor.start_child` in `Elara.Server`, and every other
-  `Elara.TaskSup` user is `async` or `async_nolink`. So a spawn on the
-  `Task.Supervised` reply path is a task. A test pins that audit.
+  The audit: closure-based `Task.Supervisor.start_child` sites are the server
+  connection in `Elara.Server` and the handoff ask relay in `Elara.Session`.
+  The server closure is a connection; the relay is a task. Other `Elara.TaskSup`
+  users are `async` or `async_nolink`, whose `Task.Supervised` reply path is a
+  task. A test pins that inventory.
   """
 
   @ranked [:exec, :session, :connection, :task]

@@ -492,6 +492,7 @@ fn run_interactive(
     let mut focused = None;
 
     loop {
+        let mut notifications = Vec::new();
         if let Some(target) = model.handoff_target()
             && attempted_handoff.as_ref() != Some(&target)
         {
@@ -542,13 +543,8 @@ fn run_interactive(
                             }
                         }
                     }
-                    if let Some(message) = model.notification.take()
-                        && model.appearance.notifications
-                        && focused != Some(true)
-                    {
-                        write!(io::stdout(), "\x07\x1b]777;notify;Elara;{message}\x1b\\")
-                            .and_then(|_| io::stdout().flush())
-                            .map_err(|error| format!("Cannot notify terminal: {error}"))?;
+                    if let Some(message) = model.notification.take() {
+                        notifications.push(message);
                     }
                     dirty = true;
                 }
@@ -570,7 +566,7 @@ fn run_interactive(
         }
         dirty |= model.check_acceptance_timeout();
 
-        if event::poll(Duration::from_millis(30))
+        while event::poll(Duration::ZERO)
             .map_err(|error| format!("terminal input failed: {error}"))?
         {
             let event = event::read().map_err(|error| format!("terminal input failed: {error}"))?;
@@ -635,6 +631,15 @@ fn run_interactive(
                 model.mark_disconnected(&error);
             }
         }
+        if model.appearance.notifications && focused != Some(true) {
+            for message in notifications {
+                write!(io::stdout(), "\x07\x1b]777;notify;Elara;{message}\x1b\\")
+                    .and_then(|_| io::stdout().flush())
+                    .map_err(|error| format!("Cannot notify terminal: {error}"))?;
+            }
+        }
+        event::poll(Duration::from_millis(30))
+            .map_err(|error| format!("terminal input failed: {error}"))?;
     }
 }
 

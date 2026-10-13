@@ -235,7 +235,7 @@ defmodule Elara.TuiTest do
   @tag timeout: 60_000
   test "turn notifications respect focus and saved preference", context do
     replies =
-      Enum.map(1..6, fn n ->
+      Enum.map(1..7, fn n ->
         result =
           if n == 3,
             do:
@@ -243,7 +243,7 @@ defmodule Elara.TuiTest do
                %Elara.Provider.Error{kind: :bad_response, message: "PRIVATE_PROVIDER_DETAIL"}},
             else: {:ok, asst("reply-#{n}")}
 
-        {:stream, [{:sleep, 250}], result}
+        {:stream, [{:sleep, 1_000}], result}
       end)
 
     {:ok, session} = Elara.start_session(provider: script(replies), tools: [], persist: false)

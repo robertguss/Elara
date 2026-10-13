@@ -5,7 +5,9 @@ import os
 import pathlib
 import pty
 import select
+import shlex
 import signal
+import socket
 import struct
 import sys
 import termios
@@ -17,9 +19,19 @@ captures = bytearray()
 
 
 def client(turns):
+    gate = pathlib.Path(os.environ["ELARA_TUI_STATE_DIR"]) / "editor-gate.py"
+    gate.parent.mkdir(parents=True, exist_ok=True)
+    ready, release = gate.with_suffix(".ready"), gate.with_suffix(".release")
+    gate.write_text('''import pathlib, time
+gate = pathlib.Path(__file__)
+gate.with_suffix(".ready").touch()
+while not gate.with_suffix(".release").exists():
+    time.sleep(0.01)
+''')
     pid, master = pty.fork()
     if pid == 0:
         os.environ["TERM"] = "xterm-256color"
+        os.environ["VISUAL"] = f'{shlex.quote(sys.executable)} {shlex.quote(str(gate))}'
         os.execv(binary, [binary, "--port", server_port, "--", session])
     output = bytearray()
 
@@ -51,6 +63,28 @@ def client(turns):
                 return
         raise AssertionError(f"missing {needle!r}: {bytes(output[-2500:])!r}")
 
+    def await_server_idle(prompt):
+        with socket.create_connection(("127.0.0.1", int(server_port)), timeout=5) as peer:
+            reader = peer.makefile("rb")
+            peer.sendall((json.dumps({"version": 2, "command": "attach",
+                                     "token": os.environ["ELARA_SERVER_TOKEN"],
+                                     "session_id": session, "mode": "observe", "cursor": 0}) + "\n").encode())
+            assert json.loads(reader.readline())["type"] == "attached"
+            until = time.monotonic() + 8
+            while time.monotonic() < until:
+                peer.sendall(b'{"version":2,"command":"resnapshot"}\n')
+                while True:
+                    frame = json.loads(reader.readline())
+                    if frame["type"] == "snapshot":
+                        view = frame["snapshot"]
+                        break
+                users = [m["text"] for m in view["messages"] if m["role"] == "user"]
+                if users and users[-1] == prompt.decode() and view["turn"]["state"] == "idle":
+                    reader.close()
+                    return
+                time.sleep(0.02)
+            raise AssertionError("server never completed while client paused")
+
     try:
         fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 32, 120, 0, 0))
         os.kill(pid, signal.SIGWINCH)
@@ -58,7 +92,8 @@ def client(turns):
         assert b"\x1b[?1004h" in output, "focus reporting requested"
         assert notice not in output, "attachment never re-notifies historical turns"
         for prompt, focus, command, result, notify in turns:
-            if focus:
+            coqueued = prompt in (b"error-turn", b"enabled-again")
+            if focus and not coqueued:
                 send(focus)
             if command:
                 send(command + b"\r")
@@ -66,6 +101,23 @@ def client(turns):
                 assert saved["notifications"] == (command == b"/notifications on")
             before = len(output)
             send(prompt + b"\r")
+            if prompt == b"enabled-again":
+                send(b"\x07")
+                until = time.monotonic() + 5
+                while not ready.exists() and time.monotonic() < until:
+                    drain()
+                assert ready.exists(), "main thread blocked in foreground editor"
+                os.write(master, focus + b"\n")
+                await_server_idle(prompt)
+                # The socket reader remains live while main awaits the editor.
+                release.touch()
+            elif coqueued:
+                os.kill(pid, signal.SIGSTOP)
+                try:
+                    os.write(master, focus)
+                    await_server_idle(prompt)
+                finally:
+                    os.kill(pid, signal.SIGCONT)
             wait_for(result, before)
             drain(0.3)
             emitted = bytes(output[before:])
@@ -99,6 +151,8 @@ def client(turns):
             os.kill(pid, signal.SIGKILL)
             os.waitpid(pid, 0)
         os.close(master)
+        for path in (gate, ready, release):
+            path.unlink(missing_ok=True)
 
 
 client([
@@ -109,7 +163,8 @@ client([
 ])
 client([
     (b"persisted-off", None, None, b"reply-5", False),
-    (b"enabled-again", None, b"/notifications on", b"reply-6", True),
+    (b"enabled-again", b"\x1b[I", b"/notifications on", b"reply-6", False),
+    (b"lost-again", b"\x1b[O", None, b"reply-7", True),
 ])
 capture = os.environ.get("ELARA_TUI_NOTIFICATIONS_CAPTURE")
 if capture:

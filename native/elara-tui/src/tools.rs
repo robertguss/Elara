@@ -177,14 +177,12 @@ pub(crate) fn entry(session: &str, call: &Value, expanded: bool) -> Entry {
                 ),
             ];
             for (prefix, content, fg, bg) in rows {
-                for line in sanitize(content).split('\n') {
-                    body.push((
-                        Some(bg),
-                        vec![Span::styled(
-                            format!("{prefix}{line}"),
-                            Style::default().fg(fg),
-                        )],
-                    ));
+                for line in
+                    crate::syntax::lines(args["path"].as_str().unwrap_or(""), &sanitize(content))
+                {
+                    let mut spans = vec![Span::styled(prefix, Style::default().fg(fg))];
+                    spans.extend(line.spans);
+                    body.push((Some(bg), spans));
                 }
             }
         } else if call["outcome"].is_null() {
@@ -194,7 +192,17 @@ pub(crate) fn entry(session: &str, call: &Value, expanded: bool) -> Entry {
             let mut shown = text.split('\n').peekable();
             let total = text.split('\n').count();
             let failed = matches!(status, "failed" | "indeterminate");
-            for _ in 0..INLINE_RESULT_LINES.min(total) {
+            let code = (name == "read" && status == "succeeded").then(|| {
+                crate::syntax::lines(
+                    args["path"].as_str().unwrap_or(""),
+                    &text
+                        .split('\n')
+                        .take(INLINE_RESULT_LINES)
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                )
+            });
+            for index in 0..INLINE_RESULT_LINES.min(total) {
                 let Some(line) = shown.next() else { break };
                 let style = if failed {
                     Style::default().fg(slot::FAILURE)
@@ -203,7 +211,10 @@ pub(crate) fn entry(session: &str, call: &Value, expanded: bool) -> Entry {
                 };
                 body.push((
                     Some(slot::SURFACE),
-                    vec![Span::styled(line.to_owned(), style)],
+                    code.as_ref().map_or_else(
+                        || vec![Span::styled(line.to_owned(), style)],
+                        |lines| lines[index].spans.clone(),
+                    ),
                 ));
             }
             if shown.peek().is_some() {
@@ -292,22 +303,58 @@ pub(crate) fn inspection(session: &str, call: &Value) -> Entry {
         text.push_str(&sanitize(result));
     }
     sections.push(("result", start..text.len()));
+    let mut diff_lines = Vec::new();
     if name == "edit"
         && status == "succeeded"
         && call["outcome"]["ok"].is_string()
         && let (Some(old), Some(new)) = (args["old_text"].as_str(), args["new_text"].as_str())
     {
         text.push_str("\nReported successful replacement snippet (not a full-file diff):");
-        for (prefix, content) in [("- ", old), ("+ ", new)] {
-            for line in sanitize(content).split('\n') {
+        let mut index = text.bytes().filter(|byte| *byte == b'\n').count();
+        for (prefix, content, fg, bg) in [
+            ("- ", old, slot::REMOVED, slot::REMOVED_SURFACE),
+            ("+ ", new, slot::ADDED, slot::ADDED_SURFACE),
+        ] {
+            for line in
+                crate::syntax::lines(args["path"].as_str().unwrap_or(""), &sanitize(content))
+            {
                 text.push('\n');
+                index += 1;
                 text.push_str(prefix);
-                text.push_str(line);
+                let mut spans = vec![Span::styled(prefix, Style::default().fg(fg))];
+                for span in &line.spans {
+                    text.push_str(&span.content);
+                }
+                spans.extend(line.spans);
+                diff_lines.push((index, Line::from(spans), bg));
             }
         }
     }
     text.push_str("\nAll retained arguments/results shown; source/Core caps cannot be undone.");
     let mut entry = Entry::plain(&format!("{session}:tool:{id}"), &sanitize(&text), false);
+    for (section, range) in &sections {
+        let hint = if *section == "arguments" {
+            "json"
+        } else if name == "read" && status == "succeeded" {
+            args["path"].as_str().unwrap_or("")
+        } else {
+            continue;
+        };
+        let start = text[..range.start]
+            .bytes()
+            .filter(|byte| *byte == b'\n')
+            .count();
+        for (offset, line) in crate::syntax::lines(hint, &text[range.clone()])
+            .into_iter()
+            .enumerate()
+        {
+            entry.lines[start + offset] = line;
+        }
+    }
+    for (index, line, bg) in diff_lines {
+        entry.lines[index] = line;
+        entry.decorate_line(index, Some(Style::default().bg(bg)), Vec::new());
+    }
     entry.sections = sections;
     let color = match status {
         "succeeded" => slot::SUCCESS,

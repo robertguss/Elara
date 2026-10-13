@@ -19,6 +19,9 @@ section. The runtime catalog supplies model windows through
 Command environment forwarding and `mix elara.env` diagnostics are documented
 in README.md's "Command environment" section. Extra project names belong in
 operator startup config, never an agent-editable project file.
+The TUI's shared code colors live in `native/elara-tui/src/syntax.rs`.
+Colored Elixir and edit frames for all four themes live in
+`native/elara-tui/tests/goldens/syntax-*.txt`.
 
 ## Where Elara stands
 

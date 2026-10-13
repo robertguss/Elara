@@ -9,6 +9,7 @@ mod sessions;
 pub use appearance::{Appearance, Theme, ViewLayout};
 mod clipboard;
 mod editor;
+mod syntax;
 mod tools;
 mod transcript;
 pub use editor::{Editor, MAX_INPUT_BYTES};
@@ -2134,6 +2135,12 @@ impl StyleSheet for TranscriptMarkdown {
     fn code_block_fence(&self) -> &str {
         ""
     }
+
+    fn code(&self) -> Style {
+        Style::default()
+            .fg(appearance::slot::TEXT)
+            .bg(syntax::CODE_BACKGROUND)
+    }
 }
 
 fn assistant_markdown_lines(text: &str) -> Vec<Line<'static>> {
@@ -2141,6 +2148,7 @@ fn assistant_markdown_lines(text: &str) -> Vec<Line<'static>> {
         MarkdownOptions::new(TranscriptMarkdown).image_fallback(ImageFallback::AltTextAndUrl);
     let rendered = tui_markdown::from_str_with_options(text, &options);
     let mut lines: Vec<Line<'static>> = rendered.lines.into_iter().map(owned_line).collect();
+    syntax::markdown(&mut lines, text);
 
     if lines.is_empty() {
         lines.push(Line::default());
@@ -3015,12 +3023,9 @@ mod tests {
         assert!(lines.iter().flat_map(|line| &line.spans).any(|span| {
             span.content == "italic" && span.style.add_modifier.contains(Modifier::ITALIC)
         }));
-        assert!(
-            lines
-                .iter()
-                .flat_map(|line| &line.spans)
-                .any(|span| { span.content == "code" && span.style.bg == Some(Color::Black) })
-        );
+        assert!(lines.iter().flat_map(|line| &line.spans).any(|span| {
+            span.content == "code" && span.style.bg == Some(appearance::slot::SURFACE)
+        }));
     }
 
     #[test]
@@ -3592,11 +3597,14 @@ mod tool_inspection_tests {
     fn expanded_result_selection_copy_keeps_unicode_tabs_newlines_across_wraps() {
         let mut model = model();
         finish(&mut model);
+        model.projection.view["tool_calls"][0]["args"]["ok"]["path"] = json!("inspection.ex");
+        let output = format!("# {}界\n\tdef label, do: \"café\"\n", "a".repeat(65_533));
+        model.projection.view["tool_calls"][0]["outcome"] = json!({"ok":output});
         key(&mut model, KeyCode::Char('f'));
         render_frame(&model, 20, 12).unwrap();
         let text = model.transcript.borrow().copy_entry().unwrap();
-        let start = text.find("α\tretained\n").unwrap();
-        let end = start + "α\tretained\n".len();
+        let start = text.find(&output).unwrap();
+        let end = start + output.len();
         let id = model.transcript.borrow().selected.clone().unwrap();
         model.transcript.borrow_mut().selection = Some((
             transcript::Point {
@@ -3607,14 +3615,14 @@ mod tool_inspection_tests {
         ));
         assert_eq!(
             model.transcript.borrow().copy_selection().as_deref(),
-            Some("α\tretained\n")
+            Some(output.as_str())
         );
         let anchor = model.transcript.borrow().anchor.clone();
         render_frame(&model, 80, 24).unwrap();
         assert_eq!(model.transcript.borrow().anchor, anchor);
         assert_eq!(
             model.transcript.borrow().copy_selection().as_deref(),
-            Some("α\tretained\n")
+            Some(output.as_str())
         );
     }
 }

@@ -66,6 +66,9 @@ filesystem writes. Changed touched paths or gitlinks refuse the whole undo.
 New coding worktrees are kept outside protected Elara state; the location and
 operator override are documented under "Persistent delegated children".
 Existing children keep their recorded paths, without relocation or deletion.
+The child-lifecycle PTY proof in `test/support/threads_pty.py` waits for the
+uniquely filtered child's row before inspecting or opening it; random IDs can
+fuzzy-match short names, so selection is not inferred from stale terminal bytes.
 File-tool roots, protected paths, and resolved symlinks are documented in
 README.md's "File-tool fence" section. Internal skill/session/plugin reads are
 separate; the fence is not an OS sandbox. Grep and glob share that policy:

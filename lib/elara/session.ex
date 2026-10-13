@@ -358,8 +358,15 @@ defmodule Elara.Session do
   def handle_call(:runtime_limits_view, _from, shell),
     do: {:reply, runtime_limits_view(shell), shell}
 
-  def handle_call({:workspace_diff, scope}, _from, shell) when scope in [:turn, :session],
-    do: {:reply, Elara.WorkspaceDiff.report(shell.workspace_diff, shell.store, scope), shell}
+  def handle_call({:workspace_diff, scope} = command, _from, shell)
+      when scope in [:turn, :session] do
+    result =
+      if Handoff.frozen?(shell.store),
+        do: forward_handoff(shell, command, :infinity),
+        else: Elara.WorkspaceDiff.report(shell.workspace_diff, shell.store, scope)
+
+    {:reply, result, shell}
+  end
 
   def handle_call(:recording, _from, shell) do
     {:reply, FlightRecorder.snapshot(shell.recorder), shell}

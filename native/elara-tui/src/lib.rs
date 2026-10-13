@@ -271,6 +271,7 @@ impl Model {
         self.provider_picker = None;
         self.session_picker = None;
         self.viewer = None;
+        self.workspace_diff = None;
         self.transcript.borrow_mut().source_key = None;
         self.notice = Some("Reattached; local draft and view restored.".into());
     }

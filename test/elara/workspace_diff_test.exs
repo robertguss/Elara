@@ -159,4 +159,134 @@ defmodule Elara.WorkspaceDiffTest do
     assert File.read!(Path.join(cwd, ".git/index")) == index
     assert {_, 128} = System.cmd("git", ["rev-parse", "HEAD"], cd: cwd, stderr_to_stdout: true)
   end
+
+  test "fork and clone start at copy time, not inherited turns, and separate pre-turn outside edits",
+       %{cwd: cwd} do
+    git(cwd, ["init", "--quiet"])
+
+    for mode <- [:fork, :clone] do
+      File.write!(Path.join(cwd, "file.txt"), "pre-source\n")
+      File.rm(Path.join(cwd, "outside.txt"))
+
+      source =
+        start(cwd, [
+          {:ok,
+           %Assistant{
+             tool_calls: [
+               call("edit", %{
+                 "path" => "file.txt",
+                 "old_text" => "pre-source",
+                 "new_text" => "source"
+               })
+             ]
+           }},
+          {:ok, %Assistant{text: "source done"}},
+          {:ok,
+           %Assistant{
+             tool_calls: [
+               call("edit", %{
+                 "path" => "file.txt",
+                 "old_text" => "source",
+                 "new_text" => "copied"
+               })
+             ]
+           }},
+          {:ok, %Assistant{text: "copy done"}}
+        ])
+
+      assert {:ok, "source done"} = Elara.ask(source, "source turn")
+
+      result =
+        if mode == :clone,
+          do: Elara.clone_session(source),
+          else: Elara.fork(source, hd(Elara.user_entries(source)).id)
+
+      copy =
+        case result do
+          {:ok, id, _, _} -> id
+          {:ok, _, _} -> source
+        end
+
+      on_exit(fn -> stop(copy) end)
+      assert {:ok, fresh} = Elara.workspace_diff(copy, :session)
+      assert fresh =~ "Fresh baseline at fork/clone copy time"
+      assert fresh =~ "No changes."
+      refute fresh =~ "pre-source"
+      File.write!(Path.join(cwd, "outside.txt"), "outside-before-copy-turn\n")
+      assert {:ok, "copy done"} = Elara.ask(copy, "copy turn")
+      assert {:ok, report} = Elara.workspace_diff(copy, :session)
+      assert report =~ "-source"
+      assert report =~ "+copied"
+      refute report =~ "pre-source"
+      assert report =~ "Changed outside Elara"
+      assert report =~ "+outside-before-copy-turn"
+      stop(copy)
+      stop(source)
+    end
+  end
+
+  test "diff follows the handoff owner and labels the successor-only session view", %{cwd: cwd} do
+    git(cwd, ["init", "--quiet"])
+    File.write!(Path.join(cwd, "file.txt"), "before\n")
+
+    source =
+      start(
+        cwd,
+        [
+          {:ok,
+           %Assistant{
+             tool_calls: [
+               call("edit", %{
+                 "path" => "file.txt",
+                 "old_text" => "before",
+                 "new_text" => "successor"
+               })
+             ]
+           }},
+          {:ok, %Assistant{text: "successor done"}}
+        ],
+        context_limit: 100_000,
+        seed_history: [
+          Elara.Message.user("goal"),
+          %Assistant{text: String.duplicate("x", 60_000), usage: %{"input_tokens" => 90_000}}
+        ]
+      )
+
+    assert {:error, :interrupted} = Elara.ask(source, "continue the goal")
+    deadline = System.monotonic_time(:millisecond) + 5000
+
+    owner =
+      Stream.repeatedly(fn ->
+        if System.monotonic_time(:millisecond) > deadline,
+          do:
+            flunk(
+              "handoff did not transfer ownership: #{inspect(Elara.snapshot(source).snapshot["inbox"]["handoff"])}"
+            )
+
+        Process.sleep(10)
+        Elara.snapshot(source).snapshot["inbox"]["handoff"]["delivery_owner"]
+      end)
+      |> Enum.find(&is_binary/1)
+
+    assert is_binary(owner) and owner != source
+    on_exit(fn -> stop(owner) end)
+
+    report =
+      Stream.repeatedly(fn -> Elara.workspace_diff(source) end)
+      |> Enum.find(fn result ->
+        if System.monotonic_time(:millisecond) > deadline,
+          do: flunk("successor did not close its turn")
+
+        Process.sleep(10)
+
+        match?({:ok, _}, result) and elem(result, 1) =~ "closed endpoint" and
+          elem(result, 1) =~ "+successor"
+      end)
+
+    assert {:ok, latest} = report
+    assert {:ok, ^latest} = Elara.workspace_diff(owner)
+    assert {:ok, session} = Elara.workspace_diff(source, :session)
+    assert session =~ "Unavailable before successor start; showing from there"
+    assert session =~ "+successor"
+  end
 end

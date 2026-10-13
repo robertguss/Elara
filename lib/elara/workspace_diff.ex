@@ -8,7 +8,7 @@ defmodule Elara.WorkspaceDiff do
   @file_limit 128 * 1024
   @report_limit 256 * 1024
   @zero String.duplicate("0", 40)
-  defstruct [:root, :repo, :active, :error]
+  defstruct [:root, :repo, :active, :error, :origin]
 
   def open(store) do
     with {:ok, state} <- Store.root(),
@@ -17,17 +17,57 @@ defmodule Elara.WorkspaceDiff do
         root: String.trim(root),
         repo: Path.join([state, "_workspace_snapshots", component(store.id)])
       }
+      |> open_origin(store)
     else
       _ ->
         %__MODULE__{error: "Workspace diff unavailable: this workspace is not a Git repository."}
     end
   end
 
+  defp open_origin(handle, store) do
+    if Map.get(store, :parent_session) do
+      ref = "refs/elara/origin"
+
+      result =
+        case bank(handle, ["log", "-1", "--format=%B", ref]) do
+          {:ok, encoded} ->
+            with {:ok, origin} <- JSON.decode(String.trim(encoded)),
+                 true <- origin["root"] == handle.root,
+                 {:ok, tree} <- bank(handle, ["rev-parse", ref <> "^{tree}"]) do
+              {:ok, Map.put(origin, "tree", String.trim(tree))}
+            end
+
+          _ ->
+            notice =
+              if Map.get(store, :context, %{})["source"],
+                do:
+                  "Unavailable before successor start; showing from there (#{DateTime.utc_now()}).\n",
+                else: "Fresh baseline at fork/clone copy time (#{DateTime.utc_now()}).\n"
+
+            origin = %{"root" => handle.root, "entry" => store.leaf, "notice" => notice}
+
+            with {:ok, tree} <- capture(handle),
+                 {:ok, commit} <- bank(handle, ["commit-tree", tree, "-m", JSON.encode!(origin)]),
+                 {:ok, _} <- bank(handle, ["update-ref", ref, String.trim(commit), @zero]) do
+              {:ok, Map.put(origin, "tree", tree)}
+            end
+        end
+
+      case result do
+        {:ok, origin} -> %{handle | origin: origin}
+        _ -> %{handle | error: "Workspace diff unavailable: copy/successor baseline failed."}
+      end
+    else
+      handle
+    end
+  end
+
   def admit(%{root: nil} = handle, id), do: %{handle | active: id}
 
-  def admit(handle, id) do
-    handle = if handle.error, do: %{handle | active: nil, error: nil}, else: handle
+  def admit(%{error: error} = handle, id) when not is_nil(error),
+    do: %{handle | active: id}
 
+  def admit(handle, id) do
     with {:ok, tree} <- capture(handle),
          {:ok, handle} <- close_at(handle, tree),
          {:ok, _} <- publish(handle, id, tree, nil) do
@@ -54,12 +94,26 @@ defmodule Elara.WorkspaceDiff do
   def report(%{error: error}, _store, _scope) when not is_nil(error), do: {:error, error}
 
   def report(handle, store, scope) when scope in [:turn, :session] do
-    ids = current_turns(store)
+    ids = current_turns(handle, store)
 
-    with [_ | _] <- ids,
-         {:ok, latest} <- checkpoint(handle, List.last(ids)),
+    origin =
+      if handle.origin,
+        do: %{before: handle.origin["tree"], tree: handle.origin["tree"], closed?: true}
+
+    with {:ok, latest} <-
+           if(ids == [] and scope == :session and origin,
+             do: {:ok, origin},
+             else: checkpoint(handle, List.last(ids))
+           ),
          {:ok, first} <-
-           checkpoint(handle, if(scope == :session, do: hd(ids), else: List.last(ids))),
+           if(scope == :session and origin,
+             do: {:ok, origin},
+             else:
+               checkpoint(
+                 handle,
+                 if(scope == :session, do: List.first(ids), else: List.last(ids))
+               )
+           ),
          {:ok, current} <- capture(handle),
          {:ok, _} <- keep_live(handle, current),
          endpoint = if(latest.closed?, do: latest.tree, else: current),
@@ -72,6 +126,7 @@ defmodule Elara.WorkspaceDiff do
             do: " · closed endpoint\n",
             else: " · live workspace (endpoint not sealed)\n"
           ) <>
+          if(scope == :session and handle.origin, do: handle.origin["notice"], else: "") <>
           changes <> outside
 
       {:ok, text}
@@ -80,19 +135,20 @@ defmodule Elara.WorkspaceDiff do
     end
   end
 
-  defp current_turns(store) do
+  defp current_turns(handle, store) do
     entries = Map.new(store.entries, &{&1.id, &1})
-    ancestors(entries, store.leaf, [])
+    ancestors(entries, store.leaf, if(handle.origin, do: handle.origin["entry"]), [])
   end
 
-  defp ancestors(_entries, nil, acc), do: acc
+  defp ancestors(_entries, id, stop, acc) when is_nil(id) or id == stop, do: acc
 
-  defp ancestors(entries, id, acc) do
+  defp ancestors(entries, id, stop, acc) do
     entry = Map.fetch!(entries, id)
 
     ancestors(
       entries,
       entry.parent_id,
+      stop,
       if(is_struct(entry.message, User), do: [id | acc], else: acc)
     )
   end
@@ -123,6 +179,8 @@ defmodule Elara.WorkspaceDiff do
       {:ok, commit}
     end
   end
+
+  defp checkpoint(_handle, nil), do: {:error, :missing_checkpoint}
 
   defp checkpoint(handle, id) do
     ref = turn_ref(id)
@@ -360,6 +418,21 @@ defmodule Elara.WorkspaceDiff do
           _ -> {:ok, "Outside-edit boundary unavailable.\n"}
         end
       end)
+
+    gaps =
+      if scope == :session and handle.origin do
+        initial =
+          Stream.map([List.first(ids)], fn id ->
+            with {:ok, first} <-
+                   if(id, do: checkpoint(handle, id), else: {:ok, %{before: current}}) do
+              compare(handle, handle.origin["tree"], first.before)
+            end
+          end)
+
+        Stream.concat(initial, gaps)
+      else
+        gaps
+      end
 
     gaps =
       case checkpoint(handle, List.last(ids)) do

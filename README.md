@@ -812,3 +812,8 @@ request size or trigger a context handoff. Large-history protocol fixtures use
 an explicit `context_limit`; production context safeguards remain enabled.
 Queued input consumption is not completion: await the assistant result when
 asserting that the provider has finished.
+
+The research lab is a separate Mix project in `lab/` that depends on this app
+by path; the app does not ship it, and neither `mix test` nor `bin/check` runs
+it. Run its checks with `cd lab && mix deps.get && mix test`;
+[docs/lab](docs/lab/README.md) explains its experiments and `mix elara.lab`.

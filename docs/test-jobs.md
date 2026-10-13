@@ -195,8 +195,9 @@ See the [experiment report](harness-experiments.md) for assistance and limits.
 The live repository driver and its passive observer (JOB-6,
 `test/support/live_session_driver.exs`) were retired in LAB-2 slice E; both
 remain in git history before that commit. The job recovery properties they
-exercised now run as seeded lab scenarios: `mix elara.lab run concurrent_jobs`,
-`session_crash` and `provider_fault` (see [docs/lab/README.md](lab/README.md)).
+exercised now run as seeded lab scenarios in the `lab/` Mix project:
+`cd lab && mix elara.lab run concurrent_jobs`, `session_crash` and
+`provider_fault` (see [docs/lab/README.md](lab/README.md)).
 
 
 The [JOB-10 concurrency experiment](harness-experiments.md#2026-09-07-concurrent-cancellation-and-capacity-refill--job-10)

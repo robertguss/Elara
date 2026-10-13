@@ -25,7 +25,14 @@ defmodule Elara.ConfigTest do
   end
 
   test "runtime limits prefer options, then environment, then application config" do
-    keys = [:max_iterations, :tool_timeout_ms, :max_tool_timeout_ms]
+    keys = [
+      :max_iterations,
+      :tool_timeout_ms,
+      :max_tool_timeout_ms,
+      :context_keep_results,
+      :context_keep_tokens
+    ]
+
     previous = Map.new(keys, &{&1, Application.get_env(:elara, &1)})
 
     on_exit(fn ->
@@ -41,6 +48,23 @@ defmodule Elara.ConfigTest do
     assert defaults[:max_iterations] == 100
     assert defaults[:tool_timeout_ms] == 600_000
     assert defaults[:max_tool_timeout_ms] == 3_600_000
+    assert {:ok, retention} = Config.context_retention([], %{})
+    assert retention[:context_keep_results] == 5
+    assert retention[:context_keep_tokens] == 20_000
+    Application.put_env(:elara, :context_keep_results, 7)
+    Application.put_env(:elara, :context_keep_tokens, 30_000)
+    assert {:ok, retention} = Config.context_retention([], %{})
+    assert retention[:context_keep_results] == 7
+    assert retention[:context_keep_tokens] == 30_000
+
+    assert {:ok, retention} =
+             Config.context_retention([context_keep_results: 3], %{
+               "ELARA_CONTEXT_KEEP_RESULTS" => "9",
+               "ELARA_CONTEXT_KEEP_TOKENS" => "12000"
+             })
+
+    assert retention[:context_keep_results] == 3
+    assert retention[:context_keep_tokens] == 12_000
 
     Application.put_env(:elara, :max_iterations, 55)
     Application.put_env(:elara, :tool_timeout_ms, 120_000)
@@ -64,6 +88,9 @@ defmodule Elara.ConfigTest do
     for value <- ["0", "-1", "12ms", "1.5", "nonsense"] do
       assert {:error, {:invalid_runtime_limit, :max_iterations}} =
                Config.runtime_limits([], Map.put(env, "ELARA_MAX_ITERATIONS", value))
+
+      assert {:error, {:invalid_runtime_limit, :context_keep_tokens}} =
+               Config.context_retention([], %{"ELARA_CONTEXT_KEEP_TOKENS" => value})
     end
 
     assert {:error, {:invalid_runtime_limit, :tool_timeout_ms}} =

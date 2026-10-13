@@ -506,6 +506,7 @@ defmodule Elara.Session.Store do
       |> Map.put("publicContent", message.public_content)
       |> put_optional("usage", message.usage)
       |> put_optional("responseModel", message.response_model)
+      |> put_optional("billingReceipt", message.billing_receipt)
       |> put_optional("requestSettings", message.request_settings)
       |> Map.put("interrupted", message.interrupted)
 
@@ -569,10 +570,13 @@ defmodule Elara.Session.Store do
                  "publicContent",
                  "usage",
                  "responseModel",
+                 "billingReceipt",
                  "requestSettings",
                  "interrupted"
                ])
            ),
+         true <- Elara.Provider.Visibility.valid_usage?(Map.get(assistant, "usage")),
+         true <- Elara.Provider.Billing.valid?(Map.get(assistant, "billingReceipt")),
          {:ok, tool_calls} <- decode_tool_calls(calls),
          parts = Map.get(assistant, "publicContent", []),
          true <- is_list(parts) and Enum.all?(parts, &Elara.Provider.Visibility.valid_part?/1),
@@ -585,6 +589,7 @@ defmodule Elara.Session.Store do
          public_content: parts,
          usage: Map.get(assistant, "usage"),
          response_model: Map.get(assistant, "responseModel"),
+         billing_receipt: Map.get(assistant, "billingReceipt"),
          request_settings: Map.get(assistant, "requestSettings"),
          interrupted: Map.get(assistant, "interrupted", false)
        }}

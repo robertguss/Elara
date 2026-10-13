@@ -843,7 +843,7 @@ defmodule Elara.FlightRecorder do
     }
 
   defp normalize_message(%Assistant{} = message) do
-    %{
+    normalized = %{
       kind: :assistant,
       text: message.text,
       tool_calls: Enum.map(message.tool_calls, &normalize_call/1),
@@ -853,6 +853,10 @@ defmodule Elara.FlightRecorder do
       request_settings: message.request_settings,
       interrupted: message.interrupted
     }
+
+    if message.billing_receipt,
+      do: Map.put(normalized, :billing_receipt, message.billing_receipt),
+      else: normalized
   end
 
   defp normalize_message(%ToolResult{} = result) do
@@ -882,6 +886,7 @@ defmodule Elara.FlightRecorder do
       public_content: Map.get(message, :public_content, []),
       usage: Map.get(message, :usage),
       response_model: Map.get(message, :response_model),
+      billing_receipt: Map.get(message, :billing_receipt),
       request_settings: Map.get(message, :request_settings),
       interrupted: Map.get(message, :interrupted, false)
     }

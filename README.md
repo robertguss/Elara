@@ -246,6 +246,44 @@ replay divergence; replay them with the
 [last format 1 build](https://github.com/robertguss/Elara/commit/daa06f281368d0a532721695c6a656ec12ec14a5).
 Session JSONL history is unchanged and remains reopenable.
 
+### Provider usage and estimated cost
+
+OpenAI-compatible, Grok OAuth and Codex responses retain provider-reported
+input, cached-input and output tokens, plus the actual response model.
+Cached-input tokens are included in input tokens, not extra tokens.
+Missing counters remain unknown. Streaming usage frames replace cumulative
+counters instead of counting the same request twice.
+
+The authoritative `Elara.materialized_view(session)` snapshot exposes:
+
+- `provider_view.usage.last_request`: the latest reported counters, or `null`.
+- `provider_view.usage.session_totals`: sums of reported counters along the
+  current history path. Top-level `usage` contains the same totals.
+- `provider_view.usage.cost`: `estimated_usd_nanos`, `priced_records`,
+  `subscription_records`, `unpriced_records`, `complete`, and `models`.
+  Each model row has those totals plus `provider`, `billing`, `model`, and `tokens`.
+- Assistant messages carry `response_model`, `usage`, and an optional
+  `billing_receipt`. The receipt records authentication provenance and the
+  price source, version and rates used for that response.
+
+Costs use integer billionths of a US dollar. An estimate sums only priced API
+responses. `complete: false` means that some responses cannot be priced, so
+the sum is partial. No priced responses means `estimated_usd_nanos: null`,
+not $0. Codex and Grok OAuth are subscription usage, with token counts only;
+Elara does not turn those tokens into API spend or estimate a subscription bill.
+
+Standard prices are pinned for OpenAI `gpt-4.1` and its `2025-04-14` snapshot,
+and xAI `grok-4.6` and `grok-4.7`. xAI prices double at 200K input tokens for
+the whole request. Rates are saved with each response and survive reopening,
+copying and replay without repricing old history.
+The sources are [OpenAI's GPT-4.1 prices](https://developers.openai.com/api/docs/models/gpt-4.1)
+and [xAI's pricing table](https://docs.x.ai/developers/pricing), checked on 2026-10-13.
+Unknown models, custom endpoints, missing billing provenance, nonstandard
+service tiers, incomplete counters and unpriced cache writes remain unpriced.
+Nested tool usage has no billing receipt and is unpriced, not silently billed
+as the main provider. Clearing tool results leaves the parent's usage evidence
+unchanged; children of cleared parents retain C3's reset counters and may be unpriced.
+
 ## Command environment
 
 Commands run by `bash`, search, jobs, and the shipped Elixir project plugin get

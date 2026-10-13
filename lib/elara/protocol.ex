@@ -480,7 +480,7 @@ defmodule Elara.Protocol do
     }
 
   defp encode_message(%Assistant{text: text, tool_calls: calls} = message) do
-    %{
+    encoded = %{
       "role" => "assistant",
       "text" => text,
       "tool_calls" => Enum.map(calls, &encode_call/1),
@@ -490,6 +490,10 @@ defmodule Elara.Protocol do
       "request_settings" => message.request_settings,
       "interrupted" => message.interrupted
     }
+
+    if message.billing_receipt,
+      do: Map.put(encoded, "billing_receipt", message.billing_receipt),
+      else: encoded
   end
 
   defp encode_message(%ToolResult{call_id: id, name: name, outcome: outcome, usage: usage}) do
@@ -522,6 +526,8 @@ defmodule Elara.Protocol do
          true <- valid_public_usage?(usage),
          model = Map.get(message, "response_model"),
          true <- is_nil(model) or is_binary(model),
+         billing = Map.get(message, "billing_receipt"),
+         true <- Elara.Provider.Billing.valid?(billing),
          settings = Map.get(message, "request_settings"),
          true <- valid_request_settings?(settings),
          interrupted = Map.get(message, "interrupted", false),
@@ -533,6 +539,7 @@ defmodule Elara.Protocol do
          public_content: parts,
          usage: usage,
          response_model: model,
+         billing_receipt: billing,
          request_settings: settings,
          interrupted: interrupted
        }}

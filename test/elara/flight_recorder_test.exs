@@ -159,6 +159,14 @@ defmodule Elara.FlightRecorderTest do
 
     {:ok, assistant} = Message.assistant("answer", [], provider_state)
 
+    assistant =
+      %{
+        assistant
+        | response_model: "gpt-4.1",
+          usage: %{"input_tokens" => 10, "cached_input_tokens" => 4, "output_tokens" => 3}
+      }
+      |> Elara.Provider.Billing.stamp("openai")
+
     {:ok, session} =
       Elara.start_session(provider: script([{:ok, assistant}]), tools: [], persist: false)
 
@@ -172,6 +180,10 @@ defmodule Elara.FlightRecorderTest do
              Elara.replay(recording)
 
     assert List.last(replayed.history).provider_state == nil
+    assert List.last(replayed.history).billing_receipt == assistant.billing_receipt
+
+    assert Elara.Provider.Visibility.view(replayed)["usage"]["cost"]["estimated_usd_nanos"] ==
+             38_000
   end
 
   test "detects core behavior changes and supports transition fault injection" do

@@ -1,6 +1,8 @@
 # The directory Mix will write compiled artifacts to.
 /_build/
 /lab/_build/
+/lab/cover/
+/lab/tmp/
 /native/exec-stub/target/
 /native/elara-tui/target/
 

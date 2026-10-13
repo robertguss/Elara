@@ -7,6 +7,8 @@ defmodule ElaraLab.MixProject do
       version: "0.1.0",
       elixir: "~> 1.20",
       # The product's lock, so the lab runs the product's exact dependencies.
+      # Manage it from the root: deps.update or deps.unlock --unused run here
+      # would rewrite the product's lock (stream_data looks unused from lab/).
       lockfile: "../mix.lock",
       deps: deps()
     ]

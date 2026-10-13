@@ -48,12 +48,12 @@ defmodule Elara.Chat.CoreTest do
     {:idle_help, :idle, {:line, "/help"}, :idle,
      [
        {:print,
-        "/help       this list\n/interrupt  cancel the current turn\n/reload     reload local plugins\n/why [N]    explain the latest event, or event N\n/resume     list saved sessions\n/resume N   resume saved session N\n/tree       list user turns; /tree N branches in this session\n/fork       list user turns; /fork N branches into a new session\n/clone      copy the current path into a new session\n/name TEXT  name the current session\n/quit       exit\n> "}
+        "/help       this list\n/interrupt  cancel the current turn\n/reload     reload local plugins\n/why [N]    explain the latest event, or event N\n/model [ID [EFFORT]]  list models/windows or select the next request\n/resume     list saved sessions\n/resume N   resume saved session N\n/tree       list user turns; /tree N branches in this session\n/fork       list user turns; /fork N branches into a new session\n/clone      copy the current path into a new session\n/name TEXT  name the current session\n/quit       exit\n> "}
      ]},
     {:idle_h, :idle, {:line, "/h"}, :idle,
      [
        {:print,
-        "/help       this list\n/interrupt  cancel the current turn\n/reload     reload local plugins\n/why [N]    explain the latest event, or event N\n/resume     list saved sessions\n/resume N   resume saved session N\n/tree       list user turns; /tree N branches in this session\n/fork       list user turns; /fork N branches into a new session\n/clone      copy the current path into a new session\n/name TEXT  name the current session\n/quit       exit\n> "}
+        "/help       this list\n/interrupt  cancel the current turn\n/reload     reload local plugins\n/why [N]    explain the latest event, or event N\n/model [ID [EFFORT]]  list models/windows or select the next request\n/resume     list saved sessions\n/resume N   resume saved session N\n/tree       list user turns; /tree N branches in this session\n/fork       list user turns; /fork N branches into a new session\n/clone      copy the current path into a new session\n/name TEXT  name the current session\n/quit       exit\n> "}
      ]},
     {:idle_unknown, :idle, {:line, "/foo"}, :idle, [{:print, "unknown command /foo. /help\n> "}]},
     {:idle_escape, :idle, {:line, "//quit"}, {:in_turn, "/quit"},

@@ -21,6 +21,7 @@ defmodule Elara.Chat.Core do
           | {:action_result, :clone | :name, :ok | {:error, term()}}
           | {:reload_result, {:ok, [Elara.Plugin.Info.t()]} | {:error, term()}}
           | {:why_result, {:ok, map()} | {:error, term()}}
+          | {:model_result, {:ok, map()} | {:error, term()}}
           | :ask_rejected
 
   @type effect ::
@@ -34,6 +35,7 @@ defmodule Elara.Chat.Core do
           | {:name_session, String.t()}
           | :reload_plugins
           | {:why, :latest | pos_integer()}
+          | {:model, [String.t()]}
           | :interrupt
           | {:halt, 0 | 1}
 
@@ -45,6 +47,7 @@ defmodule Elara.Chat.Core do
     "/stop" => :interrupt,
     "/reload" => :reload,
     "/why" => :why_latest,
+    "/model" => :model_list,
     "/resume" => :resume_list,
     "/tree" => :tree_list,
     "/fork" => :fork_list,
@@ -59,6 +62,7 @@ defmodule Elara.Chat.Core do
   /interrupt  cancel the current turn
   /reload     reload local plugins
   /why [N]    explain the latest event, or event N
+  /model [ID [EFFORT]]  list models/windows or select the next request
   /resume     list saved sessions
   /resume N   resume saved session N
   /tree       list user turns; /tree N branches in this session
@@ -76,6 +80,41 @@ defmodule Elara.Chat.Core do
 
   @spec step(phase(), input()) :: {phase(), [effect()]}
   def step(phase, input)
+
+  def step(phase, {:model_result, {:ok, view}}) do
+    rows =
+      Enum.map(view["catalog"], fn row ->
+        window = row["context_window"] || "unknown (conservative fallback)"
+
+        [
+          row["model"],
+          " · window ",
+          to_string(window),
+          " · ",
+          row["provenance"] || "unknown",
+          " · efforts ",
+          Enum.join(row["efforts"], ", "),
+          "\n",
+          if(row["source"], do: ["  ", row["source"], " · ", row["date"] || "", "\n"], else: [])
+        ]
+      end)
+
+    text = [
+      "Model catalog: ",
+      view["catalog_source"] || "unavailable",
+      "\n",
+      rows,
+      if(view["catalog_error"], do: [view["catalog_error"], "\n"], else: []),
+      "Next request: ",
+      inspect(view["next_request"]),
+      "\n"
+    ]
+
+    {phase, print([text, if(phase == :idle, do: @prompt, else: "")])}
+  end
+
+  def step(phase, {:model_result, {:error, reason}}),
+    do: {phase, print([action_error(reason), if(phase == :idle, do: @prompt, else: "")])}
 
   def step(:idle, {:line, line}), do: idle_line(parse(line))
 
@@ -192,6 +231,9 @@ defmodule Elara.Chat.Core do
   defp idle_line(:help), do: {:idle, print([@help, @prompt])}
   defp idle_line(:reload), do: {:idle, [:reload_plugins]}
   defp idle_line(:why_latest), do: {:idle, [{:why, :latest}]}
+  defp idle_line(:model_list), do: {:idle, [{:model, []}]}
+  defp idle_line({:model, args}), do: {:idle, [{:model, args}]}
+  defp idle_line(:invalid_model), do: {:idle, print(["usage: /model [ID [EFFORT]]\n", @prompt])}
   defp idle_line({:why, sequence}), do: {:idle, [{:why, sequence}]}
   defp idle_line(:invalid_why), do: {:idle, print(["usage: /why or /why N\n", @prompt])}
   defp idle_line(:resume_list), do: {:idle, [:list_sessions]}
@@ -218,6 +260,12 @@ defmodule Elara.Chat.Core do
   defp in_turn_line(_phase, _prompt, :quit), do: {{:exiting, 0}, [:interrupt]}
   defp in_turn_line(phase, _prompt, :interrupt), do: {phase, [:interrupt]}
   defp in_turn_line(phase, _prompt, :help), do: {phase, print(@help)}
+  defp in_turn_line(phase, _prompt, :model_list), do: {phase, [{:model, []}]}
+  defp in_turn_line(phase, _prompt, {:model, args}), do: {phase, [{:model, args}]}
+
+  defp in_turn_line(phase, _prompt, :invalid_model),
+    do: {phase, print("usage: /model [ID [EFFORT]]\n")}
+
   defp in_turn_line(phase, _prompt, :resume_list), do: {phase, print(@refuse)}
   defp in_turn_line(phase, _prompt, {:resume, _}), do: {phase, print(@refuse)}
   defp in_turn_line(phase, _prompt, :invalid_resume), do: {phase, print(@refuse)}
@@ -376,6 +424,12 @@ defmodule Elara.Chat.Core do
 
       Regex.match?(~r/^\/why\s/, trimmed) ->
         parse_index_command(trimmed, "/why", :why, :invalid_why)
+
+      Regex.match?(~r/^\/model\s/, trimmed) ->
+        case String.split(trimmed, ~r/\s+/, trim: true) do
+          [_command | args] when length(args) in 1..2 -> {:model, args}
+          _ -> :invalid_model
+        end
 
       String.starts_with?(trimmed, "/") ->
         {:unknown, trimmed}

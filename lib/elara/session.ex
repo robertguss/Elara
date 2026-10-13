@@ -63,6 +63,8 @@ defmodule Elara.Session do
       :effect_executor,
       :effect_executor_explicit?,
       :effect_recovery_task,
+      :catalog_task,
+      :catalog_timer,
       :effect_fault_hook,
       :base_system,
       :context_limit,
@@ -230,6 +232,7 @@ defmodule Elara.Session do
           if shell.effect_recovery_pending == [], do: send(self(), :drain_inputs)
           if shell.effect_recovery_pending != [], do: send(self(), :check_effect_recovery)
           if Handoff.frozen?(store), do: send(self(), :advance_handoff)
+          send(self(), :refresh_catalog)
           {:ok, shell}
         else
           {:error, reason} ->
@@ -246,6 +249,8 @@ defmodule Elara.Session do
   @impl true
   def terminate(_reason, shell) do
     if shell.effect_recovery_task, do: Task.shutdown(shell.effect_recovery_task, :brutal_kill)
+    if shell.catalog_task, do: Task.shutdown(shell.catalog_task, :brutal_kill)
+    if shell.catalog_timer, do: Process.cancel_timer(shell.catalog_timer)
     close_effect_journal(shell.effect_journal)
     FlightRecorder.close(shell.recorder)
     Store.release(shell.store)
@@ -709,6 +714,12 @@ defmodule Elara.Session do
                 }
 
                 shell = feed({:provider_settings, config.provider_settings}, shell)
+
+                shell =
+                  if config.provider_catalog == shell.core.config.provider_catalog,
+                    do: shell,
+                    else: feed({:provider_catalog, config.provider_catalog}, shell)
+
                 {:reply, {:ok, shell.core.history}, shell}
 
               {:error, reason} ->
@@ -874,6 +885,54 @@ defmodule Elara.Session do
 
   def handle_info(:drain_inputs, shell), do: {:noreply, drain_inputs(shell)}
   def handle_info(:inbox_changed, shell), do: {:noreply, inbox_changed(shell)}
+
+  def handle_info(:refresh_catalog, shell) do
+    if shell.core.config.provider_catalog &&
+         Application.get_env(:elara, :model_catalog_online, true) && shell.catalog_task == nil do
+      provider = shell.provider
+      previous = shell.core.config.provider_catalog
+
+      task =
+        Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
+          Provider.Catalog.refresh(provider, previous)
+        end)
+
+      timer = Process.send_after(self(), {:catalog_timeout, task.ref}, 5_500)
+      {:noreply, %{shell | catalog_task: task, catalog_timer: timer}}
+    else
+      {:noreply, shell}
+    end
+  end
+
+  def handle_info({ref, catalog}, %{catalog_task: %Task{ref: ref}} = shell) do
+    Process.demonitor(ref, [:flush])
+    Process.cancel_timer(shell.catalog_timer)
+    Process.send_after(self(), :refresh_catalog, 300_000)
+    shell = %{shell | catalog_task: nil, catalog_timer: nil}
+
+    catalog =
+      case shell.core.config.provider_catalog["settings_notice"] do
+        nil -> Map.delete(catalog, "settings_notice")
+        notice -> Map.put(catalog, "settings_notice", notice)
+      end
+
+    {:noreply,
+     if(catalog == shell.core.config.provider_catalog,
+       do: shell,
+       else: feed({:provider_catalog, catalog}, shell)
+     )}
+  end
+
+  def handle_info({:catalog_timeout, ref}, %{catalog_task: %Task{ref: ref}} = shell) do
+    Task.shutdown(shell.catalog_task, :brutal_kill)
+    catalog_refresh_failed(shell)
+  end
+
+  def handle_info(
+        {:DOWN, ref, :process, _pid, _reason},
+        %{catalog_task: %Task{ref: ref}} = shell
+      ),
+      do: catalog_refresh_failed(shell)
 
   def handle_info(:advance_handoff, shell) do
     case Handoff.outgoing(shell.store) do
@@ -1528,13 +1587,49 @@ defmodule Elara.Session do
   end
 
   defp restore_provider_settings(config, store, provider) do
-    settings =
+    {settings, notice} =
       case Elara.Provider.Visibility.settings(provider) do
-        nil -> nil
-        defaults -> store.provider_settings || config.provider_settings || defaults
+        nil ->
+          {nil, nil}
+
+        defaults ->
+          saved = store.provider_settings || config.provider_settings
+
+          cond do
+            saved == nil ->
+              {defaults, nil}
+
+            is_map(saved) and Map.keys(saved) == Map.keys(defaults) ->
+              {saved, nil}
+
+            true ->
+              old = if is_map(saved) and Map.has_key?(saved, "effort"), do: "Codex", else: "Grok"
+              new = if Map.has_key?(defaults, "effort"), do: "Codex", else: "Grok"
+              model = if is_map(saved), do: saved["model"], else: "unknown"
+
+              {defaults,
+               "saved #{old} model #{model} not applied under #{new}; using #{defaults["model"]}"}
+          end
       end
 
-    %{config | provider_settings: settings}
+    catalog = Provider.Catalog.offline(provider)
+    catalog = if notice, do: Map.put(catalog, "settings_notice", notice), else: catalog
+    %{config | provider_settings: settings, provider_catalog: catalog}
+  end
+
+  defp catalog_refresh_failed(shell) do
+    Process.cancel_timer(shell.catalog_timer)
+    Process.send_after(self(), :refresh_catalog, 300_000)
+
+    catalog =
+      Map.put(
+        shell.core.config.provider_catalog,
+        "error",
+        "Model listing unavailable; using offline catalog"
+      )
+
+    {:noreply,
+     feed({:provider_catalog, catalog}, %{shell | catalog_task: nil, catalog_timer: nil})}
   end
 
   defp hydrate(store, config) do
@@ -2215,7 +2310,8 @@ defmodule Elara.Session do
       end
 
     patch_ops =
-      if event == :inbox_changed or match?({:message_appended, _}, event) or
+      if event in [:inbox_changed, :provider_view_changed] or
+           match?({:message_appended, _}, event) or
            match?({:message_appended, _, :streamed}, event),
          do: patch_ops ++ [%{"op" => "set_inbox", "inbox" => inbox_view(shell)}],
          else: patch_ops
@@ -2928,8 +3024,10 @@ defmodule Elara.Session do
   end
 
   defp change_provider_settings(shell, settings) do
+    settings = Provider.Visibility.normalize(settings, shell.core.config.provider_catalog)
+
     with true <- shell.core.config.provider_settings != nil,
-         :ok <- Elara.Provider.Visibility.validate(settings),
+         :ok <- Elara.Provider.Visibility.validate(settings, shell.core.config.provider_catalog),
          {:ok, store} <- Store.set_provider_settings(shell.store, settings) do
       {:reply, :ok, feed({:provider_settings, settings}, %{shell | store: store})}
     else

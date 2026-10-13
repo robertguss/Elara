@@ -6,6 +6,8 @@ defmodule Elara.Provider.Visibility do
   @type settings :: %{String.t() => String.t()}
   @type usage :: %{String.t() => non_neg_integer()}
 
+  alias Elara.Provider.{Catalog, Grok, OpenAI, OpenAICodex}
+
   @catalog_version "subscription-preflight-2026-09-04"
   def catalog do
     Enum.map(["gpt-5.5", "gpt-5.4-mini"], fn model ->
@@ -20,6 +22,14 @@ defmodule Elara.Provider.Visibility do
   end
 
   @spec context_window(term()) :: {:ok, pos_integer()} | :unknown
+  def context_window({%{"model" => model}, %{"models" => models}}) do
+    case Enum.find(models, &(&1["model"] == model)) do
+      %{"context_window" => tokens} when is_integer(tokens) and tokens > 0 -> {:ok, tokens}
+      _ -> :unknown
+    end
+  end
+
+  def context_window({settings, nil}) when is_map(settings), do: context_window(settings)
   def context_window({_, %{model: model}}), do: context_window(model)
   def context_window(%{"model" => model}), do: context_window(model)
 
@@ -40,14 +50,55 @@ defmodule Elara.Provider.Visibility do
 
   def validate(_), do: {:error, :unsupported_provider_settings}
 
-  def settings({Elara.Provider.OpenAICodex, config}),
+  def validate(settings, nil), do: validate(settings)
+
+  def validate(%{"model" => model} = settings, %{"kind" => "grok"}) do
+    if map_size(settings) == 1 and Catalog.valid_id?(model),
+      do: :ok,
+      else: {:error, :unsupported_provider_settings}
+  end
+
+  def validate(%{"model" => model, "effort" => effort} = settings, %{
+        "kind" => "codex",
+        "models" => models
+      }) do
+    if map_size(settings) == 2 and
+         Enum.any?(models, &(&1["model"] == model and effort in &1["efforts"])),
+       do: :ok,
+       else: {:error, :unsupported_provider_settings}
+  end
+
+  def validate(_, _), do: {:error, :unsupported_provider_settings}
+
+  def normalize(%{"model" => model} = settings, %{"kind" => "codex", "models" => models})
+      when map_size(settings) == 1 do
+    case Enum.find(models, &(&1["model"] == model)) do
+      %{"efforts" => [first | _]} = row ->
+        Map.put(settings, "effort", row["default_effort"] || first)
+
+      _ ->
+        settings
+    end
+  end
+
+  def normalize(settings, _), do: settings
+
+  def settings({OpenAICodex, config}),
     do: %{"model" => config.model, "effort" => config.effort}
+
+  def settings({Grok, config}), do: %{"model" => config.model}
+
+  def settings({OpenAI, config}) do
+    if URI.parse(config.base_url).host == "api.x.ai", do: %{"model" => config.model}, else: nil
+  end
 
   def settings(_), do: nil
 
-  def configure({Elara.Provider.OpenAICodex, config}, %{"model" => model, "effort" => effort}),
-    do: {Elara.Provider.OpenAICodex, %{config | model: model, effort: effort}}
+  def configure({OpenAICodex, config}, %{"model" => model, "effort" => effort}),
+    do: {OpenAICodex, %{config | model: model, effort: effort}}
 
+  def configure({Grok, config}, %{"model" => model}), do: {Grok, %{config | model: model}}
+  def configure({OpenAI, config}, %{"model" => model}), do: {OpenAI, %{config | model: model}}
   def configure(provider, _), do: provider
 
   def valid_part?(
@@ -68,7 +119,24 @@ defmodule Elara.Provider.Visibility do
 
   def view(core) do
     settings = core.config.provider_settings
-    catalog = if settings, do: catalog(), else: []
+    snapshot = core.config.provider_catalog
+    catalog = if snapshot, do: snapshot["models"], else: if(settings, do: catalog(), else: [])
+
+    catalog =
+      if settings && snapshot && not Enum.any?(catalog, &(&1["model"] == settings["model"])) do
+        catalog ++
+          [
+            %{
+              "model" => settings["model"],
+              "efforts" => [],
+              "context_window" => nil,
+              "provenance" => "unverified"
+            }
+          ]
+      else
+        catalog
+      end
+
     budget = Elara.Session.Context.budget(core)
 
     last =
@@ -96,6 +164,9 @@ defmodule Elara.Provider.Visibility do
     %{
       "extension" => "provider_visibility_v1",
       "catalog" => catalog,
+      "catalog_source" => snapshot && snapshot["source"],
+      "catalog_error" => snapshot && snapshot["error"],
+      "settings_notice" => snapshot && snapshot["settings_notice"],
       "next_request" => settings,
       "active_request" => if(core.streaming, do: core.streaming.settings, else: nil),
       "usage" => %{

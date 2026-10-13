@@ -583,9 +583,8 @@ defmodule Elara.Server do
          %{
            "command" => "set_provider_settings",
            "extension" => "provider_visibility_v1",
-           "model" => model,
-           "effort" => effort
-         },
+           "model" => _model
+         } = request,
          _provider,
          _lifetime
        ) do
@@ -593,7 +592,7 @@ defmodule Elara.Server do
       command_result(
         Elara.attached_command(
           session,
-          {:provider_settings, %{"model" => model, "effort" => effort}}
+          {:provider_settings, Map.take(request, ["model", "effort"])}
         ),
         2
       )

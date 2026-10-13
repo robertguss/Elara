@@ -75,6 +75,10 @@ defmodule Elara.Chat do
     Process.monitor(session_pid)
     :ok = Elara.subscribe(session)
     write_out(out, @banner)
+
+    if notice = Elara.materialized_view(session)["provider_view"]["settings_notice"],
+      do: write_out(out, [notice, "\n"])
+
     write_out(out, Core.render_transcript(Elara.transcript(session)))
 
     case String.trim(seed) do
@@ -130,6 +134,11 @@ defmodule Elara.Chat do
         })
 
       {:resume_result, result} ->
+        if match?({:ok, _}, result) do
+          if notice = Elara.materialized_view(session)["provider_view"]["settings_notice"],
+            do: write_out(out, [notice, "\n"])
+        end
+
         dispatch(session, session_pid, out, phase, {:resume_result, result}, %{
           opts
           | rewrite: false
@@ -161,6 +170,12 @@ defmodule Elara.Chat do
 
       {:why_result, result} ->
         dispatch(session, session_pid, out, phase, {:why_result, result}, %{
+          opts
+          | rewrite: false
+        })
+
+      {:model_result, result} ->
+        dispatch(session, session_pid, out, phase, {:model_result, result}, %{
           opts
           | rewrite: false
         })
@@ -199,6 +214,27 @@ defmodule Elara.Chat do
 
         :interrupt ->
           Elara.interrupt(session)
+          {:cont, {phase, opts}}
+
+        {:model, args} ->
+          owner = Elara.Session.Handoff.owner(session)
+
+          settings =
+            case args do
+              [] -> nil
+              [model] -> %{"model" => model}
+              [model, effort] -> %{"model" => model, "effort" => effort}
+            end
+
+          result = if settings, do: Elara.set_provider_settings(owner, settings), else: :ok
+
+          result =
+            case result do
+              :ok -> {:ok, Elara.materialized_view(owner)["provider_view"]}
+              {:error, _} = error -> error
+            end
+
+          send(self(), {:model_result, result})
           {:cont, {phase, opts}}
 
         :list_sessions ->

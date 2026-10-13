@@ -716,7 +716,20 @@ pub(super) fn command_action(model: &mut Model, command: &str) -> Option<InputAc
         }
         "model" | "effort" if control => {
             model.editor.clear();
-            super::open_provider(model)
+            if argument.is_empty() || name == "effort" {
+                super::open_provider(model)
+            } else {
+                let args: Vec<_> = argument.split_whitespace().collect();
+                let settings = match args.as_slice() {
+                    [id] => json!({"model": id}),
+                    [id, effort] => json!({"model": id, "effort": effort}),
+                    _ => {
+                        model.notice = Some("Use /model ID [EFFORT]".into());
+                        return Some(InputAction::None);
+                    }
+                };
+                super::submit_provider_settings(model, settings)
+            }
         }
         _ => {
             model.notice = Some(if !control {

@@ -34,6 +34,7 @@ if config_env() == :test do
   # application (reproduced with seed 734866).
   config :elara,
     max_restarts: 100,
+    model_catalog_online: false,
     test_run_dir: run_dir,
     sessions_root: Path.join(run_dir, "sessions"),
     skills_home: Path.join(run_dir, "home"),

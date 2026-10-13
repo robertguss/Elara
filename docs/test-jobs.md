@@ -1,7 +1,8 @@
 # Supervised focused test jobs
 
-[Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
-owns planning and status, including the historical JOB inventory.
+[Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1)
+owns planning and status. The historical JOB inventory is in the Linear archive,
+[docs/archive/linear](archive/linear/README.md).
 This is the bounded contract authorized after the
 [harness experiments](harness-experiments.md).
 

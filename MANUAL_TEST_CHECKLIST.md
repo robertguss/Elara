@@ -2,7 +2,7 @@
 
 This is an inventory and verification worksheet for functionality that is
 currently shipped. It is not a roadmap or a status source;
-[Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
+[Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1)
 is the sole source for those, and this file does not
 mark any roadmap item complete.
 

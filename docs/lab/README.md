@@ -1,9 +1,9 @@
 # Lab notes
 
-One page per experiment. The research questions (RQ-n) and the queue (LAB-n)
-live in [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215);
-a note records the versioned registration and what one experiment
-found. Experiments before the 2026-09-26 lab pivot are in
+One page per experiment. Planning and the experiment queue live in
+[Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1); a note records the versioned registration and what one
+experiment found. Notes 001 to 009 cite Linear issues (RQ-n, LAB-n, ROB-n):
+those are archived in [docs/archive/linear](../archive/linear/README.md). Experiments before the 2026-09-26 lab pivot are in
 [`harness-experiments.md`](../harness-experiments.md).
 
 ## Conventions

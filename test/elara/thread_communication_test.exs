@@ -322,7 +322,7 @@ defmodule Elara.ThreadCommunicationTest do
 
     await(fn -> map_size(:sys.get_state(Comm).waiters) == 1 end)
 
-    answer(child_model, String.duplicate("x", 60_000), [
+    answer(child_model, String.duplicate("x", 360_000), [
       %Message.ToolCall{
         id: "read-before-handoff",
         name: "read",

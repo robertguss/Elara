@@ -11,8 +11,11 @@ and [Working Agreement](https://app.notion.com/p/3f8700320c4581818358c50f271e494
 before continuing. Stream task order and current delivery status live there,
 not in this handoff. The runtime stream starts with the stable daily build;
 its launch and update commands are documented in README.md.
-Context handoff recovery, delivery routing, and independent copies are
-documented in README.md's "Automatic context handoff" section.
+The usage-anchored context meter, handoff recovery, delivery routing, and
+independent copies are documented in README.md's "Automatic context handoff"
+section. The runtime catalog supplies model windows through
+`Elara.Provider.Visibility.context_window/1`; the TUI meter uses
+`snapshot.inbox.context`.
 
 ## Where Elara stands
 

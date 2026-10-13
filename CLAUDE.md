@@ -193,10 +193,11 @@ Coordinator batch patterns, candidate judging and map/reduce were retired under
 ROB-1095/LAB-6. Threads has no automatic judging or reduction contract.
 
 **Handoff (`lib/elara/session/handoff.ex`, `session/context.ex`).**
-`Context.budget/2` is a conservative pre-request byte estimate (independent of
-the protocol/attachment limits); at a safe boundary the session freezes and
-continues in a linked successor. Chains are bounded to eight. The handoff index
-is extractive evidence pointing at originals, not a claim of complete
+`Context.budget/3` anchors on main-provider usage plus newer bytes ÷ 4 and
+resolves the selected window through `Provider.Visibility.context_window/1`
+before each request (independent of protocol/attachment limits). At 90%, the
+session transfers delivery to a linked successor. Chains are bounded to eight.
+The handoff index is extractive evidence pointing at originals, not a claim of complete
 summarization.
 
 **Prompt surface.** `Elara.Prompt` composes the system prompt from `AGENTS.md`

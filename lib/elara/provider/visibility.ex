@@ -19,6 +19,19 @@ defmodule Elara.Provider.Visibility do
     end)
   end
 
+  @spec context_window(term()) :: {:ok, pos_integer()} | :unknown
+  def context_window({_, %{model: model}}), do: context_window(model)
+  def context_window(%{"model" => model}), do: context_window(model)
+
+  def context_window(model) when is_binary(model) do
+    case Enum.find(catalog(), &(&1["model"] == model)) do
+      %{"context_window" => tokens} -> {:ok, tokens}
+      nil -> :unknown
+    end
+  end
+
+  def context_window(_), do: :unknown
+
   def validate(%{"model" => model, "effort" => effort} = settings) when map_size(settings) == 2 do
     if Enum.any?(catalog(), &(&1["model"] == model and effort in &1["efforts"])),
       do: :ok,
@@ -56,7 +69,7 @@ defmodule Elara.Provider.Visibility do
   def view(core) do
     settings = core.config.provider_settings
     catalog = if settings, do: catalog(), else: []
-    selected = settings && Enum.find(catalog, &(&1["model"] == settings["model"]))
+    budget = Elara.Session.Context.budget(core)
 
     last =
       core.history
@@ -78,7 +91,7 @@ defmodule Elara.Provider.Visibility do
 
     # Image token cost depends on provider preprocessing, not encoded blob size.
     # Do not serialize image-bearing history on each streaming patch.
-    estimate = if images?, do: nil, else: text_estimate(core)
+    estimate = if images?, do: nil, else: budget["estimate_tokens"]
 
     %{
       "extension" => "provider_visibility_v1",
@@ -90,32 +103,18 @@ defmodule Elara.Provider.Visibility do
         "session_totals" => totals(core.history)
       },
       "context" => %{
-        "advertised_limit" => if(selected, do: selected["context_window"], else: nil),
+        "advertised_limit" => budget["advertised_limit"],
         "occupancy" => nil,
         "estimate_tokens" => estimate,
         "estimate_basis" =>
           if(images?,
             do: "Unknown: history contains images whose provider token cost is unavailable",
-            else:
-              "UTF-8 serialized history, system and tool schemas plus 4096 framing reserve; conservative byte estimate, not exact provider request or tokenizer occupancy"
+            else: budget["basis"]
           )
       },
       "streaming" =>
         if(core.streaming, do: Map.take(core.streaming, [:id, :public_content]), else: nil)
     }
-  end
-
-  defp text_estimate(core) do
-    4096 + byte_size(core.config.system) +
-      (core.history
-       |> Enum.map(&Elara.Session.Store.encode_message/1)
-       |> JSON.encode!()
-       |> byte_size()) +
-      (core.config.tools
-       |> Map.values()
-       |> Enum.map(&Map.take(&1, [:name, :description, :parameters]))
-       |> JSON.encode!()
-       |> byte_size())
   end
 
   def key(part), do: {part["output_index"], part["part_index"], part["kind"]}

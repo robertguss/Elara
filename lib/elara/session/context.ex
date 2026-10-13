@@ -1,61 +1,74 @@
 defmodule Elara.Session.Context do
-  @moduledoc "Conservative pre-request accounting, independent of the wire/snapshot budget."
+  @moduledoc "Usage-anchored pre-request estimates; not exact tokenizer or wire occupancy."
   alias Elara.Message
 
-  def budget(core, limit \\ nil) do
-    selected =
-      Enum.find(Elara.Provider.Visibility.catalog(), fn item ->
-        core.config.provider_settings &&
-          item["model"] == core.config.provider_settings["model"]
+  def budget(core, limit \\ nil, provider \\ nil) do
+    window = Elara.Provider.Visibility.context_window(core.config.provider_settings || provider)
+
+    limit =
+      limit ||
+        case window do
+          {:ok, tokens} -> tokens
+          :unknown -> 128_000
+        end
+
+    {reported, newer} =
+      core.history
+      |> Enum.reverse()
+      |> Enum.split_while(fn
+        %Message.Assistant{usage: %{"input_tokens" => _}} -> false
+        _ -> true
+      end)
+      |> then(fn {newer, rest} ->
+        case rest do
+          [%Message.Assistant{usage: usage} | _] ->
+            {usage["input_tokens"] + Map.get(usage, "output_tokens", 0), newer}
+
+          [] ->
+            {nil, newer}
+        end
       end)
 
-    limit = limit || (selected && selected["context_window"]) || 128_000
-    images = Enum.sum(Enum.map(core.history, &images/1))
+    bytes = Enum.sum(Enum.map(newer, &byte_size(JSON.encode!(public_message(&1)))))
+    images = Enum.sum(Enum.map(newer, &images/1))
 
     bytes =
-      byte_size(core.config.system) +
-        byte_size(JSON.encode!(Enum.map(core.history, &public_message/1))) +
-        byte_size(
-          JSON.encode!(
-            Enum.map(
-              Map.values(core.config.tools),
-              &Map.take(&1, [:name, :description, :parameters])
+      if reported do
+        bytes
+      else
+        bytes + byte_size(core.config.system) + 4096 +
+          byte_size(
+            JSON.encode!(
+              Enum.map(
+                Map.values(core.config.tools),
+                &Map.take(&1, [:name, :description, :parameters])
+              )
             )
           )
-        ) + 4096
+      end
 
-    # One token per UTF-8 byte is deliberately pessimistic. Image preprocessing
-    # is unobserved: reserve 32K per image rather than treating base64 as tokens.
-    reported =
-      Enum.reduce(core.history, 0, fn
-        %Message.Assistant{usage: %{"input_tokens" => input} = usage}, _ ->
-          input + Map.get(usage, "output_tokens", 0)
-
-        message, count ->
-          count + byte_size(JSON.encode!(public_message(message))) + images(message) * 32_768
-      end)
-
-    estimate = max(bytes + images * 32_768, reported)
-    output = max(div(limit, 10), 4096)
-    handoff = max(div(limit, 10), 4096)
-    tools = core.config.max_tool_output_bytes + 2048
-    uncertainty = if selected, do: div(limit, 20), else: div(limit, 4)
-    reserve = output + handoff + tools + uncertainty
+    estimate = (reported || 0) + div(bytes + 3, 4) + images * 32_768
+    headroom = limit - div(limit * 9, 10)
 
     %{
       "limit" => limit,
+      "advertised_limit" =>
+        case window do
+          {:ok, tokens} -> tokens
+          :unknown -> nil
+        end,
       "estimate_tokens" => estimate,
-      "confidence" => if(selected && images == 0, do: "conservative", else: "low"),
+      "confidence" => if(window != :unknown && images == 0, do: "estimated", else: "low"),
       "basis" =>
-        "UTF-8 bytes + framing + 32768/image, floored by reported usage; not tokenizer occupancy",
+        "Last main-provider input + output tokens, then newer UTF-8 bytes / 4; without usage, request bytes / 4 including framing. Unreported images add 32768/image; not exact tokenizer occupancy",
       "reserves" => %{
-        "output" => output,
-        "handoff" => handoff,
-        "tools" => tools,
-        "uncertainty" => uncertainty
+        "output" => headroom,
+        "handoff" => 0,
+        "tools" => 0,
+        "uncertainty" => 0
       },
-      "warning" => estimate + reserve >= div(limit * 4, 5),
-      "handoff_required" => estimate + reserve >= limit
+      "warning" => estimate >= div(limit * 4, 5),
+      "handoff_required" => estimate + headroom >= limit
     }
   end
 

@@ -284,7 +284,9 @@ defmodule Elara.Session.Handoff do
 
       core = Core.new(shell.core.config, [assistant, user])
 
-      if Elara.Session.Context.budget(core, shell.context_limit)["handoff_required"] do
+      if Elara.Session.Context.budget(core, shell.context_limit, shell.provider)[
+           "handoff_required"
+         ] do
         {:error, :handoff_does_not_fit_fresh_context}
       else
         with {:ok, _} <- Store.append(store, assistant), do: :ok

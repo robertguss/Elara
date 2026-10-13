@@ -239,9 +239,9 @@ defmodule Elara.FlightRecorderTest do
 
     assert decision.reserves == %{
              "output" => 20_000,
-             "handoff" => 20_000,
-             "tools" => 18_432,
-             "uncertainty" => 50_000
+             "handoff" => 0,
+             "tools" => 0,
+             "uncertainty" => 0
            }
 
     assert decision.frozen == false
@@ -293,11 +293,11 @@ defmodule Elara.FlightRecorderTest do
     GenServer.stop(pid)
   end
 
-  test "context capture keeps resolved catalog/default budgets, usage floor and images" do
-    for {settings, override, limit, uncertainty} <- [
-          {nil, nil, 128_000, 32_000},
-          {%{"model" => "gpt-5.5", "effort" => "low"}, nil, 272_000, 13_600},
-          {%{"model" => "gpt-5.5", "effort" => "low"}, 100_000, 100_000, 5_000}
+  test "context capture keeps resolved catalog/default budgets, reported usage and images" do
+    for {settings, override, limit} <- [
+          {nil, nil, 128_000},
+          {%{"model" => "gpt-5.5", "effort" => "low"}, nil, 272_000},
+          {%{"model" => "gpt-5.5", "effort" => "low"}, 100_000, 100_000}
         ] do
       core =
         Core.new(
@@ -330,7 +330,8 @@ defmodule Elara.FlightRecorderTest do
       effect = Map.put(transition.id, :effect_index, index)
       budget = Elara.Session.Context.budget(core, override)
       assert budget["limit"] == limit
-      assert budget["reserves"]["uncertainty"] == uncertainty
+      assert budget["reserves"]["output"] == div(limit, 10)
+      assert budget["reserves"]["uncertainty"] == 0
       # 90,123 reported tokens + image reserve + public encoded user bytes.
       assert budget["estimate_tokens"] > 122_891
       branch = if budget["handoff_required"], do: :attempt_handoff, else: :attempt_dispatch

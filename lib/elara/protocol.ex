@@ -214,6 +214,11 @@ defmodule Elara.Protocol do
   # The retry itself is carried by the turn state this patch also sets.
   defp event_ops({:provider_retry, _retry}, _offset, _messages, _supersedes), do: []
 
+  defp event_ops({kind, _pending}, _offset, _messages, _supersedes)
+       when kind in [:approval_required, :approval_granted], do: []
+
+  defp event_ops({:command_blocked, _, _}, _offset, _messages, _supersedes), do: []
+
   defp event_ops({:tool_started, call}, _offset, _messages, _supersedes) do
     [
       %{
@@ -272,6 +277,9 @@ defmodule Elara.Protocol do
   defp event_turn({:turn_started, prompt}, phase),
     do: Map.put(encode_phase(phase), "prompt", prompt)
 
+  defp event_turn({kind, pending}, phase) when kind in [:approval_required, :approval_granted],
+    do: Map.merge(encode_phase(phase), %{"event" => Atom.to_string(kind), "approval" => pending})
+
   defp event_turn({:turn_ended, outcome}, phase),
     do: Map.put(encode_phase(phase), "outcome", encode_turn_outcome(outcome))
 
@@ -300,6 +308,17 @@ defmodule Elara.Protocol do
   defp encode_phase({:running_tool, _ref, call, _remaining, iteration}) do
     %{"state" => "running_tool", "tool_call_id" => call.id, "iteration" => iteration}
   end
+
+  defp encode_phase({:checking_tool, _ref, call, _remaining, iteration}),
+    do: %{"state" => "preparing_tool", "tool_call_id" => call.id, "iteration" => iteration}
+
+  defp encode_phase({:approval_waiting, _ref, call, _remaining, iteration, pending}),
+    do: %{
+      "state" => "approval_waiting",
+      "tool_call_id" => call.id,
+      "iteration" => iteration,
+      "approval" => pending
+    }
 
   defp tool_views(%Core.State{} = core) do
     results =
@@ -397,7 +416,14 @@ defmodule Elara.Protocol do
   end
 
   defp apply_op(view, %{"op" => "set_turn_state", "turn" => %{"state" => state} = turn} = op)
-       when state in ["idle", "calling_provider", "running_tool"] do
+       when state in [
+              "idle",
+              "calling_provider",
+              "running_tool",
+              "awaiting_retry",
+              "preparing_tool",
+              "approval_waiting"
+            ] do
     view = Map.put(view, "turn", Map.drop(turn, ["prompt", "outcome", "streamed"]))
     clear_superseded(view, Map.get(op, "supersedes"))
   end

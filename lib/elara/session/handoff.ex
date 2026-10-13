@@ -99,6 +99,7 @@ defmodule Elara.Session.Handoff do
         workspace_id: shell.workspace_id,
         allowed_capabilities: shell.allowed_capabilities,
         read_only: read_only(shell),
+        approval_wait: shell.approval_wait,
         max_iterations: limits.max_iterations,
         max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
         context_keep_results: shell.core.config.context_keep_results,
@@ -309,6 +310,7 @@ defmodule Elara.Session.Handoff do
           "activated" => false,
           "provider" => shell.store.context["provider"],
           "read_only" => shell.core.read_only,
+          "command_rules" => shell.store.context["command_rules"],
           "options" => shell.store.context["options"]
         }
       }

@@ -546,6 +546,11 @@ defmodule Elara.FlightRecorder do
     defaults = %Core.Config{}
 
     config =
+      if state.config.command_preflight,
+        do: Map.put(config, :command_preflight, true),
+        else: config
+
+    config =
       Enum.reduce(
         [:tool_timeout_ms, :max_tool_timeout_ms, :context_keep_results, :context_keep_tokens],
         config,
@@ -626,6 +631,7 @@ defmodule Elara.FlightRecorder do
           Map.get(state.config, :context_keep_results, defaults.context_keep_results),
         context_keep_tokens:
           Map.get(state.config, :context_keep_tokens, defaults.context_keep_tokens),
+        command_preflight: Map.get(state.config, :command_preflight, false),
         provider_settings: Map.get(state.config, :provider_settings),
         retry: denormalize_retry_policy(Map.get(state.config, :retry))
       },
@@ -702,6 +708,14 @@ defmodule Elara.FlightRecorder do
   defp normalize_fact({:tool_deferred, ref, system}),
     do: %{kind: :tool_deferred, ref: ref, system: system}
 
+  defp normalize_fact({:tool_checked, ref, :allow}),
+    do: %{kind: :tool_checked, ref: ref, decision: :allow}
+
+  defp normalize_fact({:tool_checked, ref, {decision, detail}}),
+    do: %{kind: :tool_checked, ref: ref, decision: decision, detail: detail}
+
+  defp normalize_fact({:tool_approved, ref}), do: %{kind: :tool_approved, ref: ref}
+
   defp normalize_fact({:instruction_context, system}),
     do: %{kind: :instruction_context, system: system}
 
@@ -753,6 +767,14 @@ defmodule Elara.FlightRecorder do
   defp denormalize_fact(%{kind: :tool_deferred, ref: ref, system: system}),
     do: {:tool_deferred, ref, system}
 
+  defp denormalize_fact(%{kind: :tool_checked, ref: ref, decision: :allow}),
+    do: {:tool_checked, ref, :allow}
+
+  defp denormalize_fact(%{kind: :tool_checked, ref: ref, decision: decision, detail: detail}),
+    do: {:tool_checked, ref, {decision, detail}}
+
+  defp denormalize_fact(%{kind: :tool_approved, ref: ref}), do: {:tool_approved, ref}
+
   defp denormalize_fact(%{kind: :instruction_context, system: system}),
     do: {:instruction_context, system}
 
@@ -789,6 +811,9 @@ defmodule Elara.FlightRecorder do
   defp normalize_effect({:await_retry, ref, min_ms, max_ms}, _tools),
     do: %{kind: :await_retry, ref: ref, min_ms: min_ms, max_ms: max_ms}
 
+  defp normalize_effect({:check_tool, ref, call}, _tools),
+    do: %{kind: :check_tool, ref: ref, call: normalize_call(call)}
+
   defp normalize_effect({:run_tool, ref, call, tool}, tools) do
     %{kind: :run_tool, ref: ref, call: normalize_call(call), tool: Map.fetch!(tools, tool.name)}
   end
@@ -817,6 +842,25 @@ defmodule Elara.FlightRecorder do
     }
   end
 
+  defp normalize_phase({:checking_tool, ref, call, rest, iteration}),
+    do: %{
+      kind: :checking_tool,
+      ref: ref,
+      call: normalize_call(call),
+      remaining: Enum.map(rest, &normalize_call/1),
+      iteration: iteration
+    }
+
+  defp normalize_phase({:approval_waiting, ref, call, rest, iteration, pending}),
+    do: %{
+      kind: :approval_waiting,
+      ref: ref,
+      call: normalize_call(call),
+      remaining: Enum.map(rest, &normalize_call/1),
+      iteration: iteration,
+      pending: pending
+    }
+
   defp denormalize_phase(:idle), do: :idle
 
   defp denormalize_phase(%{kind: :calling_provider, ref: ref, iteration: iteration}),
@@ -829,6 +873,16 @@ defmodule Elara.FlightRecorder do
     {:running_tool, phase.ref, denormalize_call(phase.call),
      Enum.map(phase.remaining, &denormalize_call/1), phase.iteration}
   end
+
+  defp denormalize_phase(%{kind: :checking_tool} = phase),
+    do:
+      {:checking_tool, phase.ref, denormalize_call(phase.call),
+       Enum.map(phase.remaining, &denormalize_call/1), phase.iteration}
+
+  defp denormalize_phase(%{kind: :approval_waiting} = phase),
+    do:
+      {:approval_waiting, phase.ref, denormalize_call(phase.call),
+       Enum.map(phase.remaining, &denormalize_call/1), phase.iteration, phase.pending}
 
   defp normalize_message(%Elara.Message.System{text: text, undo_id: id}),
     do: %{kind: :system, text: text, undo_id: id}
@@ -953,6 +1007,12 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_event({:tool_started, call}),
     do: %{kind: :tool_started, call: normalize_call(call)}
+
+  defp normalize_event({:command_blocked, call, reason}),
+    do: %{kind: :command_blocked, call: normalize_call(call), reason: reason}
+
+  defp normalize_event({kind, pending}) when kind in [:approval_required, :approval_granted],
+    do: %{kind: kind, pending: pending}
 
   defp normalize_event({:provider_retry, retry}),
     do: %{

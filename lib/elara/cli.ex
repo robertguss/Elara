@@ -85,6 +85,19 @@ defmodule Elara.CLI do
     ["  -> ", name, ": ", arg_summary(args), "\n"]
   end
 
+  def render({:command_blocked, _call, reason}), do: ["[blocked] ", reason, "\n"]
+
+  def render({:approval_required, pending}),
+    do: [
+      "[approval required] ",
+      pending["reason"],
+      "\nUse /approve from a controlling TUI for request ",
+      pending["id"],
+      "\n"
+    ]
+
+  def render({:approval_granted, _pending}), do: ["[approved] exact request\n"]
+
   def render({:message_appended, %ToolResult{outcome: {:ok, text}}}) do
     lines = text |> String.split("\n") |> length()
     ["  <- ok (", Integer.to_string(lines), " lines)\n"]
@@ -139,22 +152,24 @@ defmodule Elara.CLI do
   defp seconds(milliseconds), do: :erlang.float_to_binary(milliseconds / 1000, decimals: 1)
 
   defp run_ask(prompt, provider, opts) do
-    {:ok, session} = Elara.start_session(opts ++ [provider: provider, persist: false])
+    {:ok, session} =
+      Elara.start_session(opts ++ [provider: provider, persist: false, approval_wait: false])
+
     {:ok, session_pid} = Elara.session_pid(session)
     ref = Process.monitor(session_pid)
     :ok = Elara.subscribe(session)
     :ok = Elara.ask_async(session, prompt)
-    loop(session, session_pid, ref)
+    loop(session, session_pid, ref, false)
   end
 
-  defp loop(session, session_pid, ref) do
+  defp loop(session, session_pid, ref, approval_required) do
     receive do
       {:elara, ^session, event} ->
         IO.write(render(event))
 
         case event do
           {:turn_ended, {:completed, _}} ->
-            :ok
+            if approval_required, do: exit({:shutdown, 1}), else: :ok
 
           {:turn_ended, _} ->
             exit({:shutdown, 1})
@@ -162,8 +177,12 @@ defmodule Elara.CLI do
           {:turn_ended, _outcome, :streamed} ->
             exit({:shutdown, 1})
 
+          {:message_appended, %ToolResult{outcome: outcome}} ->
+            required = match?({:error, "approval required:" <> _}, outcome)
+            loop(session, session_pid, ref, required)
+
           _ ->
-            loop(session, session_pid, ref)
+            loop(session, session_pid, ref, approval_required)
         end
 
       {:DOWN, ^ref, :process, ^session_pid, _reason} ->

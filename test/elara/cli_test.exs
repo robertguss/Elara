@@ -5,6 +5,61 @@ defmodule Elara.CLITest do
   alias Elara.Message.{Assistant, ToolCall, ToolResult}
   alias Elara.Provider.Error
 
+  @tag :tmp_dir
+  test "ask refuses approval without executing and reports failure only when it ends there", %{
+    tmp_dir: cwd
+  } do
+    File.mkdir_p!(Path.join(cwd, ".elara"))
+    File.write!(Path.join(cwd, ".elara/command-rules.json"), ~s({"ask":["printf guarded"]}))
+
+    guarded = %ToolCall{
+      id: "guarded",
+      name: "bash",
+      args: {:ok, %{"command" => "printf guarded > guarded"}}
+    }
+
+    for continue? <- [false, true] do
+      turns =
+        if continue? do
+          [
+            {:ok, %Assistant{tool_calls: [guarded]}},
+            {:ok,
+             %Assistant{
+               tool_calls: [
+                 %ToolCall{
+                   id: "fallback",
+                   name: "read",
+                   args: {:ok, %{"path" => ".elara/command-rules.json"}}
+                 }
+               ]
+             }},
+            {:ok, %Assistant{text: "read instead"}}
+          ]
+        else
+          [{:ok, %Assistant{tool_calls: [guarded]}}, {:ok, %Assistant{text: "approval needed"}}]
+        end
+
+      {:ok, agent} = Agent.start_link(fn -> turns end)
+
+      output =
+        ExUnit.CaptureIO.capture_io(fn ->
+          run = fn ->
+            CLI.main(["--cwd", cwd, "inspect"], provider: {Elara.Provider.Scripted, agent})
+          end
+
+          if continue?,
+            do: assert(run.() == :ok),
+            else: assert(catch_exit(run.()) == {:shutdown, 1})
+        end)
+
+      assert output =~ "approval required:"
+      assert output =~ "printf guarded"
+      assert output =~ "TUI"
+      assert output =~ if(continue?, do: "read instead", else: "approval needed")
+      refute File.exists?(Path.join(cwd, "guarded"))
+    end
+  end
+
   test "ask parses explicit workspace without changing the process directory" do
     cwd = File.cwd!()
 

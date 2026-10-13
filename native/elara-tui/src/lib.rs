@@ -155,6 +155,7 @@ pub struct Model {
     attachments: attachments::Draft,
     inbox: inbox::Inbox,
     plugin_reload_supported: bool,
+    command_approvals_supported: bool,
     pub safe_paste: bool,
     safe_paste_cr: bool,
     pub enhanced_keyboard: bool,
@@ -216,6 +217,7 @@ impl Model {
             attachments: attachments::Draft::default(),
             inbox: inbox::Inbox::default(),
             plugin_reload_supported: false,
+            command_approvals_supported: false,
             safe_paste: false,
             safe_paste_cr: false,
             enhanced_keyboard: false,
@@ -272,6 +274,16 @@ impl Model {
         self.mode = fresh.mode;
         self.cwd = fresh.cwd;
         self.lifetime = fresh.lifetime;
+        self.command_approvals_supported = fresh.command_approvals_supported;
+        if fresh.session_detail.is_some()
+            || self
+                .session_detail
+                .as_deref()
+                .is_some_and(|text| text.starts_with("Approval required"))
+        {
+            self.session_detail = fresh.session_detail;
+            self.session_detail_scroll = 0;
+        }
         self.attachments.reconnect(fresh.attachments.supported);
         self.inbox.supported = fresh.inbox.supported;
         self.inbox.blocked |= fresh.inbox.blocked;
@@ -571,6 +583,21 @@ impl Model {
             match op.get("op").and_then(Value::as_str) {
                 Some("set_turn_state") => {
                     let turn = &op["turn"];
+                    if self.command_approvals_supported
+                        && turn["event"] == "approval_required"
+                        && turn["state"] == "approval_waiting"
+                    {
+                        self.notify("Approval required");
+                        self.session_detail = Some(sessions::approval_detail(&turn["approval"]));
+                        self.session_detail_scroll = 0;
+                    } else if turn["state"] != "approval_waiting"
+                        && self
+                            .session_detail
+                            .as_deref()
+                            .is_some_and(|text| text.starts_with("Approval required"))
+                    {
+                        self.session_detail = None;
+                    }
                     if turn["state"].as_str() != Some("idle")
                         && self.metrics.ask_to_active_ms.is_none()
                         && let Some(started) = self.ask_sent_at
@@ -1385,6 +1412,17 @@ pub fn attached_model(frame: &Value, mode: &str) -> Result<Model, String> {
             .iter()
             .any(|extension| extension == "plugin_reload_v1")
     });
+    model.command_approvals_supported = frame["extensions"].as_array().is_some_and(|extensions| {
+        extensions
+            .iter()
+            .any(|extension| extension == "command_approvals_v1")
+    });
+    if model.command_approvals_supported && model.turn_state() == "approval_waiting" {
+        model.session_detail = Some(sessions::approval_detail(
+            &model.projection.view["turn"]["approval"],
+        ));
+        model.session_detail_scroll = 0;
+    }
     model.attachments.supported = frame["extensions"].as_array().is_some_and(|extensions| {
         extensions
             .iter()
@@ -1405,7 +1443,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "create",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, limits::EXTENSION, "thread_communication_v1", "plugin_reload_v1"],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, limits::EXTENSION, "thread_communication_v1", "plugin_reload_v1", "command_approvals_v1"],
             "mode": mode,
             "cwd": std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).to_string_lossy()
         })
@@ -1413,7 +1451,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "attach",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, limits::EXTENSION, "thread_communication_v1", "plugin_reload_v1"],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, limits::EXTENSION, "thread_communication_v1", "plugin_reload_v1", "command_approvals_v1"],
             "session_id": target,
             "mode": mode,
             "cursor": cursor.cursor,
@@ -1889,6 +1927,7 @@ fn activity_label(model: &Model, state: &str) -> String {
         .and_then(|call| call["name"].as_str());
     match (state, running) {
         ("running_tool", Some(name)) => format!("Running {name}"),
+        ("approval_waiting", _) => "Approval required · /approve · Esc interrupts".into(),
         ("awaiting_retry", _) => retry_label(model),
         _ => {
             let mut label = state.replace('_', " ");
@@ -2601,7 +2640,17 @@ fn valid_outcome(outcome: &Value) -> bool {
 
 fn validate_turn(turn: &Value) -> Result<(), String> {
     match turn["state"].as_str() {
-        Some("idle" | "calling_provider" | "running_tool" | "awaiting_retry") => Ok(()),
+        Some("approval_waiting")
+            if turn["approval"]["id"].is_string()
+                && turn["approval"]["tool"].is_string()
+                && turn["approval"]["args"].is_object()
+                && matches!(turn["approval"]["kind"].as_str(), Some("call" | "rules")) =>
+        {
+            Ok(())
+        }
+        Some(
+            "idle" | "calling_provider" | "running_tool" | "awaiting_retry" | "preparing_tool",
+        ) => Ok(()),
         _ => Err("snapshot has invalid turn".to_string()),
     }
 }

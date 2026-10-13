@@ -68,6 +68,9 @@ The TUI's `/read-only` changes model-tool mutation permission from the next call
 including mid-turn. Its authoritative footer mode, transcript transition positions,
 copy/child/handoff inheritance and trusted plugin declarations are documented in
 README.md and `docs/plugins.md`. It has no default shortcut under D22.
+Command-text rules, exact-call `/approve`, exact-byte approval of repository
+rule loosening, and the one-shot CLI refusal path are documented in README.md's
+"Command rules and approval" section. They are not an OS sandbox.
 The TUI's `/limits` and session-local overrides are documented in README.md's
 execution section. They follow delivery ownership and reset to startup config
 when a session restarts, including children and handoff successors.

@@ -371,6 +371,49 @@ This fence does **not** wrap Elara's internal skill, session, or plugin reads.
 It is **not an OS sandbox**: `bash`, search, other tools, and trusted plugins
 are not granted filesystem isolation by it.
 
+## Command rules and approval
+
+Every model `bash` call checks command-text rules before execution. A deny
+match returns a tool error. An ask match waits for the controlling TUI to
+approve that exact call. The approval view shows the command and the matching
+rule. Esc closes the view, then `/approve` confirms the displayed request.
+`/approve REQUEST_ID` selects an explicit request. There is no default key.
+Observers cannot approve. Esc outside a panel interrupts the waiting turn
+without running its pending calls.
+
+Project rules live in `.elara/command-rules.json`:
+
+```json
+{"deny": ["printf forbidden"], "ask": ["printf inspect-first"]}
+```
+
+These are literal, case-sensitive substrings, not regular expressions.
+Deny wins over ask. Rules apply to the whole command string, including compound
+commands. Invalid or oversized files fail closed. Files are limited to 64 KiB.
+The session captures project rules before the model starts and rereads them
+before each command. Adding restrictions takes effect immediately. Removing
+a restriction or changing deny to ask requires approval of the exact new file
+bytes. Deleting the file also requires approval. Until then, previous
+restrictions remain. Approving a rule change does not approve a command that
+still matches an ask rule.
+
+`ELARA_COMMAND_RULES` accepts the same JSON object from the operator's startup
+environment. These rules can only add restrictions. A repository cannot remove
+them, and changing a running server's environment does not replace them.
+Saved sessions, copies, children, and handoff successors retain project
+restrictions, but never inherit pending approvals. Restarting a waiting session
+never executes its unapproved call. Approval rereads the rules and still checks
+read-only mode and the session's capability grants. Blocks and approvals are
+recorded with their transcript positions and replay facts.
+
+`mix elara.ask` refuses an ask-matched call without execution and tells the model
+and operator to use the TUI. The turn can continue with other tools. If its last
+tool result still requires approval, the command exits with status 1.
+
+Command rules are **text matching, not an OS sandbox or a shell parser**.
+Alternate spellings, scripts, interpreters, and trusted plugins can bypass
+text matches. The file-tool fence and read-only mode remain separate checks.
+
 ## Ask or chat
 
 Run one turn and exit:
@@ -667,9 +710,9 @@ at the next safe boundary: an active provider request is interrupted, but an
 already-started tool settles before steering and unstarted sibling calls are
 suppressed. **Esc** stops and pauses queue draining without deleting pending
 inputs. Resume with **r** in the inbox, `/resume-inputs`, or a new normal
-submission. The inbox shows effective execution capabilities; trusted local
-execution adds no approval prompts. Observers can inspect the inbox but cannot
-mutate it.
+submission. The inbox shows effective execution capabilities. Command ask rules
+also require approval in trusted local sessions. Observers can inspect the
+inbox but cannot mutate it.
 
 Use **`/read-only`** to toggle the session's model tools, or `/read-only on|off`
 to choose explicitly. The footer always labels read-only sessions. You can still

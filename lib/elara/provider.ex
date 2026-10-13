@@ -14,9 +14,18 @@ defmodule Elara.Provider do
   end
 
   defmodule Error do
+    @moduledoc """
+    A failed provider call. `retry_after_ms` carries a server-sent `Retry-After`
+    so the retry policy can honor it; absent means the policy picks the delay.
+    """
     @type kind :: :http | :transport | :bad_response | :crash | :entitlement | :resource_limit
-    @type t :: %__MODULE__{kind: kind(), message: String.t(), status: integer() | nil}
-    defstruct [:kind, :message, status: nil]
+    @type t :: %__MODULE__{
+            kind: kind(),
+            message: String.t(),
+            status: integer() | nil,
+            retry_after_ms: non_neg_integer() | nil
+          }
+    defstruct [:kind, :message, status: nil, retry_after_ms: nil]
   end
 
   @type config :: term()

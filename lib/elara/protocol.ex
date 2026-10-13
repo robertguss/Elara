@@ -208,6 +208,9 @@ defmodule Elara.Protocol do
 
   defp event_ops({:turn_started, _prompt}, _offset, _messages, _supersedes), do: []
 
+  # The retry itself is carried by the turn state this patch also sets.
+  defp event_ops({:provider_retry, _retry}, _offset, _messages, _supersedes), do: []
+
   defp event_ops({:tool_started, call}, _offset, _messages, _supersedes) do
     [
       %{
@@ -282,6 +285,14 @@ defmodule Elara.Protocol do
 
   defp encode_phase({:calling_provider, _ref, iteration}),
     do: %{"state" => "calling_provider", "iteration" => iteration}
+
+  defp encode_phase({:awaiting_retry, _ref, iteration, attempt, delay_ms}),
+    do: %{
+      "state" => "awaiting_retry",
+      "iteration" => iteration,
+      "attempt" => attempt,
+      "delay_ms" => delay_ms
+    }
 
   defp encode_phase({:running_tool, _ref, call, _remaining, iteration}) do
     %{"state" => "running_tool", "tool_call_id" => call.id, "iteration" => iteration}

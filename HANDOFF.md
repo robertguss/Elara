@@ -54,6 +54,9 @@ Turn and session workspace diffs are documented in that section. The shell's
 private checkpoints live in `Elara.WorkspaceDiff`; the Rust diff panel lives in
 `native/elara-tui/src/workspace_diff.rs`. Snapshots include bash changes but
 never alter the workspace index or HEAD. Missing baselines report unavailable.
+Session reports read predecessor banks across handoffs, with imported objects
+rooted under separate `refs/elara/chain/` refs. Missing evidence and unsealed
+handoff attribution boundaries are labelled; predecessor undo remains excluded.
 Confirmed turn undo is documented beside `/diff` in README.md. The shell owns
 preflight, restore, and interrupted-attempt records in the same snapshot bank;
 Rust owns only the confirmation panel in `workspace_undo.rs`. System notices

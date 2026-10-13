@@ -605,10 +605,15 @@ as **Changed outside Elara**. Private, ref-rooted snapshots live under Elara's
 session state, without changing the workspace's index or HEAD. A non-Git
 workspace, missing baseline, or failed capture reports unavailable rather than
 a guessed diff. A live or interrupted turn has an explicitly unsealed endpoint.
-Diff inspection follows the active handoff owner. Until chain-spanning reports
-land, `/diff session` explicitly labels the successor-only view as unavailable
-before successor start. Fork and clone start a fresh copy-time baseline and
-say so in `/diff session`; inherited turns are not attributed to the copy.
+Diff inspection follows the active handoff owner. `/diff session` spans its
+predecessors' snapshot banks, comparing the earliest baseline with the current
+owner's endpoint. Missing predecessor evidence labels the view partial rather
+than attributing earlier work to the successor. An unsealed handoff boundary
+cannot distinguish unfinished source work from outside edits, so it reports
+that boundary unavailable. Imported snapshots stay rooted in a separate private
+ref namespace; they do not make predecessor turns eligible for undo. Fork and
+clone start a fresh copy-time baseline and say so in `/diff session`; inherited
+turns are not attributed to the copy.
 
 `/undo` previews the latest closed turn's changed files; `/undo TURN_ID` selects
 an older turn on the current path. Enter confirms, and Esc cancels without

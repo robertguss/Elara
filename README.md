@@ -243,7 +243,7 @@ handoff successors inherit.
 Flight recordings now use format 2 to include retry state. Format 1 recordings
 are preserved but report `unsupported_format` in this build rather than false
 replay divergence; replay them with the
-[last format 1 build](https://github.com/robertguss/Elara/commit/83b72539f9705eb58d35659290bac8446aff657d).
+[last format 1 build](https://github.com/robertguss/Elara/commit/daa06f281368d0a532721695c6a656ec12ec14a5).
 Session JSONL history is unchanged and remains reopenable.
 
 ## Ask or chat

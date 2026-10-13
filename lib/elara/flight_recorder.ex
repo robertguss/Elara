@@ -10,7 +10,7 @@ defmodule Elara.FlightRecorder do
 
   @magic "ELARA-FLIGHT\0"
   @version 2
-  @last_v1_commit "83b72539f9705eb58d35659290bac8446aff657d"
+  @last_v1_commit "daa06f281368d0a532721695c6a656ec12ec14a5"
   @max_frame_bytes 64 * 1024 * 1024
 
   defmodule Recording do

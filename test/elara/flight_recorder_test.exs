@@ -65,7 +65,7 @@ defmodule Elara.FlightRecorderTest do
 
       legacy = %{recording | header: %{recording.header | format_version: 1}}
       assert {:error, {:unsupported_format, 1, message}} = Elara.replay(legacy)
-      assert message =~ "pre-retry build at 83b72539f9705eb58d35659290bac8446aff657d"
+      assert message =~ "pre-retry build at daa06f281368d0a532721695c6a656ec12ec14a5"
     end
 
     path = Path.join(tmp, "legacy.flight")

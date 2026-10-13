@@ -1,0 +1,28 @@
+ ✳ elara                        control
+────────────────────────────────────────
+
+ ▌ YOU
+ ▌ inspect the build
+
+ ELARA
+ I’ll check it.
+
+
+
+
+
+
+
+
+
+
+
+
+ ✓ Idle
+┌ PROMPT  ask · Enter send · Ctrl-V p… ┐
+│                                      │
+└ Esc stop · Ctrl-Q queue · Ctrl-J newl┘
+ ember / ember · Thinking expanded · ?
+ Tokens in 23001 · cached(in) 2300
+ out 790 · ~$0.0216 (partial)
+ Ctx ~12400/272000 · near limit

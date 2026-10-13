@@ -27,6 +27,10 @@ are documented in README.md's "Provider usage and estimated cost" section.
 The authoritative cost summary is `snapshot.provider_view.usage.cost`.
 Subscription usage has no API estimate; unknown prices remain unknown, and
 partial sums are marked incomplete. Original C3 history remains billing evidence.
+The TUI footer renders those totals and `inbox.context` through
+`presentation::usage_footer`, without repricing or recounting history.
+Wide and narrow priced, partial, subscription and unknown footer goldens live
+in `native/elara-tui/tests/goldens/usage-*.txt`.
 Command environment forwarding and `mix elara.env` diagnostics are documented
 in README.md's "Command environment" section. Extra project names belong in
 operator startup config, never an agent-editable project file.

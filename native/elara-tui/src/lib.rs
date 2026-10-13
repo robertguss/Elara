@@ -1554,6 +1554,8 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
         );
         return;
     }
+    let usage_lines = presentation::usage_footer(model, area.width.saturating_sub(2));
+    let usage_height = usage_lines.len() as u16;
     if let Some((id, _)) = &model.viewer {
         let view = &model.projection.view;
         let call = view["tool_calls"]
@@ -1565,7 +1567,7 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             .and_then(|call| call["name"].as_str())
             .unwrap_or("unavailable");
         let viewer_area = ratatui::layout::Rect {
-            height: area.height.saturating_sub(1),
+            height: area.height.saturating_sub(1 + usage_height),
             ..area
         };
         let mut state = model.transcript.borrow_mut();
@@ -1605,8 +1607,7 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             ),
             viewer_area,
         );
-        let status_area =
-            ratatui::layout::Rect::new(area.x, area.bottom().saturating_sub(1), area.width, 1);
+        let status_area = ratatui::layout::Rect::new(area.x, viewer_area.bottom(), area.width, 1);
         let connection = match model.connection {
             ConnectionState::Connected => "connected",
             ConnectionState::Resynchronizing => "resynchronizing",
@@ -1637,6 +1638,15 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             )),
             status_area,
         );
+        frame.render_widget(
+            Paragraph::new(usage_lines),
+            Rect::new(
+                area.x + 1,
+                status_area.bottom(),
+                area.width.saturating_sub(2),
+                usage_height,
+            ),
+        );
         return;
     }
     let editor_layout = model
@@ -1655,7 +1665,7 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             Constraint::Length(1),
             Constraint::Length(model.attachments.selections.len() as u16),
             Constraint::Length(editor_height + 2),
-            Constraint::Length(1),
+            Constraint::Length(1 + usage_height),
             Constraint::Length(diagnostics_rows),
         ])
         .split(area);
@@ -1805,7 +1815,7 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             composer.y + 1 + (editor_layout.cursor_row - first_row) as u16,
         ));
     }
-    draw_footer(frame, model, chunks[5]);
+    draw_footer(frame, model, chunks[5], usage_lines);
     if diagnostics_rows > 0 {
         draw_diagnostics(frame, model, chunks[6]);
     }
@@ -1975,8 +1985,13 @@ fn tilde(path: &str) -> String {
     }
 }
 
-/// Quiet footer: model, layout/theme, thinking state, F1 help, cwd.
-fn draw_footer(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
+/// Session usage and context, alongside local appearance and control hints.
+fn draw_footer(
+    frame: &mut ratatui::Frame<'_>,
+    model: &Model,
+    area: Rect,
+    usage: Vec<Line<'static>>,
+) {
     if area.height == 0 {
         return;
     }
@@ -2039,6 +2054,15 @@ fn draw_footer(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
         )
     };
     frame.render_widget(Paragraph::new(line), inner);
+    frame.render_widget(
+        Paragraph::new(usage),
+        Rect::new(
+            inner.x,
+            inner.y + 1,
+            inner.width,
+            inner.height.saturating_sub(1),
+        ),
+    );
 }
 
 /// Dense status row for debugging; enabled with `/diagnostics` or `--diagnostics`.

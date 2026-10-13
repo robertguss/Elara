@@ -464,6 +464,9 @@ defmodule Elara.Protocol do
     end
   end
 
+  defp encode_message(%Elara.Message.System{text: text, undo_id: id}),
+    do: %{"role" => "system", "text" => text, "undo_id" => id}
+
   defp encode_message(%User{agent_source: source} = user) when is_map(source),
     do: encode_message(%{user | agent_source: nil}) |> Map.put("agent_source", source)
 
@@ -499,6 +502,9 @@ defmodule Elara.Protocol do
 
     if usage, do: Map.put(message, "usage", usage), else: message
   end
+
+  defp decode_message(%{"role" => "system", "text" => text, "undo_id" => id}),
+    do: Elara.Session.Store.decode_message(%{"system" => %{"text" => text, "undoId" => id}})
 
   defp decode_message(%{"role" => "user", "text" => text, "agent_source" => source}),
     do:

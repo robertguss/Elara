@@ -135,6 +135,425 @@ defmodule Elara.WorkspaceDiff do
     end
   end
 
+  def undo_preview(%{error: error}, _store, _target) when not is_nil(error),
+    do: {:error, error}
+
+  def undo_preview(handle, store, target) do
+    ids = current_turns(handle, store)
+
+    id =
+      if target == :latest do
+        Enum.find(Enum.reverse(ids), fn id ->
+          match?({:ok, %{closed?: true}}, checkpoint(handle, id))
+        end)
+      else
+        if target in ids, do: target
+      end
+
+    with {:ok, %{closed?: true} = record} <- checkpoint(handle, id),
+         {:ok, changes} <- raw_changes(handle, record.before, record.tree),
+         :ok <- restorable(changes),
+         :ok <- undo_preflight(handle, changes),
+         {:ok, root} <- File.lstat(handle.root) do
+      plan = %{
+        id: Base.url_encode64(:crypto.strong_rand_bytes(24), padding: false),
+        turn: id,
+        root_inode: root.inode,
+        root_device: root.major_device,
+        changes: changes
+      }
+
+      if changes == [] do
+        {:error, "Undo unavailable: this turn has no net Git-visible changes."}
+      else
+        {:ok, plan}
+      end
+    else
+      {:error, text} when is_binary(text) -> {:error, text}
+      _ -> {:error, "Undo unavailable: no closed snapshot for this turn on the current path."}
+    end
+  end
+
+  def undo_apply(handle, plan) do
+    with {:ok, %{inode: inode, major_device: device, type: :directory}} <- File.lstat(handle.root),
+         true <- inode == plan.root_inode and device == plan.root_device,
+         :ok <- undo_preflight(handle, plan.changes),
+         {:ok, staged} <- stage_undo(handle, plan),
+         :ok <- undo_preflight(handle, plan.changes),
+         :ok <-
+           save_undo(handle, %{version: 1, id: plan.id, turn: plan.turn, paths: undo_paths(plan)}) do
+      result = restore_paths(handle, staged)
+
+      text =
+        case result do
+          :ok ->
+            "Undid Git-visible changes from turn #{plan.turn}."
+
+          {:error, reason} ->
+            "Undo of turn #{plan.turn} stopped; changes may be partial: #{inspect(reason)}."
+        end
+
+      notice = %Elara.Message.System{
+        undo_id: plan.id,
+        text: text <> " Files: #{undo_names(undo_paths(plan))}. " <> undo_limits()
+      }
+
+      case save_undo(handle, %{version: 1, notice: Store.encode_message(notice)}) do
+        :ok ->
+          {:notice, notice, result}
+
+        _ ->
+          {:error,
+           "Undo outcome could not be persisted; reopen to record the interrupted attempt."}
+      end
+    else
+      {:error, text} when is_binary(text) ->
+        {:error, text}
+
+      _ ->
+        {:error,
+         "Undo refused: workspace changed or restore preparation failed; no files restored."}
+    end
+  end
+
+  def undo_recovery(%{repo: nil}), do: :none
+
+  def undo_recovery(handle) do
+    case File.read(undo_record(handle)) do
+      {:error, :enoent} -> :none
+      {:ok, bytes} -> decode_undo_recovery(bytes)
+      _ -> {:error, "Undo recovery record unreadable; no restoration will be replayed."}
+    end
+  end
+
+  def undo_recorded(handle, id) do
+    with :ok <- File.rm(undo_record(handle)) do
+      File.rm_rf(Path.join(handle.repo, "undo-stage-" <> component(id)))
+      :ok
+    end
+  end
+
+  def undo_paths(plan), do: Enum.map(plan.changes, & &1.path)
+
+  def undo_limits,
+    do:
+      "Cannot reverse migrations that ran, ignored folders such as deps/ and _build/, or pushes. Submodules are gitlink-only."
+
+  defp decode_undo_recovery(bytes) do
+    case JSON.decode(bytes) do
+      {:ok, %{"version" => 1, "notice" => notice}} ->
+        case Store.decode_message(notice) do
+          {:ok, %Elara.Message.System{} = system} -> {:notice, system}
+          _ -> {:error, "Undo recovery record invalid; no restoration will be replayed."}
+        end
+
+      {:ok, %{"version" => 1, "id" => id, "turn" => turn, "paths" => paths}}
+      when is_binary(id) and id != "" and is_binary(turn) and is_list(paths) ->
+        if Enum.all?(paths, &is_binary/1) do
+          {:notice,
+           %Elara.Message.System{
+             undo_id: id,
+             text:
+               "Undo of turn #{turn} was interrupted; restoration may be partial or uncertain. " <>
+                 "Files: #{undo_names(paths)}. No filesystem writes were replayed. " <>
+                 undo_limits()
+           }}
+        else
+          {:error, "Undo recovery record invalid; no restoration will be replayed."}
+        end
+
+      _ ->
+        {:error, "Undo recovery record invalid; no restoration will be replayed."}
+    end
+  end
+
+  defp restorable(changes) do
+    unsupported =
+      Enum.filter(changes, fn change ->
+        change.before.mode == "160000" or change.after.mode == "160000" or
+          not String.valid?(change.path)
+      end)
+
+    if unsupported == [],
+      do: :ok,
+      else:
+        {:error,
+         "Undo refused: changed submodules or unsupported paths: #{undo_names(Enum.map(unsupported, & &1.path))}. No files restored."}
+  end
+
+  defp undo_preflight(handle, changes) do
+    removals =
+      changes
+      |> Enum.filter(&(&1.before.mode == "000000"))
+      |> MapSet.new(& &1.path)
+
+    conflicts =
+      Enum.filter(changes, fn change ->
+        case safe_undo_path?(handle, change.path) do
+          :ok ->
+            current_entry(handle, change.path) != {:ok, change.after} or
+              not removable_directory?(handle, change.path, removals)
+
+          {:blocked, ancestor} ->
+            change.after.mode != "000000" or not MapSet.member?(removals, ancestor)
+
+          _ ->
+            true
+        end
+      end)
+
+    if conflicts == [],
+      do: :ok,
+      else:
+        {:error,
+         "Undo refused: files changed since the turn ended or have unsafe paths: " <>
+           "#{undo_names(Enum.map(conflicts, & &1.path))}."}
+  end
+
+  defp undo_names(paths), do: inspect(paths, limit: :infinity, printable_limit: :infinity)
+
+  defp removable_directory?(handle, path, removals) do
+    full = Path.join(handle.root, path)
+
+    case File.lstat(full) do
+      {:ok, %{type: :directory}} ->
+        case File.ls(full) do
+          {:ok, names} ->
+            Enum.all?(names, fn name ->
+              child = Path.join(path, name)
+
+              case File.lstat(Path.join(handle.root, child)) do
+                {:ok, %{type: :directory}} -> removable_directory?(handle, child, removals)
+                {:ok, _} -> MapSet.member?(removals, child)
+                _ -> false
+              end
+            end)
+
+          _ ->
+            false
+        end
+
+      _ ->
+        true
+    end
+  end
+
+  defp safe_undo_path?(handle, path) do
+    parts = Path.split(path)
+
+    if Path.type(path) != :relative or parts == [] or
+         Enum.any?(parts, &(&1 in [".", "..", ".git"])) do
+      {:error, :unsafe_path}
+    else
+      parts
+      |> Enum.drop(-1)
+      |> Enum.reduce_while(handle.root, fn part, parent ->
+        child = Path.join(parent, part)
+
+        case File.lstat(child) do
+          {:ok, %{type: :directory}} ->
+            {:cont, child}
+
+          {:error, :enoent} ->
+            {:cont, child}
+
+          {:ok, %{type: type}} when type in [:regular, :symlink] ->
+            {:halt, {:blocked, Path.relative_to(child, handle.root)}}
+
+          _ ->
+            {:halt, {:error, :unsafe_ancestor}}
+        end
+      end)
+      |> case do
+        value when is_binary(value) -> :ok
+        error -> error
+      end
+    end
+  end
+
+  defp current_entry(handle, path) do
+    full = Path.join(handle.root, path)
+
+    case File.lstat(full) do
+      {:error, :enoent} ->
+        {:ok, %{mode: "000000", oid: @zero}}
+
+      {:ok, %{type: :directory}} ->
+        {:ok, %{mode: "000000", oid: @zero}}
+
+      {:ok, %{type: :symlink}} ->
+        with {:ok, target} <- File.read_link(full) do
+          oid =
+            Base.encode16(:crypto.hash(:sha, "blob #{byte_size(target)}" <> <<0>> <> target),
+              case: :lower
+            )
+
+          {:ok, %{mode: "120000", oid: oid}}
+        end
+
+      {:ok, %{type: :regular, mode: mode}} ->
+        with {:ok, oid} <- bank(handle, ["hash-object", "--no-filters", "--", full]) do
+          {:ok,
+           %{
+             mode: if(band(mode, 0o111) != 0, do: "100755", else: "100644"),
+             oid: String.trim(oid)
+           }}
+        end
+
+      _ ->
+        {:error, :unsupported_path}
+    end
+  end
+
+  defp stage_undo(handle, plan) do
+    stage = Path.join(handle.repo, "undo-stage-" <> component(plan.id))
+
+    with :ok <- File.mkdir_p(stage) do
+      Enum.reduce_while(plan.changes, {:ok, []}, fn change, {:ok, staged} ->
+        source = Path.join(stage, component(change.path))
+
+        result =
+          if change.before.mode == "000000" do
+            :ok
+          else
+            output = File.stream!(source, [:write, :binary])
+
+            case System.cmd(
+                   "git",
+                   ["--git-dir=" <> handle.repo, "cat-file", "blob", change.before.oid],
+                   cd: handle.root,
+                   env: bank_env(handle),
+                   into: output
+                 ) do
+              {_, 0} -> :ok
+              _ -> {:error, :missing_baseline_blob}
+            end
+          end
+
+        case result do
+          :ok -> {:cont, {:ok, staged ++ [Map.put(change, :source, source)]}}
+          error -> {:halt, error}
+        end
+      end)
+    end
+  rescue
+    error in [File.Error, ErlangError] -> {:error, Exception.message(error)}
+  end
+
+  defp restore_paths(handle, changes) do
+    {removals, restorations} = Enum.split_with(changes, &(&1.before.mode == "000000"))
+
+    result =
+      Enum.reduce_while(removals ++ restorations, :ok, fn change, :ok ->
+        with :ok <- undo_preflight(handle, [change]),
+             :ok <- restore_path(handle, change) do
+          {:cont, :ok}
+        else
+          false -> {:halt, {:error, :path_changed}}
+          error -> {:halt, error}
+        end
+      end)
+
+    with :ok <- result do
+      mismatches =
+        Enum.filter(changes, fn change ->
+          case safe_undo_path?(handle, change.path) do
+            :ok -> current_entry(handle, change.path) != {:ok, change.before}
+            {:blocked, _} -> change.before.mode != "000000"
+            _ -> true
+          end
+        end)
+
+      if mismatches == [],
+        do: :ok,
+        else: {:error, {:restore_verification_failed, Enum.map(mismatches, & &1.path)}}
+    end
+  end
+
+  defp restore_path(handle, %{before: %{mode: "000000"}} = change),
+    do: File.rm(Path.join(handle.root, change.path))
+
+  defp restore_path(handle, change) do
+    destination = Path.join(handle.root, change.path)
+    temporary = destination <> ".elara-undo-" <> component(change.source)
+
+    with :ok <- File.mkdir_p(Path.dirname(destination)),
+         {:ok, file} <- File.open(temporary, [:write, :binary, :exclusive]) do
+      File.close(file)
+
+      try do
+        result =
+          if change.before.mode == "120000" do
+            with {:ok, target} <- File.read(change.source),
+                 :ok <- File.rm(temporary),
+                 do: File.ln_s(target, temporary)
+          else
+            permissions =
+              case File.lstat(destination) do
+                {:ok, %{type: :regular, mode: mode}} -> band(mode, 0o666)
+                _ -> 0o600
+              end
+
+            with :ok <- File.cp(change.source, temporary),
+                 do:
+                   File.chmod(
+                     temporary,
+                     if(change.before.mode == "100755",
+                       do: bor(permissions, 0o100),
+                       else: permissions
+                     )
+                   )
+          end
+
+        with :ok <- result,
+             :ok <- safe_undo_path?(handle, change.path),
+             true <- current_entry(handle, change.path) == {:ok, change.after},
+             :ok <- remove_empty_directory(destination),
+             do: File.rename(temporary, destination)
+      after
+        File.rm(temporary)
+      end
+    end
+  end
+
+  defp remove_empty_directory(path) do
+    case File.lstat(path) do
+      {:ok, %{type: :directory}} ->
+        with {:ok, names} <- File.ls(path),
+             :ok <-
+               Enum.reduce_while(names, :ok, fn name, :ok ->
+                 child = Path.join(path, name)
+
+                 case File.lstat(child) do
+                   {:ok, %{type: :directory}} ->
+                     case remove_empty_directory(child) do
+                       :ok -> {:cont, :ok}
+                       error -> {:halt, error}
+                     end
+
+                   _ ->
+                     {:halt, {:error, :directory_not_empty}}
+                 end
+               end),
+             do: File.rmdir(path)
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp save_undo(handle, record) do
+    path = undo_record(handle)
+    temporary = path <> ".tmp"
+
+    with {:ok, :ok} <-
+           File.open(temporary, [:write, :binary, :sync], &IO.binwrite(&1, JSON.encode!(record))),
+         :ok <- File.rename(temporary, path),
+         do: :ok
+  end
+
+  defp undo_record(handle), do: Path.join(handle.repo, "undo-pending.json")
+
   defp current_turns(handle, store) do
     entries = Map.new(store.entries, &{&1.id, &1})
     ancestors(entries, store.leaf, if(handle.origin, do: handle.origin["entry"]), [])
@@ -308,13 +727,35 @@ defmodule Elara.WorkspaceDiff do
     Enum.map_join(entries, fn entry -> "#{entry.mode} #{entry.oid}\t#{entry.path}" <> <<0>> end)
   end
 
-  defp compare(handle, before, after_tree) do
+  defp raw_changes(handle, before, after_tree) do
     with {:ok, raw} <-
            bank(handle, ["diff-tree", "--no-renames", "-r", "--raw", "-z", before, after_tree]) do
-      records = String.split(raw, <<0>>, trim: true) |> Enum.chunk_every(2)
+      changes =
+        raw
+        |> String.split(<<0>>, trim: true)
+        |> Enum.chunk_every(2)
+        |> Enum.map(fn [metadata, path] ->
+          [old_mode, new_mode, old_oid, new_oid, _status] = String.split(metadata)
 
-      Enum.reduce_while(records, {:ok, ""}, fn [metadata, path], {:ok, text} ->
-        [old_mode, new_mode, old_oid, new_oid, _status] = String.split(metadata)
+          %{
+            path: path,
+            before: %{mode: String.trim_leading(old_mode, ":"), oid: old_oid},
+            after: %{mode: new_mode, oid: new_oid}
+          }
+        end)
+
+      {:ok, changes}
+    end
+  end
+
+  defp compare(handle, before, after_tree) do
+    with {:ok, changes} <- raw_changes(handle, before, after_tree) do
+      Enum.reduce_while(changes, {:ok, ""}, fn change, {:ok, text} ->
+        %{
+          path: path,
+          before: %{mode: old_mode, oid: old_oid},
+          after: %{mode: new_mode, oid: new_oid}
+        } = change
 
         with {:ok, old_size} <- blob_size(handle, old_oid, old_mode),
              {:ok, new_size} <- blob_size(handle, new_oid, new_mode),
@@ -368,7 +809,7 @@ defmodule Elara.WorkspaceDiff do
          new_size
        ) do
     cond do
-      old_mode == ":160000" or new_mode == "160000" ->
+      old_mode == "160000" or new_mode == "160000" ->
         {:ok,
          "#{inspect(path)}: submodule gitlink #{old_oid} → #{new_oid} (contents not shown)\n"}
 

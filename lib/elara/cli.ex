@@ -109,6 +109,9 @@ defmodule Elara.CLI do
   def render({:message_appended, %Assistant{}}), do: []
   def render({:message_appended, %User{}}), do: []
 
+  def render({:message_appended, %Elara.Message.System{text: text}}),
+    do: ["[system] ", text, "\n"]
+
   def render({:provider_retry, retry}) do
     [
       "[retry] attempt ",

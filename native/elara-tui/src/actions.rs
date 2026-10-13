@@ -38,6 +38,7 @@ pub(crate) enum Action {
     Queue,
     Steer,
     ReadOnly,
+    Undo,
 }
 pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
     (
@@ -106,6 +107,11 @@ pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
         "diff",
         "latest turn; /diff session: session net changes",
         false,
+    ),
+    (
+        "undo",
+        "[TURN_ID]: confirm restoring a closed turn's files",
+        true,
     ),
     ("interrupt", "stop current turn", true),
     ("detach", "leave the session", false),
@@ -343,6 +349,7 @@ static BINDINGS: &[Binding] = &[
 ];
 pub(crate) const SLASH_ONLY: &[(Action, &str)] = &[
     (Action::ReadOnly, "read-only"),
+    (Action::Undo, "undo"),
     (Action::Appearance, "appearance"),
     (Action::Attachments, "attachments"),
     (Action::ThinkingView, "thinking-view"),

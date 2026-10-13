@@ -49,6 +49,9 @@ pub(super) fn open(model: &mut Model) -> InputAction {
 }
 
 pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
+    if crate::workspace_undo::reply(model, frame) {
+        return true;
+    }
     if crate::workspace_diff::reply(model, frame) {
         return true;
     }
@@ -444,6 +447,7 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
         }
         "limits" => crate::limits::command(model, argument),
         "diff" => crate::workspace_diff::command(model, argument),
+        "undo" => crate::workspace_undo::command(model, argument),
         "job" | "ack-job-stopped" if name == "job" || control => {
             let id = if argument.starts_with('"') {
                 serde_json::from_str::<String>(argument).ok()

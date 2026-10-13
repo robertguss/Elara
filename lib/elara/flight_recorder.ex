@@ -675,6 +675,9 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_fact({:read_only, enabled}), do: %{kind: :read_only, enabled: enabled}
 
+  defp normalize_fact({:system_notice, notice}),
+    do: %{kind: :system_notice, notice: normalize_message(notice)}
+
   defp normalize_fact({:ask_input, user}), do: %{kind: :ask_input, user: normalize_message(user)}
 
   defp normalize_fact({:ask, prompt}), do: %{kind: :ask, prompt: prompt}
@@ -721,6 +724,9 @@ defmodule Elara.FlightRecorder do
     do: {:clear_tool_results, fact.ref, fact.entries, fact.bytes_freed}
 
   defp denormalize_fact(%{kind: :read_only, enabled: enabled}), do: {:read_only, enabled}
+
+  defp denormalize_fact(%{kind: :system_notice, notice: notice}),
+    do: {:system_notice, denormalize_message(notice)}
 
   defp denormalize_fact(%{kind: :ask_input, user: user}),
     do: {:ask_input, denormalize_message(user)}
@@ -824,6 +830,9 @@ defmodule Elara.FlightRecorder do
      Enum.map(phase.remaining, &denormalize_call/1), phase.iteration}
   end
 
+  defp normalize_message(%Elara.Message.System{text: text, undo_id: id}),
+    do: %{kind: :system, text: text, undo_id: id}
+
   defp normalize_message(%User{text: text, attachments: []}), do: %{kind: :user, text: text}
 
   defp normalize_message(%User{text: text, attachments: attachments}),
@@ -856,6 +865,9 @@ defmodule Elara.FlightRecorder do
 
     if result.usage, do: Map.put(message, :usage, result.usage), else: message
   end
+
+  defp denormalize_message(%{kind: :system, text: text, undo_id: id}),
+    do: %Elara.Message.System{text: text, undo_id: id}
 
   defp denormalize_message(%{kind: :user, text: text, attachments: attachments}),
     do: %User{text: text, attachments: attachments}

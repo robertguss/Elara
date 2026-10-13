@@ -165,9 +165,11 @@ defmodule Elara do
     do: call(session, {:workspace_diff, scope}, :infinity)
 
   @doc false
-  @spec attached_command(session_ref(), term()) :: :ok | {:error, term()}
+  @spec attached_command(session_ref(), term()) :: :ok | {:ok, map()} | {:error, term()}
   def attached_command(session, command) when is_pid(session) or is_binary(session) do
-    timeout = if command == :reload_plugins, do: :infinity, else: 5_000
+    timeout =
+      if command == :reload_plugins or match?({:undo, _, _}, command), do: :infinity, else: 5_000
+
     call(session, {:attached_command, command}, timeout)
   end
 

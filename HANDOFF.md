@@ -22,6 +22,9 @@ operator startup config, never an agent-editable project file.
 Crash-safe reopening and legacy receipt escape paths are documented in
 `docs/sessions.md` under "Recover an interrupted write". A different live VM
 that owns the ledger must stop before takeover; callbacks are never replayed.
+Revalidation refusals before any callback attempt now durably fail the receipt
+with zero attempts, leaving the next turn usable. Ledger schemas 1–3 migrate
+to schema 4 without losing receipt or ownership evidence.
 The TUI's shared code colors live in `native/elara-tui/src/syntax.rs`.
 Colored Elixir and edit frames for all four themes live in
 `native/elara-tui/tests/goldens/syntax-*.txt`.

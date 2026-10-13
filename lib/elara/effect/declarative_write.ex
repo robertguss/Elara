@@ -249,7 +249,10 @@ defmodule Elara.Effect.DeclarativeWrite do
 
       classify_sidecar(sidecar, job, cwd)
     else
-      {:error, reason} -> rejected_result(job, cwd, reason)
+      {:error, reason} ->
+        message = "declarative write protocol failed: #{inspect(reason)}"
+        sidecar = Sidecar.reject(executor, journal, job, message)
+        classify_sidecar(sidecar, job, cwd)
     end
   end
 
@@ -419,13 +422,16 @@ defmodule Elara.Effect.DeclarativeWrite do
   defp validate_digest(_digest), do: {:error, :invalid_digest}
 
   defp classify_sidecar(%Sidecar.Result{} = sidecar, job, cwd) do
-    {:ok, workspace} = observe(job, cwd)
+    workspace = workspace_observation(job, cwd)
     record = sidecar.executor_record
 
     {causal, historical, safe_action} =
       case record do
         %Record{state: :completed} ->
           {:completed, :invoked, :none}
+
+        %Record{state: :failed, callback_attempt_count: 0} ->
+          {:failed, :not_invoked, :report_rejection}
 
         %Record{state: :failed} ->
           {:failed, :invoked, terminal_safe_action(workspace)}
@@ -513,7 +519,7 @@ defmodule Elara.Effect.DeclarativeWrite do
       outcome: record.result,
       workspace: workspace,
       causal: causal,
-      historical: :invoked,
+      historical: unavailable_historical(record),
       safe_action: safe_action,
       executor_record: nil,
       controller_record: record
@@ -535,28 +541,29 @@ defmodule Elara.Effect.DeclarativeWrite do
   end
 
   defp rejected_result(job, cwd, reason) do
-    workspace =
-      case observe(job, cwd) do
-        {:ok, observation} ->
-          observation
-
-        {:error, observation_reason} ->
-          %Observation{
-            state: :unavailable,
-            path: Map.get(job.arguments, "path", "unknown"),
-            reason: observation_reason
-          }
-      end
-
     %Result{
       job: job,
       status: :terminal,
       outcome: {:error, "declarative write protocol failed: #{inspect(reason)}"},
-      workspace: workspace,
+      workspace: workspace_observation(job, cwd),
       causal: :not_started,
       historical: :not_invoked,
       safe_action: :report_rejection
     }
+  end
+
+  defp workspace_observation(job, cwd) do
+    case observe(job, cwd) do
+      {:ok, observation} ->
+        observation
+
+      {:error, reason} ->
+        %Observation{
+          state: :unavailable,
+          path: Map.get(job.arguments, "path", "unknown"),
+          reason: reason
+        }
+    end
   end
 
   defp terminal_safe_action(%Observation{state: :conflict}), do: :report_conflict
@@ -584,11 +591,10 @@ defmodule Elara.Effect.DeclarativeWrite do
 
   defp indeterminate_safe_action(_workspace, _job, _cwd), do: :manual_investigation
 
+  defp unavailable_historical(%Record{state: :failed, callback_attempt_count: 0}),
+    do: :not_invoked
+
   defp unavailable_historical(%Record{callback_attempt_count: 1}), do: :invoked
-
-  defp unavailable_historical(%Record{state: state}) when ExecutorLedger.is_terminal_state(state),
-    do: :invoked
-
   defp unavailable_historical(_record), do: :unknown
 
   defp unavailable_message(job, observation, safe_action) do

@@ -299,8 +299,34 @@ defmodule Elara.Effect.ProductionWriteTest do
 
     assert message =~ "resolved_target_changed"
     assert File.read!(other) == "unchanged"
+    {job, observation} = controller_evidence(context.journal_path)
+
+    assert {:failed,
+            %Record{callback_attempt_count: 0, terminal_count: 1, attempt_incarnation: nil} =
+              refused} = Executor.query(local_executor(context), job.job_id)
+
+    assert refused.result == {:error, message}
+    assert observation.executor_record == refused
     assert {:ok, "still usable"} = Elara.ask(resumed, "continue safely")
     stop_session(resumed)
+    stop_local_executor(local_executor(context))
+
+    assert {:ok, reopened} =
+             start_session(context, script([{:ok, assistant("still safe")}]),
+               resume: session_path
+             )
+
+    assert {:failed, ^refused} = Executor.query(local_executor(context), job.job_id)
+
+    assert {:error, :already_terminal} =
+             Executor.continue(local_executor(context), job.job_id, job.operation_digest, fn ->
+               File.write!(other, "must not run")
+               {:ok, "must not run"}
+             end)
+
+    assert {:ok, "still safe"} = Elara.ask(reopened, "another safe turn")
+    assert File.read!(other) == "unchanged"
+    stop_session(reopened)
     stop_local_executor(local_executor(context))
   end
 

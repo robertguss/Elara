@@ -170,8 +170,10 @@ or remote executor by capability, health, affinity, and load.
 receipt-backed local `write` only. A job is admitted once by
 `{job_id, operation_digest}`; only an accepted job whose callback never started
 may be continued; after a callback starts without durable terminal evidence the
-result is `indeterminate`, never retried. The executor ledger (SQLite via
-`exqlite`, schema 3) has three terminal states, `completed | failed |
+result is `indeterminate`, never retried. Revalidation may durably fail an
+accepted receipt with zero attempts: the refused callback never ran.
+The executor ledger (SQLite via
+`exqlite`, schema 4) has three terminal states, `completed | failed |
 indeterminate`: a callback that returns uncertainty, crashes or returns an invalid
 result is recorded as `indeterminate`. Callbacks run in linked workers with
 one serial ledger writer. Worker DOWN while the writer survives records an
@@ -179,8 +181,9 @@ indeterminate terminal. R7 startup records an indeterminate terminal for orphane
 attempts only under exclusive writer and callback locks plus durable VM/writer/
 callback identity proving that the old owners are dead. A different live VM
 refuses takeover, naming its OS PID, node and start time: stop it first.
-It never replays a callback. Schema 1 and
-2 ledgers migrate in place with `attempt_incarnation: nil` for legacy attempts.
+It never replays a callback. Schemas 1–3 migrate in place, retaining rows,
+digests and incarnation evidence. Schemas 1 and 2 retain
+`attempt_incarnation: nil` for legacy attempts.
 Those attempts never auto-terminalize: the session stays idle, refuses a new
 turn for missing proof, and permits `/clone` or `/fork` as a workaround. Live
 timeout barriers remain until a durable terminal exists. Test terminal states

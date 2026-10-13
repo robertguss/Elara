@@ -26,6 +26,41 @@ defmodule Elara.Effect.Sidecar do
   @type operation :: (-> Elara.Tool.outcome())
   @type fault_hook :: (atom() -> :ok)
 
+  @spec reject(GenServer.server(), GenServer.server(), Job.t(), String.t()) :: Result.t()
+  def reject(executor, journal, %Job{} = job, message) do
+    safely(job, journal, fn ->
+      response =
+        case Executor.reject(executor, job.job_id, job.operation_digest, message) do
+          {:error, reason} when reason in [:callback_already_attempted, :already_terminal] ->
+            Executor.query(executor, job.job_id)
+
+          response ->
+            response
+        end
+
+      # No admission or continuation on a rejected path, even if evidence is missing.
+      case response do
+        {state, %Record{} = record} when ExecutorLedger.is_terminal_state(state) ->
+          case ControllerJournal.observe(journal, record) do
+            {:ok, _observation} ->
+              result(job, record)
+
+            {:error, reason} ->
+              indeterminate(job, record, {:controller_observation_failed, reason})
+          end
+
+        {:accepted, %Record{} = record} ->
+          indeterminate(job, record, :missing_causal_terminal_evidence)
+
+        :unknown ->
+          rejected(job, nil, message)
+
+        {:error, reason} ->
+          unavailable(job, journal, reason)
+      end
+    end)
+  end
+
   @spec execute(
           GenServer.server(),
           GenServer.server(),

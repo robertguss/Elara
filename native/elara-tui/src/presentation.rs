@@ -778,6 +778,84 @@ fn usage_text(usage: &Value) -> String {
     .join(" · ")
 }
 
+pub(super) fn usage_footer(model: &Model, width: u16) -> Vec<Line<'static>> {
+    let usage = &model.projection.view["provider_view"]["usage"];
+    let context = &model.projection.view["inbox"]["context"];
+    let mut fields = Vec::new();
+    if usage.is_object() {
+        for (key, label) in [
+            ("input_tokens", "Tokens in"),
+            ("cached_input_tokens", "cached(in)"),
+            ("output_tokens", "out"),
+        ] {
+            let count = usage["session_totals"][key]
+                .as_u64()
+                .map_or_else(|| "?".into(), |value| value.to_string());
+            fields.push(Span::styled(format!("{label} {count}"), muted()));
+        }
+        let cost = &usage["cost"];
+        if let Some(nanos) = cost["estimated_usd_nanos"].as_u64() {
+            let dollars = if nanos > 0 && nanos < 100_000 {
+                "<$0.0001".into()
+            } else {
+                let units = nanos / 100_000 + u64::from(nanos % 100_000 >= 50_000);
+                format!("${}.{:04}", units / 10_000, units % 10_000)
+            };
+            fields.push(Span::styled(
+                format!(
+                    "~{dollars}{}",
+                    if cost["complete"] == false {
+                        " (partial)"
+                    } else {
+                        ""
+                    }
+                ),
+                muted(),
+            ));
+        }
+    }
+    if context.is_object() {
+        let number = |key: &str| {
+            context[key]
+                .as_u64()
+                .map_or_else(|| "?".into(), |n| n.to_string())
+        };
+        let style = if context["warning"] == true || context["handoff_required"] == true {
+            muted().add_modifier(Modifier::BOLD)
+        } else {
+            muted()
+        };
+        fields.push(Span::styled(
+            format!("Ctx ~{}/{}", number("estimate_tokens"), number("limit")),
+            style,
+        ));
+        if context["confidence"] == "low" {
+            fields.push(Span::styled("low confidence", style));
+        }
+        if context["handoff_required"] == true {
+            fields.push(Span::styled("handoff required", style));
+        } else if context["warning"] == true {
+            fields.push(Span::styled("near limit", style));
+        }
+    }
+    let mut lines = Vec::new();
+    let mut line = Line::default();
+    for field in fields {
+        if !line.spans.is_empty() && line.width() + 3 + field.width() > width as usize {
+            lines.push(line);
+            line = Line::default();
+        }
+        if !line.spans.is_empty() {
+            line.spans.push(Span::styled(" · ", muted()));
+        }
+        line.spans.push(field);
+    }
+    if !line.spans.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
 pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
     if model.appearance_picker.is_some() || model.presentation_overlay.is_some() {
         let area = frame.area();
@@ -790,7 +868,10 @@ pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
             .len()
             .clamp(1, (area.height as usize / 3).max(1)) as u16
             + 2;
-        let fixed_rows = editor_height + 2 + u16::from(model.appearance.diagnostics);
+        let fixed_rows = editor_height
+            + 2
+            + usage_footer(model, area.width.saturating_sub(2)).len() as u16
+            + u16::from(model.appearance.diagnostics);
         let overlay_area = Rect {
             height: area.height.saturating_sub(fixed_rows),
             ..area

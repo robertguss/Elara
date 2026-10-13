@@ -576,6 +576,7 @@ defmodule Elara.TuiTest do
     {:ok, session} =
       Elara.start_session(
         provider: script([{:ok, asst(nil, [call])}]),
+        cwd: context.state_dir,
         persist: false
       )
 

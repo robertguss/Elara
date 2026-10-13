@@ -255,6 +255,7 @@ defmodule Elara.Effect.JobTest do
                tools: [tool],
                plugins: [],
                persist: false,
+               cwd: context.root,
                effect_journal_path: context.journal_path,
                effect_fault_hook: hook
              )

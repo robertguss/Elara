@@ -566,6 +566,14 @@ fn run_interactive(
         }
         dirty |= model.check_acceptance_timeout();
 
+        if model.connection == ConnectionState::Connected
+            && let Some(request) = model.next_workspace_diff_request()
+            && let Err(error) = connection.send(&request)
+        {
+            model.mark_disconnected(&error);
+            dirty = true;
+        }
+
         while event::poll(Duration::ZERO)
             .map_err(|error| format!("terminal input failed: {error}"))?
         {

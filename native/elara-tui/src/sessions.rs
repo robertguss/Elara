@@ -49,6 +49,9 @@ pub(super) fn open(model: &mut Model) -> InputAction {
 }
 
 pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
+    if crate::workspace_diff::reply(model, frame) {
+        return true;
+    }
     match frame["type"].as_str() {
         Some("read_only_changed") if frame["version"] == 2 => {
             model.notice = Some(if frame["enabled"] == true {
@@ -440,6 +443,7 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
             InputAction::Session(request)
         }
         "limits" => crate::limits::command(model, argument),
+        "diff" => crate::workspace_diff::command(model, argument),
         "job" | "ack-job-stopped" if name == "job" || control => {
             let id = if argument.starts_with('"') {
                 serde_json::from_str::<String>(argument).ok()

@@ -440,6 +440,19 @@ four independent themes (Ember, Observatory, Workbench, Forest). Enter applies;
 `--layout workbench --theme forest` overrides defaults for one launch.
 `ELARA_TUI_APPEARANCE_FILE` selects a separate preferences file.
 
+`/diff` opens the latest turn's workspace diff; `/diff session` shows the net
+diff from the first turn's baseline. The panel refreshes during a running turn;
+**r** refreshes it manually, arrows/PageUp/PageDown scroll, and Esc closes it.
+Both include changes made through `bash`. Scope is the repository root's
+Git-visible files (tracked and non-ignored untracked); ignored files are not
+shown. Submodules are gitlink-only summaries. Binary files and files over
+128 KiB are summarized, and each report section is capped at 256 KiB.
+Changes observed between turns or after the latest endpoint appear separately
+as **Changed outside Elara**. Private, ref-rooted snapshots live under Elara's
+session state, without changing the workspace's index or HEAD. A non-Git
+workspace, missing baseline, or failed capture reports unavailable rather than
+a partial diff. A live or interrupted turn has an explicitly unsealed endpoint.
+
 **Ctrl-T** hides/shows thinking and retains that choice through layout switches.
 `/thinking-view` opens its full view; **Ctrl-R** opens turn navigation. Esc closes either view
 and restores focus. Turn navigation shows short summaries; the transcript

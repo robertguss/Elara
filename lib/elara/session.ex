@@ -66,6 +66,7 @@ defmodule Elara.Session do
       :base_system,
       :context_limit,
       :handoff_fault_hook,
+      :workspace_diff,
       skills: %{skills: %{}, diagnostics: []},
       skill_options: [],
       instructions: %{},
@@ -190,6 +191,7 @@ defmodule Elara.Session do
             instructions: Keyword.get(opts, :instructions, %{}),
             context_limit: Keyword.get(opts, :context_limit),
             handoff_fault_hook: Keyword.fetch!(opts, :handoff_fault_hook),
+            workspace_diff: Elara.WorkspaceDiff.open(store),
             base_tools: core.config.tools,
             discover_plugins?: Keyword.get(opts, :discover_plugins?, false),
             plugins: plugins
@@ -355,6 +357,9 @@ defmodule Elara.Session do
 
   def handle_call(:runtime_limits_view, _from, shell),
     do: {:reply, runtime_limits_view(shell), shell}
+
+  def handle_call({:workspace_diff, scope}, _from, shell) when scope in [:turn, :session],
+    do: {:reply, Elara.WorkspaceDiff.report(shell.workspace_diff, shell.store, scope), shell}
 
   def handle_call(:recording, _from, shell) do
     {:reply, FlightRecorder.snapshot(shell.recorder), shell}
@@ -649,7 +654,15 @@ defmodule Elara.Session do
 
                 core = Core.rebase_history(shell.core, core.history)
                 recorder = FlightRecorder.segment(shell.recorder, core, :history_rebased)
-                shell = %{shell | store: store, core: core, recorder: recorder}
+
+                shell = %{
+                  shell
+                  | store: store,
+                    core: core,
+                    recorder: recorder,
+                    workspace_diff: Elara.WorkspaceDiff.open(store)
+                }
+
                 shell = feed({:provider_settings, config.provider_settings}, shell)
                 {:reply, {:ok, shell.core.history}, shell}
 
@@ -1541,7 +1554,13 @@ defmodule Elara.Session do
               recorder = FlightRecorder.segment(shell.recorder, core, :history_rebased)
 
               {:reply, {:ok, prompt, core.history},
-               %{shell | store: store, core: core, recorder: recorder}}
+               %{
+                 shell
+                 | store: store,
+                   core: core,
+                   recorder: recorder,
+                   workspace_diff: Elara.WorkspaceDiff.open(store)
+               }}
 
             {:error, reason} ->
               {:reply, {:error, reason}, shell}
@@ -1667,6 +1686,14 @@ defmodule Elara.Session do
 
     case result do
       {:ok, store} ->
+        shell =
+          if is_struct(message, Message.User),
+            do: %{
+              shell
+              | workspace_diff: Elara.WorkspaceDiff.admit(shell.workspace_diff, store.leaf)
+            },
+            else: shell
+
         shell = emit(event, effect_id, %{shell | store: store, consuming_id: nil}, patch_context)
         if consuming?, do: inbox_changed(shell), else: shell
 
@@ -2063,6 +2090,13 @@ defmodule Elara.Session do
   end
 
   defp emit(event, effect_id, shell, patch_context) do
+    shell =
+      case event do
+        {:turn_ended, outcome} -> finish_workspace_diff(shell, outcome)
+        {:turn_ended, outcome, _} -> finish_workspace_diff(shell, outcome)
+        _ -> shell
+      end
+
     seq = shell.next_event_seq
 
     shell = %{
@@ -2129,6 +2163,14 @@ defmodule Elara.Session do
     end
 
     shell
+  end
+
+  defp finish_workspace_diff(shell, outcome) do
+    settled? =
+      outcome != :interrupted and map_size(shell.tasks) == 0 and
+        map_size(shell.pending_effects) == 0 and pending_receipt_effects(shell) == []
+
+    %{shell | workspace_diff: Elara.WorkspaceDiff.finish(shell.workspace_diff, settled?)}
   end
 
   defp track_task(shell, %Task{ref: ref, pid: pid}, kind, core_ref, plugin_lease \\ nil) do

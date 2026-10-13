@@ -604,6 +604,27 @@ defmodule Elara.Server do
     command_result(Elara.attached_command(session, :interrupt), version)
   end
 
+  defp handle_versioned_command(
+         session,
+         2,
+         %{"command" => "workspace_diff"} = request,
+         _provider,
+         _lifetime
+       ) do
+    case Map.get(request, "scope", "turn") do
+      scope when scope in ["turn", "session"] ->
+        result = Elara.workspace_diff(session, if(scope == "session", do: :session, else: :turn))
+
+        case result do
+          {:ok, text} -> %{"type" => "workspace_diff", "version" => 2, "text" => text}
+          {:error, reason} -> session_error("workspace_diff", reason)
+        end
+
+      _ ->
+        session_error("workspace_diff", :invalid_diff_scope)
+    end
+  end
+
   defp handle_versioned_command(session, version, %{"command" => "inspect"}, _provider, _lifetime) do
     case Elara.status(session) do
       %{} = status ->

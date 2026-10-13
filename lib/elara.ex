@@ -160,6 +160,10 @@ defmodule Elara do
   def materialized_view(session) when is_pid(session) or is_binary(session),
     do: call(session, :materialized_view)
 
+  @spec workspace_diff(session_ref(), :turn | :session) :: {:ok, String.t()} | {:error, term()}
+  def workspace_diff(session, scope \\ :turn) when scope in [:turn, :session],
+    do: call(session, {:workspace_diff, scope}, :infinity)
+
   @doc false
   @spec attached_command(session_ref(), term()) :: :ok | {:error, term()}
   def attached_command(session, command) when is_pid(session) or is_binary(session) do

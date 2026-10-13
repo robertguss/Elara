@@ -98,6 +98,7 @@ defmodule Elara do
         router: router,
         workspace_id: workspace_id,
         allowed_capabilities: allowed_capabilities,
+        read_only: Keyword.get(opts, :read_only, false),
         effect_journal_path: effect_journal_path,
         effect_executor: effect_executor,
         effect_executor_explicit?: effect_executor_explicit?,
@@ -134,6 +135,10 @@ defmodule Elara do
 
   @doc "Accept model and effort for the next provider request; an in-flight request is unchanged."
   def set_provider_settings(session, settings), do: call(session, {:provider_settings, settings})
+
+  @doc "Change mutation permission from the next tool call; does not stop a running call."
+  def set_read_only(session, enabled) when is_boolean(enabled),
+    do: call(session, {:read_only, enabled})
 
   @spec subscribe(session_ref()) :: :ok
   def subscribe(session) when is_pid(session) or is_binary(session) do

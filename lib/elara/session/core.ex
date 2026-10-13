@@ -76,6 +76,7 @@ defmodule Elara.Session.Core do
             runtime_limit_sources: %{optional(Elara.Session.Core.runtime_limit_key()) => :session},
             cleared_tools: %{optional(non_neg_integer()) => map()},
             context_usage_after: non_neg_integer(),
+            read_only: boolean(),
             next_ref: pos_integer()
           }
     defstruct [
@@ -89,6 +90,7 @@ defmodule Elara.Session.Core do
       runtime_limit_sources: %{},
       cleared_tools: %{},
       context_usage_after: 0,
+      read_only: false,
       next_ref: 1,
       deferred_calls: [],
       steering?: false
@@ -101,6 +103,7 @@ defmodule Elara.Session.Core do
           | {:provider_delta, ref(), Provider.delta()}
           | {:provider_settings, Elara.Provider.Visibility.settings()}
           | {:runtime_limits, runtime_limits(), [runtime_limit_key()]}
+          | {:read_only, boolean()}
           | {:clear_tool_results, ref(), [map()], bytes_freed :: pos_integer()}
           | :runtime_limits_changed
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
@@ -116,6 +119,7 @@ defmodule Elara.Session.Core do
 
   @type effect ::
           {:call_provider, ref(), Provider.Request.t()}
+          | :persist_read_only
           | :persist_context_clearing
           | {:await_retry, ref(), min_ms :: non_neg_integer(), max_ms :: non_neg_integer()}
           | {:run_tool, ref(), ToolCall.t(), Tool.t()}
@@ -256,6 +260,10 @@ defmodule Elara.Session.Core do
 
   def step(state, :inbox_changed), do: {state, [{:emit, :inbox_changed}]}
   def step(state, :runtime_limits_changed), do: {state, [{:emit, :runtime_limits_changed}]}
+
+  def step(state, {:read_only, enabled}) when is_boolean(enabled) do
+    {%{state | read_only: enabled}, [:persist_read_only, {:emit, :inbox_changed}]}
+  end
 
   def step(
         %State{phase: {:calling_provider, ref, _}} = state,

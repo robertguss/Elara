@@ -153,6 +153,21 @@ defmodule Elara.Session do
           incarnation = new_incarnation()
           core = Context.restore(core, store)
 
+          core = %{
+            core
+            | read_only: Map.get(store.context, "read_only", Keyword.get(opts, :read_only, false))
+          }
+
+          store =
+            if core.read_only and store.context["read_only"] != true do
+              {:ok, store} =
+                Store.save(%{store | context: Map.put(store.context, "read_only", true)})
+
+              store
+            else
+              store
+            end
+
           shell = %Shell{
             core: Core.replace_tools(core, tools),
             store: store,
@@ -331,6 +346,12 @@ defmodule Elara.Session do
 
   def handle_call({:runtime_limits, changes}, _from, shell),
     do: change_runtime_limits(shell, changes)
+
+  def handle_call({:read_only, enabled}, _from, shell),
+    do: change_read_only(shell, enabled)
+
+  def handle_call(:read_only_view, _from, shell),
+    do: {:reply, Handoff.read_only_status(shell), shell}
 
   def handle_call(:runtime_limits_view, _from, shell),
     do: {:reply, runtime_limits_view(shell), shell}
@@ -541,6 +562,7 @@ defmodule Elara.Session do
       router: shell.router,
       workspace_id: shell.workspace_id,
       allowed_capabilities: shell.allowed_capabilities,
+      read_only: Handoff.read_only(shell),
       context_limit: shell.context_limit
     }
 
@@ -1460,9 +1482,29 @@ defmodule Elara.Session do
     end
   end
 
+  defp copy_store(shell) do
+    context =
+      case Handoff.read_only_status(shell) do
+        {:known, enabled} ->
+          if enabled or shell.store.context != %{},
+            do: Map.put(shell.store.context, "read_only", enabled),
+            else: shell.store.context
+
+        :owner_unavailable ->
+          shell.store.context
+          |> Map.put("read_only", true)
+          |> Map.put(
+            "read_only_notice",
+            "Delivery owner unavailable; this copy is read-only. /read-only off lifts it."
+          )
+      end
+
+    %{shell.store | context: context}
+  end
+
   defp idle_store_change(shell, change) do
     if Core.idle?(shell.core) do
-      case change.(shell.store) do
+      case change.(copy_store(shell)) do
         {:ok, store, prompt} when shell.store.context != %{} and store.path != shell.store.path ->
           case Elara.start_session(
                  Handoff.options(shell) ++ [provider: shell.provider, resume: store.path]
@@ -1667,6 +1709,25 @@ defmodule Elara.Session do
     end
   end
 
+  defp run_effect(:persist_read_only, _effect_id, shell, _patch_context) do
+    transition = %{
+      "read_only" => shell.core.read_only,
+      "after_entry" => shell.store.leaf,
+      "turn" => Protocol.snapshot(shell.id, shell.incarnation, shell.core)["turn"]
+    }
+
+    context =
+      shell.store.context
+      |> Map.put("read_only", shell.core.read_only)
+      |> Map.delete("read_only_notice")
+      |> Map.update("read_only_changes", [transition], &(&1 ++ [transition]))
+
+    case Store.save(%{shell.store | context: context}) do
+      {:ok, store} -> %{shell | store: store}
+      {:error, reason} -> raise "read-only persistence failed: #{inspect(reason)}"
+    end
+  end
+
   defp run_effect({:call_provider, core_ref, request}, effect_id, shell, _patch_context) do
     budget = Context.budget(shell.core, shell.context_limit, shell.provider)
     frozen = Handoff.frozen?(shell.store)
@@ -1734,7 +1795,29 @@ defmodule Elara.Session do
     end
   end
 
-  defp run_effect(
+  defp run_effect({:run_tool, core_ref, call, tool}, effect_id, shell, patch_context) do
+    cond do
+      shell.core.read_only and tool.mutating ->
+        feed(
+          {:tool_result, core_ref,
+           {:error,
+            "permission denied: session is read-only; /read-only off restores mutating tools"}},
+          shell
+        )
+
+      not capabilities_allowed?(tool.capabilities, shell.allowed_capabilities) ->
+        feed(
+          {:tool_result, core_ref,
+           {:error, "permission denied: required capability not granted"}},
+          shell
+        )
+
+      true ->
+        run_authorized_tool({:run_tool, core_ref, call, tool}, effect_id, shell, patch_context)
+    end
+  end
+
+  defp run_authorized_tool(
          {:run_tool, core_ref, call, %Tool{plugin: %PluginRef{} = plugin} = tool},
          effect_id,
          shell,
@@ -1777,51 +1860,44 @@ defmodule Elara.Session do
     end
   end
 
-  defp run_effect({:run_tool, core_ref, call, tool}, effect_id, shell, _patch_context) do
+  defp run_authorized_tool({:run_tool, core_ref, call, tool}, effect_id, shell, _patch_context) do
     {:ok, args} = call.args
 
-    if capabilities_allowed?(tool.capabilities, shell.allowed_capabilities) do
-      case instruction_preflight(shell, tool, args) do
-        {:defer, shell} ->
-          feed({:tool_deferred, core_ref, instruction_system(shell)}, shell)
+    case instruction_preflight(shell, tool, args) do
+      {:defer, shell} ->
+        feed({:tool_deferred, core_ref, instruction_system(shell)}, shell)
 
-        {:error, reason, shell} ->
-          feed({:tool_result, core_ref, {:error, reason}}, sync_instruction_context(shell))
+      {:error, reason, shell} ->
+        feed({:tool_result, core_ref, {:error, reason}}, sync_instruction_context(shell))
 
-        {:ok, shell} ->
-          shell = sync_instruction_context(shell)
+      {:ok, shell} ->
+        shell = sync_instruction_context(shell)
 
-          cond do
-            tool.run == {Elara.Completion, :run} ->
-              ctx = %Tool.Ctx{
-                session_id: shell.id,
-                tool_name: tool.name,
-                cwd: shell.cwd,
-                max_output_bytes: shell.core.config.max_tool_output_bytes
-              }
+        cond do
+          tool.run == {Elara.Completion, :run} ->
+            ctx = %Tool.Ctx{
+              session_id: shell.id,
+              tool_name: tool.name,
+              cwd: shell.cwd,
+              max_output_bytes: shell.core.config.max_tool_output_bytes
+            }
 
-              task =
-                Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
-                  Elara.Completion.run(args, ctx)
-                end)
+            task =
+              Task.Supervisor.async_nolink(Elara.TaskSup, fn ->
+                Elara.Completion.run(args, ctx)
+              end)
 
-              track_task(shell, task, :tool, core_ref)
+            track_task(shell, task, :tool, core_ref)
 
-            tool.run == {Elara.Skills, :load} ->
-              feed({:tool_result, core_ref, Elara.Skills.load(shell.skills, args["name"])}, shell)
+          tool.run == {Elara.Skills, :load} ->
+            feed({:tool_result, core_ref, Elara.Skills.load(shell.skills, args["name"])}, shell)
 
-            Tool.builtin_write?(tool) ->
-              run_declarative_write(shell, effect_id, core_ref, call, args)
+          Tool.builtin_write?(tool) ->
+            run_declarative_write(shell, effect_id, core_ref, call, args)
 
-            true ->
-              run_routed_tool(shell, effect_id, core_ref, call, tool, args)
-          end
-      end
-    else
-      feed(
-        {:tool_result, core_ref, {:error, "permission denied: required capability not granted"}},
-        shell
-      )
+          true ->
+            run_routed_tool(shell, effect_id, core_ref, call, tool, args)
+        end
     end
   end
 
@@ -2371,6 +2447,9 @@ defmodule Elara.Session do
   defp handle_attached_command({:runtime_limits, changes}, shell),
     do: change_runtime_limits(shell, changes)
 
+  defp handle_attached_command({:read_only, enabled}, shell),
+    do: change_read_only(shell, enabled)
+
   defp handle_attached_command(_command, shell), do: {:reply, {:error, :invalid_command}, shell}
 
   defp input_ready(shell, images, queue? \\ false) do
@@ -2432,6 +2511,19 @@ defmodule Elara.Session do
         :ok
     end
   end
+
+  defp change_read_only(%{store: %{context: %{"handoff" => _}}} = shell, enabled) do
+    result = forward_handoff(shell, {:read_only, enabled})
+    shell = if match?({:ok, _}, result), do: feed(:inbox_changed, shell), else: shell
+    {:reply, result, shell}
+  end
+
+  defp change_read_only(shell, enabled) when is_boolean(enabled) or enabled == :toggle do
+    enabled = if enabled == :toggle, do: not shell.core.read_only, else: enabled
+    {:reply, {:ok, enabled}, feed({:read_only, enabled}, shell)}
+  end
+
+  defp change_read_only(shell, _enabled), do: {:reply, {:error, :invalid_read_only}, shell}
 
   defp change_runtime_limits(%{store: %{context: %{"handoff" => _}}} = shell, changes) do
     result = forward_handoff(shell, {:runtime_limits, changes})
@@ -2504,7 +2596,7 @@ defmodule Elara.Session do
         {:reply, {:error, :busy}, shell}
 
       true ->
-        case copy.(shell.store) do
+        case copy.(copy_store(shell)) do
           {:ok, store} ->
             Store.release(store)
             {:reply, {:ok, store.id, nil}, shell}
@@ -2964,6 +3056,8 @@ defmodule Elara.Session do
       "wake_budget_exhausted" => shell.store.agent_wake_count >= 8,
       "execution" => %{
         "mode" => "trusted_local",
+        "read_only" => Handoff.read_only(shell),
+        "read_only_notice" => shell.store.context["read_only_notice"],
         "allowed_capabilities" => shell.allowed_capabilities
       }
     }

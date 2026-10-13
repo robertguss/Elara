@@ -269,6 +269,8 @@ defmodule Elara.Plugin.Server do
         run: {Elara.Plugin, :run},
         plugin: plugin,
         placement: :local,
+        capabilities: spec.capabilities || [],
+        mutating: spec.mutating,
         cancel_on_interrupt: spec.cancel_on_interrupt
       }
     end)

@@ -162,15 +162,27 @@ defmodule Elara.Plugin.Loader do
         name: name,
         description: description,
         parameters: parameters,
+        capabilities: capabilities,
+        mutating: mutating,
         cancel_on_interrupt: cancel
       } = tool,
       {:ok, names, acc}
       when is_binary(name) and name != "" and is_binary(description) and is_map(parameters) and
-             is_boolean(cancel) ->
-        if MapSet.member?(names, name) do
-          {:halt, {:error, {:duplicate_plugin_tool, name}}}
-        else
-          {:cont, {:ok, MapSet.put(names, name), [tool | acc]}}
+             is_boolean(cancel) and is_boolean(mutating) ->
+        cond do
+          capabilities != nil and
+              (not is_list(capabilities) or
+                 not Enum.all?(capabilities, &(is_binary(&1) and &1 != ""))) ->
+            {:halt, {:error, :invalid_plugin_tool}}
+
+          not mutating and capabilities == nil ->
+            {:halt, {:error, :invalid_plugin_tool}}
+
+          MapSet.member?(names, name) ->
+            {:halt, {:error, {:duplicate_plugin_tool, name}}}
+
+          true ->
+            {:cont, {:ok, MapSet.put(names, name), [tool | acc]}}
         end
 
       _tool, _acc ->

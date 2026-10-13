@@ -37,8 +37,14 @@ pub(crate) enum Action {
     Sessions,
     Queue,
     Steer,
+    ReadOnly,
 }
 pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
+    (
+        "read-only",
+        "on|off: deny mutations from the next tool call",
+        true,
+    ),
     ("delegate", "coding|research TASK: persistent child", true),
     (
         "delegate-fork",
@@ -331,6 +337,7 @@ static BINDINGS: &[Binding] = &[
     ),
 ];
 pub(crate) const SLASH_ONLY: &[(Action, &str)] = &[
+    (Action::ReadOnly, "read-only"),
     (Action::Appearance, "appearance"),
     (Action::Attachments, "attachments"),
     (Action::ThinkingView, "thinking-view"),

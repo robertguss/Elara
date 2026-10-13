@@ -149,6 +149,71 @@ defmodule Elara.PluginTest do
     end
   end
 
+  test "undeclared plugins are mutating and read-only declarations require capabilities", %{
+    path: path,
+    dir: dir
+  } do
+    write_counter(path, module_name(), "1")
+    source = File.read!(path)
+
+    provider =
+      script([
+        {:ok, asst(nil, [call("denied")])},
+        {:ok, asst("done")},
+        {:ok, asst(nil, [call("restored")])},
+        {:ok, asst("done")}
+      ])
+
+    session = start_session(cwd: dir, plugins: [path], provider: provider)
+    assert {:ok, true} = Elara.set_read_only(session, true)
+    assert {:ok, "done"} = Elara.ask(session, "increment")
+    assert [{:error, "permission denied: session is read-only" <> _}] = tool_outcomes(session)
+    assert {:ok, false} = Elara.set_read_only(session, false)
+    assert {:ok, "done"} = Elara.ask(session, "increment")
+    assert List.last(tool_outcomes(session)) == {:ok, "1 count=1"}
+
+    declaration = "description: \"Increment a counter.\","
+    write_plugin(path, String.replace(source, declaration, declaration <> " mutating: false,"))
+    assert {:error, :invalid_plugin_tool} = Loader.load(path)
+
+    write_plugin(
+      path,
+      String.replace(
+        source,
+        declaration,
+        declaration <> " mutating: false, capabilities: [\"filesystem:read\"],"
+      )
+    )
+
+    {:ok, candidate} = Loader.load(path)
+    assert hd(candidate.tools).mutating == false
+
+    allowed =
+      start_session(
+        cwd: dir,
+        plugins: [path],
+        provider: script([{:ok, asst(nil, [call("read-only")])}, {:ok, asst("done")}]),
+        allowed_capabilities: ["filesystem:read"]
+      )
+
+    assert {:ok, true} = Elara.set_read_only(allowed, true)
+    assert {:ok, "done"} = Elara.ask(allowed, "inspect")
+    assert tool_outcomes(allowed) == [{:ok, "1 count=1"}]
+
+    restricted =
+      start_session(
+        cwd: dir,
+        plugins: [path],
+        provider: script([{:ok, asst(nil, [call("restricted")])}, {:ok, asst("done")}]),
+        allowed_capabilities: []
+      )
+
+    assert {:ok, "done"} = Elara.ask(restricted, "inspect")
+
+    assert [{:error, "permission denied: required capability not granted"}] =
+             tool_outcomes(restricted)
+  end
+
   test "plugin cancellation declarations must be boolean", %{path: path} do
     write_counter(path, module_name(), "1")
 
@@ -474,7 +539,11 @@ defmodule Elara.PluginTest do
       )
 
     assert {:ok, "timed out"} = Elara.ask(session, "first")
-    assert tool_outcomes(session) == [{:error, "timed out"}]
+
+    assert tool_outcomes(session) == [
+             {:indeterminate,
+              "timed out while running; it may have partially changed the workspace"}
+           ]
 
     write_counter(path, module, "2")
     assert {:ok, [%{version: "2", generation: 2}]} = Elara.reload_plugins(session)
@@ -588,12 +657,22 @@ defmodule Elara.PluginTest do
     end
 
     assert_receive {:elara, ^session,
-                    {:message_appended, %ToolResult{outcome: {:error, "timed out"}}}}
+                    {:message_appended,
+                     %ToolResult{
+                       outcome:
+                         {:indeterminate,
+                          "timed out while running; it may have partially changed the workspace"}
+                     }}}
 
     assert_receive {:elara, ^session, {:turn_ended, {:completed, "timed out"}}}
 
     assert {:ok, "after timeout"} = Elara.ask(session, "second")
-    assert tool_outcomes(session) == [{:error, "timed out"}, {:ok, "1 count=1"}]
+
+    assert tool_outcomes(session) == [
+             {:indeterminate,
+              "timed out while running; it may have partially changed the workspace"},
+             {:ok, "1 count=1"}
+           ]
   end
 
   test "two sessions keep independent code revisions and state", %{path: path, dir: dir} do

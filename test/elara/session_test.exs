@@ -19,6 +19,16 @@ defmodule Elara.SessionTest do
     end
   end
 
+  defmodule GatedMutation do
+    def run(_args, _ctx) do
+      send(Process.whereis(Elara.SessionTest), {:mutation_running, self()})
+
+      receive do
+        :finish -> {:ok, "running mutation finished"}
+      end
+    end
+  end
+
   defmodule RecordingProvider do
     alias Elara.Provider
     alias Elara.Session.Store
@@ -103,6 +113,134 @@ defmodule Elara.SessionTest do
       env: [{"MIX_ENV", "test"}],
       stderr_to_stdout: true
     )
+  end
+
+  test "read-only toggles mid-turn, preserves running calls, fences later calls and persists" do
+    Process.register(self(), __MODULE__)
+    cwd = Path.join(System.tmp_dir!(), "read-only-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(cwd)
+    File.write!(Path.join(cwd, "note"), "original")
+    on_exit(fn -> File.rm_rf!(cwd) end)
+
+    call = fn id, name, args -> %ToolCall{id: id, name: name, args: {:ok, args}} end
+
+    attempts = [
+      call.("write", "write", %{"path" => "new", "content" => "bad"}),
+      call.("edit", "edit", %{"path" => "note", "old_text" => "original", "new_text" => "bad"}),
+      call.("bash", "bash", %{"command" => "printf bad > shell-output"}),
+      call.("read", "read", %{"path" => "note"})
+    ]
+
+    gate = %Tool{
+      name: "gate",
+      parameters: %{},
+      description: "test mutation",
+      run: {GatedMutation, :run},
+      mutating: true
+    }
+
+    provider =
+      script([
+        {:ok, asst(nil, [call.("gate", "gate", %{}) | attempts])},
+        {:ok, asst("protected")},
+        {:ok, asst(nil, [call.("restored", "write", %{"path" => "new", "content" => "good"})])},
+        {:ok, asst("restored")}
+      ])
+
+    {:ok, session} =
+      Elara.start_session(
+        cwd: cwd,
+        provider: provider,
+        tools: [gate | Tool.builtins()],
+        plugins: []
+      )
+
+    :ok = Elara.subscribe(session)
+    :ok = Elara.ask_async(session, "inspect")
+    assert_receive {:mutation_running, running}, 1_000
+    assert {:ok, true} = Elara.set_read_only(session, true)
+    assert Elara.snapshot(session).snapshot["inbox"]["execution"]["read_only"]
+    send(running, :finish)
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, "protected"}}}, 2_000
+    outcomes = for %Message.ToolResult{outcome: result} <- Elara.transcript(session), do: result
+
+    assert [
+             {:ok, "running mutation finished"},
+             {:error, w},
+             {:error, e},
+             {:error, b},
+             {:ok, "original"}
+           ] = outcomes
+
+    assert Enum.all?([w, e, b], &String.contains?(&1, "session is read-only"))
+    assert File.read!(Path.join(cwd, "note")) == "original"
+    refute File.exists?(Path.join(cwd, "new"))
+    refute File.exists?(Path.join(cwd, "shell-output"))
+    assert {:ok, %{status: :match}} = Elara.replay(Elara.recording(session))
+
+    {:ok, info} = Store.newest(cwd)
+    {:ok, stored} = Store.open(info.path)
+
+    assert [
+             %{
+               "read_only" => true,
+               "turn" => %{"state" => "running_tool", "tool_call_id" => "gate"}
+             }
+           ] = stored.context["read_only_changes"]
+
+    assert Elara.child_config(session).read_only
+    assert {:ok, copy, _, _} = Elara.clone_session(session)
+    assert copy != session
+    assert Elara.snapshot(copy).snapshot["inbox"]["execution"]["read_only"]
+    GenServer.stop(session_pid(copy))
+    GenServer.stop(session_pid(session))
+
+    {:ok, reopened} =
+      Elara.start_session(cwd: cwd, resume: info.path, provider: provider, plugins: [])
+
+    assert Elara.snapshot(reopened).snapshot["inbox"]["execution"]["read_only"]
+    assert {:ok, false} = Elara.set_read_only(reopened, false)
+    assert {:ok, "restored"} = Elara.ask(reopened, "write now")
+    assert File.read!(Path.join(cwd, "new")) == "good"
+    GenServer.stop(session_pid(reopened))
+  end
+
+  test "turning read-only off during a provider call restores its next mutation" do
+    cwd = Path.join(System.tmp_dir!(), "read-only-off-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(cwd)
+    on_exit(fn -> File.rm_rf!(cwd) end)
+
+    {:ok, session} =
+      Elara.start_session(
+        cwd: cwd,
+        read_only: true,
+        provider: {BlockingProvider, self()},
+        plugins: []
+      )
+
+    :ok = Elara.subscribe(session)
+    assert :ok = Elara.ask_async(session, "write")
+    assert_receive {:provider_blocked, provider, _}, 1_000
+    assert {:ok, false} = Elara.set_read_only(session, false)
+
+    send(
+      provider,
+      {:reply,
+       asst(nil, [
+         %ToolCall{
+           id: "write",
+           name: "write",
+           args: {:ok, %{"path" => "note", "content" => "restored mid-turn"}}
+         }
+       ])}
+    )
+
+    assert_receive {:provider_blocked, provider, _}, 1_000
+    assert File.read!(Path.join(cwd, "note")) == "restored mid-turn"
+    send(provider, {:reply, asst("done")})
+    assert_receive {:elara, ^session, {:turn_ended, {:completed, "done"}}}, 1_000
+    assert {:ok, %{status: :match}} = Elara.replay(Elara.recording(session))
+    GenServer.stop(session_pid(session))
   end
 
   test "sync ask returns final text and fans events" do

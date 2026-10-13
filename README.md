@@ -423,6 +423,15 @@ A successful save replaces the draft, never sends it; a failed editor, invalid
 UTF-8, or text above the 64 KiB limit leaves the original draft intact. Temporary
 draft files are removed when the editor returns.
 
+When a turn completes or ends with a provider error or turn limit, the TUI sends
+a terminal bell and an OSC 777 desktop notification (supported by WezTerm).
+Notifications are suppressed while the terminal reports focus; terminals that
+do not report focus notify by default. Notification text is fixed and contains
+no prompts, answers, or error details. `/notifications off` disables both bell
+and desktop notifications; `/notifications on` enables them. These commands
+save the local preference. The appearance picker also has an `n` toggle; use
+`s` there to save it as the default. Reattaching does not notify for old turns.
+
 Bracketed clipboard paste preserves newlines without sending. If paste framing
 is unavailable, press **F2 before pasting**: safe paste mode inserts Enter as a
 newline and disables application commands; F2 exits that mode without sending.

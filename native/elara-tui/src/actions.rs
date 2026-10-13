@@ -100,6 +100,11 @@ pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
     ("help", "show all controls", false),
     ("editor", "edit the prompt in $VISUAL or $EDITOR", false),
     ("appearance", "choose layout/theme", false),
+    (
+        "notifications",
+        "on|off: save terminal notification preference",
+        false,
+    ),
     ("diagnostics", "toggle the diagnostic status row", false),
     ("model", "choose model/effort", true),
     ("effort", "choose model/effort", true),

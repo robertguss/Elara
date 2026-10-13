@@ -57,6 +57,7 @@ pub(super) fn input(model: &mut Model, event: &Event) -> bool {
             KeyCode::Up => choice.theme = choice.theme.previous(),
             KeyCode::Down | KeyCode::Char('t') => choice.theme = choice.theme.next(),
             KeyCode::Char('d') => choice.diagnostics = !choice.diagnostics,
+            KeyCode::Char('n') => choice.notifications = !choice.notifications,
             KeyCode::Esc | KeyCode::F(3) => {
                 model.appearance_picker = None;
                 return true;
@@ -1337,6 +1338,7 @@ pub(crate) mod tests {
                     layout: *layout,
                     theme: *theme,
                     diagnostics: false,
+                    ..Appearance::default()
                 });
                 for (w, h) in [(80, 24), (120, 40), (180, 45), (80, 24)] {
                     render_frame(&model, w, h).unwrap();
@@ -1418,6 +1420,7 @@ pub(crate) mod tests {
                 layout: ViewLayout::Workbench,
                 theme: Theme::Forest,
                 diagnostics: false,
+                ..Appearance::default()
             }
         );
         key(&mut model, KeyCode::F(5));
@@ -1454,6 +1457,7 @@ pub(crate) mod tests {
                 layout: *layout,
                 theme: Theme::Forest,
                 diagnostics: false,
+                ..Appearance::default()
             });
             for visible in [false, true] {
                 model.thinking_visible = visible;
@@ -1526,6 +1530,7 @@ pub(crate) mod tests {
                         layout: *layout,
                         theme: *theme,
                         diagnostics: false,
+                        ..Appearance::default()
                     });
                     model.preview_reasoning = scenario.starts_with("reasoning");
                     model.thinking_visible = scenario != "reasoning-hidden";

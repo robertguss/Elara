@@ -102,6 +102,10 @@ Retained local command output and `output_read` are documented in that section.
 `Elara.Output.capture/2` also accepts content chunks for fetch and MCP tools.
 Transcript-owned vaults copy only referenced handles; source history authorizes
 handoff inheritance. Remote retained-output transport remains Phase 5 work.
+README.md's "Fetch public pages" section documents vetted public GETs, bounded
+HTML-to-Markdown conversion, and labeled pages behind retained-output handles.
+`inbox.web_content_entered` drives the informational TUI footer marker. Core
+records trusted entry, and copies, history children, and handoff preserve it.
 Personal and project MCP configs, exact-config and catalog approval, explicit
 read-only marks, and the supervised client API are documented in README.md's
 "Approve an MCP server" section. Model-facing tools are a separate integration.

@@ -83,6 +83,7 @@ defmodule Elara.Session.Core do
             cleared_tools: %{optional(non_neg_integer()) => map()},
             context_usage_after: non_neg_integer(),
             read_only: boolean(),
+            web_content_entered: boolean(),
             next_ref: pos_integer()
           }
     defstruct [
@@ -97,6 +98,7 @@ defmodule Elara.Session.Core do
       cleared_tools: %{},
       context_usage_after: 0,
       read_only: false,
+      web_content_entered: false,
       next_ref: 1,
       deferred_calls: [],
       steering?: false
@@ -111,6 +113,7 @@ defmodule Elara.Session.Core do
           | {:provider_catalog, Elara.Provider.Catalog.t()}
           | {:runtime_limits, runtime_limits(), [runtime_limit_key()]}
           | {:read_only, boolean()}
+          | {:web_content_entered, ref()}
           | {:system_notice, Message.System.t()}
           | {:clear_tool_results, ref(), [map()], bytes_freed :: pos_integer()}
           | :runtime_limits_changed
@@ -130,6 +133,7 @@ defmodule Elara.Session.Core do
   @type effect ::
           {:call_provider, ref(), Provider.Request.t()}
           | :persist_read_only
+          | :persist_web_content
           | :persist_context_clearing
           | {:await_retry, ref(), min_ms :: non_neg_integer(), max_ms :: non_neg_integer()}
           | {:check_tool, ref(), ToolCall.t()}
@@ -286,6 +290,13 @@ defmodule Elara.Session.Core do
 
   def step(state, {:read_only, enabled}) when is_boolean(enabled) do
     {%{state | read_only: enabled}, [:persist_read_only, {:emit, :inbox_changed}]}
+  end
+
+  def step(
+        %State{phase: {:running_tool, ref, _, _, _}, web_content_entered: false} = state,
+        {:web_content_entered, ref}
+      ) do
+    {%{state | web_content_entered: true}, [:persist_web_content, {:emit, :inbox_changed}]}
   end
 
   def step(

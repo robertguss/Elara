@@ -246,6 +246,7 @@ defmodule Elara.Session.Store do
             "read_only",
             "read_only_changes",
             "read_only_notice",
+            "web_content_entered",
             "command_rules"
           ])
     }

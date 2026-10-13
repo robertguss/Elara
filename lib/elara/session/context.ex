@@ -38,7 +38,9 @@ defmodule Elara.Session.Context do
     %{
       core
       | cleared_tools: cleared,
-        context_usage_after: if(map_size(cleared) > 0, do: after_index, else: 0)
+        context_usage_after: if(map_size(cleared) > 0, do: after_index, else: 0),
+        web_content_entered:
+          core.web_content_entered or store.context["web_content_entered"] == true
     }
   end
 

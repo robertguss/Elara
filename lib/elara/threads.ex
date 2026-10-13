@@ -613,6 +613,8 @@ defmodule Elara.Threads do
             system: config.system,
             allowed_capabilities: caps,
             read_only: config.read_only,
+            web_content_entered:
+              Keyword.get(opts, :history, false) and config.web_content_entered,
             approval_wait: config.approval_wait,
             max_iterations: config.max_iterations,
             max_tool_output_bytes: config.max_tool_output_bytes,

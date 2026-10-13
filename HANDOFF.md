@@ -34,6 +34,10 @@ Colored Elixir and edit frames for all four themes live in
 The confirmed TUI controls and clipboard fallback are documented in README.md's
 TUI section. `native/elara-tui/src/actions.rs` owns action bindings and help;
 Esc closes panels or interrupts, and consecutive Ctrl-C requests a safe quit.
+Turn and session workspace diffs are documented in that section. The shell's
+private checkpoints live in `Elara.WorkspaceDiff`; the Rust diff panel lives in
+`native/elara-tui/src/workspace_diff.rs`. Snapshots include bash changes but
+never alter the workspace index or HEAD. Missing baselines report unavailable.
 New coding worktrees are kept outside protected Elara state; the location and
 operator override are documented under "Persistent delegated children".
 Existing children keep their recorded paths, without relocation or deletion.

@@ -102,6 +102,11 @@ pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
         true,
     ),
     ("why", "inspect latest event", false),
+    (
+        "diff",
+        "latest turn; /diff session: session net changes",
+        false,
+    ),
     ("interrupt", "stop current turn", true),
     ("detach", "leave the session", false),
     ("quit", "quit; confirm if live sessions will end", false),

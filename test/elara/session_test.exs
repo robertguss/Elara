@@ -263,7 +263,10 @@ defmodule Elara.SessionTest do
 
   test "scripted streaming emits ordered deltas before one durable final assistant" do
     provider = script([{:stream, ["hel", "lo"], {:ok, asst("hello")}}])
-    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
+
+    {:ok, session} =
+      Elara.start_session(provider: provider, cwd: System.tmp_dir!(), tools: [], persist: false)
+
     :ok = Elara.subscribe(session)
 
     assert :ok = Elara.ask_async(session, "hi")

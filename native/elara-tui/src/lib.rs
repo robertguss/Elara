@@ -13,6 +13,7 @@ mod editor;
 mod syntax;
 mod tools;
 mod transcript;
+mod workspace_diff;
 pub use editor::{Editor, MAX_INPUT_BYTES};
 use std::cell::RefCell;
 use std::fs;
@@ -180,6 +181,7 @@ pub struct Model {
     seen_thread_reports: HashSet<String>,
     session_detail: Option<String>,
     session_detail_scroll: u16,
+    workspace_diff: Option<workspace_diff::Panel>,
     pub metrics: Metrics,
     ask_sent_at: Option<Instant>,
 }
@@ -228,6 +230,7 @@ impl Model {
             seen_thread_reports: HashSet::new(),
             session_detail: None,
             session_detail_scroll: 0,
+            workspace_diff: None,
             metrics: Metrics::default(),
             ask_sent_at: None,
         }
@@ -268,6 +271,7 @@ impl Model {
         self.provider_picker = None;
         self.session_picker = None;
         self.viewer = None;
+        self.workspace_diff = None;
         self.transcript.borrow_mut().source_key = None;
         self.notice = Some("Reattached; local draft and view restored.".into());
     }
@@ -440,6 +444,10 @@ impl Model {
 
     pub fn next_attachment_request(&mut self) -> Option<Value> {
         self.attachments.outbox.pop_front()
+    }
+
+    pub fn next_workspace_diff_request(&mut self) -> Option<Value> {
+        workspace_diff::poll(self)
     }
 
     pub fn attachment_reply(&mut self, frame: &Value) -> bool {
@@ -782,9 +790,13 @@ pub fn handle_input(
         model.provider_picker = None;
         model.session_picker = None;
         model.session_detail = None;
+        model.workspace_diff = None;
         model.inbox.selected = None;
         model.attachments.close_picker();
         return InputAction::Paste;
+    }
+    if let Some(action) = workspace_diff::input(model, &event) {
+        return action;
     }
     if !model.safe_paste
         && let Some(action) = inbox::input(model, &event)
@@ -1431,6 +1443,7 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
     sessions::draw(frame, model);
     inbox::draw(frame, model);
     draw_session_detail(frame, model);
+    workspace_diff::draw(frame, model);
     if model.quit_confirmation {
         let area = frame.area();
         let rect = Rect::new(area.x + 1, area.y + 1, area.width.saturating_sub(2), 5);

@@ -5,8 +5,8 @@
 > architecture, and reversal signals. Do not track status here.
 > The dated addenda and implementation sequence below are historical evidence;
 > their references to `ROADMAP.md` describe the former tracking location, now
-> a pointer to Notion. Linear, which tracked Elara in between, is archived in
-> `docs/archive/linear/`. They do not authorize queued or canceled work.
+> a pointer to Notion, and they do not authorize queued or canceled work.
+> Linear, which tracked Elara in between, is archived in `docs/archive/linear/`.
 
 ## 2026-09-26 lab-pivot addendum
 

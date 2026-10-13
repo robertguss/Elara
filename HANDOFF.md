@@ -12,14 +12,14 @@ decisions D1 to D14 in the Notion Decision Log:
 
 - Elara is Robert's own daily-driver coding agent, and nothing else is
   promised (D2). It is a coding agent, not a language (D1).
-- Two bets: **uniforms**, a harness fitted to the language, framework and
-  project (D4), and **surgical context**, results kept in BEAM processes the
-  model queries instead of compacting a full window (D13). The first uniform
-  is Elixir (D5).
+- Two bets, both still to build: **uniforms**, a harness fitted to the
+  language, framework and project (D4, Phase 2), and **surgical context**,
+  results kept in BEAM processes the model queries instead of compacting a full
+  window (D13, Phase 3). The first uniform is Elixir (D5).
 - Three ways of working: one session, a lead with helpers, and many sessions
   (D6). Pace is all-in (D9).
-- Today's code is simplified toward the daily driver: the lab moves into its
-  own project, honest "unknown" results stay, recording gets cheap (D7).
+- Today's code is to be simplified toward the daily driver: the lab moves into
+  its own project, honest "unknown" results stay, recording gets cheap (D7).
 - Robert decides direction and anything he would notice as a user; agents
   decide the rest, including merges (D8). Paid model APIs are capped at
   US$100 a month (D14).

@@ -1,10 +1,11 @@
 # Lab notes
 
 One page per experiment. Planning and the experiment queue live in
-[Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1); a note records the versioned registration and what one
-experiment found. Notes 001 to 009 cite Linear issues (RQ-n, LAB-n, ROB-n):
-those are archived in [docs/archive/linear](../archive/linear/README.md). Experiments before the 2026-09-26 lab pivot are in
-[`harness-experiments.md`](../harness-experiments.md).
+[Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1); a note
+records the versioned registration and what one experiment found. Notes 001 to
+009 cite Linear issues (RQ-n, LAB-n, ROB-n): those are archived in
+[docs/archive/linear](../archive/linear/README.md). Experiments before the
+2026-09-26 lab pivot are in [`harness-experiments.md`](../harness-experiments.md).
 
 ## Conventions
 
@@ -24,9 +25,10 @@ those are archived in [docs/archive/linear](../archive/linear/README.md). Experi
 ```markdown
 # NNN — Title
 
-- **Question:** RQ-n. What this experiment asks, in one sentence.
+- **Question:** What this experiment asks, in one sentence.
 - **Hypothesis:** A claim the result could refute.
-- **Queue item:** LAB-n · **Date:** YYYY-MM-DD · **Commit:** `abc1234`
+- **Tier:** claim (registered before it runs) or probe (quick, labelled as an anecdote)
+- **Task:** the Notion Spike task · **Date:** YYYY-MM-DD · **Commit:** `abc1234`
 
 ## Method
 

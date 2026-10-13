@@ -17,6 +17,7 @@ defmodule Elara.RoadmapTest do
       contents = File.read!(Path.join(@root, path))
       assert contents =~ @hub, "#{path} must link the Elara Notion hub"
       refute contents =~ @retired, "#{path} must not send readers to the retired Linear project"
+      refute contents =~ "linear.app", "#{path} must not link Linear, which is retired"
       refute contents =~ "`ROADMAP.md` is the sole"
       refute contents =~ "`ROADMAP.md` is the **sole**"
     end

@@ -6,16 +6,18 @@ code in this repository.
 ## What this is
 
 Elara is a BEAM-native coding agent (Mix app `:elara`) that runs from source —
-there is no installed `elara` executable. User-facing surfaces are
+there is no installed `elara` executable; `bin/elara` is a source-backed
+launcher that starts the TUI in the caller's directory. User-facing surfaces are
 `mix elara.ask`, `mix elara.chat`, `mix elara.tui`, `mix elara.server`,
 `mix elara.worker`, `mix elara.login`, and the public `Elara` Elixir API. There
 is no web UI.
 
 Elara is **Robert's own daily-driver coding agent** (decision D2, 2026-10-13).
-It is built on two bets. **Uniforms:** the harness fits itself to the language,
-framework and project it works in, with tools that return structured results,
-a feedback loop, knowledge, guardrails and workflow, and the same model should
-do measurably better than in a generic harness (D4). **Surgical context:** tool
+It is being built around two bets, neither implemented yet. **Uniforms**
+(Roadmap Phase 2): the harness fits itself to the language, framework and
+project it works in, with tools that return structured results, a feedback
+loop, knowledge, guardrails and workflow, so the same model does measurably
+better than in a generic harness (D4). **Surgical context** (Phase 3): tool
 results stay in BEAM processes the model queries through handles, instead of
 filling the window and compacting it (D13). The first uniform is Elixir (D5).
 Research serves daily use; it is not a goal of its own.
@@ -43,7 +45,7 @@ this in cloud environments.
 ## Commands
 
 ```bash
-bin/check                       # every check below, in order; run before pushing
+bin/check                       # compile, format, both Rust crates, then mix test; run before pushing
 mix deps.get
 mix compile --warnings-as-errors
 mix format                      # mix format --check-formatted to lint only
@@ -129,8 +131,9 @@ deterministic recordings of the facts fed to Core and replays them offline to
 detect divergence.
 
 **Protocol and clients.** `Elara.Protocol` (v2, 16 MiB line limit) is the
-versioned JSON command/event protocol; `Elara.Protocol.Projector` materializes a
-snapshot so a fresh client gets state rather than only missed events.
+versioned JSON command/event protocol; the server sends a fresh client a
+snapshot (`Elara.Protocol`) rather than only missed events.
+`Elara.Protocol.Projector` is used only by tests.
 `Elara.Server` is the local TCP gateway for detachable sessions; the Rust TUI
 (`native/elara-tui`) is a pure projection over it. `mix elara.tui` starts an
 _embedded_ server (dies with the command) when the port is free;
@@ -140,8 +143,8 @@ _embedded_ server (dies with the command) when the port is free;
 (`native/exec-stub`) over an Erlang Port; each command runs in its own process
 group so cancel/timeout/byte-cap can SIGKILL the group. Stub loss reports
 `indeterminate`, never success. `Elara.Executor` is the serializable
-placement-independent request boundary; `Elara.Executor.Router` picks
-local/plugin/remote by capability, health, affinity, and load.
+placement-independent request boundary; `Elara.Executor.Router` picks a local
+or remote executor by capability, health, affinity, and load.
 
 **Durable effects (`lib/elara/effect/`).** Frozen at PROD-1 scope:
 receipt-backed local `write` only. A job is admitted once by
@@ -179,7 +182,7 @@ summarization.
 **Prompt surface.** `Elara.Prompt` composes the system prompt from `AGENTS.md`
 ancestry plus `Elara.Skills` metadata (Agent Skills format). Skills load
 _metadata_ into context; bodies load selectively through the `skill` tool.
-`Elara.Plugin` loads trusted local `.elara/plugins/*.exs` tools with
+`Elara.Plugin` loads trusted local `.elara/plugins/*.{ex,exs}` tools with
 generation/lease-based atomic reload. Project check evidence/diagnosis tools
 belong to the project plugin, not the built-in roster. Session binds evidence
 and provider updates to the current tool caller/incarnation; plugins may opt

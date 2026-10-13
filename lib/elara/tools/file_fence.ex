@@ -5,19 +5,37 @@ defmodule Elara.Tools.FileFence do
     .zshrc .zshenv .zprofile .zlogin .zlogout .cshrc .tcshrc .kshrc .login .logout)
 
   def resolve(path, cwd) when is_binary(path) and is_binary(cwd) do
+    case valid_path(path) do
+      :ok ->
+        with {:ok, fence} <- prepare(cwd), do: resolve(path, fence)
+
+      {:error, reason} ->
+        refusal(reason)
+    end
+  end
+
+  def resolve(path, %{cwd: cwd, roots: roots, protected: protected}) when is_binary(path) do
     with :ok <- valid_path(path),
-         {:ok, root} <- canonical(cwd),
-         {:ok, extras} <- extra_roots(),
          path =
            if(path == "~" or String.starts_with?(path, "~/"), do: Path.expand(path), else: path),
          full = if(Path.type(path) == :absolute, do: path, else: Path.join(cwd, path)),
-         :ok <- unprotected(Path.expand(full)),
+         :ok <- unprotected(Path.expand(full), protected),
          {:ok, resolved} <- canonical(full),
-         :ok <- unprotected(resolved),
-         allowed when is_binary(allowed) <- Enum.find([root | extras], &inside?(resolved, &1)) do
+         :ok <- unprotected(resolved, protected),
+         allowed when is_binary(allowed) <- Enum.find(roots, &inside?(resolved, &1)) do
       {:ok, {allowed, resolved}}
     else
       nil -> refusal(:path_outside_workspace)
+      {:error, reason} -> refusal(reason)
+    end
+  end
+
+  @doc "Reuse operator policy within a file-tool invocation; every target still resolves afresh."
+  def prepare(cwd) when is_binary(cwd) do
+    with {:ok, root} <- canonical(cwd),
+         {:ok, extras} <- extra_roots() do
+      {:ok, %{cwd: cwd, roots: [root | extras], protected: protected_roots()}}
+    else
       {:error, reason} -> refusal(reason)
     end
   end
@@ -42,18 +60,28 @@ defmodule Elara.Tools.FileFence do
     end)
   end
 
-  defp unprotected(path) do
-    parts = Path.split(path)
+  defp protected_roots do
     home = System.user_home!()
     {:ok, sessions} = Elara.Session.Store.root()
 
-    protected = [
+    [
       Path.join(home, ".elara"),
       Path.join(home, ".ssh"),
       Path.join(home, ".codex/auth.json"),
       sessions,
       Application.get_env(:elara, :plugin_trust_root, Path.join(home, ".elara/plugin-trust"))
     ]
+    |> Enum.flat_map(fn root ->
+      case canonical(root) do
+        {:ok, resolved} -> [resolved, Path.expand(root)]
+        {:error, _} -> [Path.expand(root)]
+      end
+    end)
+    |> Enum.uniq()
+  end
+
+  defp unprotected(path, protected) do
+    parts = Path.split(path)
 
     protected? =
       Enum.any?(parts, &(&1 in @protected_names)) or
@@ -62,12 +90,7 @@ defmodule Elara.Tools.FileFence do
           ["fish", "config.fish"] -> true
           _ -> false
         end) or
-        Enum.any?(protected, fn root ->
-          case canonical(root) do
-            {:ok, resolved} -> inside?(path, resolved) or inside?(path, Path.expand(root))
-            {:error, _} -> inside?(path, Path.expand(root))
-          end
-        end)
+        Enum.any?(protected, &inside?(path, &1))
 
     if protected?, do: {:error, :protected_path}, else: :ok
   end

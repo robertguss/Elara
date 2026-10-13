@@ -61,6 +61,77 @@ defmodule Elara.WorkspaceSearchProductTest do
     assert "glob" in names
   end
 
+  test "recursive search skips protected files and aliases before reading contents", %{
+    target: target
+  } do
+    private = Path.join(target, "private[state]")
+    Application.put_env(:elara, :sessions_root, private)
+
+    for path <- [".envrc", ".profile", "fish/config.fish", "private[state]/auth.json"] do
+      full = Path.join(target, path)
+      File.mkdir_p!(Path.dirname(full))
+      File.write!(full, "marker PRIVATE_FIXTURE_ONLY\n")
+    end
+
+    File.ln_s!(Path.join(private, "auth.json"), Path.join(target, "alias.json"))
+    File.ln_s!(private, Path.join(target, "alias-dir"))
+    ctx = %Ctx{cwd: target}
+
+    for args <- [%{"pattern" => "marker"}, %{"pattern" => "marker", "glob" => "**/*"}] do
+      assert Search.grep(args, ctx) == {:ok, "lib/only.ex:2:  @marker :selected"}
+    end
+
+    assert Search.glob(%{"pattern" => "**/*"}, ctx) == {:ok, "lib/only.ex"}
+
+    for path <- [
+          ".envrc",
+          ".profile",
+          "fish/config.fish",
+          "private[state]",
+          "alias.json",
+          "alias-dir"
+        ] do
+      assert {:error, "file access refused: protected_path"} =
+               Search.grep(%{"pattern" => "marker", "path" => path}, ctx)
+
+      assert {:error, "file access refused: protected_path"} =
+               Search.glob(%{"pattern" => "**/*", "path" => path}, ctx)
+    end
+  end
+
+  test "search resolves scopes and permits only operator-approved extra roots", %{target: target} do
+    outside = Path.join(Path.dirname(target), "other source")
+    File.mkdir_p!(outside)
+    File.write!(Path.join(outside, "other.ex"), "marker outside\n")
+    File.ln_s!(outside, Path.join(target, "outside-link"))
+    ctx = %Ctx{cwd: target}
+
+    for path <- [outside, "outside-link", Path.join(outside, "other.ex")] do
+      assert {:error, "file access refused: path_outside_workspace"} =
+               Search.grep(%{"pattern" => "marker", "path" => path}, ctx)
+
+      assert {:error, "file access refused: path_outside_workspace"} =
+               Search.glob(%{"pattern" => "**/*", "path" => path}, ctx)
+    end
+
+    previous = System.get_env("ELARA_FILE_ROOTS")
+    System.put_env("ELARA_FILE_ROOTS", outside)
+
+    on_exit(fn ->
+      if previous,
+        do: System.put_env("ELARA_FILE_ROOTS", previous),
+        else: System.delete_env("ELARA_FILE_ROOTS")
+    end)
+
+    for path <- [outside, "outside-link"] do
+      assert Search.grep(%{"pattern" => "marker", "path" => path}, ctx) ==
+               {:ok, "#{outside}/other.ex:1:marker outside"}
+
+      assert Search.glob(%{"pattern" => "**/*.ex", "path" => path}, ctx) ==
+               {:ok, "#{outside}/other.ex"}
+    end
+  end
+
   test "a workspace selected with --cwd is the search root, not the launch directory", context do
     %{target: target, invoking: invoking} = context
 
@@ -99,7 +170,7 @@ defmodule Elara.WorkspaceSearchProductTest do
     assert results["glob"] == {:ok, "lib/only.ex"}
     assert results["grep"] == {:ok, "lib/only.ex:2:  @marker :selected"}
     assert {:error, escape} = results["escape"]
-    assert escape =~ "must stay inside the working directory"
+    assert escape == "file access refused: path_outside_workspace"
 
     assert File.cwd!() == invoking
     assert Store.list(target, include_empty: true) == []

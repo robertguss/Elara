@@ -1,19 +1,17 @@
 defmodule Elara.Tools.Search do
-  @moduledoc """
-  Read-only workspace search delegated to ripgrep. Bounded and deterministic.
-  Scoped lexically to the session workspace, like the rest of relative path
-  handling; not a filesystem boundary. Nothing mutates, so an incomplete search
-  is an error or a labelled truncation, never `indeterminate`.
-  """
+  @moduledoc "Fenced, bounded file search delegated to ripgrep; not an OS sandbox."
 
-  alias Elara.Effect.AtomicFile
   alias Elara.Exec
   alias Elara.Tool.Ctx
+  alias Elara.Tools.FileFence
 
   @default_glob_limit 200
   @default_grep_limit 100
   @max_limit 1_000
   @max_columns 400
+  @max_file_list_bytes 8 * 1_024 * 1_024
+  @batch_files 128
+  @unsupported_paths "search requires UTF-8 filenames; narrow the path"
 
   # Listed after a caller's include pattern so an exclusion always wins.
   @excluded_dirs [".git", ".hg", ".svn", "_build", "deps", "node_modules", "target"]
@@ -25,14 +23,14 @@ defmodule Elara.Tools.Search do
 
   @spec glob(map(), Ctx.t()) :: Elara.Tool.outcome()
   def glob(%{"pattern" => pattern} = args, %Ctx{} = ctx) when is_binary(pattern) do
+    deadline = deadline(ctx)
+
     with {:ok, pattern} <- nonempty_pattern(pattern),
          {:ok, limit} <- limit_arg(args, @default_glob_limit),
          {:ok, scope} <- scope_arg(args, ctx.cwd),
-         {:ok, rg} <- ripgrep() do
-      argv =
-        [rg, "--files", "--glob", pattern] ++ shared_flags() ++ operand(scope)
-
-      run(argv, ctx, limit, "files")
+         {:ok, rg} <- ripgrep(),
+         {:ok, files} <- files(rg, scope, pattern, ctx, deadline, limit + 1) do
+      render(Enum.join(files, "\n"), ctx, limit, "files", false)
     end
   end
 
@@ -40,28 +38,28 @@ defmodule Elara.Tools.Search do
 
   @spec grep(map(), Ctx.t()) :: Elara.Tool.outcome()
   def grep(%{"pattern" => pattern} = args, %Ctx{} = ctx) when is_binary(pattern) do
+    deadline = deadline(ctx)
+
     with {:ok, pattern} <- nonempty_pattern(pattern),
          {:ok, limit} <- limit_arg(args, @default_grep_limit),
          {:ok, scope} <- scope_arg(args, ctx.cwd),
          {:ok, include} <- string_arg(args, "glob"),
          {:ok, insensitive} <- boolean_arg(args, "case_insensitive"),
-         {:ok, rg} <- ripgrep() do
+         {:ok, rg} <- ripgrep(),
+         {:ok, files} <- files(rg, scope, include, ctx, deadline) do
       argv =
         [
           rg,
-          "--line-number",
-          "--with-filename",
-          "--no-heading",
-          "--max-columns=#{@max_columns}",
-          "--max-columns-preview"
+          "--color=never",
+          "--sort=path",
+          "--json"
         ] ++
           case_flag(insensitive) ++
-          include_flag(include) ++
-          shared_flags() ++
-          ["--regexp", pattern] ++
-          operand(scope)
+          ["--regexp", pattern]
 
-      run(argv, ctx, limit, "matches")
+      with {:ok, output, capped} <- grep_batches(argv, files, ctx, deadline) do
+        render(output, ctx, limit, "matches", capped)
+      end
     end
   end
 
@@ -80,26 +78,142 @@ defmodule Elara.Tools.Search do
   defp include_flag(nil), do: []
   defp include_flag(glob), do: ["--glob", glob]
 
-  defp operand(nil), do: []
-  defp operand(path), do: ["--", path]
+  defp operand(paths) do
+    [
+      "--"
+      | Enum.map(paths, fn
+          "-" -> "./-"
+          path -> path
+        end)
+    ]
+  end
 
-  defp run(argv, %Ctx{} = ctx, limit, noun) do
+  # Enumerate names only, then authorize every resolved target before rg can
+  # read contents. NUL framing keeps unusual filenames from bypassing the fence.
+  defp files(rg, scope, include, ctx, deadline, max_files \\ nil) do
+    argv =
+      [rg, "--files", "--null"] ++ include_flag(include) ++ shared_flags() ++ operand([scope])
+
+    with {:ok, fence} <- FileFence.prepare(ctx.cwd),
+         {:ok, output, false} <- execute(argv, ctx, @max_file_list_bytes, deadline) do
+      candidates =
+        output
+        |> String.split(<<0>>, trim: true)
+        |> Stream.flat_map(fn path ->
+          case FileFence.resolve(path, fence) do
+            {:ok, {_root, resolved}} -> [Path.relative_to(resolved, Path.expand(ctx.cwd))]
+            {:error, _} -> []
+          end
+        end)
+        |> Stream.uniq()
+
+      files = if max_files, do: Enum.take(candidates, max_files), else: Enum.to_list(candidates)
+      files = Enum.sort(files)
+
+      cond do
+        not Enum.all?(files, &String.valid?/1) -> {:error, @unsupported_paths}
+        System.monotonic_time(:millisecond) < deadline -> {:ok, files}
+        true -> {:error, "search timed_out before returning results"}
+      end
+    else
+      {:ok, _output, true} ->
+        {:error, "search file listing exceeded the 8 MiB cap; narrow the path"}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp grep_batches(argv, [], ctx, deadline) do
+    # Explicit empty stdin validates the regex without falling back to cwd.
+    execute(argv ++ ["--", "-"], ctx, ctx.max_output_bytes || 16_384, deadline)
+  end
+
+  defp grep_batches(argv, files, ctx, deadline) do
+    files
+    |> Enum.chunk_every(@batch_files)
+    |> Enum.reduce_while({:ok, "", false}, fn batch, {:ok, output, false} ->
+      remaining = (ctx.max_output_bytes || 16_384) - byte_size(output)
+
+      if remaining <= 0 do
+        {:halt, {:ok, output, true}}
+      else
+        # JSON adds paths, match offsets and statistics. Bound that wire data
+        # separately; rendered matches still share the session's output budget.
+        wire_bytes = min(remaining * 32 + 4096, @max_file_list_bytes)
+
+        case execute(argv ++ operand(batch), ctx, wire_bytes, deadline) do
+          {:ok, next, true} -> {:halt, {:ok, output <> match_lines(next, batch), true}}
+          {:ok, next, false} -> {:cont, {:ok, output <> match_lines(next, batch), false}}
+          {:error, _} = error -> {:halt, error}
+        end
+      end
+    end)
+  end
+
+  # Structured records distinguish filenames from binary diagnostics even when
+  # a filename contains newlines or the exact diagnostic text. Ignore incomplete
+  # JSON at a byte cap and matches containing binary NUL bytes.
+  defp match_lines(output, batch) do
+    paths = MapSet.new(batch, fn path -> if path == "-", do: "./-", else: path end)
+
+    output
+    |> String.split("\n")
+    |> Enum.drop(-1)
+    |> Enum.flat_map(fn record ->
+      with {:ok, %{"type" => "match", "data" => data}} <- JSON.decode(record),
+           {:ok, path} <- json_bytes(data["path"]),
+           true <- MapSet.member?(paths, path),
+           {:ok, bytes} <- json_bytes(data["lines"]),
+           false <- String.contains?(bytes, <<0>>),
+           line when is_integer(line) and line > 0 <- data["line_number"] do
+        path = if path == "./-", do: "-", else: path
+        text = bytes |> String.replace_invalid() |> String.trim_trailing("\n")
+
+        text =
+          if String.length(text) > @max_columns,
+            do: String.slice(text, 0, @max_columns) <> " [... omitted end of long line]",
+            else: text
+
+        [String.replace_invalid(path) <> ":#{line}:" <> text <> "\n"]
+      else
+        _ -> []
+      end
+    end)
+    |> Enum.join()
+  end
+
+  defp json_bytes(%{"text" => text}) when is_binary(text), do: {:ok, text}
+  defp json_bytes(%{"bytes" => bytes}) when is_binary(bytes), do: Base.decode64(bytes)
+  defp json_bytes(_), do: :error
+
+  defp deadline(ctx), do: System.monotonic_time(:millisecond) + (ctx.timeout_ms || 30_000)
+
+  defp execute(argv, ctx, max_bytes, deadline) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    if remaining > 0,
+      do: execute_with_timeout(argv, ctx, max_bytes, remaining),
+      else: {:error, "search timed_out before returning results"}
+  end
+
+  defp execute_with_timeout(argv, ctx, max_bytes, timeout_ms) do
     result =
       Exec.run(argv,
         cwd: ctx.cwd,
         # An empty value makes ripgrep ignore any user config file, so a host's
         # own ripgrep preferences cannot change what the model is told.
         env: %{"RIPGREP_CONFIG_PATH" => ""},
-        max_bytes: ctx.max_output_bytes || 16_384,
-        timeout_ms: ctx.timeout_ms || 30_000
+        max_bytes: max_bytes,
+        timeout_ms: timeout_ms
       )
 
     case result do
       {:ok, %Exec.Result{termination: :exited, code: 0, output: output}} ->
-        {:ok, bound(output, limit, noun, false)}
+        {:ok, output, false}
 
       {:ok, %Exec.Result{termination: :exited, code: 1}} ->
-        {:ok, "no #{noun}"}
+        {:ok, "", false}
 
       # Exit 2 covers an unusable pattern and a scope ripgrep could not read.
       # Report its diagnostic rather than presenting a partial scan as complete.
@@ -111,7 +225,7 @@ defmodule Elara.Tools.Search do
         {:error, "search killed by signal #{signal}\n" <> output}
 
       {:ok, %Exec.Result{termination: :truncated} = truncated} ->
-        {:ok, bound(truncated.output, limit, noun, true)}
+        {:ok, truncated.output, true}
 
       {:ok, %Exec.Result{termination: termination}} ->
         {:error, "search #{termination} before returning results"}
@@ -124,6 +238,15 @@ defmodule Elara.Tools.Search do
       {:indeterminate, message} ->
         {:error, "search failed: #{message}"}
     end
+  end
+
+  defp render("", _ctx, _limit, noun, false), do: {:ok, "no #{noun}"}
+
+  defp render(output, ctx, limit, noun, capped) do
+    max_bytes = ctx.max_output_bytes || 16_384
+    clipped = byte_size(output) > max_bytes
+    output = if clipped, do: binary_part(output, 0, max_bytes), else: output
+    {:ok, bound(output, limit, noun, capped or clipped)}
   end
 
   defp bound(output, limit, noun, byte_capped) do
@@ -191,33 +314,19 @@ defmodule Elara.Tools.Search do
 
   defp scope_arg(args, cwd) do
     case Map.fetch(args, "path") do
-      :error -> {:ok, nil}
+      :error -> resolve_scope(".", cwd)
       {:ok, path} when is_binary(path) -> resolve_scope(path, cwd)
       {:ok, _value} -> {:error, "search path must be a string"}
     end
   end
 
   defp resolve_scope(path, cwd) do
-    trimmed = if Path.type(path) == :relative, do: String.trim_trailing(path, "/"), else: path
-
-    if trimmed in ["", "."] do
-      {:ok, nil}
-    else
-      confine(trimmed, cwd)
-    end
-  end
-
-  # Reuses the session's existing lexical confinement rule rather than a second
-  # path checker: relative, canonical, no NUL, and never above the workspace.
-  defp confine(path, cwd) do
-    case AtomicFile.target(path, cwd) do
-      {:ok, target} ->
-        if File.exists?(target.full_path),
-          do: {:ok, target.path},
-          else: {:error, "search path does not exist in the workspace: #{path}"}
-
-      {:error, :path_outside_workspace} ->
-        {:error, "search path must stay inside the working directory: #{path}"}
+    with {:ok, {_root, resolved}} <- FileFence.resolve(path, cwd) do
+      cond do
+        not String.valid?(resolved) -> {:error, @unsupported_paths}
+        File.exists?(resolved) -> {:ok, Path.relative_to(resolved, Path.expand(cwd))}
+        true -> {:error, "search path does not exist in the workspace: #{path}"}
+      end
     end
   end
 end

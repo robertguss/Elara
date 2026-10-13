@@ -54,10 +54,21 @@ defmodule Elara.WorkspaceSearchTest do
     assert Search.grep(%{"pattern" => "absent-token"}, ctx) == {:ok, "no matches"}
   end
 
-  test "grep skips ignored paths, VCS metadata, build output and binary files", %{ctx: ctx} do
+  test "grep skips ignored paths, VCS metadata, build output and binary files", %{
+    ctx: ctx,
+    dir: dir
+  } do
+    # An unframed binary diagnostic must not become the next match's filename.
+    File.write!(Path.join(dir, "a.bin"), <<"needle", 0, "tail">>)
+    File.write!(Path.join(dir, "odd:name\nnotes.md"), "needle unusual filename\n")
+
     {:ok, output} = Search.grep(%{"pattern" => "needle"}, ctx)
 
+    assert output ==
+             Enum.join(@matches ++ ["odd:name\nnotes.md:1:needle unusual filename"], "\n")
+
     for excluded <- [
+          "a.bin",
           "skipped.log",
           "ignored_dir",
           "_build",
@@ -66,6 +77,40 @@ defmodule Elara.WorkspaceSearchTest do
           "payload.bin"
         ],
         do: refute(output =~ excluded, "#{excluded} leaked into results")
+  end
+
+  test "grep cannot attribute a binary diagnostic to a similarly named text file", %{dir: dir} do
+    scope = Path.join(dir, "ambiguous")
+    File.mkdir_p!(scope)
+    File.write!(Path.join(scope, "a.bin"), <<"needle", 0, "tail">>)
+    File.write!(Path.join(scope, "notes.md"), "needle real\n")
+
+    File.write!(
+      Path.join(
+        scope,
+        "a.bin: binary file matches (found \"\\0\" byte around offset 6)\nnotes.md"
+      ),
+      "absent\n"
+    )
+
+    assert Search.grep(%{"pattern" => "needle"}, %Ctx{cwd: scope}) ==
+             {:ok, "notes.md:1:needle real"}
+  end
+
+  test "non-UTF-8 filenames refuse without crashing the command runner", %{ctx: ctx, dir: dir} do
+    path = Path.join(dir, "bad" <> <<255>> <> ".txt")
+    File.write!(path, "needle\n")
+    File.ln_s!(path, Path.join(dir, "bad-alias.txt"))
+    error = {:error, "search requires UTF-8 filenames; narrow the path"}
+
+    assert Search.grep(%{"pattern" => "needle"}, ctx) == error
+    assert Search.glob(%{"pattern" => "**/*"}, ctx) == error
+
+    for tool <- [&Search.grep/2, &Search.glob/2] do
+      assert {:error, _} = tool.(%{"pattern" => "needle", "path" => "bad-alias.txt"}, ctx)
+    end
+
+    assert Search.grep(%{"pattern" => "needle", "path" => "lib"}, ctx) |> lines() == @matches
   end
 
   test "grep never dumps bytes from a binary-only workspace", %{ctx: ctx, dir: dir} do
@@ -122,12 +167,26 @@ defmodule Elara.WorkspaceSearchTest do
     assert length(shown) < length(complete)
     # A byte cap kills ripgrep mid-write, so prove every retained line is whole.
     assert shown == Enum.take(complete, length(shown))
+
+    File.write!(Path.join(dir, "lib/wide.ex"), "needle" <> String.duplicate("x", 500) <> "\n")
+
+    assert Search.grep(%{"pattern" => "needle", "path" => "lib/wide.ex"}, ctx) ==
+             {:ok,
+              "lib/wide.ex:1:needle" <>
+                String.duplicate("x", 394) <> " [... omitted end of long line]"}
   end
 
   test "an unusable pattern reports ripgrep's diagnosis as an error", %{ctx: ctx} do
     assert {:error, message} = Search.grep(%{"pattern" => "needle("}, ctx)
     assert message =~ "search failed (exit 2)"
     assert message =~ "regex parse error"
+
+    File.mkdir_p!(Path.join(ctx.cwd, "empty"))
+
+    assert {:error, empty_message} =
+             Search.grep(%{"pattern" => "needle(", "path" => "empty"}, ctx)
+
+    assert empty_message =~ "regex parse error"
 
     assert {:error, glob_message} = Search.glob(%{"pattern" => "lib/["}, ctx)
     assert glob_message =~ "search failed (exit 2)"
@@ -141,7 +200,7 @@ defmodule Elara.WorkspaceSearchTest do
 
     for path <- ["..", "../outside", "../", outside, "/etc", "lib/../../outside", "/"] do
       assert {:error, message} = Search.grep(%{"pattern" => "needle", "path" => path}, ctx)
-      assert message =~ "must stay inside the working directory", "accepted #{inspect(path)}"
+      assert message == "file access refused: path_outside_workspace", "accepted #{inspect(path)}"
       assert {:error, _} = Search.glob(%{"pattern" => "**/*.ex", "path" => path}, ctx)
     end
 
@@ -160,6 +219,15 @@ defmodule Elara.WorkspaceSearchTest do
 
     assert Search.glob(%{"pattern" => "**/*", "path" => "lib/nested dir"}, ctx) ==
              {:ok, "lib/nested dir/beta file.ex"}
+
+    for path <- ["-", "--follow"] do
+      File.write!(Path.join(ctx.cwd, path), "operand_marker\n")
+
+      assert Search.grep(%{"pattern" => "operand_marker", "path" => path}, ctx) ==
+               {:ok, "#{path}:1:operand_marker"}
+
+      assert Search.glob(%{"pattern" => "**/*", "path" => path}, ctx) == {:ok, path}
+    end
   end
 
   test "ripgrep's documented glob precedence over ignore files stays deliberate", %{ctx: ctx} do
@@ -184,6 +252,32 @@ defmodule Elara.WorkspaceSearchTest do
 
     assert length(shown) == 3
     assert List.last(shown) == "[truncated at the 2-files cap; narrow the pattern or path]"
+  end
+
+  test "grep preserves ordering and one output budget across many files", %{ctx: ctx, dir: dir} do
+    File.mkdir_p!(Path.join(dir, "many"))
+
+    paths =
+      for index <- 0..128, do: "many/#{String.pad_leading(Integer.to_string(index), 3, "0")}.ex"
+
+    for path <- paths, do: File.write!(Path.join(dir, path), "absent\n")
+    File.write!(Path.join(dir, hd(paths)), "unique_marker first\n")
+    File.write!(Path.join(dir, List.last(paths)), String.duplicate("unique_marker last\n", 100))
+
+    expected =
+      ["many/000.ex:1:unique_marker first"] ++
+        for line <- 1..100, do: "many/128.ex:#{line}:unique_marker last"
+
+    assert lines(Search.grep(%{"pattern" => "unique_marker", "limit" => 200}, ctx)) == expected
+
+    {:ok, output} =
+      Search.grep(%{"pattern" => "unique_marker", "limit" => 200}, %{ctx | max_output_bytes: 1024})
+
+    {notice, shown} = output |> String.split("\n") |> List.pop_at(-1)
+    assert notice == "[truncated at the output byte cap; narrow the pattern or path]"
+    assert byte_size(Enum.join(shown, "\n")) <= 1024
+    assert length(shown) > 1
+    assert shown == Enum.take(expected, length(shown))
   end
 
   test "argument validation rejects malformed calls", %{ctx: ctx} do

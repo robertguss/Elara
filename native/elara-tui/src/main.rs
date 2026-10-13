@@ -6,8 +6,9 @@ use std::process::{Command, ExitCode};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{
-    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    self, DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+    EnableFocusChange, EnableMouseCapture, Event, KeyboardEnhancementFlags,
+    PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use crossterm::terminal::{
@@ -333,6 +334,7 @@ fn pick_appearance(original: Appearance) -> Result<Appearance, String> {
                 KeyCode::Up => choice.theme = choice.theme.previous(),
                 KeyCode::Down | KeyCode::Char('t') => choice.theme = choice.theme.next(),
                 KeyCode::Char('d') => choice.diagnostics = !choice.diagnostics,
+                KeyCode::Char('n') => choice.notifications = !choice.notifications,
                 KeyCode::Enter => return Ok(choice),
                 KeyCode::Esc => return Ok(original),
                 KeyCode::Char('c')
@@ -487,8 +489,10 @@ fn run_interactive(
     let mut dirty = true;
     let mut session_models: HashMap<String, Model> = HashMap::new();
     let mut attempted_handoff = None;
+    let mut focused = None;
 
     loop {
+        let mut notifications = Vec::new();
         if let Some(target) = model.handoff_target()
             && attempted_handoff.as_ref() != Some(&target)
         {
@@ -539,6 +543,9 @@ fn run_interactive(
                             }
                         }
                     }
+                    if let Some(message) = model.notification.take() {
+                        notifications.push(message);
+                    }
                     dirty = true;
                 }
                 Ok(None) => break,
@@ -559,10 +566,15 @@ fn run_interactive(
         }
         dirty |= model.check_acceptance_timeout();
 
-        if event::poll(Duration::from_millis(30))
+        while event::poll(Duration::ZERO)
             .map_err(|error| format!("terminal input failed: {error}"))?
         {
             let event = event::read().map_err(|error| format!("terminal input failed: {error}"))?;
+            match event {
+                Event::FocusGained => focused = Some(true),
+                Event::FocusLost => focused = Some(false),
+                _ => {}
+            }
             let width = terminal.size().map_err(|error| error.to_string())?.width;
             dirty = true;
             let request = match handle_input(model, event, width.saturating_sub(2).max(1) as usize)
@@ -573,6 +585,7 @@ fn run_interactive(
                     if guard.is_none() {
                         return Err("Cannot restore terminal after editor.".into());
                     }
+                    focused = None;
                     model.enhanced_keyboard = guard.as_ref().is_some_and(|g| g.enhanced_keyboard);
                     terminal.clear().map_err(|error| error.to_string())?;
                     match result {
@@ -618,6 +631,15 @@ fn run_interactive(
                 model.mark_disconnected(&error);
             }
         }
+        if model.appearance.notifications && focused != Some(true) {
+            for message in notifications {
+                write!(io::stdout(), "\x07\x1b]777;notify;Elara;{message}\x1b\\")
+                    .and_then(|_| io::stdout().flush())
+                    .map_err(|error| format!("Cannot notify terminal: {error}"))?;
+            }
+        }
+        event::poll(Duration::from_millis(30))
+            .map_err(|error| format!("terminal input failed: {error}"))?;
     }
 }
 
@@ -806,6 +828,7 @@ impl TerminalGuard {
             io::stdout(),
             EnterAlternateScreen,
             EnableBracketedPaste,
+            EnableFocusChange,
             EnableMouseCapture
         )
         .map_err(|error| format!("cannot initialize terminal: {error}"))?;
@@ -829,6 +852,7 @@ impl Drop for TerminalGuard {
         let _ = execute!(
             io::stdout(),
             DisableBracketedPaste,
+            DisableFocusChange,
             DisableMouseCapture,
             LeaveAlternateScreen,
             crossterm::cursor::Show

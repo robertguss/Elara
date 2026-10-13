@@ -31,12 +31,23 @@ macro_rules! choices {
 }
 choices!(ViewLayout, Ember => "ember", Observatory => "observatory", Workbench => "workbench");
 choices!(Theme, Ember => "ember", Observatory => "observatory", Workbench => "workbench", Forest => "forest");
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Appearance {
     pub layout: ViewLayout,
     pub theme: Theme,
     /// Show the dense connection/head/outcome status row under the footer.
     pub diagnostics: bool,
+    pub notifications: bool,
+}
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            layout: ViewLayout::default(),
+            theme: Theme::default(),
+            diagnostics: false,
+            notifications: true,
+        }
+    }
 }
 impl Appearance {
     pub fn path() -> PathBuf {
@@ -67,10 +78,20 @@ impl Appearance {
                 ));
             }
         };
+        let notifications = match &v["notifications"] {
+            Value::Null => true,
+            Value::Bool(flag) => *flag,
+            other => {
+                return Err(format!(
+                    "Invalid appearance preferences: notifications {other}"
+                ));
+            }
+        };
         Ok(Self {
             layout: ViewLayout::parse(v["layout"].as_str().unwrap_or(""))?,
             theme: Theme::parse(v["theme"].as_str().unwrap_or(""))?,
             diagnostics,
+            notifications,
         })
     }
     pub fn save(self) -> Result<(), String> {
@@ -86,7 +107,8 @@ impl Appearance {
             json!({
                 "layout": self.layout.name(),
                 "theme": self.theme.name(),
-                "diagnostics": self.diagnostics
+                "diagnostics": self.diagnostics,
+                "notifications": self.notifications
             })
             .to_string(),
         )
@@ -108,6 +130,14 @@ impl Appearance {
             Line::from(format!(
                 "d                · Diagnostics: {}",
                 if self.diagnostics { "on" } else { "off" }
+            )),
+            Line::from(format!(
+                "n                · Notifications: {}",
+                if self.notifications {
+                    "on (unfocused)"
+                } else {
+                    "off"
+                }
             )),
             Line::from(""),
             Line::from("Enter apply · s save defaults + apply · Esc cancel"),
@@ -290,12 +320,14 @@ mod tests {
             layout: ViewLayout::Workbench,
             theme: Theme::Forest,
             diagnostics: true,
+            notifications: false,
         };
         choice.write(&path).unwrap();
         assert_eq!(Appearance::read(&path).unwrap(), choice);
         // Preferences written before the diagnostics flag existed still load quietly.
         fs::write(&path, "{\"layout\":\"ember\",\"theme\":\"forest\"}").unwrap();
         assert!(!Appearance::read(&path).unwrap().diagnostics);
+        assert!(Appearance::read(&path).unwrap().notifications);
         fs::write(&path, "{\"layout\":\"bogus\",\"theme\":\"forest\"}").unwrap();
         assert!(Appearance::read(&path).is_err());
         fs::write(

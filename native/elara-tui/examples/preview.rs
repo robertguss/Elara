@@ -42,6 +42,7 @@ fn main() {
         layout,
         theme,
         diagnostics,
+        ..Appearance::default()
     });
     model.thinking_visible = !hidden;
     model.expand_tool("c2");

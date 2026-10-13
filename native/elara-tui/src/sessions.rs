@@ -530,6 +530,30 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
             model.appearance_picker = Some(model.appearance);
             InputAction::None
         }
+        "notifications" => {
+            let enabled = match argument {
+                "on" => true,
+                "off" => false,
+                _ => {
+                    model.notice = Some("Use /notifications on|off".into());
+                    return Some(InputAction::None);
+                }
+            };
+            let mut appearance = model.appearance;
+            appearance.notifications = enabled;
+            if let Err(error) = appearance.save() {
+                model.notice = Some(error);
+                return Some(InputAction::None);
+            }
+            model.set_appearance(appearance);
+            model.editor.clear();
+            model.notice = Some(if enabled {
+                "Notifications on when unfocused (or focus unknown)".into()
+            } else {
+                "Notifications off".into()
+            });
+            InputAction::None
+        }
         "diagnostics" => {
             model.editor.clear();
             let mut appearance = model.appearance;

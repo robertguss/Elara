@@ -3,6 +3,7 @@ defmodule Elara.MCP.Transport do
 
   alias Elara.MCP.Protocol
   @max_wire 8_388_608
+  @max_result 16_777_216
 
   def open(%{transport: :http} = config),
     do: {:ok, %{config: config, port: nil, session: nil, buffer: ""}}
@@ -44,6 +45,8 @@ defmodule Elara.MCP.Transport do
 
   def rpc(transport, message, version, headers, deadline, caller_monitor) do
     bytes = JSON.encode!(message)
+    limit = if message["method"] == "tools/call", do: @max_result, else: @max_wire
+    transport = Map.put(transport, :response_limit, limit)
 
     cond do
       remaining(deadline) == 0 ->
@@ -105,7 +108,7 @@ defmodule Elara.MCP.Transport do
 
         receive do
           {^port, {:data, chunk}} ->
-            if total + byte_size(chunk) <= @max_wire do
+            if total + byte_size(chunk) <= transport.response_limit do
               read_stdio(
                 %{transport | buffer: transport.buffer <> chunk},
                 id,
@@ -114,7 +117,9 @@ defmodule Elara.MCP.Transport do
                 total + byte_size(chunk)
               )
             else
-              {{:indeterminate, :response_too_large}, transport}
+              {{:indeterminate,
+                {:response_too_large, total + byte_size(chunk), transport.response_limit}},
+               transport}
             end
 
           {^port, {:exit_status, _}} ->
@@ -181,8 +186,8 @@ defmodule Elara.MCP.Transport do
         state = Process.get(key)
 
         next =
-          if state.total + byte_size(chunk) > @max_wire do
-            %{state | exceeded: true}
+          if state.total + byte_size(chunk) > transport.response_limit do
+            %{state | total: state.total + byte_size(chunk), exceeded: true}
           else
             state = %{
               state
@@ -240,7 +245,7 @@ defmodule Elara.MCP.Transport do
 
     cond do
       state.exceeded ->
-        {{:indeterminate, :response_too_large}, next}
+        {{:indeterminate, {:response_too_large, state.total, transport.response_limit}}, next}
 
       id == nil and response.status == 202 ->
         {:ok, next}

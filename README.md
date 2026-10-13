@@ -350,6 +350,7 @@ MCP configuration lives in `~/.elara/mcp.json` for personal servers or
 `.elara/mcp.json` for workspace servers. Project entries add to user entries.
 If both files contain the same server name, Elara refuses and names both paths.
 The user file and approval records are internal reads, fenced from model file tools.
+The project file remains editable. Any byte change requires approval before use.
 No servers are configured or contacted by default.
 
 Use this shape, substituting the executable or complete MCP endpoint:
@@ -395,6 +396,12 @@ with object keys and tool names sorted to ignore ordering-only changes.
 Elara refuses the whole HTTP catalog if its header annotations cannot be honored.
 Unsupported definitions are never silently left out of approval.
 
+`mix elara.mcp info NAME` shows the negotiated protocol and the server's
+self-reported name and version. The trust review shows these diagnostics too.
+Identity and unused server capabilities grant no authority and are not pinned.
+Remote software or protocol changes with an unchanged approved catalog do not
+require approval again.
+
 The client API is `Elara.MCP.catalog(cwd, server)` and
 `Elara.MCP.call(cwd, server, tool, arguments, timeout_ms: 30_000)`.
 It returns decoded MCP results, preserving `isError` and structured content.
@@ -402,9 +409,12 @@ Model-facing search and call tools are a separate integration.
 Each configured server starts on first use under supervision and serializes
 its calls. A crash, lost response, or in-flight timeout returns `indeterminate`,
 never a replay or a claim that a remote write did not happen. The next explicit
-call reconnects and checks the catalog again. Requests and responses are
-bounded to 8 MiB; catalogs to 8 MiB and 100 pages. Unsupported input requests
-return uncertainty rather than automatically supplying data or calling a model.
+call reconnects and checks the catalog again. Requests and catalogs are bounded
+to 8 MiB, catalogs to 100 pages, and tool responses to 16 MiB. An oversized
+response reports the observed byte count as a lower bound and the limit.
+For a tool explicitly marked read-only, it is an ordinary error. Otherwise it
+is indeterminate and never replayed. Unsupported input requests return
+uncertainty rather than automatically supplying data or calling a model.
 
 The client supports stateless MCP `2026-07-28` and the older initialize
 handshake over stdio or Streamable HTTP, including POST JSON and SSE replies.

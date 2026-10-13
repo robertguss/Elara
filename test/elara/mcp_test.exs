@@ -46,6 +46,12 @@ defmodule Elara.MCPTest do
       {:ok, config} = Config.read(ctx.cwd, "docs")
       :ok = Trust.approve_config(config)
       assert {:ok, %{tools: tools}} = MCP.discover(ctx.cwd, "docs")
+
+      assert {:ok, %{"protocol_version" => version, "server_info" => identity}} =
+               MCP.diagnostics(ctx.cwd, "docs")
+
+      assert version == if(@era == "modern", do: "2026-07-28", else: "2025-11-25")
+      assert identity == %{"name" => "fixture", "version" => "1.0"}
       assert {:error, :mcp_catalog_approval_required} = MCP.call(ctx.cwd, "docs", "echo", %{})
       :ok = Trust.approve_catalog(config, tools, ["echo"])
       assert {:ok, %{read_only: ["echo"], digest: marked}} = MCP.catalog(ctx.cwd, "docs")
@@ -75,7 +81,21 @@ defmodule Elara.MCPTest do
       end
 
       assert {:indeterminate, _} = MCP.call(ctx.cwd, "docs", "lost", %{})
+      changed_era = if @era == "modern", do: "legacy", else: "modern"
+      File.write!(Path.join(fixture.root, "era.txt"), changed_era)
+
+      File.write!(
+        Path.join(fixture.root, "identity.json"),
+        ~s({"name":"fixture","version":"2.0"})
+      )
+
       assert {:ok, _} = MCP.call(ctx.cwd, "docs", "echo", %{})
+
+      assert {:ok, %{"protocol_version" => changed_version, "server_info" => changed_identity}} =
+               MCP.diagnostics(ctx.cwd, "docs")
+
+      assert changed_version == if(changed_era == "modern", do: "2026-07-28", else: "2025-11-25")
+      assert changed_identity == %{"name" => "fixture", "version" => "2.0"}
       assert File.read!(Path.join(fixture.root, "calls")) == "echo\nlost\necho\n"
       [first | rest] = tools
 
@@ -86,7 +106,14 @@ defmodule Elara.MCPTest do
 
       assert {:error, :mcp_catalog_approval_required} = MCP.call(ctx.cwd, "docs", "echo", %{})
       assert File.read!(Path.join(fixture.root, "calls")) == "echo\nlost\necho\n"
-      put_config(ctx.cwd, %{"docs" => fixture.spec}, "\n")
+      project = Path.join(ctx.cwd, ".elara/mcp.json")
+
+      {:ok, _} =
+        Elara.Tools.write(
+          %{"path" => project, "content" => File.read!(project) <> "\n"},
+          %Elara.Tool.Ctx{cwd: ctx.cwd}
+        )
+
       assert {:error, :mcp_config_approval_required} = MCP.call(ctx.cwd, "docs", "echo", %{})
     end
   end
@@ -130,6 +157,23 @@ defmodule Elara.MCPTest do
     assert {:ok, %{"structuredContent" => info}} = MCP.call(ctx.cwd, "private", "echo", %{})
     assert info["server_token_present"]
     refute info["unrelated_token_present"]
+  end
+
+  test "HTTP sends only its referenced bearer token", ctx do
+    fixture = fixture(ctx.root, :http, "modern")
+    File.write!(Path.join(fixture.root, "expected-token"), "fixture-only")
+    System.put_env("ELARA_TEST_MCP_SERVER", "fixture-only")
+    on_exit(fn -> System.delete_env("ELARA_TEST_MCP_SERVER") end)
+
+    put_config(ctx.cwd, %{
+      "private" => Map.put(fixture.spec, "token_env", "ELARA_TEST_MCP_SERVER")
+    })
+
+    approve(ctx.cwd, "private")
+    assert {:ok, _} = MCP.call(ctx.cwd, "private", "echo", %{})
+    System.put_env("ELARA_TEST_MCP_SERVER", "wrong-token")
+    assert {:indeterminate, :bad_http_status} = MCP.call(ctx.cwd, "private", "echo", %{})
+    assert File.read!(Path.join(fixture.root, "calls")) == "echo\n"
   end
 
   test "HTTP approval never silently excludes unsupported tool definitions", ctx do
@@ -181,12 +225,30 @@ defmodule Elara.MCPTest do
       approve(ctx.cwd, "bounded")
       assert {:indeterminate, _} = MCP.call(ctx.cwd, "bounded", "slow", %{}, timeout_ms: 500)
       assert {:ok, _} = MCP.call(ctx.cwd, "bounded", "echo", %{})
-      assert {:indeterminate, :response_too_large} = MCP.call(ctx.cwd, "bounded", "flood", %{})
+
+      below = 16_777_216 - 1024
+
+      assert {:ok, %{"content" => [%{"text" => text}]}} =
+               MCP.call(ctx.cwd, "bounded", "flood", %{"bytes" => below})
+
+      assert text == String.duplicate("x", below)
+
+      assert {:indeterminate, "result too large:" <> reason} =
+               MCP.call(ctx.cwd, "bounded", "flood", %{})
+
+      assert reason =~ "limit 16 MiB"
+
+      {:ok, config} = Config.read(ctx.cwd, "bounded")
+      {:ok, %{tools: tools}} = MCP.discover(ctx.cwd, "bounded")
+      :ok = Trust.approve_catalog(config, tools, ["flood"])
+      assert {:error, "result too large:" <> _} = MCP.call(ctx.cwd, "bounded", "flood", %{})
+      assert {:ok, _} = MCP.call(ctx.cwd, "bounded", "echo", %{})
 
       assert {:indeterminate, :unsupported_input_required} =
                MCP.call(ctx.cwd, "bounded", "input", %{})
 
-      assert File.read!(Path.join(fixture.root, "calls")) == "slow\necho\nflood\ninput\n"
+      assert File.read!(Path.join(fixture.root, "calls")) ==
+               "slow\necho\nflood\nflood\nflood\necho\ninput\n"
     end
   end
 
@@ -235,11 +297,11 @@ defmodule Elara.MCPTest do
     :ok = Trust.approve_catalog(config, tools, [])
   end
 
-  defp put_config(base, servers, suffix \\ ""),
+  defp put_config(base, servers),
     do:
       File.write!(
         Path.join(base, ".elara/mcp.json"),
-        JSON.encode!(%{"servers" => servers}) <> suffix
+        JSON.encode!(%{"servers" => servers})
       )
 
   defp fixture(root, transport, era) do

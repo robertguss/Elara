@@ -9,12 +9,26 @@ defmodule Mix.Tasks.Elara.Mcp do
   def run(argv) do
     {opts, args, invalid} = OptionParser.parse(argv, strict: [cwd: :string, read_only: :string])
 
-    unless invalid == [] and match?(["trust", _], args),
-      do: Mix.raise("usage: mix elara.mcp trust NAME [--cwd DIR] [--read-only tool_a,tool_b]")
+    unless invalid == [] and match?([command, _] when command in ["trust", "info"], args),
+      do:
+        Mix.raise("usage: mix elara.mcp trust|info NAME [--cwd DIR] [--read-only tool_a,tool_b]")
 
-    ["trust", name] = args
+    [command, name] = args
     cwd = Path.expand(Keyword.get(opts, :cwd, File.cwd!()))
 
+    case command do
+      "info" ->
+        case Elara.MCP.diagnostics(cwd, name) do
+          {:ok, diagnostics} -> Mix.shell().info(JSON.encode!(diagnostics))
+          error -> Mix.raise("could not inspect MCP connection: #{inspect(error)}")
+        end
+
+      "trust" ->
+        trust(cwd, name, opts)
+    end
+  end
+
+  defp trust(cwd, name, opts) do
     marks =
       Keyword.get(opts, :read_only, "")
       |> String.split(",", trim: true)
@@ -33,9 +47,14 @@ defmodule Mix.Tasks.Elara.Mcp do
 
       if confirm("Approve this exact config and connect for catalog review?") do
         with :ok <- Trust.approve_config(config),
-             {:ok, %{config: connected, tools: tools}} <- Elara.MCP.discover(cwd, name),
+             {:ok, %{config: connected, tools: tools, diagnostics: diagnostics}} <-
+               Elara.MCP.discover(cwd, name),
              true <- connected.sha256 == config.sha256,
              true <- Enum.all?(marks, fn mark -> Enum.any?(tools, &(&1["name"] == mark)) end) do
+          Mix.shell().info(
+            "Connection diagnostics (not authority): " <> JSON.encode!(diagnostics)
+          )
+
           Mix.shell().info(JSON.encode!(tools))
           Mix.shell().info("Read-only tools: #{inspect(marks)}; every other tool is mutating.")
           Mix.shell().info("Catalog + marks SHA256 #{Trust.digest(tools, marks)}")

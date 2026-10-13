@@ -16,19 +16,23 @@ with (root / "starts").open("a") as file:
 
 def answer(request, headers=None):
     global initialized
+    mode_file = root / "era.txt"
+    mode = mode_file.read_text() if mode_file.exists() else era
+    identity_file = root / "identity.json"
+    identity = json.loads(identity_file.read_text()) if identity_file.exists() else {"name": "fixture", "version": "1.0"}
     method = request["method"]
     with (root / "requests").open("a") as file:
         file.write(method + "\n")
     if method == "notifications/initialized":
         initialized = True
         return None
-    if era == "legacy" and method == "server/discover":
+    if mode == "legacy" and method == "server/discover":
         return {"error": {"code": -32601, "message": "legacy"}}
     if method == "initialize":
-        return {"result": {"protocolVersion": "2025-11-25", "capabilities": {}}}
+        return {"result": {"protocolVersion": "2025-11-25", "capabilities": {}, "serverInfo": identity}}
     if method == "server/discover":
-        return {"result": {"supportedVersions": ["2026-07-28"], "capabilities": {"tools": {}}, "resultType": "complete"}}
-    if era == "legacy" and not initialized:
+        return {"result": {"supportedVersions": ["2026-07-28"], "capabilities": {"tools": {}}, "resultType": "complete", "_meta": {"io.modelcontextprotocol/serverInfo": identity}}}
+    if mode == "legacy" and not initialized:
         return {"error": {"code": -32000, "message": "not initialized"}}
     if method == "tools/list":
         tools = json.loads((root / "catalog.json").read_text())
@@ -44,7 +48,8 @@ def answer(request, headers=None):
         if name == "slow":
             time.sleep(2)
         if name == "flood":
-            return {"result": {"content": [{"type": "text", "text": "x" * 8_388_608}]}}
+            size = request["params"]["arguments"].get("bytes", 16_778_240)
+            return {"result": {"content": [{"type": "text", "text": "x" * size}]}}
         if name == "input":
             return {"result": {"resultType": "input_required", "inputRequests": []}}
         return {"result": {"content": [{"type": "text", "text": "echo ✓"}], "isError": False,
@@ -67,6 +72,12 @@ if "--http" in sys.argv:
 
         def do_POST(self):
             request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            expected = root / "expected-token"
+            if expected.exists() and self.headers.get("Authorization") != "Bearer " + expected.read_text():
+                self.send_response(401)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             reply = answer(request, {key.lower(): value for key, value in self.headers.items() if key.lower() != "authorization"})
             if reply == "lost":
                 self.connection.shutdown(socket.SHUT_RDWR)

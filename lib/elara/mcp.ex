@@ -4,6 +4,7 @@ defmodule Elara.MCP do
   alias Elara.MCP.{Config, Server, Trust}
 
   def discover(cwd, name, opts \\ []), do: request(cwd, name, :discover, opts)
+  def diagnostics(cwd, name, opts \\ []), do: request(cwd, name, :diagnostics, opts)
   def catalog(cwd, name, opts \\ []), do: request(cwd, name, :catalog, opts)
 
   def call(cwd, server, name, args, opts \\ []) when is_binary(name) and is_map(args),

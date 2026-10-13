@@ -7,6 +7,24 @@ defmodule Elara.MCP.Protocol do
   def modern, do: @modern
   def legacy, do: @legacy
 
+  def server_info(result) do
+    meta =
+      case result["_meta"] do
+        %{} = meta -> meta["io.modelcontextprotocol/serverInfo"]
+        _ -> nil
+      end
+
+    info = result["serverInfo"] || meta
+
+    case info do
+      %{"name" => name, "version" => version} when is_binary(name) and is_binary(version) ->
+        %{"name" => name, "version" => version}
+
+      _ ->
+        nil
+    end
+  end
+
   def request(version, id, method, params) do
     params =
       if version == @modern do

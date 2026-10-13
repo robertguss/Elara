@@ -10,7 +10,7 @@ defmodule Elara.MCP.Server do
   @impl true
   def init(_key) do
     Process.flag(:trap_exit, true)
-    {:ok, %{config: nil, transport: nil, version: nil, seq: 0}}
+    {:ok, %{config: nil, transport: nil, version: nil, server_info: nil, seq: 0}}
   end
 
   @impl true
@@ -68,7 +68,7 @@ defmodule Elara.MCP.Server do
 
   defp disconnected(state) do
     Transport.close(state.transport)
-    %{state | config: nil, transport: nil, version: nil}
+    %{state | config: nil, transport: nil, version: nil, server_info: nil}
   end
 
   defp connect(%{version: version} = state, _config, _deadline, _monitor) when is_binary(version),
@@ -151,12 +151,16 @@ defmodule Elara.MCP.Server do
     end
   end
 
+  defp perform(:diagnostics, state, _deadline, _monitor) do
+    {{:ok, diagnostics(state)}, state}
+  end
+
   defp perform(operation, state, deadline, monitor) do
     case list_tools(state, deadline, monitor, nil, [], [], 0) do
       {{:ok, tools}, state} ->
         case operation do
           :discover ->
-            {{:ok, %{config: state.config, tools: tools}}, state}
+            {{:ok, %{config: state.config, tools: tools, diagnostics: diagnostics(state)}}, state}
 
           :catalog ->
             case Trust.check_catalog(state.config, tools) do
@@ -223,7 +227,7 @@ defmodule Elara.MCP.Server do
   end
 
   defp invoke(state, tools, name, args, deadline, monitor) do
-    with {:ok, _marks} <- Trust.check_catalog(state.config, tools),
+    with {:ok, marks} <- Trust.check_catalog(state.config, tools),
          %{} = tool <- Enum.find(tools, &(&1["name"] == name)),
          {:ok, headers} <- headers(state, tool, args) do
       {result, state} =
@@ -236,7 +240,15 @@ defmodule Elara.MCP.Server do
           monitor
         )
 
-      {sanitize(result), state}
+      case result do
+        {:indeterminate, {:response_too_large, bytes, _limit}} ->
+          kind = if name in marks, do: :error, else: :indeterminate
+          reason = "result too large: at least #{bytes} bytes, limit 16 MiB"
+          {{kind, reason}, disconnected(state)}
+
+        _ ->
+          {sanitize(result), state}
+      end
     else
       nil -> {{:error, :unknown_mcp_tool}, state}
       error -> {error, state}
@@ -255,8 +267,17 @@ defmodule Elara.MCP.Server do
     {result, transport} =
       Transport.rpc(state.transport, message, state.version, headers, deadline, monitor)
 
-    {result, %{state | transport: transport, seq: seq}}
+    info =
+      case result do
+        {:ok, result} -> Protocol.server_info(result) || state.server_info
+        _ -> state.server_info
+      end
+
+    {result, %{state | transport: transport, seq: seq, server_info: info}}
   end
+
+  defp diagnostics(state),
+    do: %{"protocol_version" => state.version, "server_info" => state.server_info}
 
   defp sanitize({:rpc_error, %{"code" => code}}), do: {:error, {:mcp_rpc_error, code}}
   defp sanitize({:legacy_http, _}), do: {:error, :bad_http_response}

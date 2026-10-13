@@ -1,7 +1,8 @@
 use std::collections::HashMap;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
+use std::os::unix::process::CommandExt;
 use std::path::{Component, Path, PathBuf};
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{
@@ -15,8 +16,8 @@ use crossterm::terminal::{
 };
 use elara_tui::{
     Appearance, ClientConnection, ConnectionState, Cursor, CursorStore, DEFAULT_PORT, Ingest,
-    InputAction, Model, Theme, ViewLayout, attach_request, attached_model, command, draw_model,
-    handle_input, render_frame,
+    InputAction, MAX_INPUT_BYTES, Model, Theme, ViewLayout, attach_request, attached_model,
+    command, draw_model, handle_input, render_frame,
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
@@ -474,8 +475,9 @@ fn run_interactive(
     cursors: &CursorStore,
     started: Instant,
 ) -> Result<(), String> {
-    let guard = TerminalGuard::enter()?;
-    model.enhanced_keyboard = guard.enhanced_keyboard;
+    let initial_guard = TerminalGuard::enter()?;
+    model.enhanced_keyboard = initial_guard.enhanced_keyboard;
+    let mut guard = Some(initial_guard);
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal =
         Terminal::new(backend).map_err(|error| format!("terminal failed: {error}"))?;
@@ -566,6 +568,32 @@ fn run_interactive(
             let request = match handle_input(model, event, width.saturating_sub(2).max(1) as usize)
             {
                 InputAction::Detach => return Ok(()),
+                InputAction::ExternalEditor => {
+                    let result = edit_prompt(&mut guard, model.editor.text());
+                    if guard.is_none() {
+                        return Err("Cannot restore terminal after editor.".into());
+                    }
+                    model.enhanced_keyboard = guard.as_ref().is_some_and(|g| g.enhanced_keyboard);
+                    terminal.clear().map_err(|error| error.to_string())?;
+                    match result {
+                        Ok(text) if text != model.editor.text() => {
+                            let mut edited = model.editor.clone();
+                            edited.clear();
+                            if edited.insert(&text) {
+                                model.editor = edited;
+                                model.notice = Some("Editor saved; draft ready, not sent.".into());
+                            } else {
+                                model.notice =
+                                    Some("Editor draft exceeds 64 KiB; original retained.".into());
+                            }
+                        }
+                        Ok(_) => model.notice = Some("Editor closed; draft unchanged.".into()),
+                        Err(error) => {
+                            model.notice = Some(format!("{error}; original draft retained."))
+                        }
+                    }
+                    None
+                }
                 InputAction::Submit => model.prepare_submit(),
                 InputAction::Steer => model.prepare_steer(),
                 InputAction::ProviderSettings(request)
@@ -702,6 +730,66 @@ fn dump_frame(enabled: bool, started: Instant, frame: &Value) {
             started.elapsed().as_secs_f64() * 1_000.0
         );
     }
+}
+
+fn edit_prompt(guard: &mut Option<TerminalGuard>, draft: &str) -> Result<String, String> {
+    let editor = ["VISUAL", "EDITOR"]
+        .into_iter()
+        .find_map(|name| {
+            std::env::var(name)
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+        })
+        .ok_or("Set $VISUAL or $EDITOR to edit the prompt")?;
+    let mut file = tempfile::Builder::new()
+        .prefix("elara-prompt-")
+        .suffix(".md")
+        .tempfile()
+        .map_err(|error| format!("Cannot create editor draft: {error}"))?;
+    file.write_all(draft.as_bytes())
+        .and_then(|_| file.flush())
+        .map_err(|error| format!("Cannot write editor draft: {error}"))?;
+    drop(guard.take());
+    let result = (|| {
+        // The editor shares our foreground process group. Ctrl-C must cancel
+        // it, not kill the TUI before its terminal guard can restore modes.
+        let signals = [libc::SIGINT, libc::SIGQUIT];
+        let previous = signals.map(|signal| unsafe { libc::signal(signal, libc::SIG_IGN) });
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", &format!("exec {editor} \"$1\""), "elara-editor"])
+            .arg(file.path());
+        // Only async-signal-safe libc calls run between fork and exec.
+        unsafe {
+            command.pre_exec(move || {
+                for signal in signals {
+                    libc::signal(signal, libc::SIG_DFL);
+                }
+                Ok(())
+            });
+        }
+        let status = command.status();
+        for (signal, handler) in signals.into_iter().zip(previous) {
+            unsafe { libc::signal(signal, handler) };
+        }
+        let status = status.map_err(|error| format!("Cannot launch editor: {error}"))?;
+        if !status.success() {
+            return Err(format!("Editor exited with {status}"));
+        }
+        let mut text = String::new();
+        std::fs::File::open(file.path())
+            .and_then(|file| {
+                file.take(MAX_INPUT_BYTES as u64 + 1)
+                    .read_to_string(&mut text)
+            })
+            .map_err(|error| format!("Cannot read editor draft: {error}"))?;
+        if text.len() > MAX_INPUT_BYTES {
+            return Err("Editor draft exceeds 64 KiB".into());
+        }
+        Ok(text)
+    })();
+    *guard = Some(TerminalGuard::enter()?);
+    result
 }
 
 struct TerminalGuard {

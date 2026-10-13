@@ -204,6 +204,34 @@ defmodule Elara.TuiTest do
     assert output =~ "PTY passed"
   end
 
+  @tag timeout: 60_000
+  test "external editor round-trips drafts and retains them on failure", context do
+    {:ok, session} =
+      Elara.start_session(
+        provider: script([{:ok, asst("first")}, {:ok, asst("second")}]),
+        tools: [],
+        persist: false
+      )
+
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+
+    {output, status} =
+      System.cmd(
+        System.find_executable("python3") || flunk("python3 is required for PTY coverage"),
+        [
+          Path.expand("../support/tui_editor_pty.py", __DIR__),
+          context.binary,
+          Integer.to_string(Elara.Server.port(server)),
+          session
+        ],
+        env: [{"ELARA_TUI_STATE_DIR", context.state_dir}],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+    assert output =~ "Editor PTY passed"
+  end
+
   test "headless empty asks fail without waiting for an unsent turn", context do
     {:ok, session} = Elara.start_session(provider: script([]), tools: [], persist: false)
     {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))

@@ -30,7 +30,11 @@ defmodule Elara.TestEnvironmentTest do
     for name <- ~w(ELARA_API_KEY XAI_API_KEY EXA_API_KEY PRIVATE_OTHER_TOKEN PHX_PORT DATABASE_URL SECRET_KEY_BASE) do
       System.put_env(name, "fake-test-value")
     end
-    System.put_env("ELARA_COMMAND_ENV", " PHX_PORT, DATABASE_URL,SECRET_KEY_BASE,ELARA_API_KEY,XAI_API_KEY,EXA_API_KEY")
+    for name <- ~w(SSH_AUTH_SOCK MISE_DATA_DIR ASDF_DATA_DIR HOMEBREW_PREFIX MIX_TEST_OPTION HEX_TEST_OPTION ERL_TEST_OPTION ELIXIR_TEST_OPTION HOMEBREW_GITHUB_API_TOKEN HEX_API_KEY MISE_SECRET) do
+      System.put_env(name, "fake-test-value")
+    end
+    System.delete_env("LC_ALL")
+    System.put_env("ELARA_COMMAND_ENV", " PHX_PORT, DATABASE_URL,SECRET_KEY_BASE,HEX_API_KEY,ELARA_API_KEY,XAI_API_KEY,EXA_API_KEY")
     {:ok, _} = Application.ensure_all_started(:elara)
     call = %Elara.Message.ToolCall{id: "environment", name: "bash",
       args: {:ok, %{"command" => "env | cut -d= -f1; set -e; mix --version; git --version; cargo --version"}}}
@@ -48,6 +52,8 @@ defmodule Elara.TestEnvironmentTest do
     IO.puts(message)
     {:error, {:not_started, message}} = Elara.Exec.run(["env"], env: %{"UNNAMED_PROJECT_VARIABLE" => "fake-test-value"})
     IO.puts(message)
+    {:ok, %Elara.Exec.Result{code: 0, output: "C"}} =
+      Elara.Exec.run(["/bin/sh", "-c", "printf %s \"$LC_ALL\""], env: %{"LC_ALL" => "C"})
     Mix.Task.run("elara.env")
     """
 
@@ -58,11 +64,13 @@ defmodule Elara.TestEnvironmentTest do
         stderr_to_stdout: true
       )
 
-    for name <- ~w(ELARA_API_KEY XAI_API_KEY EXA_API_KEY PRIVATE_OTHER_TOKEN ELARA_COMMAND_ENV) do
+    for name <-
+          ~w(ELARA_API_KEY XAI_API_KEY EXA_API_KEY PRIVATE_OTHER_TOKEN ELARA_COMMAND_ENV HOMEBREW_GITHUB_API_TOKEN MISE_SECRET) do
       refute name in String.split(output, "\n")
     end
 
-    for name <- ~w(PHX_PORT DATABASE_URL SECRET_KEY_BASE),
+    for name <-
+          ~w(PHX_PORT DATABASE_URL SECRET_KEY_BASE SSH_AUTH_SOCK MISE_DATA_DIR ASDF_DATA_DIR HOMEBREW_PREFIX MIX_TEST_OPTION HEX_TEST_OPTION ERL_TEST_OPTION ELIXIR_TEST_OPTION HEX_API_KEY),
         do: assert(name in String.split(output, "\n"))
 
     assert output =~ "command environment overrides are not allowed: [\"XAI_API_KEY\"]"

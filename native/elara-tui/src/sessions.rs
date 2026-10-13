@@ -58,7 +58,10 @@ pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
     match frame["type"].as_str() {
         Some("read_only_changed") if frame["version"] == 2 => {
             model.notice = Some(if frame["enabled"] == true {
-                "Read-only from the next tool call; Esc stops the running one".into()
+                format!(
+                    "Read-only from the next tool call; {} stops the running one",
+                    model.keymap.keys(super::actions::Action::Escape)
+                )
             } else {
                 "Mutating tools restored from the next tool call".into()
             });
@@ -402,17 +405,23 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
     frame.render_widget(
         Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(
             if picker.child_limit.is_some() {
-                " Threads · Esc close · /threads refresh "
+                " Threads · Esc close · /threads refresh ".to_owned()
             } else if picker.branch {
                 if model.mode == "control" {
-                    " Branch points · Enter fork · Esc close "
+                    " Branch points · Enter fork · Esc close ".to_owned()
                 } else {
-                    " Branch points · read-only · Esc close "
+                    " Branch points · read-only · Esc close ".to_owned()
                 }
             } else if model.mode == "control" {
-                " Sessions · Ctrl-O refresh · Enter switch · Delete remove "
+                format!(
+                    " Sessions · {} refresh · Enter switch · Delete remove ",
+                    model.keymap.keys(super::actions::Action::Sessions)
+                )
             } else {
-                " Sessions · Ctrl-O refresh · Enter observe · read-only "
+                format!(
+                    " Sessions · {} refresh · Enter observe · read-only ",
+                    model.keymap.keys(super::actions::Action::Sessions)
+                )
             },
         )),
         rect,
@@ -427,6 +436,17 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
         return Some(InputAction::Submit);
     }
     let command = text.strip_prefix('/')?;
+    let result = command_action(model, command);
+    if result
+        .as_ref()
+        .is_some_and(|result| !matches!(result, InputAction::None))
+    {
+        model.editor.clear();
+    }
+    result
+}
+
+pub(super) fn command_action(model: &mut Model, command: &str) -> Option<InputAction> {
     let mut words = command.splitn(2, ' ');
     let name = words.next().unwrap_or("");
     let argument = words.next().unwrap_or("").trim();
@@ -667,9 +687,6 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
             InputAction::None
         }
     };
-    if !matches!(result, InputAction::None) {
-        model.editor.clear();
-    }
     Some(result)
 }
 

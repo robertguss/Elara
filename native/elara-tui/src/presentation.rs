@@ -35,7 +35,7 @@ pub(super) fn input(model: &mut Model, event: &Event) -> bool {
     if model.safe_paste {
         return false;
     }
-    let action = actions::lookup(*key, model.transcript.borrow().focused);
+    let action = model.keymap.lookup(*key, model.transcript.borrow().focused);
     if action == Some(actions::Action::Paste) {
         model.appearance_picker = None;
         model.presentation_overlay = None;
@@ -46,11 +46,15 @@ pub(super) fn input(model: &mut Model, event: &Event) -> bool {
         return false;
     }
     if let Some(mut choice) = model.appearance_picker {
+        if action == Some(actions::Action::Appearance) {
+            model.appearance_picker = None;
+            return true;
+        }
         if matches!(key.code, KeyCode::Char(_)) && !key.modifiers.is_empty() {
             return true;
         }
         match key.code {
-            _ if key.code == KeyCode::Esc || action == Some(actions::Action::Appearance) => {
+            KeyCode::Esc => {
                 model.appearance_picker = None;
                 return true;
             }
@@ -209,9 +213,15 @@ fn thinking_heading(model: &Model, width: u16) -> Line<'static> {
         format!(" · turn {}", model.transcript.borrow().selected_user_turn())
     };
     let tail = if model.thinking_visible {
-        vec![Span::styled("Hide − Ctrl-T", muted())]
+        vec![Span::styled(
+            format!("Hide − {}", model.keymap.keys(actions::Action::Thinking)),
+            muted(),
+        )]
     } else {
-        vec![Span::styled("Ctrl-T show", muted())]
+        vec![Span::styled(
+            format!("{} show", model.keymap.keys(actions::Action::Thinking)),
+            muted(),
+        )]
     };
     row(
         vec![
@@ -246,7 +256,10 @@ fn thinking_lines(model: &Model, width: u16) -> Vec<Line<'static>> {
     };
     if !model.thinking_visible {
         lines.push(Line::from(Span::styled(
-            "Hidden by you · Ctrl-T show",
+            format!(
+                "Hidden by you · {} show",
+                model.keymap.keys(actions::Action::Thinking)
+            ),
             muted(),
         )));
         lines.push(divider());
@@ -474,9 +487,9 @@ pub(super) fn inline_thinking(
         0,
         vec![Span::styled(
             if model.thinking_visible {
-                "Hide − Ctrl-T"
+                format!("Hide − {}", model.keymap.keys(actions::Action::Thinking))
             } else {
-                "Ctrl-T show"
+                format!("{} show", model.keymap.keys(actions::Action::Thinking))
             },
             muted(),
         )],
@@ -526,7 +539,12 @@ fn turn_lines(model: &Model, skip: usize, rows: usize) -> Vec<Line<'_>> {
         }))
         .chain(std::iter::once(Line::default()))
         .chain(std::iter::once(Line::from(Span::styled(
-            format!("{} · Ctrl-R turns · End live", model.thinking_source()),
+            format!(
+                "{} · {} turns · {} live",
+                model.thinking_source(),
+                model.keymap.keys(actions::Action::Turns),
+                model.keymap.keys(actions::Action::Tail)
+            ),
             muted(),
         ))))
         .skip(skip)

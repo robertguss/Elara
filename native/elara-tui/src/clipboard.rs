@@ -48,7 +48,10 @@ pub(crate) fn paste() -> Result<Content, String> {
                 .map_err(|_| "Clipboard text is not UTF-8; draft retained.".into());
         }
     }
-    Err("Clipboard unavailable; protected terminal paste enabled. Ctrl-V finishes; /image attaches a PNG from disk.".into())
+    Err(
+        "Clipboard unavailable; protected terminal paste enabled; /image attaches a PNG from disk."
+            .into(),
+    )
 }
 
 #[cfg(target_os = "macos")]

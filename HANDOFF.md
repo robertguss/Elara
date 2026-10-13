@@ -37,6 +37,10 @@ Colored Elixir and edit frames for all four themes live in
 The confirmed TUI controls and clipboard fallback are documented in README.md's
 TUI section. `native/elara-tui/src/actions.rs` owns action bindings and help;
 Esc closes panels or interrupts, and consecutive Ctrl-C requests a safe quit.
+README.md's "Custom keys" documents local `keymap.json`, action names,
+collision fallback and fixed panel/editor controls. The per-Model keymap drives
+both lookup and effective hints. New actions need an exhaustive `Action::name`
+case and registration; slash-only registration does not assign a default key.
 Turn and session workspace diffs are documented in that section. The shell's
 private checkpoints live in `Elara.WorkspaceDiff`; the Rust diff panel lives in
 `native/elara-tui/src/workspace_diff.rs`. Snapshots include bash changes but

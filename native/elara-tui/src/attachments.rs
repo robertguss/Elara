@@ -341,7 +341,7 @@ pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
         if key.kind == KeyEventKind::Release {
             return model.attachments.picker.as_ref().map(|_| InputAction::None);
         }
-        let action = super::actions::lookup(*key, false);
+        let action = model.keymap.lookup(*key, false);
         if action == Some(super::actions::Action::Paste) {
             model.attachments.picker = None;
             return None;
@@ -769,7 +769,12 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
             Block::default()
                 .borders(Borders::ALL)
                 .title(title)
-                .title_bottom(" Ctrl-F files · /image image · /attachments attachments "),
+                .title_bottom(format!(
+                    " {} files · {} image · {} attachments ",
+                    model.keymap.keys(super::actions::Action::Files),
+                    model.keymap.keys(super::actions::Action::Image),
+                    model.keymap.keys(super::actions::Action::Attachments)
+                )),
         ),
         rect,
     );

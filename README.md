@@ -440,6 +440,57 @@ four independent themes (Ember, Observatory, Workbench, Forest). Enter applies;
 `--layout workbench --theme forest` overrides defaults for one launch.
 `ELARA_TUI_APPEARANCE_FILE` selects a separate preferences file.
 
+### Custom keys
+
+The controls described here are defaults. Put a JSON object in
+`~/.elara/tui/keymap.json` (or `$ELARA_TUI_STATE_DIR/keymap.json`):
+
+```json
+{
+  "provider_settings": "ctrl+k",
+  "submit": "f3",
+  "newline": "f2",
+  "read_only": "alt+a"
+}
+```
+
+Each entry replaces all shortcuts for that action with one key. Restart the
+TUI to load changes; reconnecting or switching sessions keeps its map. `/help` and
+on-screen hints show the effective keys. Slash commands do not change. Actions
+without a default shortcut, including `read_only` and `undo`, can be bound.
+
+Action names are `appearance`, `files`, `image`, `attachments`,
+`provider_settings`, `thinking`, `thinking_view`, `turns`, `focus`, `toggle_tool`,
+`tool_viewer`, `up`, `down`, `page_up`, `page_down`, `home`, `tail`, `previous_turn`,
+`next_turn`, `search`, `next_match`, `previous_match`, `copy`, `copy_entry`, `help`,
+`paste`, `external_editor`, `submit`, `newline`, `interrupt`, `escape`,
+`clear_or_quit`, `sessions`, `queue`, `steer`, `read_only`, `undo` and `select_all`.
+Their scope stays the same: transcript-only actions remain transcript-only;
+help opens on an empty prompt; observer restrictions still apply.
+
+Use `ctrl+`, `alt+` and `shift+` prefixes, a character, `f1` through `f24`, or
+`enter`, `esc`, `tab`, `space`, `up`, `down`, `left`, `right`, `home`, `end`,
+`pageup`, `pagedown`, `backspace` or `delete`. Modifier names are case-insensitive.
+The terminal must report that combination; older terminals cannot distinguish
+all modified keys. Plus itself cannot be bound with this notation.
+
+Panel confirmation/navigation and letter controls, and low-level editing
+(cursor movement, selection, word deletion and prompt history) stay fixed.
+For example, rebinding `submit` does not rebind a confirmation panel's Enter.
+Arrows, Home/End, PageUp/PageDown, deletion keys, Enter/Esc/Tab, panel letters
+`l/t/d/n/s/r`, inline `@` file discovery (also Shift-@), and legacy Ctrl-H/I/M/[
+aliases are reserved. Help labels the
+fixed controls. A collision with another action (including its default key)
+rejects the entry, retaining its default. Duplicate custom keys reject both
+entries; key swaps through reserved defaults are not supported. An action can
+retain one of its own defaults, even when that key is also fixed in panels.
+
+Missing files use defaults silently. Malformed/unreadable files use defaults
+with a startup notice; invalid entries are ignored individually, without
+discarding valid ones. `/help` retains the error details. Safe terminal paste
+still treats Enter, Ctrl-J and Tab as text, not configurable commands; the
+effective `paste` shortcut finishes it without sending.
+
 `/diff` opens the latest turn's workspace diff; `/diff session` shows the net
 diff from the first turn's baseline. The panel refreshes during a running turn;
 **r** refreshes it manually, arrows/PageUp/PageDown scroll, and Esc closes it.

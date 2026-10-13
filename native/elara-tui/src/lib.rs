@@ -1096,22 +1096,28 @@ pub struct Cursor {
     pub incarnation: Option<String>,
 }
 
+/// Root for TUI-local state. Unit tests default to a per-process temporary
+/// directory so they never write into the developer's home.
+pub(crate) fn state_root() -> PathBuf {
+    if let Some(root) = std::env::var_os("ELARA_TUI_STATE_DIR") {
+        return PathBuf::from(root);
+    }
+    if cfg!(test) {
+        return std::env::temp_dir().join(format!("elara-tui-test-{}", std::process::id()));
+    }
+    std::env::var_os("HOME")
+        .map(|home| PathBuf::from(home).join(".elara/tui"))
+        .unwrap_or_else(|| PathBuf::from(".elara/tui"))
+}
+
 pub struct CursorStore {
     path: PathBuf,
 }
 
 impl CursorStore {
     pub fn from_environment() -> Self {
-        let root = std::env::var_os("ELARA_TUI_STATE_DIR")
-            .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("HOME")
-                    .map(PathBuf::from)
-                    .map(|home| home.join(".elara/tui"))
-            })
-            .unwrap_or_else(|| PathBuf::from(".elara/tui"));
         Self {
-            path: root.join("cursors.json"),
+            path: state_root().join("cursors.json"),
         }
     }
 

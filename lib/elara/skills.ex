@@ -21,10 +21,11 @@ defmodule Elara.Skills do
       )
 
     explicit = Enum.map(Keyword.get(opts, :skill_paths, env_paths()), &Path.expand(&1, cwd))
+    ignored = Enum.map(Application.get_env(:elara, :ignored_skill_dirs, []), &Path.expand/1)
 
     sources =
       Enum.map(explicit, &{&1, "explicit", true}) ++
-        Enum.map(project_roots(cwd), &{&1, "project", false}) ++
+        Enum.map(project_roots(cwd) -- ignored, &{&1, "project", false}) ++
         [
           {Path.join(home, ".config/agents/skills"), "user-config", false},
           {Path.join(home, ".agents/skills"), "user-legacy", false}

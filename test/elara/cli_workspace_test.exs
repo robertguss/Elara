@@ -177,14 +177,11 @@ defmodule Elara.CLIWorkspaceTest do
     stop(active.id)
 
     {:ok, remaining, opts} = Mix.Tasks.Elara.Chat.parse_args(["--cwd", ctx.target])
+    # StringIO monitors its owner and stops when this test process exits, so
+    # on_exit must not close it: that call races the device's own shutdown.
     {:ok, out} = StringIO.open("")
-    Process.unlink(out)
     stdio = spawn(fn -> waiting_stdio(out) end)
-
-    on_exit(fn ->
-      send(stdio, :close)
-      if Process.alive?(out), do: StringIO.close(out)
-    end)
+    on_exit(fn -> send(stdio, :close) end)
 
     provider = script([])
 

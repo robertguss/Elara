@@ -44,4 +44,17 @@ defmodule Elara.TestEnvironmentTest do
     refute String.starts_with?(Path.expand(sessions), System.user_home!())
     assert Elara.Skills.discover(System.tmp_dir!()).options[:home] == Path.expand(home)
   end
+
+  test "the checkout's own project skills never reach test sessions" do
+    checkout_skills = Path.join(@root, ".agents/skills")
+    assert checkout_skills in Application.fetch_env!(:elara, :ignored_skill_dirs)
+
+    for cwd <- [@root, Path.join(@root, "tmp/nested workspace")] do
+      %{skills: skills} = Elara.Skills.discover(cwd)
+
+      refute Enum.any?(skills, fn {_, skill} ->
+               String.starts_with?(skill.path, checkout_skills)
+             end)
+    end
+  end
 end

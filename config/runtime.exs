@@ -36,5 +36,10 @@ if config_env() == :test do
     test_run_dir: run_dir,
     sessions_root: Path.join(run_dir, "sessions"),
     skills_home: Path.join(run_dir, "home"),
+    # The checkout's own agent skills serve whoever develops Elara. Sessions
+    # whose workspace sits inside the checkout (the default cwd, ExUnit's
+    # tmp_dir) must not load them, or their prompt size depends on what the
+    # repo happens to hold.
+    ignored_skill_dirs: [Path.expand("../.agents/skills", __DIR__)],
     plugin_trust_root: Path.join(run_dir, "plugin-trust")
 end

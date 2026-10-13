@@ -76,6 +76,7 @@ defmodule Elara.Tool do
       edit_tool(),
       bash_tool(),
       output_read_tool(),
+      web_fetch_tool(),
       grep_tool(),
       glob_tool(),
       Elara.Skills.tool(),
@@ -234,6 +235,24 @@ defmodule Elara.Tool do
                   "protected files and escaping symlinks are skipped or refused. Honours .gitignore, " <>
                   "skips VCS and build directories, orders results deterministically, " <>
                   "and bounds them with a truncation notice. Requires ripgrep."
+
+  defp web_fetch_tool do
+    %__MODULE__{
+      name: "web_fetch",
+      description:
+        "GET a public http(s) page without cookies or credentials. HTML becomes Markdown. Returns labeled untrusted content, a heading outline and about 6 KiB; the full page is retained behind output_read. Private destinations and unsafe redirects are refused. Not a browser or a sandbox.",
+      parameters: %{
+        "type" => "object",
+        "properties" => %{"url" => %{"type" => "string"}},
+        "required" => ["url"],
+        "additionalProperties" => false
+      },
+      capabilities: ["network:web"],
+      placement: :local,
+      cancel_on_interrupt: true,
+      run: {Elara.WebFetch, :run}
+    }
+  end
 
   defp grep_tool do
     %__MODULE__{

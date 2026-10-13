@@ -95,6 +95,7 @@ defmodule Elara.MixProject do
       {:req, "~> 0.5"},
       # Direct floor keeps Mint's HTTP/1 and HTTP/2 security backports in resolution.
       {:mint, "~> 1.10.2"},
+      {:floki, "~> 0.38"},
       {:yaml_elixir, "~> 2.11"},
       {:stream_data, "~> 1.1", only: :test}
     ]

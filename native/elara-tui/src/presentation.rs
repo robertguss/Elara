@@ -838,6 +838,9 @@ pub(super) fn usage_footer(model: &Model, width: u16) -> Vec<Line<'static>> {
             fields.push(Span::styled("near limit", style));
         }
     }
+    if model.projection.view["inbox"]["web_content_entered"] == true {
+        fields.push(Span::styled("web content in context", muted()));
+    }
     let mut lines = Vec::new();
     let mut line = Line::default();
     for field in fields {

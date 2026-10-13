@@ -13,7 +13,8 @@ defmodule Elara.Session do
   require ExecutorLedger
   alias Elara.FlightRecorder
   alias Elara.Message
-  alias Elara.Message.{Assistant, ToolResult}
+  alias Elara.Message.{Assistant, ToolCall, ToolResult}
+  alias Elara.Output
   alias Elara.Plugin.Server, as: PluginServer
   alias Elara.Protocol
   alias Elara.Provider
@@ -181,13 +182,29 @@ defmodule Elara.Session do
 
           core = %{
             core
-            | read_only: Map.get(store.context, "read_only", Keyword.get(opts, :read_only, false))
+            | read_only:
+                Map.get(store.context, "read_only", Keyword.get(opts, :read_only, false)),
+              web_content_entered:
+                core.web_content_entered or Keyword.get(opts, :web_content_entered, false)
           }
 
           store =
             if core.read_only and store.context["read_only"] != true do
               {:ok, store} =
                 Store.save(%{store | context: Map.put(store.context, "read_only", true)})
+
+              store
+            else
+              store
+            end
+
+          store =
+            if core.web_content_entered and store.context["web_content_entered"] != true do
+              {:ok, store} =
+                Store.save(%{
+                  store
+                  | context: Map.put(store.context, "web_content_entered", true)
+                })
 
               store
             else
@@ -394,6 +411,9 @@ defmodule Elara.Session do
 
   def handle_call(:read_only_view, _from, shell),
     do: {:reply, Handoff.read_only_status(shell), shell}
+
+  def handle_call(:web_content_view, _from, shell),
+    do: {:reply, Handoff.web_content(shell), shell}
 
   def handle_call(:runtime_limits_view, _from, shell),
     do: {:reply, runtime_limits_view(shell), shell}
@@ -616,6 +636,7 @@ defmodule Elara.Session do
       workspace_id: shell.workspace_id,
       allowed_capabilities: shell.allowed_capabilities,
       read_only: Handoff.read_only(shell),
+      web_content_entered: Handoff.web_content(shell),
       command_rules: shell.store.context["command_rules"],
       approval_wait: shell.approval_wait,
       context_limit: shell.context_limit
@@ -1048,6 +1069,7 @@ defmodule Elara.Session do
         {:tool, result} ->
           outcome = settle_tool_result(plugin_lease, result)
           shell = consume_claimed_completion(shell, core_ref, outcome)
+          shell = record_web_content(shell, core_ref, outcome)
           feed({:tool_result, core_ref, outcome}, shell)
       end
 
@@ -1655,6 +1677,11 @@ defmodule Elara.Session do
           )
       end
 
+    context =
+      if Handoff.web_content(shell),
+        do: Map.put(context, "web_content_entered", true),
+        else: context
+
     %{shell.store | context: context}
   end
 
@@ -1902,6 +1929,15 @@ defmodule Elara.Session do
     case Store.save(%{shell.store | context: Map.put(shell.store.context, "clearing", clearing)}) do
       {:ok, store} -> %{shell | store: store}
       {:error, reason} -> raise "context clearing persistence failed: #{inspect(reason)}"
+    end
+  end
+
+  defp run_effect(:persist_web_content, _effect_id, shell, _patch_context) do
+    context = Map.put(shell.store.context, "web_content_entered", true)
+
+    case Store.save(%{shell.store | context: context}) do
+      {:ok, store} -> %{shell | store: store}
+      {:error, reason} -> raise "web provenance persistence failed: #{inspect(reason)}"
     end
   end
 
@@ -2464,6 +2500,35 @@ defmodule Elara.Session do
       end
     end)
   end
+
+  defp record_web_content(shell, ref, {:ok, _}) do
+    case shell.core.phase do
+      {:running_tool, ^ref, %ToolCall{name: name, args: {:ok, args}}, _, _} ->
+        tool = Map.fetch!(shell.core.config.tools, name)
+
+        web? =
+          case tool do
+            %Tool{plugin: nil, run: {Elara.WebFetch, :run}} ->
+              true
+
+            %Tool{plugin: nil, run: {Elara.Tools, :output_read}} ->
+              Output.web_content?(
+                %Tool.Ctx{session_id: shell.id, output_owner: shell.store.id, cwd: shell.cwd},
+                args["handle"]
+              )
+
+            _ ->
+              false
+          end
+
+        if web?, do: feed({:web_content_entered, ref}, shell), else: shell
+
+      _ ->
+        shell
+    end
+  end
+
+  defp record_web_content(shell, _, _), do: shell
 
   defp settle_tool_result(nil, outcome), do: outcome
 
@@ -3510,6 +3575,7 @@ defmodule Elara.Session do
         end),
       "paused" => shell.store.inputs_paused,
       "context" => Context.budget(shell.core, shell.context_limit, shell.provider),
+      "web_content_entered" => Handoff.web_content(shell),
       "handoff" =>
         case Handoff.outgoing(shell.store) || shell.store.context["last_handoff"] do
           nil -> nil

@@ -501,6 +501,9 @@ defmodule Elara.FlightRecorder do
   defp cause(recorder, {:tool_usage, ref, _}),
     do: Map.get(recorder.causes, {:tool, ref}, :external)
 
+  defp cause(recorder, {:web_content_entered, ref}),
+    do: Map.get(recorder.causes, {:tool, ref}, :external)
+
   defp cause(recorder, {:tool_deferred, ref, _}),
     do: Map.get(recorder.causes, {:tool, ref}, :external)
 
@@ -573,6 +576,11 @@ defmodule Elara.FlightRecorder do
     }
 
     normalized = if state.read_only, do: Map.put(normalized, :read_only, true), else: normalized
+
+    normalized =
+      if state.web_content_entered,
+        do: Map.put(normalized, :web_content_entered, true),
+        else: normalized
 
     normalized =
       if map_size(state.cleared_tools) > 0,
@@ -651,6 +659,7 @@ defmodule Elara.FlightRecorder do
       cleared_tools: Map.get(state, :cleared_tools, %{}),
       context_usage_after: Map.get(state, :context_usage_after, 0),
       read_only: Map.get(state, :read_only, false),
+      web_content_entered: Map.get(state, :web_content_entered, false),
       deferred_calls: Map.get(state, :deferred_calls, []),
       next_ref: state.next_ref
     }
@@ -689,6 +698,8 @@ defmodule Elara.FlightRecorder do
     do: %{kind: :clear_tool_results, ref: ref, entries: entries, bytes_freed: bytes_freed}
 
   defp normalize_fact({:read_only, enabled}), do: %{kind: :read_only, enabled: enabled}
+
+  defp normalize_fact({:web_content_entered, ref}), do: %{kind: :web_content_entered, ref: ref}
 
   defp normalize_fact({:system_notice, notice}),
     do: %{kind: :system_notice, notice: normalize_message(notice)}
@@ -751,6 +762,8 @@ defmodule Elara.FlightRecorder do
 
   defp denormalize_fact(%{kind: :read_only, enabled: enabled}), do: {:read_only, enabled}
 
+  defp denormalize_fact(%{kind: :web_content_entered, ref: ref}), do: {:web_content_entered, ref}
+
   defp denormalize_fact(%{kind: :system_notice, notice: notice}),
     do: {:system_notice, denormalize_message(notice)}
 
@@ -802,6 +815,8 @@ defmodule Elara.FlightRecorder do
   defp normalize_effect({:emit, event}, _tools), do: %{kind: :emit, event: normalize_event(event)}
 
   defp normalize_effect(:persist_context_clearing, _tools), do: %{kind: :persist_context_clearing}
+
+  defp normalize_effect(:persist_web_content, _tools), do: %{kind: :persist_web_content}
 
   defp normalize_effect(:persist_read_only, _tools), do: %{kind: :persist_read_only}
 

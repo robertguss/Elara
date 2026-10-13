@@ -85,6 +85,28 @@ defmodule Elara.Session.Handoff do
     :exit, _ -> :owner_unavailable
   end
 
+  def web_content(shell) do
+    case outgoing(shell.store) do
+      %{"delivery_owner" => id} ->
+        case Elara.session_pid(id) do
+          {:ok, pid} -> GenServer.call(pid, :web_content_view)
+          _ -> stored_web_content(id) or shell.core.web_content_entered
+        end
+
+      _ ->
+        shell.core.web_content_entered
+    end
+  catch
+    :exit, _ -> stored_web_content(owner(shell.store.id)) or shell.core.web_content_entered
+  end
+
+  defp stored_web_content(id) do
+    case store(id) do
+      {:ok, store} -> store.context["web_content_entered"] == true
+      _ -> false
+    end
+  end
+
   def options(shell) do
     limits = Core.runtime_limits(shell.core)
 
@@ -99,6 +121,7 @@ defmodule Elara.Session.Handoff do
         workspace_id: shell.workspace_id,
         allowed_capabilities: shell.allowed_capabilities,
         read_only: read_only(shell),
+        web_content_entered: web_content(shell),
         approval_wait: shell.approval_wait,
         max_iterations: limits.max_iterations,
         max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
@@ -317,6 +340,7 @@ defmodule Elara.Session.Handoff do
           "activated" => false,
           "provider" => shell.store.context["provider"],
           "read_only" => shell.core.read_only,
+          "web_content_entered" => shell.core.web_content_entered,
           "command_rules" => shell.store.context["command_rules"],
           "options" => shell.store.context["options"]
         }

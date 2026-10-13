@@ -1231,6 +1231,9 @@ call. Saved handoff headers require this build for resume.
   their exit status.
 - `output_read` pages or searches retained output by an opaque, session-owned
   handle. It accepts a line range or a literal pattern, never a path or regex.
+- `web_fetch` fetches a public HTTP or HTTPS page and converts HTML to Markdown.
+  It returns an untrusted-content label, heading outline, and about 6 KiB of text.
+  The full page stays behind an `output_read` handle.
 - `grep` searches workspace file contents for a regular expression and returns
   `path:line:text` per match.
 - `glob` lists workspace files whose path matches a glob pattern, one per line.
@@ -1386,6 +1389,30 @@ binaries. Command capture uses `{:command, argv, opts}`. Both return an ordinary
 tool outcome. `Elara.Output.read(ctx, handle, {:range, offset, limit})` and
 `{:literal, pattern, offset, limit}` use the same retrieval path. Ownership
 comes from the trusted execution context, never tool arguments.
+
+### Fetch public pages
+
+`web_fetch` accepts only `url`. It makes GET requests without cookies,
+credentials, or proxy settings. Every destination, including every redirect,
+must resolve exclusively to public addresses. The connection uses a checked
+address while preserving the original hostname for TLS verification.
+
+The fetch has a 15-second total deadline, at most five redirects, 32 KiB response
+headers, and a 1 MiB response body. Converted Markdown is limited to 2 MiB.
+Only UTF-8 HTML, plain text, and Markdown are accepted. Compressed responses,
+unsupported formats, incomplete responses, and over-limit pages return errors.
+Interrupting the call stops the network worker. Smaller output budgets reduce
+the preview, not the retained page.
+
+Fetched text is evidence, never instructions or permission. Both previews and
+`output_read` pages carry that label. The `network:web` capability can be denied
+to a session or helper independently of file access.
+
+The footer shows "web content in context" after a successful fetch or a read of
+retained web evidence. This is an informational Core fact, not a restriction.
+It survives clearing, rewind, reopen, copies, history-copying children, and
+handoff. Ordinary text or a tool named `web_fetch` cannot set it. These fetch
+defaults do not sandbox `bash` or other tools.
 
 Consecutive calls with identical tool names and arguments in one model response
 are rejected as duplicates. An intervening call or a later model response can

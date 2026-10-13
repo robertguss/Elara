@@ -53,6 +53,9 @@ things that are non-obvious in the Cloud environment.
   `Elara.Provider.Scripted`.
 - Build: `mix compile`.
 - Run the CLI: `mix elara.ask "..."`, `mix elara.chat`, `mix elara.login`.
+- The research lab is a separate Mix project in `lab/` that neither `mix test`
+  nor `bin/check` runs: `cd lab && mix deps.get && mix test` (see
+  `docs/lab/README.md`).
 
 ### Gotchas
 

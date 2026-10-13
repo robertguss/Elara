@@ -957,11 +957,15 @@ defmodule Elara.Lab.ProfileTest do
   end
 
   test "the audited spawn paths hold: the only TaskSup start_child is the server's closure" do
+    # Product and lab source, as paths relative to the repository root.
+    repo = Path.expand("../../..", __DIR__)
+
     sites =
-      for path <- Path.wildcard("lib/**/*.ex"),
+      for source <- ["lib", "lab/lib"],
+          path <- Path.wildcard(Path.join([repo, source, "**/*.ex"])),
           {line, n} <- path |> File.read!() |> String.split("\n") |> Enum.with_index(1),
           line =~ ~r/Task\.Supervisor\.start_child\(/,
-          do: {path, n, line}
+          do: {Path.relative_to(path, repo), n, line}
 
     assert [{"lib/elara/server.ex", _n, line}] = sites,
            "Elara.Lab.Profile classifies TaskSup spawns on the reply path as tasks; " <>

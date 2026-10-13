@@ -35,7 +35,7 @@ records the versioned registration and what one experiment found. Notes 001 to
 Scenario, provider mode (scripted / simulated / real), N, seeds, fault schedule,
 machine. The command that reproduces the summary:
 
-    mix elara.lab run SCENARIO --n N --seed S
+    cd lab && mix elara.lab run SCENARIO --n N --seed S
 
 ## Results
 
@@ -57,7 +57,22 @@ Confounds, unmeasured effects, and the follow-up this suggests.
 
 ## Running experiments
 
+The lab is its own Mix project in `lab/`. `Elara.Lab.*`, `mix elara.lab` and
+`Elara.Provider.Simulated` live there; the product app does not ship them. The
+lab depends on the product (`:elara`) by path and reads the product's
+`mix.lock`, so it runs the current product source with the product's
+dependencies. Run every lab command from `lab/`:
+
+    cd lab
+    mix deps.get
+    mix test
     mix elara.lab run SCENARIO [--n N] [--seed S] [--set KEY=VALUE ...] [--results DIR]
+
+Commands quoted in notes written before the lab moved (2026-10-13) ran from the
+repository root. Run them from `lab/`, where `--results lab/results/...` becomes
+`--results results/...`; it is the same directory. A recovery matrix
+registration (`Elara.Lab.MatrixRunner.registration/3`) takes the repository
+root, `..` from `lab/`, so the product's source is frozen with the lab's.
 
 Repetition `r` uses seed `S + r` in its own temporary sessions root and skills
 home, so runs never touch `~/.elara`. Each repetition appends one JSON line to

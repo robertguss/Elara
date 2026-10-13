@@ -20,7 +20,7 @@ defmodule Elara.Lab.SessionRecoveryTest do
   end
 
   test "registration names the ordinary direct-marker path and the 30-run schedule" do
-    note = File.read!("docs/lab/005-shell-chaos.md")
+    note = File.read!(Path.expand("../../../docs/lab/005-shell-chaos.md", __DIR__))
 
     assert note =~ "effect_executor: nil"
     assert note =~ "provider_started,provider_streaming,tool_running"

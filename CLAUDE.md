@@ -83,6 +83,13 @@ mix test test/elara/session_test.exs:120      # one test by line
   (`bin/launch`, `bin/doctor`, `bin/drive`, `bin/cleanup`) that runs Elara under
   an isolated `HOME` and a disposable git worktree. Use it — not `mix test` — to
   prove user-visible ask/chat/TUI/session behavior.
+- The research lab (`Elara.Lab.*`, `mix elara.lab`, `Elara.Provider.Simulated`)
+  is a separate Mix project in `lab/`; the product app does not ship it, and
+  neither `mix test` nor `bin/check` runs it. It depends on `:elara` by path,
+  reads the root `mix.lock`, and has its own test isolation in
+  `lab/config/runtime.exs`. Run it from there:
+  `cd lab && mix deps.get && mix test`, or `cd lab && mix elara.lab ...` (see
+  `docs/lab/README.md`).
 
 ## Running the agent
 

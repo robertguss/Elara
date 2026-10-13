@@ -39,7 +39,7 @@ defmodule Elara.JobsProfileTest do
 
         case File.read(Path.join(root, "os_pid")) do
           {:ok, os_pid} ->
-            eventually(fn -> Elara.Lab.ProcessProbe.stopped?(String.to_integer(os_pid)) end)
+            eventually(fn -> os_stopped?(String.to_integer(os_pid)) end)
 
           _ ->
             :ok
@@ -369,9 +369,7 @@ defmodule Elara.JobsProfileTest do
     eventually(fn -> Exec.settlement(runner, admitted["execution"]["token"]) == :settled end)
 
     eventually(fn ->
-      Elara.Lab.ProcessProbe.stopped?(
-        String.to_integer(File.read!(Path.join(ctx.root, "os_pid")))
-      )
+      os_stopped?(String.to_integer(File.read!(Path.join(ctx.root, "os_pid"))))
     end)
 
     assert {:ok, same} = general(ctx, "start", "probe", %{"mode" => "pass"})
@@ -797,6 +795,15 @@ defmodule Elara.JobsProfileTest do
   defp status(ctx) do
     {:ok, json} = legacy(ctx, "status")
     JSON.decode!(json)
+  end
+
+  # The OS process is gone or a zombie.
+  defp os_stopped?(pid) do
+    case System.cmd("ps", ["-p", to_string(pid), "-o", "stat="], stderr_to_stdout: true) do
+      {"", 1} -> true
+      {stat, 0} -> String.starts_with?(String.trim(stat), "Z")
+      _ -> false
+    end
   end
 
   defp eventually(check, deadline \\ nil) do

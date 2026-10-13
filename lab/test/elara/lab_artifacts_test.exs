@@ -3,7 +3,8 @@ defmodule Elara.Lab.ArtifactsTest do
   alias Elara.Lab.Artifacts
 
   test "frozen source/build/native bytes and loaded BEAM code match their independent manifest" do
-    repo = Path.expand("../..", __DIR__)
+    # The repository root, so the product's source is frozen with the lab's.
+    repo = Path.expand("../../..", __DIR__)
     snapshot = Artifacts.snapshot(repo) |> JSON.encode!() |> JSON.decode!()
     assert snapshot["schema"] == 1
     assert snapshot["files"][Application.app_dir(:elara, "priv/native/exec-stub")] != nil

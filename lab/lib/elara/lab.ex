@@ -1,7 +1,7 @@
 defmodule Elara.Lab do
   @moduledoc """
   Seeded lab runner. Runs a scenario once per repetition, each in its own
-  temporary sessions root and skills home, and summarizes the results.
+  temporary sessions root, skills home and coding worktree root, and summarizes the results.
 
   A seed fixes a scenario's choices (simulated responses, tool plans, fault
   schedules). It does not fix concurrent interleavings or timings, so those
@@ -131,9 +131,14 @@ defmodule Elara.Lab do
 
   defp settle_once(module, name, context, dir) do
     File.mkdir_p!(dir)
-    previous = Map.new([:sessions_root, :skills_home], &{&1, Application.get_env(:elara, &1)})
+
+    previous =
+      Map.new([:sessions_root, :skills_home], &{&1, Application.get_env(:elara, &1)})
+      |> Map.put("ELARA_WORKTREES_ROOT", System.get_env("ELARA_WORKTREES_ROOT"))
+
     Application.put_env(:elara, :sessions_root, Path.join(dir, "sessions"))
     Application.put_env(:elara, :skills_home, Path.join(dir, "home"))
+    System.put_env("ELARA_WORKTREES_ROOT", Path.join(dir, "worktrees"))
     started = System.monotonic_time(:millisecond)
 
     result =
@@ -254,6 +259,8 @@ defmodule Elara.Lab do
 
   defp restore(previous) do
     Enum.each(previous, fn
+      {key, nil} when is_binary(key) -> System.delete_env(key)
+      {key, value} when is_binary(key) -> System.put_env(key, value)
       {key, nil} -> Application.delete_env(:elara, key)
       {key, value} -> Application.put_env(:elara, key, value)
     end)

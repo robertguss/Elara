@@ -14,6 +14,10 @@ defmodule Elara.Lab.MatrixTest do
              Enum.map(Matrix.cases(), & &1.case_id)
 
     assert Enum.all?(Enum.frequencies_by(rows, & &1.case_id), fn {_, n} -> n == 50 end)
+
+    assert Enum.all?(Enum.filter(rows, &(&1.scenario == "handoff_recovery")), fn cell ->
+             cell.params["context_limit"] == "16000"
+           end)
   end
 
   test "a causally witnessed failed outcome remains eligible and is reported as a check failure" do

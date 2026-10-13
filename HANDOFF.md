@@ -40,7 +40,10 @@ when a session restarts, including children and handoff successors.
 The lab's current async-site inventory is pinned in
 `lab/test/elara/lab_profile_test.exs`; its classifier distinguishes server
 connections from session handoff relay tasks. Historical registrations stay
-unchanged. The Phase 1 lab adaptation follow-up is tracked in
+unchanged. Current lab fixtures use a 16K-token handoff window, trace
+`Context.budget/3` and isolate coding worktrees beside their session state.
+`docs/lab/README.md` describes recovery registration version 2 and reproduction
+of historical versions. Delivery is tracked in
 [Dev Hub](https://app.notion.com/p/3f8700320c4581a59c2cdf3a839a5ae0).
 
 ## Where Elara stands

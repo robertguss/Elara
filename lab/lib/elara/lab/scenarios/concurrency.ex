@@ -57,7 +57,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   @counted [
     {:file, :sync, 1},
     {Elara.Session.Store, :save, 1},
-    {Elara.Session.Context, :budget, 2},
+    {Elara.Session.Context, :budget, 3},
     {Elara.Session.Handoff, :lineage, 1},
     {Elara.FlightRecorder, :complete_transition, 4},
     {Elara.Exec, :run, 2}
@@ -1472,7 +1472,10 @@ defmodule Elara.Lab.Scenarios.Concurrency do
         ),
       records: length(actors.records),
       worktrees:
-        length(Path.wildcard(Path.join([run.dir, "sessions", "_threads", "workspaces", "*"])))
+        Enum.count(actors.records, fn id ->
+          {:ok, record} = Elara.Threads.record(id)
+          File.exists?(Path.join(record["cwd"], ".git"))
+        end)
     }
   end
 

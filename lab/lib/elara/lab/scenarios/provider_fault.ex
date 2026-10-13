@@ -14,6 +14,7 @@ defmodule Elara.Lab.Scenarios.ProviderFault do
   alias Elara.Lab.Jobs
   alias Elara.Message
   alias Elara.Provider
+  alias Elara.Provider.Retry
   alias Elara.Provider.Simulated
 
   @job "recovery-check"
@@ -67,7 +68,16 @@ defmodule Elara.Lab.Scenarios.ProviderFault do
   defp run_case(stage, seed, cwd, log) do
     Jobs.fixture(cwd)
 
-    base = [cwd: cwd, home: cwd, skill_paths: [], plugins: [], max_iterations: 4]
+    # Injected faults are this scenario's subject, so retries stay off and its
+    # accounting does not depend on the product retry classification.
+    base = [
+      cwd: cwd,
+      home: cwd,
+      skill_paths: [],
+      plugins: [],
+      max_iterations: 4,
+      provider_retry: Retry.disabled()
+    ]
 
     primary_provider =
       Simulated.new(seed: seed, id: "#{stage}", profile: profile(rules(stage)), collector: log)

@@ -101,6 +101,19 @@ def wait_visible(predicate, description):
     raise AssertionError(description + "\n" + repr(bytes(output[-5000:])))
 
 
+def filter_coding_child():
+    # Random ASCII IDs can fuzzy-match a short name; this fixture's λ makes
+    # its full name unique. Wait for that child's rendered row, not old bytes.
+    coding = next(child for child in children() if child["coding"])
+    output.clear()
+    send("PTY coding λ".encode())
+    wait_visible(
+        lambda: "Filter: PTY coding λ".encode() in output
+        and coding["id"][:8].encode() in output,
+        "unique coding child filter and loaded row",
+    )
+
+
 try:
     resize(120, 40)
     wait(lambda: b"Ctrl-J" in output, "initial TUI frame")
@@ -127,14 +140,14 @@ try:
         output.clear()
         command("/ack-child " + coding["id"] + " " + ("0" * 64) + ' ["pty-uncertain"]')
         wait_visible(lambda: b"reviewed patch changed" in output, "stale acknowledgement rejected")
-        command("/delegate research PTY research failure")
+        command("/delegate research PTY research coding failure")
         wait(lambda: len(children()) == 2 and any("failed" in c["state"] for c in children()), "sibling failure shown")
         send(b"\x1b")
     command("/children")
     wait_visible(lambda: b"Limit 4" in output and b"Threads" in output and b"unread" in output, "thread limit, unread reports and list rendered")
     resize(80, 24)
     resize(120, 40)
-    send(b"PTY coding")
+    filter_coding_child()
     send(b"\t")
     wait_visible(lambda: b"Inspection" in output, "Tab opens durable child metadata")
     # Completion notifications can push parent_id below the initial viewport.
@@ -145,7 +158,9 @@ try:
     wait_visible(lambda: b"parent_id" in output, "scroll inspects durable parent metadata")
     send(b"\x1b")
     command("/children")
-    send(b"PTY coding\r")
+    filter_coding_child()
+    output.clear()
+    send(b"\r")
     wait_visible(lambda: "PTY coding λ".encode() in output, "child transcript opens")
     if stage == "resume":
         command("explicit PTY child follow-up")

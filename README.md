@@ -246,6 +246,57 @@ replay divergence; replay them with the
 [last format 1 build](https://github.com/robertguss/Elara/commit/daa06f281368d0a532721695c6a656ec12ec14a5).
 Session JSONL history is unchanged and remains reopenable.
 
+## Command environment
+
+Commands run by `bash`, search, jobs, and the shipped Elixir project plugin get
+a strict build/cache environment, not the whole shell environment. The runner
+clears inherited variables before supplying allowed values. Exact defaults are:
+
+- `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `TERM`, `COLORTERM`,
+  `NO_COLOR`, `SSH_AUTH_SOCK`, `TMPDIR`, `TMP`, `TEMP`, `TZ`;
+- `CARGO_HOME`, `RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, `RUSTFLAGS`,
+  `CARGO_TARGET_DIR`, `CARGO_BUILD_TARGET`;
+- `CC`, `CXX`, `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS`, `PKG_CONFIG_PATH`,
+  `PKG_CONFIG_LIBDIR`, `PKG_CONFIG_SYSROOT_DIR`, `RIPGREP_CONFIG_PATH`;
+- `MIX_ENV`, `MIX_TARGET`, `MIX_HOME`, `HEX_HOME`, `MIX_ARCHIVES`, `MIX_PATH`,
+  `MIX_BUILD_PATH`, `MIX_DEPS_PATH`, `ERL_LIBS`, `ERL_FLAGS`, `ERL_AFLAGS`,
+  `ELIXIR_ERL_OPTIONS`.
+
+Defaults also match `LC_*`, `MISE_*`, `ASDF_*`, `HOMEBREW_*`, `MIX_*`,
+`HEX_*`, `ERL_*`, and `ELIXIR_*`, **except prefix-matched names containing
+`TOKEN`, `API_KEY`, `KEY`, `PASSWORD`, `SECRET`, `AUTH`, or `CREDENTIAL`**.
+Name those explicitly to forward them, for example `HEX_API_KEY` or
+`HOMEBREW_GITHUB_API_TOKEN`. This exclusion does not apply to exact defaults:
+`SSH_AUTH_SOCK` always passes. Version-manager shims remain available via
+`PATH`. Internal git and session-lock subprocesses are unchanged.
+
+To pass your app's variables through, name them in **operator startup config**.
+For example, after your shell or direnv has exported the app's values:
+
+```bash
+export ELARA_COMMAND_ENV='DATABASE_URL,SECRET_KEY_BASE,PORT'
+mix elara.env                     # forwarded and withheld names; never values
+bin/elara --cwd /path/to/phoenix-app
+```
+
+The comma-separated list selects existing values; it does not set them. Keep
+this list in your own shell/startup configuration, not an agent-editable
+project file. Restart an existing Elara server after changing its environment.
+Tool arguments cannot add names. Elara currently has no user-level command
+environment config file.
+
+**Elara's own credentials never pass through, even when named:** provider keys,
+Exa, server and worker tokens, and Codex/Grok auth variables. The `ELARA_`,
+`XAI_`, `EXA_`, `OPENAI_`, `CODEX_`, `GROK_`, and `ANTHROPIC_` namespaces and
+`CLAUDE_CODE_OAUTH_TOKEN` stay withheld. **Project credentials you explicitly
+name do pass through**, including `DATABASE_URL` and `SECRET_KEY_BASE`; only
+name values you intend the model's commands to use.
+
+Run `mix elara.env` with the same startup environment to diagnose a missing
+variable. It lists forwarded and withheld names without exposing values.
+Environment scrubbing is **not an OS sandbox**: commands and trusted local
+plugins can still read credential files through ordinary filesystem access.
+
 ## Ask or chat
 
 Run one turn and exit:

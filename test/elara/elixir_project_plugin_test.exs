@@ -16,14 +16,26 @@ defmodule Elara.ElixirProjectPluginTest do
     bin = Path.join(project, "bin")
     mix = Path.join(bin, "mix")
     File.mkdir_p!(bin)
-    File.write!(mix, "#!/bin/sh\nprintf 'fake mix %s\\n' \"$*\"\n")
+
+    File.write!(
+      mix,
+      "#!/bin/sh\nif [ -n \"${XAI_API_KEY+x}\" ]; then echo 'credential leaked'; exit 99; fi\nprintf 'fake mix %s\\n' \"$*\"\n"
+    )
+
     File.chmod!(mix, 0o755)
 
     previous_path = System.fetch_env!("PATH")
+    previous_key = System.get_env("XAI_API_KEY")
     System.put_env("PATH", bin <> ":" <> previous_path)
+    System.put_env("XAI_API_KEY", "fake-plugin-test-value")
 
     on_exit(fn ->
       System.put_env("PATH", previous_path)
+
+      if previous_key,
+        do: System.put_env("XAI_API_KEY", previous_key),
+        else: System.delete_env("XAI_API_KEY")
+
       File.rm_rf!(project)
     end)
 
@@ -75,6 +87,26 @@ defmodule Elara.ElixirProjectPluginTest do
              candidate.module.handle_tool("elixir_rerun_last", %{}, ctx, target_state)
 
     assert output =~ "fake mix test all"
+
+    File.write!(
+      mix,
+      "#!/bin/sh\ncase \"$1\" in format) sleep 0.2; touch late ;; compile) touch compile_called ;; esac\n"
+    )
+
+    assert {{:indeterminate, output}, ^initial_state} =
+             candidate.module.handle_tool(
+               "elixir_check",
+               %{"check" => "all"},
+               %{ctx | timeout_ms: 30},
+               initial_state
+             )
+
+    assert output =~ "timed_out"
+    assert output =~ "partially changed"
+    refute output =~ "evidence_run_id="
+    Process.sleep(250)
+    refute File.exists?(Path.join(project, "late"))
+    refute File.exists?(Path.join(project, "compile_called"))
   end
 
   @tag timeout: 60_000

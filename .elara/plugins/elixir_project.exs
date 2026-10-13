@@ -127,7 +127,7 @@ defmodule ElixirProjectPlugin do
     """
 
     {status, output, duration_ms} =
-      run_mix(["run", "--no-start", "--no-compile", "-e", expression], ctx.cwd)
+      run_mix(["run", "--no-start", "--no-compile", "-e", expression], ctx)
 
     finish_run(state, "project_info", {"elixir_project_info", %{}}, status, duration_ms, output)
   end
@@ -153,7 +153,7 @@ defmodule ElixirProjectPlugin do
         commands = Enum.map(checks, fn {_name, arguments} -> ["mix" | arguments] end)
 
         recorded_run(state, "check:#{check}", {"elixir_check", args}, ctx, commands, fn ->
-          run_checks(checks, ctx.cwd)
+          run_checks(checks, ctx)
         end)
 
       _other ->
@@ -165,7 +165,7 @@ defmodule ElixirProjectPlugin do
     case Map.get(args, "target") do
       nil ->
         recorded_run(state, "test:all", {"elixir_test", args}, ctx, [["mix", "test"]], fn ->
-          run_mix(["test"], ctx.cwd)
+          run_mix(["test"], ctx)
         end)
 
       target when is_binary(target) and target != "" ->
@@ -179,7 +179,7 @@ defmodule ElixirProjectPlugin do
             ctx,
             [["mix", "test", target]],
             fn ->
-              run_mix(["test", target], ctx.cwd)
+              run_mix(["test", target], ctx)
             end
           )
         end
@@ -239,9 +239,8 @@ defmodule ElixirProjectPlugin do
   defp recorded_run(state, command, {name, args}, ctx, commands, run) do
     paths = Map.get(args, "evidence_paths", default_evidence_paths(args))
 
-    with {:ok, sources} <- CheckEvidence.capture(ctx.cwd, paths) do
-      {status, output, duration_ms} = run.()
-
+    with {:ok, sources} <- CheckEvidence.capture(ctx.cwd, paths),
+         {status, output, duration_ms} when is_integer(status) <- run.() do
       evidence =
         CheckEvidence.finish(ctx.cwd, sources, command, status, duration_ms, output)
         |> Map.put("commands", commands)
@@ -266,6 +265,9 @@ defmodule ElixirProjectPlugin do
 
       {{kind, text <> suffix}, next_state}
     else
+      {:indeterminate, output, duration_ms} ->
+        finish_run(state, command, {name, args}, :indeterminate, duration_ms, output)
+
       {:error, reason} ->
         {{:error, "Check not run: cannot capture selected evidence: #{inspect(reason)}"}, state}
     end
@@ -278,23 +280,32 @@ defmodule ElixirProjectPlugin do
 
   defp default_evidence_paths(_), do: []
 
-  defp run_checks(checks, cwd) do
+  defp run_checks(checks, ctx) do
     started_at = System.monotonic_time(:millisecond)
 
     results =
-      Enum.map(checks, fn {name, arguments} ->
-        {status, output, _duration_ms} = run_mix(arguments, cwd)
-        {name, status, output}
+      Enum.reduce_while(checks, [], fn {name, arguments}, results ->
+        {status, output, _duration_ms} = run_mix(arguments, ctx)
+        next = results ++ [{name, status, output}]
+        if status == :indeterminate, do: {:halt, next}, else: {:cont, next}
       end)
 
     status =
-      if Enum.all?(results, fn {_name, status, _output} -> status == 0 end),
-        do: 0,
-        else: 1
+      cond do
+        Enum.any?(results, fn {_, status, _} -> status == :indeterminate end) -> :indeterminate
+        Enum.all?(results, fn {_, status, _} -> status == 0 end) -> 0
+        true -> 1
+      end
 
     output =
       Enum.map_join(results, "\n\n", fn {name, check_status, check_output} ->
-        label = if check_status == 0, do: "ok", else: "failed (exit #{check_status})"
+        label =
+          case check_status do
+            0 -> "ok"
+            :indeterminate -> "indeterminate"
+            status -> "failed (exit #{status})"
+          end
+
         body = check_output
         if body == "", do: "#{name}: #{label}", else: "#{name}: #{label}\n#{body}"
       end)
@@ -302,18 +313,42 @@ defmodule ElixirProjectPlugin do
     {status, output, System.monotonic_time(:millisecond) - started_at}
   end
 
-  defp run_mix(arguments, cwd) do
+  defp run_mix(arguments, ctx) do
     started_at = System.monotonic_time(:millisecond)
 
-    {output, status} =
-      try do
-        System.cmd("mix", arguments, cd: cwd, stderr_to_stdout: true)
-      rescue
-        error in ErlangError ->
-          {"could not run mix: #{Exception.message(error)}", 127}
-      end
+    case Elara.Exec.run(["mix" | arguments],
+           cwd: ctx.cwd,
+           timeout_ms: ctx.timeout_ms || 600_000,
+           max_bytes: ctx.max_output_bytes || 16_384,
+           output_policy: :head_tail
+         ) do
+      {:ok, %{termination: :exited, code: code} = result} when is_integer(code) ->
+        output =
+          if result.output_capped,
+            do: result.output <> "\n[... middle of Mix output omitted by execution byte cap ...]",
+            else: result.output
 
-    {status, output, System.monotonic_time(:millisecond) - started_at}
+        {code, output, result.elapsed_ms}
+
+      {:ok, result} ->
+        {:indeterminate,
+         "Mix command #{result.termination}; it may have partially changed the workspace. Inspect before rerunning.\n" <>
+           result.output, result.elapsed_ms}
+
+      {:error, {:not_started, message}} ->
+        {127, "could not run mix: " <> message, System.monotonic_time(:millisecond) - started_at}
+
+      {:indeterminate, message} ->
+        {:indeterminate,
+         "Mix command indeterminate; inspect the workspace before rerunning: " <> message,
+         System.monotonic_time(:millisecond) - started_at}
+    end
+  end
+
+  defp finish_run(state, command, _invocation, :indeterminate, duration_ms, output) do
+    {{:indeterminate,
+      "#{command} indeterminate (#{duration_ms} ms)\n" <> compact(String.replace_invalid(output))},
+     state}
   end
 
   defp finish_run(state, command, invocation, exit_status, duration_ms, output) do

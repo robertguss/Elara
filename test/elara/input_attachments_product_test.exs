@@ -81,10 +81,10 @@ defmodule Elara.InputAttachmentsProductTest do
     end
 
     [user | _] = Elara.transcript(session)
-    assert user.text == "Analyze é 👩‍💻 sent"
+    assert user.text == "Analyze é 👩‍💻 sent\nclipboard é\t[31m\n/interrupt"
     assert [%{"kind" => "text"} = text, %{"kind" => "image"} = image] = user.attachments
     assert text["content"] == "AT_SUBMISSION"
-    assert image["name"] == "outside blue yellow α.png"
+    assert image["name"] == "clipboard.png"
     assert image["mime_type"] == "image/png"
     assert Base.decode64!(image["base64"]) == File.read!(Path.join(root, "expected.png"))
 

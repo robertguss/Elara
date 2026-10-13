@@ -137,8 +137,8 @@ defmodule Elara.Session.StoreTest do
     assert {:ok, reopened} = Store.open(saved.path)
     assert reopened.inbox == [typed]
     assert Elara.Completion.occurrence(reopened) == "carried-origin"
-    [header | lines] = File.read!(saved.path) |> String.split("\n", trim: true)
-    header = JSON.decode!(header)
+    [header | entries] = decode_lines(saved.path)
+    lines = Enum.map(entries, &JSON.encode!/1)
 
     invalid = [
       %{},
@@ -218,7 +218,7 @@ defmodule Elara.Session.StoreTest do
     [header, first, second, third] = decode_lines(store.path)
 
     assert header == %{
-             "version" => 1,
+             "version" => 2,
              "id" => store.id,
              "cwd" => Path.expand(cwd),
              "leaf" => third["id"]
@@ -336,8 +336,8 @@ defmodule Elara.Session.StoreTest do
   test "open rejects unsupported versions and bad headers", %{cwd: cwd} do
     store = Store.new(cwd)
 
-    write_lines(store.path, %{header(store) | "version" => 2}, [])
-    assert {:error, {:unsupported_version, 2}} = Store.open(store.path, cwd)
+    write_lines(store.path, %{header(store) | "version" => 3}, [])
+    assert {:error, {:unsupported_version, 3}} = Store.open(store.path, cwd)
 
     write_lines(store.path, %{"version" => 1, "id" => store.id}, [])
     assert {:error, :bad_header} = Store.open(store.path, cwd)
@@ -494,7 +494,7 @@ defmodule Elara.Session.StoreTest do
     assert header["name"] == "manual-startup-name"
     assert header["id"] == store.id
     assert header["cwd"] == Path.expand(cwd)
-    assert header["version"] == 1
+    assert header["version"] == 2
     assert Map.has_key?(header, "leaf")
 
     assert {:ok, renamed} = Store.rename(store, "a different readable name")
@@ -508,6 +508,89 @@ defmodule Elara.Session.StoreTest do
     assert {:ok, store} = Store.append(store, Message.user("ephemeral"))
     assert Store.history(store) == [Message.user("ephemeral")]
     refute File.exists?(root)
+  end
+
+  test "appends and metadata changes preserve every previous byte and reject stale saves", %{
+    cwd: cwd
+  } do
+    {:ok, store} = Store.append(Store.new(cwd), Message.user("original"))
+    prefix = File.read!(store.path)
+    inode = File.stat!(store.path).inode
+    {:ok, claimed} = Store.claim(store)
+    {:ok, next} = Store.append(claimed, %Message.Assistant{text: "answer"})
+    {:ok, named} = Store.rename(next, "latest")
+    assert :ok = Store.sync(named)
+    assert File.stat!(store.path).inode == inode
+    assert String.starts_with?(File.read!(store.path), prefix)
+    assert {:error, :stale_store} = Store.rename(claimed, "lost update")
+    assert {:ok, reopened} = Store.open(store.path)
+    assert reopened.name == "latest"
+
+    assert Store.history(reopened) == [
+             Message.user("original"),
+             %Message.Assistant{text: "answer"}
+           ]
+
+    assert :ok = Store.release(named)
+  end
+
+  test "every torn batch prefix drops both inbox consumption and its messages, then repairs", %{
+    cwd: cwd
+  } do
+    {:ok, store} = Store.append(Store.new(cwd), Message.user("earlier"))
+
+    queued = %{
+      id: "input",
+      session_id: store.id,
+      sender_id: "operator",
+      kind: :normal,
+      state: :queued,
+      user: Message.user("consume me"),
+      created_at: 1,
+      error: nil
+    }
+
+    {:ok, store} = Store.put_inbox(store, [queued], false)
+    prefix = File.read!(store.path)
+    {:ok, consumed} = Store.put_inbox(store, [%{queued | state: :consumed}], true, queued.user)
+    full = File.read!(consumed.path)
+    batch = binary_part(full, byte_size(prefix), byte_size(full) - byte_size(prefix))
+
+    for cut <- 0..(byte_size(batch) - 1) do
+      torn = prefix <> binary_part(batch, 0, cut)
+      File.write!(store.path, torn)
+      assert {:ok, reopened} = Store.open(store.path)
+      assert reopened.inbox == [queued]
+      refute reopened.inputs_paused
+      assert Store.history(reopened) == [Message.user("earlier")]
+      assert File.read!(store.path) == torn
+    end
+
+    {:ok, reopened} = Store.open(store.path)
+    {:ok, repaired} = Store.append(reopened, Message.user("after crash"))
+    assert {:ok, loaded} = Store.open(repaired.path)
+    assert loaded.inbox == [queued]
+    assert Store.history(loaded) == [Message.user("earlier"), Message.user("after crash")]
+
+    File.write!(store.path, full)
+    assert {:ok, loaded} = Store.open(store.path)
+    assert loaded.inbox == [%{queued | state: :consumed}]
+    assert loaded.inputs_paused
+    assert Store.history(loaded) == [Message.user("earlier"), queued.user]
+    File.write!(store.path, full <> "{\n")
+    assert {:error, {:malformed_line, _, :invalid_json}} = Store.open(store.path)
+  end
+
+  test "legacy files extend without rewriting, including a missing final newline", %{cwd: cwd} do
+    store = Store.new(cwd)
+    write_lines(store.path, header(store), [entry("root", 1, Message.user("legacy"))])
+    prefix = String.trim_trailing(File.read!(store.path), "\n")
+    File.write!(store.path, prefix)
+    {:ok, opened} = Store.open(store.path)
+    {:ok, extended} = Store.append(opened, %Message.Assistant{text: "new"})
+    assert String.starts_with?(File.read!(store.path), prefix <> "\n")
+    assert {:ok, reopened} = Store.open(extended.path)
+    assert Store.history(reopened) == [Message.user("legacy"), %Message.Assistant{text: "new"}]
   end
 
   test "claim is exclusive per path", %{cwd: cwd} do
@@ -577,9 +660,18 @@ defmodule Elara.Session.StoreTest do
   end
 
   defp decode_lines(path) do
-    path
-    |> File.read!()
-    |> String.split("\n", trim: true)
-    |> Enum.map(&JSON.decode!/1)
+    [initial | records] =
+      path |> File.read!() |> String.split("\n", trim: true) |> Enum.map(&JSON.decode!/1)
+
+    {header, entries} =
+      Enum.reduce(records, {initial, []}, fn
+        %{"batch" => %{"header" => header, "entries" => added}}, {_, entries} ->
+          {header, entries ++ added}
+
+        entry, {header, entries} ->
+          {header, entries ++ [entry]}
+      end)
+
+    [header | entries]
   end
 end

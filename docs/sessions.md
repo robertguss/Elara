@@ -4,6 +4,21 @@
 conversation history after each message and lets you resume or branch that
 history later.
 
+Transcript saves append a complete JSONL batch containing new messages and the
+latest session metadata. They do not rewrite earlier messages. The session
+holds its transcript file open and syncs it after the final inbox update, before
+reporting a completed or interrupted turn. Shutdown and unclaimed bootstrap
+writes also sync. During a turn, completed batches are readable, but are not
+promised to survive a power loss before that sync.
+
+A final batch without its newline is ignored on reopen, even if its JSON looks
+complete. The next writer removes that tail under the session lock before
+appending. A malformed complete line or an invalid message is an error, not
+evidence that can be discarded. Version 1 transcripts remain readable and gain
+batches on their next save without rewriting their original bytes. Older Elara
+builds cannot read the new batches. Branches retain their off-path messages;
+copies include only the selected path.
+
 ## Start and continue
 
 ```bash

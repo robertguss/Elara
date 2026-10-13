@@ -6,7 +6,7 @@ defmodule Elara.Session.Store do
   alias Elara.Message
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
 
-  @version 1
+  @version 2
   @hash_length 12
 
   defmodule Entry do
@@ -46,6 +46,10 @@ defmodule Elara.Session.Store do
           check_evidence: map() | nil,
           lock_path: String.t() | nil,
           lock_handle: port() | nil,
+          persisted_count: non_neg_integer(),
+          persisted_bytes: non_neg_integer(),
+          disk_bytes: non_neg_integer(),
+          append_separator: boolean(),
           persist?: boolean()
         }
 
@@ -61,6 +65,10 @@ defmodule Elara.Session.Store do
     :completion_occurrence,
     :lock_path,
     :lock_handle,
+    persisted_count: 0,
+    persisted_bytes: 0,
+    disk_bytes: 0,
+    append_separator: false,
     context: %{},
     entries: [],
     inbox: [],
@@ -116,9 +124,8 @@ defmodule Elara.Session.Store do
   @spec open(String.t(), String.t() | nil) :: {:ok, t()} | {:error, term()}
   def open(path, expected_cwd \\ nil) when is_binary(path) do
     with {:ok, raw} <- File.read(path),
-         {:ok, header, entry_lines} <- decode_file_lines(raw),
+         {:ok, header, entries, bytes} <- decode_file(raw),
          :ok <- validate_expected_cwd(header.cwd, expected_cwd),
-         {:ok, entries} <- decode_entries(entry_lines, header.legacy?),
          {:ok, leaf} <- resolve_leaf(header.leaf, entries) do
       {:ok,
        %__MODULE__{
@@ -136,7 +143,11 @@ defmodule Elara.Session.Store do
          inbox: header.inbox,
          agent_wake_count: header.agent_wake_count,
          inputs_paused: header.inputs_paused,
-         active_input_id: header.active_input_id
+         active_input_id: header.active_input_id,
+         persisted_count: length(entries),
+         persisted_bytes: bytes,
+         disk_bytes: byte_size(raw),
+         append_separator: bytes == byte_size(raw) and not String.ends_with?(raw, "\n")
        }}
     end
   end
@@ -378,7 +389,7 @@ defmodule Elara.Session.Store do
     key = Path.expand(path)
 
     case Registry.lookup(Elara.SessionLocks, key) do
-      [{pid, {lock_path, lock_handle}}] when pid == self() ->
+      [{pid, {lock_path, lock_handle, _writer}}] when pid == self() ->
         {:ok, %{store | lock_path: lock_path, lock_handle: lock_handle}}
 
       _ ->
@@ -390,7 +401,7 @@ defmodule Elara.Session.Store do
     lock_path = key <> ".lock"
 
     with {:ok, lock_handle} <- acquire_file_lock(lock_path) do
-      case Registry.register(Elara.SessionLocks, key, {lock_path, lock_handle}) do
+      case Registry.register(Elara.SessionLocks, key, {lock_path, lock_handle, nil}) do
         {:ok, _} ->
           {:ok, %{store | lock_path: lock_path, lock_handle: lock_handle}}
 
@@ -401,23 +412,25 @@ defmodule Elara.Session.Store do
     end
   end
 
-  @spec release(t()) :: :ok
+  @spec release(t()) :: :ok | {:error, term()}
   def release(%__MODULE__{persist?: false}), do: :ok
   def release(%__MODULE__{path: nil}), do: :ok
 
-  def release(%__MODULE__{path: path, lock_handle: lock_handle}) do
+  def release(%__MODULE__{path: path}) do
     key = Path.expand(path)
 
     case Registry.lookup(Elara.SessionLocks, key) do
-      [{pid, {_lock_path, registered_lock_handle}}] when pid == self() ->
+      [{pid, {_lock_path, registered_lock_handle, writer}}] when pid == self() ->
+        result = if writer, do: :file.sync(writer), else: :ok
+        if writer, do: :file.close(writer)
+
         Registry.unregister(Elara.SessionLocks, key)
-        close_lock(lock_handle || registered_lock_handle)
+        close_lock(registered_lock_handle)
+        result
 
       _ ->
         :ok
     end
-
-    :ok
   end
 
   defp acquire_file_lock(lock_path) do
@@ -429,7 +442,7 @@ defmodule Elara.Session.Store do
           [
             :binary,
             :exit_status,
-            {:args, ["-n", lock_path, "sh", "-c", "printf ready; cat"]}
+            {:args, ["-n", lock_path, "sh", "-c", "printf ready; read release"]}
           ]
         )
 
@@ -452,7 +465,16 @@ defmodule Elara.Session.Store do
   end
 
   defp close_lock(port) when is_port(port) do
-    if Port.info(port), do: Port.close(port)
+    if Port.info(port) do
+      Port.command(port, "release\n")
+
+      receive do
+        {^port, {:exit_status, _}} -> :ok
+      after
+        5_000 -> if Port.info(port), do: Port.close(port)
+      end
+    end
+
     :ok
   end
 
@@ -625,20 +647,107 @@ defmodule Elara.Session.Store do
   def save(%__MODULE__{path: nil}), do: {:error, :no_path}
 
   def save(store) do
-    lines = [encode_header(store) | Enum.map(store.entries, &encode_entry/1)]
-    payload = Enum.map_join(lines, "\n", &JSON.encode!/1) <> "\n"
-    dir = Path.dirname(store.path)
-    tmp = store.path <> ".tmp.#{System.unique_integer([:positive])}"
+    # Serialize the entire transaction before touching disk. A partial final
+    # line never publishes either its entries or its mutable metadata.
+    entries = store.entries |> Enum.drop(store.persisted_count) |> Enum.map(&encode_entry/1)
+    batch = JSON.encode!(%{"batch" => %{"header" => encode_header(store), "entries" => entries}})
+    payload = batch <> "\n"
 
-    with :ok <- File.mkdir_p(dir),
-         :ok <- File.write(tmp, payload),
-         :ok <- File.chmod(tmp, 0o600),
-         :ok <- File.rename(tmp, store.path) do
-      {:ok, store}
+    case Registry.lookup(Elara.SessionLocks, Path.expand(store.path)) do
+      [{pid, {_, _, writer}}] when pid == self() ->
+        append_batch(store, writer, payload)
+
+      _ ->
+        with {:ok, claimed} <- claim(store) do
+          try do
+            with {:ok, saved} <- append_batch(claimed, nil, payload),
+                 :ok <- release(saved) do
+              {:ok, %{saved | lock_path: nil, lock_handle: nil}}
+            end
+          after
+            release(claimed)
+          end
+        end
+    end
+  end
+
+  defp append_batch(store, writer, payload) do
+    with {:ok, writer} <- ensure_writer(store.path, writer),
+         :ok <- check_writer_path(store.path, writer),
+         {:ok, size} <- :file.position(writer, :eof),
+         true <- size == store.disk_bytes,
+         :ok <- File.chmod(store.path, 0o600),
+         {:ok, _} <- :file.position(writer, store.persisted_bytes),
+         :ok <- if(size > store.persisted_bytes, do: :file.truncate(writer), else: :ok),
+         prefix =
+           (cond do
+              size == 0 ->
+                JSON.encode!(encode_header(%__MODULE__{id: store.id, cwd: store.cwd})) <> "\n"
+
+              store.append_separator ->
+                "\n"
+
+              true ->
+                ""
+            end),
+         :ok <- :file.write(writer, [prefix, payload]) do
+      bytes = store.persisted_bytes + byte_size(prefix) + byte_size(payload)
+
+      {:ok,
+       %{
+         store
+         | persisted_count: length(store.entries),
+           persisted_bytes: bytes,
+           disk_bytes: bytes,
+           append_separator: false
+       }}
     else
-      {:error, reason} ->
-        File.rm(tmp)
-        {:error, reason}
+      false -> {:error, :stale_store}
+      error -> error
+    end
+  end
+
+  defp ensure_writer(path, nil) do
+    with {:ok, writer} <-
+           :file.open(String.to_charlist(path), [:raw, :binary, :read, :write]) do
+      Registry.update_value(Elara.SessionLocks, Path.expand(path), fn {path, lock, _} ->
+        {path, lock, writer}
+      end)
+
+      {:ok, writer}
+    end
+  end
+
+  defp ensure_writer(_path, writer), do: {:ok, writer}
+
+  defp check_writer_path(path, writer) do
+    with {:ok, path} <- File.stat(path),
+         {:ok, record} <- :file.read_file_info(writer) do
+      writer = File.Stat.from_record(record)
+
+      cond do
+        path.type == :directory ->
+          {:error, :eisdir}
+
+        path.type == :regular and path.inode == writer.inode and
+          path.major_device == writer.major_device and path.minor_device == writer.minor_device ->
+          :ok
+
+        true ->
+          {:error, :stale_store}
+      end
+    end
+  end
+
+  @doc "Sync all complete transcript batches at a turn boundary."
+  def sync(%__MODULE__{persist?: false}), do: :ok
+  def sync(%__MODULE__{path: nil}), do: :ok
+
+  def sync(%__MODULE__{path: path}) do
+    case Registry.lookup(Elara.SessionLocks, Path.expand(path)) do
+      [{pid, {_, _, nil}}] when pid == self() -> :ok
+      [{pid, {_, _, writer}}] when pid == self() -> :file.sync(writer)
+      _ -> {:error, :not_owner}
     end
   end
 
@@ -733,20 +842,55 @@ defmodule Elara.Session.Store do
     Enum.any?(entries, &is_struct(&1.message, User))
   end
 
-  defp decode_file_lines(raw) do
+  defp decode_file(raw) do
     lines = raw |> String.split("\n", trim: false) |> drop_terminal_empty_line()
 
     case lines do
       [header_line | entry_lines] ->
-        case JSON.decode(header_line) do
-          {:ok, encoded} ->
-            case decode_header(encoded) do
-              {:ok, header} -> {:ok, header, entry_lines}
-              {:error, reason} -> {:error, reason}
-            end
+        with {:ok, encoded} <- JSON.decode(header_line),
+             {:ok, header} <- decode_header(encoded) do
+          initial = {header, [], MapSet.new(), nil, byte_size(header_line) + 1}
+          last = length(entry_lines) - 1
+          terminated? = String.ends_with?(raw, "\n")
 
-          {:error, _} ->
-            {:error, :bad_header}
+          entry_lines
+          |> Enum.with_index()
+          |> Enum.reduce_while({:ok, initial}, fn {line, index}, {:ok, state} ->
+            final? = index == last
+
+            case JSON.decode(line) do
+              _ when final? and not terminated? and header.version == @version ->
+                {:halt, {:ok, state}}
+
+              {:ok, %{"batch" => _}} when final? and not terminated? ->
+                {:halt, {:ok, state}}
+
+              {:ok, record} ->
+                case decode_record(record, state, index + 2) do
+                  {:ok, {h, entries, ids, previous, bytes}} ->
+                    {:cont, {:ok, {h, entries, ids, previous, bytes + byte_size(line) + 1}}}
+
+                  error ->
+                    {:halt, error}
+                end
+
+              {:error, _} when final? and line != "" and not terminated? ->
+                {:halt, {:ok, state}}
+
+              {:error, _} ->
+                {:halt, {:error, {:malformed_line, index + 2, :invalid_json}}}
+            end
+          end)
+          |> case do
+            {:ok, {h, entries, _ids, _previous, bytes}} ->
+              {:ok, h, Enum.reverse(entries), min(bytes, byte_size(raw))}
+
+            error ->
+              error
+          end
+        else
+          {:error, %JSON.DecodeError{}} -> {:error, :bad_header}
+          error -> error
         end
 
       [] ->
@@ -756,6 +900,54 @@ defmodule Elara.Session.Store do
 
   defp drop_terminal_empty_line(lines) do
     if List.last(lines) == "", do: Enum.drop(lines, -1), else: lines
+  end
+
+  defp decode_record(
+         %{"batch" => %{"header" => raw, "entries" => added} = batch} = record,
+         {header, entries, ids, previous, bytes},
+         line
+       )
+       when map_size(record) == 1 and map_size(batch) == 2 and is_list(added) do
+    with {:ok, next} <- decode_header(raw),
+         true <- next.id == header.id and next.cwd == header.cwd and next.version == @version,
+         {:ok, {_, entries, ids, previous, _}} <-
+           Enum.reduce_while(
+             added,
+             {:ok, {%{next | legacy?: false}, entries, ids, previous, bytes}},
+             fn entry, {:ok, state} ->
+               case decode_entry_record(entry, state, line) do
+                 {:ok, state} -> {:cont, {:ok, state}}
+                 error -> {:halt, error}
+               end
+             end
+           ),
+         true <- is_nil(next.leaf) or MapSet.member?(ids, next.leaf) do
+      {:ok, {next, entries, ids, previous, bytes}}
+    else
+      false -> {:error, :bad_header}
+      error -> error
+    end
+  end
+
+  defp decode_record(record, {header, entries, ids, previous, bytes}, line) do
+    decode_entry_record(record, {header, entries, ids, previous, bytes}, line)
+  end
+
+  defp decode_entry_record(record, {header, entries, ids, previous, bytes}, line) do
+    with {:ok, entry} <- decode_entry(record, header.legacy?, previous) do
+      cond do
+        MapSet.member?(ids, entry.id) ->
+          {:error, {:duplicate_id, entry.id}}
+
+        not is_nil(entry.parent_id) and not MapSet.member?(ids, entry.parent_id) ->
+          {:error, {:malformed_line, line, :invalid_parent}}
+
+        true ->
+          {:ok, {header, [entry | entries], MapSet.put(ids, entry.id), entry.id, bytes}}
+      end
+    else
+      {:error, reason} -> {:error, {:malformed_line, line, reason}}
+    end
   end
 
   defp decode_header(%{"version" => version, "id" => id, "cwd" => cwd} = header) do
@@ -782,7 +974,7 @@ defmodule Elara.Session.Store do
       not is_integer(version) ->
         {:error, :bad_header}
 
-      version != @version ->
+      version not in [1, @version] ->
         {:error, {:unsupported_version, version}}
 
       not (is_binary(id) and id != "") ->
@@ -814,6 +1006,7 @@ defmodule Elara.Session.Store do
              true <- Enum.all?(inbox, &(&1.session_id == id)) do
           {:ok,
            %{
+             version: version,
              id: id,
              cwd: cwd,
              leaf: Map.get(header, "leaf", :legacy),
@@ -932,52 +1125,6 @@ defmodule Elara.Session.Store do
   end
 
   defp validate_expected_cwd(_stored_cwd, _expected_cwd), do: {:error, :cwd_mismatch}
-
-  defp decode_entries(lines, legacy?) do
-    last_index = length(lines) - 1
-
-    lines
-    |> Enum.with_index()
-    |> Enum.reduce_while({:ok, [], MapSet.new(), nil}, fn {line, index}, acc ->
-      decode_entry_reducer(line, index, last_index, legacy?, acc)
-    end)
-    |> case do
-      {:ok, entries, _ids, _previous} -> validate_tree(Enum.reverse(entries))
-      {:ok, entries} -> validate_tree(entries)
-      error -> error
-    end
-  end
-
-  defp decode_entry_reducer(line, index, last_index, legacy?, {:ok, entries, ids, previous}) do
-    case decode_entry_line(line, legacy?, previous) do
-      {:ok, entry} ->
-        cond do
-          MapSet.member?(ids, entry.id) ->
-            {:halt, {:error, {:duplicate_id, entry.id}}}
-
-          not is_nil(entry.parent_id) and not MapSet.member?(ids, entry.parent_id) ->
-            {:halt, {:error, {:malformed_line, index + 2, :invalid_parent}}}
-
-          true ->
-            {:cont, {:ok, [entry | entries], MapSet.put(ids, entry.id), entry.id}}
-        end
-
-      {:error, :invalid_json} when index == last_index and line != "" ->
-        {:halt, {:ok, Enum.reverse(entries)}}
-
-      {:error, reason} ->
-        {:halt, {:error, {:malformed_line, index + 2, reason}}}
-    end
-  end
-
-  defp validate_tree(entries), do: {:ok, entries}
-
-  defp decode_entry_line(line, legacy?, legacy_parent) do
-    case JSON.decode(line) do
-      {:ok, encoded} -> decode_entry(encoded, legacy?, legacy_parent)
-      {:error, _} -> {:error, :invalid_json}
-    end
-  end
 
   defp decode_entry(encoded, legacy?, legacy_parent) when is_map(encoded) do
     payload_keys =

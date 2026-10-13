@@ -71,6 +71,7 @@ defmodule Elara.TuiTest do
   end
 
   setup do
+    existing_sessions = Elara.live_sessions() |> Enum.map(& &1.id) |> MapSet.new()
     tmp = Path.join(System.tmp_dir!(), "elara-tui-#{System.unique_integer([:positive])}")
     File.mkdir_p!(tmp)
     previous_appearance = System.get_env("ELARA_TUI_APPEARANCE_FILE")
@@ -79,6 +80,8 @@ defmodule Elara.TuiTest do
     Application.put_env(:elara, :sessions_root, Path.join(tmp, "sessions"))
 
     on_exit(fn ->
+      stop_sessions_except(existing_sessions)
+
       if previous_appearance do
         System.put_env("ELARA_TUI_APPEARANCE_FILE", previous_appearance)
       else

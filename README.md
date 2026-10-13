@@ -74,6 +74,33 @@ to an already-live session retains that session's original workspace.
 The working directory controls relative tool paths, shell commands, local plugin
 discovery, session scope, project instructions, and Agent Skills discovery.
 
+### Stable daily build
+
+Use the separate daily build when building Elara with Elara. It has its own
+source, dependencies, `_build`, and native binaries, so agents can run
+`mix compile` and `bin/check` in the development checkout without replacing a
+running session's command runner.
+
+```bash
+# From the development checkout; fetch and build the latest origin/main:
+bin/elara-update
+# Or choose a specific commit already merged into main:
+bin/elara-update COMMIT
+
+cd /path/to/your/project
+elara-stable                    # same arguments as elara
+```
+
+Updates are explicit, not automatic. Each successful update switches future
+launches; existing sessions keep their original build. Failed updates leave the
+previous build selected. Builds live under `~/.elara/daily` (override with an
+absolute `ELARA_STABLE_DIR` for both commands). Old builds are retained; do not
+remove one while a session uses it. This is a source build, not an installer or
+release; it still needs the toolchain. Provider login and session files are
+shared with the ordinary launcher. Use a separate server port when running both
+builds at once, since attaching to an existing server uses that server's build:
+`elara-stable --port 4050`.
+
 For a small practice project, use [the shipping example](examples/shipping/README.md).
 Its Mac guide creates disposable workspaces and includes chat/TUI tasks with
 independent checks. The baseline needs no dependencies or network.

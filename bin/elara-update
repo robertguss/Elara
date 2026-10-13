@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+stable="${ELARA_STABLE_DIR:-$HOME/.elara/daily}"
+mkdir -p -- "$stable/builds"
+stable="$(cd -- "$stable" && pwd -P)"
+
+# Serialize updates, never launches. A failed build leaves current untouched.
+exec 9>"$stable/update.lock"
+flock 9
+git -C "$root" fetch origin main
+commit="$(git -C "$root" rev-parse --verify "${1:-origin/main}^{commit}")"
+git -C "$root" merge-base --is-ancestor "$commit" origin/main || {
+  echo "Choose a commit on origin/main." >&2
+  exit 1
+}
+
+# Never overwrite a binary a live session may hold, even for the same commit.
+build="$(mktemp -d "$stable/builds/$commit.XXXXXXXX")"
+git -C "$root" archive "$commit" | tar -x -C "$build"
+(
+  cd -- "$build"
+  unset MIX_EXS MIX_BUILD_PATH MIX_BUILD_ROOT MIX_DEPS_PATH CARGO_TARGET_DIR
+  export MIX_ENV=dev
+  mix deps.get
+  mix compile --warnings-as-errors
+  mix run --no-start -e 'Mix.Tasks.Elara.Tui.binary!()'
+)
+printf '%s\n' "$build" > "$stable/current.next"
+mv -f -- "$stable/current.next" "$stable/current"
+printf 'Daily build ready: %s\nRun bin/elara-stable from your project.\n' "$commit"

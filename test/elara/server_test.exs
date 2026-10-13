@@ -91,6 +91,71 @@ defmodule Elara.ServerTest do
       view["turn"]["state"] == "idle" and
         Enum.any?(view["messages"], &(&1["text"] == "continued"))
 
+  test "limits extension is negotiated, controller-only and retained on reattach" do
+    {:ok, session} = Elara.start_session(provider: script([]), tools: [], persist: false)
+    server = start_supervised!({Elara.Server, port: 0, provider: script([])})
+    port = Elara.Server.port(server)
+
+    sockets =
+      for mode <- ["control", "observe", "legacy"] do
+        socket = connect(port)
+
+        :ok =
+          send_json(socket, %{
+            "version" => 2,
+            "command" => "attach",
+            "session_id" => session,
+            "mode" => if(mode == "control", do: "control", else: "observe"),
+            "extensions" => if(mode == "legacy", do: [], else: ["runtime_limits_v1"])
+          })
+
+        attached = recv_json(socket)
+        assert Map.has_key?(attached["snapshot"], "runtime_limits") == (mode != "legacy")
+        socket
+      end
+
+    [controller, observer, legacy] = sockets
+    on_exit(fn -> Enum.each(sockets, &:gen_tcp.close/1) end)
+
+    command = %{
+      "version" => 2,
+      "command" => "set_runtime_limits",
+      "extension" => "runtime_limits_v1",
+      "changes" => %{"max_iterations" => 150}
+    }
+
+    :ok = send_json(observer, command)
+    assert recv_json(observer)["error"] == "not_controller"
+    :ok = send_json(legacy, command)
+    assert recv_json(legacy)["error"] == "unsupported_extension"
+
+    :ok =
+      send_json(controller, Map.put(command, "changes", %{"max_tool_timeout_ms" => 7_200_000}))
+
+    assert recv_json(controller)["error"] == "invalid_runtime_limits"
+    :ok = send_json(controller, command)
+    assert %{"type" => "runtime_limits_changed", "pending" => false} = recv_json(controller)
+    assert %{"type" => "patch", "ops" => ops} = recv_json(controller)
+    assert Enum.any?(ops, &(&1["op"] == "set_runtime_limits"))
+    assert %{"type" => "patch", "ops" => legacy_ops} = recv_json(legacy)
+    refute Enum.any?(legacy_ops, &(&1["op"] == "set_runtime_limits"))
+    :ok = :gen_tcp.close(controller)
+    reattached = connect(port)
+    on_exit(fn -> :gen_tcp.close(reattached) end)
+
+    :ok =
+      send_json(reattached, %{
+        "version" => 2,
+        "command" => "attach",
+        "session_id" => session,
+        "mode" => "observe",
+        "extensions" => ["runtime_limits_v1"]
+      })
+
+    assert recv_json(reattached)["snapshot"]["runtime_limits"]["next_turn"]["max_iterations"] ==
+             150
+  end
+
   test "stable IDs resolve to live sessions while PID compatibility remains" do
     {:ok, session} =
       Elara.start_session(provider: script([{:ok, asst("hello")}]), tools: [], persist: false)

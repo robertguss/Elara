@@ -62,6 +62,8 @@ defmodule Elara.Session.Handoff do
   def owner(id, _), do: id
 
   def options(shell) do
+    limits = Core.runtime_limits(shell.core)
+
     shell.skill_options ++
       [
         cwd: shell.cwd,
@@ -72,11 +74,11 @@ defmodule Elara.Session.Handoff do
         router: shell.router,
         workspace_id: shell.workspace_id,
         allowed_capabilities: shell.allowed_capabilities,
-        max_iterations: shell.core.config.max_iterations,
+        max_iterations: limits.max_iterations,
         max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
         provider_retry: shell.core.config.retry,
-        tool_timeout_ms: shell.tool_timeout_ms,
-        max_tool_timeout_ms: shell.max_tool_timeout_ms,
+        tool_timeout_ms: limits.tool_timeout_ms,
+        max_tool_timeout_ms: limits.max_tool_timeout_ms,
         context_limit: shell.context_limit
       ]
   end

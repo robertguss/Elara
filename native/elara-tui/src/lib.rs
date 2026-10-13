@@ -4,6 +4,7 @@ mod actions;
 pub mod appearance;
 mod attachments;
 mod inbox;
+mod limits;
 mod presentation;
 mod sessions;
 pub use appearance::{Appearance, Theme, ViewLayout};
@@ -1231,7 +1232,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "create",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, "thread_communication_v1", "plugin_reload_v1"],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, limits::EXTENSION, "thread_communication_v1", "plugin_reload_v1"],
             "mode": mode,
             "cwd": std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).to_string_lossy()
         })
@@ -1239,7 +1240,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "attach",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, "thread_communication_v1", "plugin_reload_v1"],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, limits::EXTENSION, "thread_communication_v1", "plugin_reload_v1"],
             "session_id": target,
             "mode": mode,
             "cursor": cursor.cursor,
@@ -1869,6 +1870,14 @@ fn composer_help(model: &Model) -> Vec<Line<'static>> {
     lines.push(Line::from(
         "Mouse wheel/drag: scroll/select; native selection: terminal modifier.",
     ));
+    lines.push(Line::from(
+        "/limits · /limits calls 150 · /limits timeout 20m (s/m/h)",
+    ));
+    lines.extend(
+        limits::summary(&model.projection.view)
+            .into_iter()
+            .map(Line::from),
+    );
     lines
 }
 
@@ -2233,6 +2242,9 @@ fn validate_snapshot(view: &Value) -> Result<(), String> {
     if let Some(provider) = object.get("provider_view") {
         validate_provider_view(provider)?;
     }
+    if let Some(limits) = object.get("runtime_limits") {
+        limits::validate(limits)?;
+    }
     if let Some(inbox) = object.get("inbox") {
         inbox::validate(inbox, session["id"].as_str().unwrap())?;
     }
@@ -2359,6 +2371,11 @@ fn apply_patch(view: &Value, ops: &[Value]) -> Result<Value, String> {
 
 fn apply_op(view: &mut Value, op: &Value) -> Result<(), String> {
     match op["op"].as_str() {
+        Some("set_runtime_limits") => {
+            limits::validate(&op["runtime_limits"])?;
+            view["runtime_limits"] = op["runtime_limits"].clone();
+            Ok(())
+        }
         Some("set_inbox") => {
             inbox::validate(&op["inbox"], view["session"]["id"].as_str().unwrap_or(""))?;
             view["inbox"] = op["inbox"].clone();

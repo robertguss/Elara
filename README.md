@@ -966,6 +966,17 @@ application config, then defaults. The default timeout must not exceed its
 ceiling. Invalid settings fail session creation rather than silently falling
 back. Children and handoff successors inherit the session's limits.
 
+In the TUI, `/limits` shows the authoritative next-turn limits and their source
+(`config` or `set this session`). Use `/limits calls 150` or
+`/limits timeout 20m`; timeout accepts whole seconds, minutes or hours (`s`,
+`m`, `h`). The aliases `max_iterations` and `tool_timeout_ms` accept integers.
+Changes during a turn apply from the next turn, without changing any remaining
+call or command in the running turn. The config ceiling cannot be raised from
+the TUI. Session overrides survive detach/reattach and pass to children and
+handoff successors, but reopening after a session/server restart restores
+startup config. Help shows the same effective limits; observe mode can read
+them but cannot change them.
+
 Shell output is capped at 16 KiB in the execution stub, and the session keeps
 the same 16 KiB cap as a second line before output enters model history.
 

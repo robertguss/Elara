@@ -519,7 +519,7 @@ defmodule Elara.ThreadCommunicationTest do
   } do
     {child, child_model} = child(parent)
     {:ok, pid} = Elara.session_pid(parent)
-    :sys.replace_state(pid, &%{&1 | tool_timeout_ms: 20})
+    :sys.replace_state(pid, &put_in(&1.core.config.tool_timeout_ms, 20))
     :ok = Elara.ask_async(parent, "wait once")
     assert_receive {:model, model, _}, 2000
 

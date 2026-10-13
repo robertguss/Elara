@@ -266,6 +266,45 @@ defmodule Elara.TuiTest do
     assert output =~ "Notifications PTY passed"
   end
 
+  @tag timeout: 30_000
+  test "limits changed through the actual TUI govern the next turn", context do
+    call = %ToolCall{id: "limits-call", name: "absent", args: {:ok, %{}}}
+
+    {:ok, session} =
+      Elara.start_session(
+        provider:
+          script([
+            {:stream, ["ACTIVE_LIMITS_MARKER", {:sleep, 5_000}],
+             {:ok, asst("ACTIVE_LIMITS_MARKER", [%ToolCall{call | id: "active-call"}])}},
+            {:ok, asst("active finished")},
+            {:ok, asst(nil, [call])},
+            {:ok, asst("should not be requested")}
+          ]),
+        tools: [],
+        persist: false
+      )
+
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+
+    {output, status} =
+      System.cmd(
+        System.find_executable("python3"),
+        [
+          Path.expand("../support/tui_limits_pty.py", __DIR__),
+          context.binary,
+          Integer.to_string(Elara.Server.port(server)),
+          session
+        ],
+        env: [{"ELARA_TUI_STATE_DIR", context.state_dir}],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+    assert output =~ "Limits PTY passed"
+    assert Enum.count(Elara.transcript(session), &match?(%Message.Assistant{}, &1)) == 3
+    assert Elara.materialized_view(session)["runtime_limits"]["next_turn"]["max_iterations"] == 1
+  end
+
   test "headless empty asks fail without waiting for an unsent turn", context do
     {:ok, session} = Elara.start_session(provider: script([]), tools: [], persist: false)
     {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))

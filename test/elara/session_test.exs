@@ -321,6 +321,125 @@ defmodule Elara.SessionTest do
     assert timed_out =~ "partially changed"
   end
 
+  @tag :tmp_dir
+  test "pending limits compose without changing remaining calls or tools in the active turn", %{
+    tmp_dir: cwd
+  } do
+    {:ok, session} =
+      Elara.start_session(
+        provider: {BlockingProvider, self()},
+        cwd: cwd,
+        tools: [Enum.find(Tool.builtins(), &(&1.name == "bash"))],
+        persist: false,
+        max_iterations: 3,
+        tool_timeout_ms: 2_000
+      )
+
+    {:ok, _} = Elara.attach(session, :control)
+    task = Task.async(fn -> Elara.ask(session, "active") end)
+    assert_receive {:provider_blocked, provider, _}, 2_000
+    assert {:ok, true} = Elara.attached_command(session, {:runtime_limits, %{max_iterations: 1}})
+
+    assert {:ok, true} =
+             Elara.attached_command(session, {:runtime_limits, %{tool_timeout_ms: 50}})
+
+    limits = Elara.materialized_view(session)["runtime_limits"]
+    assert limits["next_turn"]["max_iterations"] == 1
+    assert limits["next_turn"]["tool_timeout_ms"] == 50
+    assert limits["active_turn"]["max_iterations"] == 3
+    assert limits["active_turn"]["tool_timeout_ms"] == 2_000
+    assert limits["sources"]["max_iterations"] == "session"
+    assert limits["sources"]["tool_timeout_ms"] == "session"
+    {:ok, pid} = Elara.session_pid(session)
+    assert %{max_iterations: 1, tool_timeout_ms: 50} = GenServer.call(pid, :child_config)
+
+    call = %ToolCall{
+      id: "active-bash",
+      name: "bash",
+      args: {:ok, %{"command" => "sleep 0.15; printf survived"}}
+    }
+
+    send(provider, {:reply, asst(nil, [call])})
+    assert_receive {:provider_blocked, provider, _}, 2_000
+    send(provider, {:reply, asst("active finished")})
+    assert {:ok, "active finished"} = Task.await(task)
+
+    assert Enum.any?(
+             Elara.transcript(session),
+             &match?(%Message.ToolResult{outcome: {:ok, "survived"}}, &1)
+           )
+
+    task = Task.async(fn -> Elara.ask(session, "next") end)
+    assert_receive {:provider_blocked, provider, _}, 2_000
+    send(provider, {:reply, asst(nil, [%ToolCall{call | id: "next-bash"}])})
+    assert {:error, :turn_limit} = Task.await(task)
+
+    assert Enum.any?(
+             Elara.transcript(session),
+             &match?(%Message.ToolResult{outcome: {:indeterminate, _}}, &1)
+           )
+
+    assert {:ok, %{status: :match}} = Elara.replay(Elara.recording(session))
+  end
+
+  @tag :tmp_dir
+  test "session overrides reattach but are not restored from the transcript after restart", %{
+    tmp_dir: cwd
+  } do
+    {:ok, session} =
+      Elara.start_session(
+        provider: script([{:ok, asst("done")}]),
+        cwd: cwd,
+        tools: [],
+        max_iterations: 7,
+        tool_timeout_ms: 60_000
+      )
+
+    {:ok, _} = Elara.attach(session, :control)
+    assert {:ok, false} = Elara.attached_command(session, {:runtime_limits, %{max_iterations: 2}})
+
+    assert {:error, {:timeout_exceeds_ceiling, 3_600_000}} =
+             Elara.attached_command(session, {:runtime_limits, %{tool_timeout_ms: 3_600_001}})
+
+    for invalid <- [
+          %{},
+          %{max_iterations: 0},
+          %{tool_timeout_ms: "20m"},
+          %{max_tool_timeout_ms: 7_200_000}
+        ] do
+      assert {:error, :invalid_runtime_limits} =
+               Elara.attached_command(session, {:runtime_limits, invalid})
+    end
+
+    observer =
+      Task.async(fn ->
+        {:ok, attachment} = Elara.attach(session, :observe)
+        assert attachment.snapshot["runtime_limits"]["next_turn"]["max_iterations"] == 2
+        Elara.attached_command(session, {:runtime_limits, %{max_iterations: 9}})
+      end)
+
+    assert {:error, :not_controller} = Task.await(observer)
+    assert {:ok, "done"} = Elara.ask(session, "recorded turn")
+    {:ok, info} = Store.newest(cwd)
+    {:ok, pid} = Elara.session_pid(session)
+    :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+
+    {:ok, reopened} =
+      Elara.start_session(
+        provider: script([]),
+        cwd: cwd,
+        tools: [],
+        resume: info.path,
+        max_iterations: 7,
+        tool_timeout_ms: 60_000
+      )
+
+    limits = Elara.materialized_view(reopened)["runtime_limits"]
+    assert limits["next_turn"]["max_iterations"] == 7
+    assert limits["next_turn"]["tool_timeout_ms"] == 60_000
+    assert limits["sources"]["max_iterations"] == "config"
+  end
+
   test "provider error surfaces" do
     err = %Error{kind: :http, message: "nope"}
     provider = script([{:error, err}])

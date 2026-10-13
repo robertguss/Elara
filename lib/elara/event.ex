@@ -17,6 +17,7 @@ defmodule Elara.Event do
 
   @type t ::
           :provider_view_changed
+          | :runtime_limits_changed
           | {:turn_started, String.t()}
           | {:provider_retry, provider_retry()}
           | {:message_appended, Elara.Message.t()}

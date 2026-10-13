@@ -1153,6 +1153,15 @@ cancellation and the Rust inspector.
 `bin/check` runs every check a change must pass before it is pushed, and stops
 at the first failure:
 
+The full suite creates hundreds of isolated workspaces. Each workspace keeps a
+supervised effect executor, SQLite ledger and writer lock until the VM stops;
+closing its session does not release that workspace's executor. `bin/check`
+raises its own soft file-descriptor limit to at least 4096 and prints the limit.
+It fails before running checks if the inherited hard limit prevents that raise.
+This is a development-suite requirement, not a change to the daily launcher;
+it also avoids macOS's lower default soft limit. To run `mix test` directly,
+first use `ulimit -S -n 4096` in that shell.
+
 ```bash
 mix compile --warnings-as-errors
 mix format --check-formatted

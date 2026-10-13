@@ -8,6 +8,20 @@ unset ELARA_UPDATE_GOLDENS
 
 step() { printf '\n==> %s\n' "$*"; }
 
+descriptor_limit=$(ulimit -S -n)
+case "$descriptor_limit" in
+  unlimited) ;;
+  *)
+    if [ "$descriptor_limit" -lt 4096 ]; then
+      if ! ulimit -S -n 4096; then
+        printf 'bin/check requires a file-descriptor hard limit of at least 4096; current hard limit: %s\n' "$(ulimit -H -n)" >&2
+        exit 1
+      fi
+    fi
+    ;;
+esac
+step "file descriptors: soft limit $(ulimit -S -n) (suite requires at least 4096)"
+
 step "mix compile --warnings-as-errors"
 mix compile --warnings-as-errors
 

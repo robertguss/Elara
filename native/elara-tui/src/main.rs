@@ -334,6 +334,7 @@ fn pick_appearance(original: Appearance) -> Result<Appearance, String> {
                 KeyCode::Up => choice.theme = choice.theme.previous(),
                 KeyCode::Down | KeyCode::Char('t') => choice.theme = choice.theme.next(),
                 KeyCode::Char('d') => choice.diagnostics = !choice.diagnostics,
+                KeyCode::Char('n') => choice.notifications = !choice.notifications,
                 KeyCode::Enter => return Ok(choice),
                 KeyCode::Esc => return Ok(original),
                 KeyCode::Char('c')

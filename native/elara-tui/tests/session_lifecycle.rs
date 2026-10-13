@@ -169,3 +169,69 @@ fn handoff_links_never_grant_observers_control_or_claim_disconnected_success() {
         assert!(frame.contains("input routed to next"));
     }
 }
+
+#[test]
+fn limits_use_authoritative_projection_and_parse_human_forms_without_sending_prompts() {
+    let mut model = attached("control", json!(["runtime_limits_v1"]));
+    model.projection.view["runtime_limits"] = json!({
+        "next_turn":{"max_iterations":150,"tool_timeout_ms":1_200_000,"max_tool_timeout_ms":3_600_000},
+        "active_turn":{"max_iterations":100,"tool_timeout_ms":600_000,"max_tool_timeout_ms":3_600_000},
+        "pending":true,
+        "sources":{"max_iterations":"session","tool_timeout_ms":"session","max_tool_timeout_ms":"config"}
+    });
+    model.editor.insert("/limits");
+    assert_eq!(
+        key(&mut model, KeyCode::Enter),
+        InputAction::Session(
+            json!({"version":2,"extension":"runtime_limits_v1","command":"runtime_limits"})
+        )
+    );
+    let limits = model.projection.view["runtime_limits"].clone();
+    assert!(
+        model.session_reply(&json!({"type":"runtime_limits","version":2,"runtime_limits":limits}))
+    );
+    let frame = elara_tui::render_frame(&model, 120, 40).unwrap();
+    for text in [
+        "Calls: 150 (set this session)",
+        "Command timeout: 20m",
+        "applies from the next turn",
+        "Running turn: 100 calls, 10m",
+        "restart restores startup config",
+    ] {
+        assert!(frame.contains(text), "{text} missing from {frame}");
+    }
+    key(&mut model, KeyCode::Esc);
+    for (input, key_name, expected) in [
+        ("calls 7", "max_iterations", 7),
+        ("timeout 3s", "tool_timeout_ms", 3_000),
+        ("timeout 20m", "tool_timeout_ms", 1_200_000),
+        ("timeout 1h", "tool_timeout_ms", 3_600_000),
+        ("max_iterations 9", "max_iterations", 9),
+        ("tool_timeout_ms 51", "tool_timeout_ms", 51),
+    ] {
+        model.editor.insert(&format!("/limits {input}"));
+        assert_eq!(
+            key(&mut model, KeyCode::Enter),
+            InputAction::Session(json!({
+                "version":2,"extension":"runtime_limits_v1","command":"set_runtime_limits","changes":{key_name:expected}
+            }))
+        );
+    }
+    for input in [
+        "calls 0",
+        "timeout 0s",
+        "timeout 18446744073709551615h",
+        "timeout 界",
+        "ceiling 2h",
+        "calls 4 extra",
+    ] {
+        model.editor.insert(&format!("/limits {input}"));
+        assert_eq!(key(&mut model, KeyCode::Enter), InputAction::None);
+        assert!(!model.editor.text().is_empty());
+        model.editor.clear();
+    }
+    model.mode = "observe".into();
+    model.editor.insert("/limits calls 2");
+    assert_eq!(key(&mut model, KeyCode::Enter), InputAction::None);
+    assert!(model.notice.as_ref().unwrap().contains("read-only"));
+}

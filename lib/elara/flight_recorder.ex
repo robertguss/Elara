@@ -533,19 +533,39 @@ defmodule Elara.FlightRecorder do
       end)
       |> Enum.sort_by(& &1.name)
 
+    config = %{
+      system: state.config.system,
+      tools: tools,
+      max_iterations: state.config.max_iterations,
+      max_tool_output_bytes: state.config.max_tool_output_bytes,
+      provider_settings: Map.get(state.config, :provider_settings),
+      retry: normalize_retry_policy(state.config.retry)
+    }
+
+    defaults = %Core.Config{}
+
+    config =
+      Enum.reduce([:tool_timeout_ms, :max_tool_timeout_ms], config, fn key, config ->
+        value = Map.fetch!(state.config, key)
+        if value == Map.fetch!(defaults, key), do: config, else: Map.put(config, key, value)
+      end)
+
     normalized = %{
-      config: %{
-        system: state.config.system,
-        tools: tools,
-        max_iterations: state.config.max_iterations,
-        max_tool_output_bytes: state.config.max_tool_output_bytes,
-        provider_settings: Map.get(state.config, :provider_settings),
-        retry: normalize_retry_policy(state.config.retry)
-      },
+      config: config,
       history: Enum.map(state.history, &normalize_message/1),
       phase: normalize_phase(state.phase),
       next_ref: state.next_ref
     }
+
+    normalized =
+      if state.pending_runtime_limits,
+        do: Map.put(normalized, :pending_runtime_limits, state.pending_runtime_limits),
+        else: normalized
+
+    normalized =
+      if map_size(state.runtime_limit_sources) > 0,
+        do: Map.put(normalized, :runtime_limit_sources, state.runtime_limit_sources),
+        else: normalized
 
     normalized =
       if state.deferred_calls == [],
@@ -575,12 +595,16 @@ defmodule Elara.FlightRecorder do
 
   defp denormalize_state(state) do
     tools = state.config.tools |> Enum.map(&denormalize_tool/1) |> Tool.table()
+    defaults = %Core.Config{}
 
     %Core.State{
       config: %Core.Config{
         system: state.config.system,
         tools: tools,
         max_iterations: state.config.max_iterations,
+        tool_timeout_ms: Map.get(state.config, :tool_timeout_ms, defaults.tool_timeout_ms),
+        max_tool_timeout_ms:
+          Map.get(state.config, :max_tool_timeout_ms, defaults.max_tool_timeout_ms),
         max_tool_output_bytes: state.config.max_tool_output_bytes,
         provider_settings: Map.get(state.config, :provider_settings),
         retry: denormalize_retry_policy(Map.get(state.config, :retry))
@@ -590,6 +614,8 @@ defmodule Elara.FlightRecorder do
       streaming: Map.get(state, :streaming),
       tool_usage: Map.get(state, :tool_usage),
       retry: Map.get(state, :retry),
+      pending_runtime_limits: Map.get(state, :pending_runtime_limits),
+      runtime_limit_sources: Map.get(state, :runtime_limit_sources, %{}),
       deferred_calls: Map.get(state, :deferred_calls, []),
       next_ref: state.next_ref
     }
@@ -617,6 +643,9 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_fact({:provider_settings, settings}),
     do: %{kind: :provider_settings, settings: settings}
+
+  defp normalize_fact({:runtime_limits, limits, keys}),
+    do: %{kind: :runtime_limits, limits: limits, keys: keys}
 
   defp normalize_fact({:ask_input, user}), do: %{kind: :ask_input, user: normalize_message(user)}
 
@@ -652,9 +681,13 @@ defmodule Elara.FlightRecorder do
   defp normalize_fact(:interrupt), do: %{kind: :interrupt}
   defp normalize_fact(:steer), do: %{kind: :steer}
   defp normalize_fact(:inbox_changed), do: %{kind: :inbox_changed}
+  defp normalize_fact(:runtime_limits_changed), do: %{kind: :runtime_limits_changed}
 
   defp denormalize_fact(%{kind: :provider_settings, settings: settings}),
     do: {:provider_settings, settings}
+
+  defp denormalize_fact(%{kind: :runtime_limits, limits: limits, keys: keys}),
+    do: {:runtime_limits, limits, keys}
 
   defp denormalize_fact(%{kind: :ask_input, user: user}),
     do: {:ask_input, denormalize_message(user)}
@@ -691,6 +724,7 @@ defmodule Elara.FlightRecorder do
   defp denormalize_fact(%{kind: :interrupt}), do: :interrupt
   defp denormalize_fact(%{kind: :steer}), do: :steer
   defp denormalize_fact(%{kind: :inbox_changed}), do: :inbox_changed
+  defp denormalize_fact(%{kind: :runtime_limits_changed}), do: :runtime_limits_changed
 
   defp normalize_effect({:emit, event}, _tools), do: %{kind: :emit, event: normalize_event(event)}
 
@@ -849,6 +883,7 @@ defmodule Elara.FlightRecorder do
     }
 
   defp normalize_event(:provider_view_changed), do: %{kind: :provider_view_changed}
+  defp normalize_event(:runtime_limits_changed), do: %{kind: :runtime_limits_changed}
   defp normalize_event(:inbox_changed), do: %{kind: :inbox_changed}
 
   defp normalize_event({:turn_started, prompt}), do: %{kind: :turn_started, prompt: prompt}

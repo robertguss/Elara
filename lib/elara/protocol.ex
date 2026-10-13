@@ -90,6 +90,7 @@ defmodule Elara.Protocol do
       "turn" => encode_phase(core.phase),
       "usage" => provider_view["usage"]["session_totals"],
       "provider_view" => provider_view,
+      "runtime_limits" => runtime_limits_view(core),
       "content_deltas" => content_deltas(core)
     }
   end
@@ -127,6 +128,7 @@ defmodule Elara.Protocol do
     reconcile_messages(message_offset, messages, supersedes) ++
       reconcile_tool_statuses(messages, core) ++
       [
+        %{"op" => "set_runtime_limits", "runtime_limits" => runtime_limits_view(core)},
         %{"op" => "set_provider_view", "provider_view" => provider_view},
         %{"op" => "set_usage", "usage" => provider_view["usage"]["session_totals"]}
       ] ++
@@ -204,6 +206,7 @@ defmodule Elara.Protocol do
   end
 
   defp event_ops(:provider_view_changed, _offset, _messages, _supersedes), do: []
+  defp event_ops(:runtime_limits_changed, _offset, _messages, _supersedes), do: []
   defp event_ops(:inbox_changed, _offset, _messages, _supersedes), do: []
 
   defp event_ops({:turn_started, _prompt}, _offset, _messages, _supersedes), do: []
@@ -403,6 +406,10 @@ defmodule Elara.Protocol do
        when is_map(usage) or is_nil(usage),
        do: {:ok, Map.put(view, "usage", usage)}
 
+  defp apply_op(view, %{"op" => "set_runtime_limits", "runtime_limits" => limits})
+       when is_map(limits) or is_nil(limits),
+       do: {:ok, Map.put(view, "runtime_limits", limits)}
+
   defp apply_op(
          %{"content_deltas" => deltas} = view,
          %{"op" => "append_content_delta", "message_id" => id, "text" => text}
@@ -421,6 +428,22 @@ defmodule Elara.Protocol do
   end
 
   defp clear_superseded(_view, _id), do: {:error, :invalid_patch}
+
+  def runtime_limits_view(core) do
+    next = Core.runtime_limits(core)
+    encode = fn limits -> Map.new(limits, fn {key, value} -> {Atom.to_string(key), value} end) end
+
+    %{
+      "next_turn" => encode.(next),
+      "active_turn" =>
+        if(Core.idle?(core), do: nil, else: encode.(Map.take(core.config, Map.keys(next)))),
+      "pending" => core.pending_runtime_limits != nil,
+      "sources" =>
+        Map.new(next, fn {key, _} ->
+          {Atom.to_string(key), Atom.to_string(Map.get(core.runtime_limit_sources, key, :config))}
+        end)
+    }
+  end
 
   defp append_message(view, messages, tool_calls, message) do
     case decode_message(message) do

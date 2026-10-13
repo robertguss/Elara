@@ -248,13 +248,22 @@ defmodule Elara.ThreadsTest do
   test "restart pauses child inbox and explicit resume preserves identity, tools, context and workspace",
        %{cwd: cwd} do
     {parent, provider} =
-      parent(cwd, [
-        {:stream, [{:sleep, 10_000}], answer("not replayed")},
-        answer("explicitly resumed")
-      ])
+      parent(
+        cwd,
+        [
+          {:stream, [{:sleep, 10_000}], answer("not replayed")},
+          answer("explicitly resumed")
+        ],
+        max_iterations: 7,
+        tool_timeout_ms: 60_000
+      )
+
+    {:ok, _} = Elara.attach(parent, :control)
+    assert {:ok, false} = Elara.attached_command(parent, {:runtime_limits, %{max_iterations: 3}})
 
     {:ok, child} = Threads.start_child(parent, "selected assignment", coding: true)
     id = child["id"]
+    assert %{max_iterations: 3, tool_timeout_ms: 60_000} = Elara.child_config(id)
     await(fn -> Elara.transcript(id) != [] end)
     assert [%Message.User{text: "selected assignment"}] = Elara.transcript(id)
     assert Elara.status(id).instructions |> inspect() =~ "Child project instructions marker"
@@ -279,7 +288,11 @@ defmodule Elara.ThreadsTest do
     stop(parent)
     :ok = Supervisor.terminate_child(Elara.Supervisor, Elara.Threads)
     {:ok, _} = Supervisor.restart_child(Elara.Supervisor, Elara.Threads)
-    assert {:ok, ^id} = Threads.resume(id, provider: provider)
+
+    assert {:ok, ^id} =
+             Threads.resume(id, provider: provider, max_iterations: 9, tool_timeout_ms: 180_000)
+
+    assert %{max_iterations: 9, tool_timeout_ms: 180_000} = Elara.child_config(id)
     assert Elara.cwd(id) == child["cwd"]
     assert Elara.snapshot(id).snapshot["inbox"]["paused"]
     assert {:ok, %{state: :queued}} = Elara.input_status(id, "pending")

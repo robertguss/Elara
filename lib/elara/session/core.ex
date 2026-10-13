@@ -15,6 +15,8 @@ defmodule Elara.Session.Core do
             tools: %{String.t() => Tool.t()},
             provider_settings: Elara.Provider.Visibility.settings() | nil,
             max_iterations: pos_integer(),
+            tool_timeout_ms: pos_integer(),
+            max_tool_timeout_ms: pos_integer(),
             max_tool_output_bytes: pos_integer(),
             retry: Elara.Provider.Retry.Policy.t()
           }
@@ -23,6 +25,8 @@ defmodule Elara.Session.Core do
       :tools,
       :provider_settings,
       max_iterations: 100,
+      tool_timeout_ms: 600_000,
+      max_tool_timeout_ms: 3_600_000,
       max_tool_output_bytes: 16_384,
       retry: %Elara.Provider.Retry.Policy{}
     ]
@@ -48,6 +52,14 @@ defmodule Elara.Session.Core do
           settings: Elara.Provider.Visibility.settings() | nil
         }
 
+  @type runtime_limits :: %{
+          max_iterations: pos_integer(),
+          tool_timeout_ms: pos_integer(),
+          max_tool_timeout_ms: pos_integer()
+        }
+  @type runtime_limit_key :: :max_iterations | :tool_timeout_ms
+  @runtime_limit_keys [:max_iterations, :tool_timeout_ms, :max_tool_timeout_ms]
+
   defmodule State do
     @type t :: %__MODULE__{
             config: Config.t(),
@@ -56,6 +68,8 @@ defmodule Elara.Session.Core do
             streaming: Elara.Session.Core.streaming() | nil,
             tool_usage: Elara.Provider.Visibility.usage() | nil,
             retry: Elara.Session.Core.retry() | nil,
+            pending_runtime_limits: Elara.Session.Core.runtime_limits() | nil,
+            runtime_limit_sources: %{optional(Elara.Session.Core.runtime_limit_key()) => :session},
             next_ref: pos_integer()
           }
     defstruct [
@@ -65,6 +79,8 @@ defmodule Elara.Session.Core do
       streaming: nil,
       tool_usage: nil,
       retry: nil,
+      pending_runtime_limits: nil,
+      runtime_limit_sources: %{},
       next_ref: 1,
       deferred_calls: [],
       steering?: false
@@ -76,6 +92,8 @@ defmodule Elara.Session.Core do
           | {:ask_input, User.t()}
           | {:provider_delta, ref(), Provider.delta()}
           | {:provider_settings, Elara.Provider.Visibility.settings()}
+          | {:runtime_limits, runtime_limits(), [runtime_limit_key()]}
+          | :runtime_limits_changed
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
           | {:retry_elapsed, ref()}
           | {:tool_result, ref(), Tool.outcome()}
@@ -168,6 +186,11 @@ defmodule Elara.Session.Core do
   def idle?(%State{phase: :idle}), do: true
   def idle?(%State{}), do: false
 
+  @doc "Authoritative next-turn limits. Config remains the running turn's limits."
+  @spec runtime_limits(State.t()) :: runtime_limits()
+  def runtime_limits(%State{pending_runtime_limits: %{} = limits}), do: limits
+  def runtime_limits(%State{} = state), do: Map.take(state.config, @runtime_limit_keys)
+
   @spec step(State.t(), fact()) :: {State.t(), [effect()]}
   def step(state, {:instruction_context, system}) when is_binary(system) do
     {%{state | config: %{state.config | system: system}}, []}
@@ -178,6 +201,12 @@ defmodule Elara.Session.Core do
   end
 
   def step(%State{phase: :idle} = state, {:ask_input, %User{} = user}) do
+    state = %{
+      state
+      | config: struct!(state.config, runtime_limits(state)),
+        pending_runtime_limits: nil
+    }
+
     prompt = user.text
     history = state.history ++ [user]
 
@@ -202,7 +231,21 @@ defmodule Elara.Session.Core do
      [{:emit, :provider_view_changed}]}
   end
 
+  def step(state, {:runtime_limits, limits, keys}) do
+    state =
+      if idle?(state) do
+        %{state | config: struct!(state.config, limits), pending_runtime_limits: nil}
+      else
+        pending = if limits == Map.take(state.config, @runtime_limit_keys), do: nil, else: limits
+        %{state | pending_runtime_limits: pending}
+      end
+
+    sources = Enum.reduce(keys, state.runtime_limit_sources, &Map.put(&2, &1, :session))
+    {%{state | runtime_limit_sources: sources}, [{:emit, :runtime_limits_changed}]}
+  end
+
   def step(state, :inbox_changed), do: {state, [{:emit, :inbox_changed}]}
+  def step(state, :runtime_limits_changed), do: {state, [{:emit, :runtime_limits_changed}]}
 
   def step(%State{phase: :idle} = state, _fact), do: {state, []}
 

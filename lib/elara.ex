@@ -66,6 +66,8 @@ defmodule Elara do
         system: system,
         tools: Tool.table(tools),
         max_iterations: max_iterations,
+        tool_timeout_ms: tool_timeout_ms,
+        max_tool_timeout_ms: Keyword.fetch!(opts, :max_tool_timeout_ms),
         max_tool_output_bytes: max_tool_output_bytes,
         retry: provider_retry
       }
@@ -82,8 +84,6 @@ defmodule Elara do
         pause_inputs: Keyword.get(opts, :pause_inputs, false),
         context_limit: Keyword.get(opts, :context_limit),
         handoff_fault_hook: Keyword.get(opts, :handoff_fault_hook, fn _ -> :ok end),
-        tool_timeout_ms: tool_timeout_ms,
-        max_tool_timeout_ms: Keyword.fetch!(opts, :max_tool_timeout_ms),
         plugin_paths: plugin_paths,
         discover_plugins?:
           Keyword.get(opts, :discover_plugins?, not Keyword.has_key?(opts, :plugins)),

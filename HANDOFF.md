@@ -34,6 +34,9 @@ Existing children keep their recorded paths, without relocation or deletion.
 File-tool roots, protected paths, and resolved symlinks are documented in
 README.md's "File-tool fence" section. Internal skill/session/plugin reads are
 separate; the fence is not an OS sandbox.
+The TUI's `/limits` and session-local overrides are documented in README.md's
+execution section. They follow delivery ownership and reset to startup config
+when a session restarts, including children and handoff successors.
 The lab's current async-site inventory is pinned in
 `lab/test/elara/lab_profile_test.exs`; its classifier distinguishes server
 connections from session handoff relay tasks. Historical registrations stay

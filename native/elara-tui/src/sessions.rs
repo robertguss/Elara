@@ -50,6 +50,24 @@ pub(super) fn open(model: &mut Model) -> InputAction {
 
 pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
     match frame["type"].as_str() {
+        Some("runtime_limits") if frame["version"] == 2 => {
+            if crate::limits::validate(&frame["runtime_limits"]).is_err() {
+                model.notice = Some("Server returned invalid runtime limits.".into());
+                return true;
+            }
+            model.projection.view["runtime_limits"] = frame["runtime_limits"].clone();
+            model.session_detail = Some(crate::limits::summary(&model.projection.view).join("\n"));
+            model.session_detail_scroll = 0;
+            true
+        }
+        Some("runtime_limits_changed") if frame["version"] == 2 => {
+            model.notice = Some(if frame["pending"] == true {
+                "Limits updated; applies from the next turn.".into()
+            } else {
+                "Limits updated for the next turn.".into()
+            });
+            true
+        }
         Some("plugins_reloaded") if frame["version"] == 2 => {
             let plugins = frame["plugins"]
                 .as_array()
@@ -400,6 +418,7 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
     let argument = words.next().unwrap_or("").trim();
     let control = model.mode == "control";
     let result = match name {
+        "limits" => crate::limits::command(model, argument),
         "job" | "ack-job-stopped" if name == "job" || control => {
             let id = if argument.starts_with('"') {
                 serde_json::from_str::<String>(argument).ok()

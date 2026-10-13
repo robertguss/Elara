@@ -141,6 +141,11 @@ defmodule Elara.Server do
       version == 2 and is_list(extensions) and "provider_visibility_v1" in extensions
     )
 
+    Process.put(
+      :runtime_limits,
+      version == 2 and is_list(extensions) and "runtime_limits_v1" in extensions
+    )
+
     case request do
       %{"version" => 2, "command" => "list"} = request ->
         case decode_cwd(Map.get(request, "cwd", File.cwd!())) do
@@ -163,6 +168,7 @@ defmodule Elara.Server do
               "extensions",
               Enum.filter(
                 [
+                  "runtime_limits_v1",
                   "provider_visibility_v1",
                   "plugin_reload_v1",
                   "input_attachments_v1",
@@ -170,6 +176,7 @@ defmodule Elara.Server do
                   "thread_communication_v1"
                 ],
                 fn
+                  "runtime_limits_v1" -> Process.get(:runtime_limits)
                   "plugin_reload_v1" -> Process.get(:plugin_reload)
                   "thread_communication_v1" -> Process.get(:thread_communication)
                   "provider_visibility_v1" -> Process.get(:provider_visibility)
@@ -317,6 +324,11 @@ defmodule Elara.Server do
 
       {:elara_patch, ^session, incarnation, seq, ops} ->
         ops =
+          if Process.get(:runtime_limits),
+            do: ops,
+            else: Enum.reject(ops, &(&1["op"] == "set_runtime_limits"))
+
+        ops =
           if Process.get(:provider_visibility),
             do: ops,
             else: Enum.reject(ops, &(&1["op"] == "set_provider_view"))
@@ -343,6 +355,11 @@ defmodule Elara.Server do
   end
 
   defp negotiated_snapshot(snapshot) do
+    snapshot =
+      if Process.get(:runtime_limits),
+        do: snapshot,
+        else: Map.delete(snapshot, "runtime_limits")
+
     snapshot =
       if Process.get(:provider_visibility),
         do: snapshot,
@@ -440,6 +457,57 @@ defmodule Elara.Server do
       queue_command(session, command, request)
     else
       input_receipt(command, request["submission_id"], nil, :unsupported_extension)
+    end
+  end
+
+  defp handle_versioned_command(
+         session,
+         2,
+         %{"command" => "runtime_limits", "extension" => "runtime_limits_v1"},
+         _provider,
+         _lifetime
+       ) do
+    if Process.get(:runtime_limits) do
+      %{
+        "type" => "runtime_limits",
+        "version" => 2,
+        "runtime_limits" => Elara.materialized_view(session)["runtime_limits"]
+      }
+    else
+      error_message(:unsupported_extension, 2)
+    end
+  end
+
+  defp handle_versioned_command(
+         session,
+         2,
+         %{"command" => "set_runtime_limits", "extension" => "runtime_limits_v1"} = request,
+         _provider,
+         _lifetime
+       ) do
+    if Process.get(:runtime_limits) do
+      changes = request["changes"]
+
+      with true <- is_map(changes) and map_size(changes) > 0,
+           true <- Enum.all?(Map.keys(changes), &(&1 in ["max_iterations", "tool_timeout_ms"])) do
+        changes =
+          Map.new(changes, fn
+            {"max_iterations", value} -> {:max_iterations, value}
+            {"tool_timeout_ms", value} -> {:tool_timeout_ms, value}
+          end)
+
+        case Elara.attached_command(session, {:runtime_limits, changes}) do
+          {:ok, pending} ->
+            %{"type" => "runtime_limits_changed", "version" => 2, "pending" => pending}
+
+          {:error, reason} ->
+            error_message(reason, 2)
+        end
+      else
+        _ -> error_message(:invalid_runtime_limits, 2)
+      end
+    else
+      error_message(:unsupported_extension, 2)
     end
   end
 
@@ -1048,6 +1116,10 @@ defmodule Elara.Server do
        do: Elara.Config.error_message(reason)
 
   defp format_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
+
+  defp format_reason({:timeout_exceeds_ceiling, ceiling}),
+    do:
+      "Command timeout exceeds the session ceiling of #{div(ceiling, 60_000)} minutes (#{ceiling} ms)"
 
   defp format_reason({kind, path, :plugin_trust_required})
        when kind in [:plugin_load_failed, :plugin_reload_failed],

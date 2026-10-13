@@ -30,8 +30,6 @@ defmodule Elara.Session do
             store: Store.t(),
             provider: {module(), term()},
             cwd: String.t(),
-            tool_timeout_ms: pos_integer(),
-            max_tool_timeout_ms: pos_integer(),
             effect_journal: pid() | nil,
             effect_journal_path: String.t(),
             effect_executor: GenServer.server() | nil,
@@ -54,8 +52,6 @@ defmodule Elara.Session do
       :store,
       :provider,
       :cwd,
-      :tool_timeout_ms,
-      :max_tool_timeout_ms,
       :id,
       :incarnation,
       :router,
@@ -123,8 +119,6 @@ defmodule Elara.Session do
 
     core_config = restore_provider_settings(core_config, store, provider)
 
-    tool_timeout_ms = Keyword.fetch!(opts, :tool_timeout_ms)
-    max_tool_timeout_ms = Keyword.fetch!(opts, :max_tool_timeout_ms)
     plugin_paths = Keyword.get(opts, :plugin_paths, [])
     router = Keyword.fetch!(opts, :router)
     workspace_id = Keyword.fetch!(opts, :workspace_id)
@@ -180,8 +174,6 @@ defmodule Elara.Session do
             instructions: Keyword.get(opts, :instructions, %{}),
             context_limit: Keyword.get(opts, :context_limit),
             handoff_fault_hook: Keyword.fetch!(opts, :handoff_fault_hook),
-            tool_timeout_ms: tool_timeout_ms,
-            max_tool_timeout_ms: max_tool_timeout_ms,
             base_tools: core.config.tools,
             discover_plugins?: Keyword.get(opts, :discover_plugins?, false),
             plugins: plugins
@@ -335,6 +327,12 @@ defmodule Elara.Session do
 
   def handle_call({:provider_settings, settings}, _from, shell),
     do: change_provider_settings(shell, settings)
+
+  def handle_call({:runtime_limits, changes}, _from, shell),
+    do: change_runtime_limits(shell, changes)
+
+  def handle_call(:runtime_limits_view, _from, shell),
+    do: {:reply, runtime_limits_view(shell), shell}
 
   def handle_call(:recording, _from, shell) do
     {:reply, FlightRecorder.snapshot(shell.recorder), shell}
@@ -512,6 +510,8 @@ defmodule Elara.Session do
   end
 
   def handle_call(:child_config, _from, shell) do
+    limits = Core.runtime_limits(shell.core)
+
     config = %{
       provider:
         Elara.Provider.Visibility.configure(shell.provider, shell.core.config.provider_settings),
@@ -519,11 +519,11 @@ defmodule Elara.Session do
       tools: Map.values(shell.base_tools),
       system: shell.base_system,
       skill_options: shell.skill_options,
-      max_iterations: shell.core.config.max_iterations,
+      max_iterations: limits.max_iterations,
       max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
       provider_retry: shell.core.config.retry,
-      tool_timeout_ms: shell.tool_timeout_ms,
-      max_tool_timeout_ms: shell.max_tool_timeout_ms,
+      tool_timeout_ms: limits.tool_timeout_ms,
+      max_tool_timeout_ms: limits.max_tool_timeout_ms,
       router: shell.router,
       workspace_id: shell.workspace_id,
       allowed_capabilities: shell.allowed_capabilities,
@@ -1715,7 +1715,7 @@ defmodule Elara.Session do
           tool_name: tool.name,
           plugin: plugin,
           job_id: request.job_id,
-          timeout_ms: shell.tool_timeout_ms,
+          timeout_ms: shell.core.config.tool_timeout_ms,
           max_output_bytes: request.max_output_bytes
         }
 
@@ -1879,7 +1879,7 @@ defmodule Elara.Session do
               shell.effect_journal,
               job,
               shell.cwd,
-              timeout: shell.tool_timeout_ms,
+              timeout: shell.core.config.tool_timeout_ms,
               sidecar_hook: shell.effect_fault_hook,
               operation_hook: shell.effect_fault_hook,
               effect_observer: shell.effect_fault_hook,
@@ -1905,14 +1905,16 @@ defmodule Elara.Session do
   end
 
   defp tool_timeout(shell, %Tool{run: {Elara.Tools, :bash}}, args) do
-    timeout = Map.get(args, "timeout_ms", shell.tool_timeout_ms)
+    timeout = Map.get(args, "timeout_ms", shell.core.config.tool_timeout_ms)
 
-    if is_integer(timeout) and timeout > 0 and timeout <= shell.max_tool_timeout_ms,
+    if is_integer(timeout) and timeout > 0 and timeout <= shell.core.config.max_tool_timeout_ms,
       do: {:ok, timeout},
-      else: {:error, "timeout_ms must be an integer from 1 to #{shell.max_tool_timeout_ms}"}
+      else:
+        {:error,
+         "timeout_ms must be an integer from 1 to #{shell.core.config.max_tool_timeout_ms}"}
   end
 
-  defp tool_timeout(shell, _tool, _args), do: {:ok, shell.tool_timeout_ms}
+  defp tool_timeout(shell, _tool, _args), do: {:ok, shell.core.config.tool_timeout_ms}
 
   defp run_routed_tool(shell, effect_id, core_ref, call, tool, args, timeout) do
     request = tool_request(shell, call, tool, args, timeout)
@@ -1960,6 +1962,18 @@ defmodule Elara.Session do
     end)
 
     patch_ops = Protocol.patch_ops(event, shell.core, patch_context)
+
+    patch_ops =
+      if Handoff.frozen?(shell.store) do
+        limits = runtime_limits_view(shell)
+
+        Enum.map(patch_ops, fn
+          %{"op" => "set_runtime_limits"} = op -> Map.put(op, "runtime_limits", limits)
+          op -> op
+        end)
+      else
+        patch_ops
+      end
 
     patch_ops =
       if event == :inbox_changed or match?({:message_appended, _}, event) or
@@ -2018,7 +2032,11 @@ defmodule Elara.Session do
 
   defp track_tool_task(shell, task, core_ref, plugin_lease, timeout \\ nil) do
     timer =
-      Process.send_after(self(), {:tool_deadline, core_ref}, timeout || shell.tool_timeout_ms)
+      Process.send_after(
+        self(),
+        {:tool_deadline, core_ref},
+        timeout || shell.core.config.tool_timeout_ms
+      )
 
     shell
     |> track_task(task, :tool, core_ref, plugin_lease)
@@ -2312,6 +2330,9 @@ defmodule Elara.Session do
   defp handle_attached_command({:provider_settings, settings}, shell),
     do: change_provider_settings(shell, settings)
 
+  defp handle_attached_command({:runtime_limits, changes}, shell),
+    do: change_runtime_limits(shell, changes)
+
   defp handle_attached_command(_command, shell), do: {:reply, {:error, :invalid_command}, shell}
 
   defp input_ready(shell, images, queue? \\ false) do
@@ -2371,6 +2392,41 @@ defmodule Elara.Session do
 
       true ->
         :ok
+    end
+  end
+
+  defp change_runtime_limits(%{store: %{context: %{"handoff" => _}}} = shell, changes) do
+    result = forward_handoff(shell, {:runtime_limits, changes})
+
+    shell =
+      if match?({:ok, _}, result),
+        do: feed(:runtime_limits_changed, shell),
+        else: shell
+
+    {:reply, result, shell}
+  end
+
+  defp change_runtime_limits(shell, changes) do
+    valid =
+      is_map(changes) and map_size(changes) > 0 and
+        Enum.all?(changes, fn {key, value} ->
+          key in [:max_iterations, :tool_timeout_ms] and is_integer(value) and value > 0
+        end)
+
+    if valid do
+      current = Core.runtime_limits(shell.core)
+      proposed = Map.merge(current, changes)
+
+      case Elara.Config.runtime_limits(Map.to_list(proposed), %{}) do
+        {:ok, limits} ->
+          shell = feed({:runtime_limits, Map.new(limits), Map.keys(changes)}, shell)
+          {:reply, {:ok, shell.core.pending_runtime_limits != nil}, shell}
+
+        {:error, {:invalid_runtime_limit, :tool_timeout_ms}} ->
+          {:reply, {:error, {:timeout_exceeds_ceiling, current.max_tool_timeout_ms}}, shell}
+      end
+    else
+      {:reply, {:error, :invalid_runtime_limits}, shell}
     end
   end
 
@@ -2436,6 +2492,18 @@ defmodule Elara.Session do
 
   defp materialized_view(shell) do
     Protocol.snapshot(shell.id, shell.incarnation, shell.core)
+    |> Map.put("runtime_limits", runtime_limits_view(shell))
+  end
+
+  defp runtime_limits_view(shell) do
+    if Handoff.frozen?(shell.store) do
+      case forward_handoff(shell, :runtime_limits_view) do
+        %{} = limits -> limits
+        _ -> nil
+      end
+    else
+      Protocol.runtime_limits_view(shell.core)
+    end
   end
 
   defp submit_input(
@@ -2969,7 +3037,8 @@ defmodule Elara.Session do
       tool_version: tool.version,
       arguments: args,
       workspace_id: shell.workspace_id,
-      deadline_ms: System.system_time(:millisecond) + (timeout || shell.tool_timeout_ms),
+      deadline_ms:
+        System.system_time(:millisecond) + (timeout || shell.core.config.tool_timeout_ms),
       max_output_bytes: shell.core.config.max_tool_output_bytes,
       cancellation_id: new_cancellation_id(),
       required_capabilities: tool.capabilities,

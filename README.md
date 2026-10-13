@@ -789,12 +789,15 @@ cancellation and the Rust inspector.
 
 ## Develop
 
+`bin/check` runs every check a change must pass before it is pushed, and stops
+at the first failure:
+
 ```bash
-mix format --check-formatted
 mix compile --warnings-as-errors
+mix format --check-formatted
+cd native/exec-stub && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+cd native/elara-tui && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 mix test
-cd native/exec-stub && cargo fmt --check && cargo clippy && cargo test
-cd ../elara-tui && cargo fmt --check && cargo clippy && cargo test
 ```
 
 The interactive TUI tests also require Python 3 and a Unix PTY. Tests use

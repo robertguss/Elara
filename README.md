@@ -324,6 +324,10 @@ trust storage, `.git/config`, `.git/hooks/**`, shell startup files (including
 `.profile`, `.bashrc`, `.bash_profile`, `.zshrc`, `.zshenv`, and
 `fish/config.fish`), `.envrc`, and `.iex.exs`. Protected names apply at any
 depth, and aliases to protected destinations are refused too.
+Older coding children whose saved worktrees are inside `~/.elara` can still
+reopen with retained evidence, but their model file tools refuse those paths.
+Start a new coding child to work in the unprotected worktree root; existing
+worktrees are not moved or deleted.
 
 This fence does **not** wrap Elara's internal skill, session, or plugin reads.
 It is **not an OS sandbox**: `bash`, search, other tools, and trusted plugins

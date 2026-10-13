@@ -54,10 +54,21 @@ defmodule Elara.WorkspaceSearchTest do
     assert Search.grep(%{"pattern" => "absent-token"}, ctx) == {:ok, "no matches"}
   end
 
-  test "grep skips ignored paths, VCS metadata, build output and binary files", %{ctx: ctx} do
+  test "grep skips ignored paths, VCS metadata, build output and binary files", %{
+    ctx: ctx,
+    dir: dir
+  } do
+    # An unframed binary diagnostic must not become the next match's filename.
+    File.write!(Path.join(dir, "a.bin"), <<"needle", 0, "tail">>)
+    File.write!(Path.join(dir, "odd:name\nnotes.md"), "needle unusual filename\n")
+
     {:ok, output} = Search.grep(%{"pattern" => "needle"}, ctx)
 
+    assert output ==
+             Enum.join(@matches ++ ["odd:name\nnotes.md:1:needle unusual filename"], "\n")
+
     for excluded <- [
+          "a.bin",
           "skipped.log",
           "ignored_dir",
           "_build",
@@ -66,6 +77,40 @@ defmodule Elara.WorkspaceSearchTest do
           "payload.bin"
         ],
         do: refute(output =~ excluded, "#{excluded} leaked into results")
+  end
+
+  test "grep cannot attribute a binary diagnostic to a similarly named text file", %{dir: dir} do
+    scope = Path.join(dir, "ambiguous")
+    File.mkdir_p!(scope)
+    File.write!(Path.join(scope, "a.bin"), <<"needle", 0, "tail">>)
+    File.write!(Path.join(scope, "notes.md"), "needle real\n")
+
+    File.write!(
+      Path.join(
+        scope,
+        "a.bin: binary file matches (found \"\\0\" byte around offset 6)\nnotes.md"
+      ),
+      "absent\n"
+    )
+
+    assert Search.grep(%{"pattern" => "needle"}, %Ctx{cwd: scope}) ==
+             {:ok, "notes.md:1:needle real"}
+  end
+
+  test "non-UTF-8 filenames refuse without crashing the command runner", %{ctx: ctx, dir: dir} do
+    path = Path.join(dir, "bad" <> <<255>> <> ".txt")
+    File.write!(path, "needle\n")
+    File.ln_s!(path, Path.join(dir, "bad-alias.txt"))
+    error = {:error, "search requires UTF-8 filenames; narrow the path"}
+
+    assert Search.grep(%{"pattern" => "needle"}, ctx) == error
+    assert Search.glob(%{"pattern" => "**/*"}, ctx) == error
+
+    for tool <- [&Search.grep/2, &Search.glob/2] do
+      assert {:error, _} = tool.(%{"pattern" => "needle", "path" => "bad-alias.txt"}, ctx)
+    end
+
+    assert Search.grep(%{"pattern" => "needle", "path" => "lib"}, ctx) |> lines() == @matches
   end
 
   test "grep never dumps bytes from a binary-only workspace", %{ctx: ctx, dir: dir} do
@@ -122,6 +167,13 @@ defmodule Elara.WorkspaceSearchTest do
     assert length(shown) < length(complete)
     # A byte cap kills ripgrep mid-write, so prove every retained line is whole.
     assert shown == Enum.take(complete, length(shown))
+
+    File.write!(Path.join(dir, "lib/wide.ex"), "needle" <> String.duplicate("x", 500) <> "\n")
+
+    assert Search.grep(%{"pattern" => "needle", "path" => "lib/wide.ex"}, ctx) ==
+             {:ok,
+              "lib/wide.ex:1:needle" <>
+                String.duplicate("x", 394) <> " [... omitted end of long line]"}
   end
 
   test "an unusable pattern reports ripgrep's diagnosis as an error", %{ctx: ctx} do

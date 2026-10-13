@@ -11,6 +11,7 @@ defmodule Elara.Tools.Search do
   @max_columns 400
   @max_file_list_bytes 8 * 1_024 * 1_024
   @batch_files 128
+  @unsupported_paths "search requires UTF-8 filenames; narrow the path"
 
   # Listed after a caller's include pattern so an exclusion always wins.
   @excluded_dirs [".git", ".hg", ".svn", "_build", "deps", "node_modules", "target"]
@@ -51,12 +52,7 @@ defmodule Elara.Tools.Search do
           rg,
           "--color=never",
           "--sort=path",
-          "--line-number",
-          "--with-filename",
-          "--null",
-          "--no-heading",
-          "--max-columns=#{@max_columns}",
-          "--max-columns-preview"
+          "--json"
         ] ++
           case_flag(insensitive) ++
           ["--regexp", pattern]
@@ -114,9 +110,11 @@ defmodule Elara.Tools.Search do
       files = if max_files, do: Enum.take(candidates, max_files), else: Enum.to_list(candidates)
       files = Enum.sort(files)
 
-      if System.monotonic_time(:millisecond) < deadline,
-        do: {:ok, files},
-        else: {:error, "search timed_out before returning results"}
+      cond do
+        not Enum.all?(files, &String.valid?/1) -> {:error, @unsupported_paths}
+        System.monotonic_time(:millisecond) < deadline -> {:ok, files}
+        true -> {:error, "search timed_out before returning results"}
+      end
     else
       {:ok, _output, true} ->
         {:error, "search file listing exceeded the 8 MiB cap; narrow the path"}
@@ -140,26 +138,54 @@ defmodule Elara.Tools.Search do
       if remaining <= 0 do
         {:halt, {:ok, output, true}}
       else
-        case execute(argv ++ operand(batch), ctx, remaining, deadline) do
-          {:ok, next, true} -> {:halt, {:ok, output <> match_lines(next), true}}
-          {:ok, next, false} -> {:cont, {:ok, output <> match_lines(next), false}}
+        # JSON adds paths, match offsets and statistics. Bound that wire data
+        # separately; rendered matches still share the session's output budget.
+        wire_bytes = min(remaining * 32 + 4096, @max_file_list_bytes)
+
+        case execute(argv ++ operand(batch), ctx, wire_bytes, deadline) do
+          {:ok, next, true} -> {:halt, {:ok, output <> match_lines(next, batch), true}}
+          {:ok, next, false} -> {:cont, {:ok, output <> match_lines(next, batch), false}}
           {:error, _} = error -> {:halt, error}
         end
       end
     end)
   end
 
-  # Explicit file operands make rg report binary matches. Keep only numbered
-  # text matches; NUL frames filenames even with colons or newlines. Incomplete
-  # records at a byte cap are omitted, never presented as complete lines.
-  defp match_lines(output) do
-    Regex.scan(~r/([^\x00]+)\x00([^\n]*\n)/, output, capture: :all_but_first)
-    |> Enum.flat_map(fn [path, text] ->
-      path = if path == "./-", do: "-", else: path
-      if Regex.match?(~r/^\d+:/, text), do: [path <> ":" <> text], else: []
+  # Structured records distinguish filenames from binary diagnostics even when
+  # a filename contains newlines or the exact diagnostic text. Ignore incomplete
+  # JSON at a byte cap and matches containing binary NUL bytes.
+  defp match_lines(output, batch) do
+    paths = MapSet.new(batch, fn path -> if path == "-", do: "./-", else: path end)
+
+    output
+    |> String.split("\n")
+    |> Enum.drop(-1)
+    |> Enum.flat_map(fn record ->
+      with {:ok, %{"type" => "match", "data" => data}} <- JSON.decode(record),
+           {:ok, path} <- json_bytes(data["path"]),
+           true <- MapSet.member?(paths, path),
+           {:ok, bytes} <- json_bytes(data["lines"]),
+           false <- String.contains?(bytes, <<0>>),
+           line when is_integer(line) and line > 0 <- data["line_number"] do
+        path = if path == "./-", do: "-", else: path
+        text = bytes |> String.replace_invalid() |> String.trim_trailing("\n")
+
+        text =
+          if String.length(text) > @max_columns,
+            do: String.slice(text, 0, @max_columns) <> " [... omitted end of long line]",
+            else: text
+
+        [String.replace_invalid(path) <> ":#{line}:" <> text <> "\n"]
+      else
+        _ -> []
+      end
     end)
     |> Enum.join()
   end
+
+  defp json_bytes(%{"text" => text}) when is_binary(text), do: {:ok, text}
+  defp json_bytes(%{"bytes" => bytes}) when is_binary(bytes), do: Base.decode64(bytes)
+  defp json_bytes(_), do: :error
 
   defp deadline(ctx), do: System.monotonic_time(:millisecond) + (ctx.timeout_ms || 30_000)
 
@@ -296,9 +322,11 @@ defmodule Elara.Tools.Search do
 
   defp resolve_scope(path, cwd) do
     with {:ok, {_root, resolved}} <- FileFence.resolve(path, cwd) do
-      if File.exists?(resolved),
-        do: {:ok, Path.relative_to(resolved, Path.expand(cwd))},
-        else: {:error, "search path does not exist in the workspace: #{path}"}
+      cond do
+        not String.valid?(resolved) -> {:error, @unsupported_paths}
+        File.exists?(resolved) -> {:ok, Path.relative_to(resolved, Path.expand(cwd))}
+        true -> {:error, "search path does not exist in the workspace: #{path}"}
+      end
     end
   end
 end

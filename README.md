@@ -1053,7 +1053,9 @@ Elara first enumerates filenames with ripgrep, then authorizes each target
 through the same policy as `read`. The filename list is bounded at 8 MiB;
 exceeding it returns an error asking for a narrower path, never a partial list
 presented as complete. Content searches use bounded batches with one shared
-timeout and output byte budget. The fence is not an OS sandbox.
+timeout and output byte budget. A permitted filename that is not valid UTF-8
+also returns a narrower-path error, rather than crashing the command runner or
+substituting a different filename. The fence is not an OS sandbox.
 
 `grep` returns at most 100 matching lines and `glob` at most 200 paths, each
 overridable up to 1000 with `limit`. Long lines are clipped and the session's

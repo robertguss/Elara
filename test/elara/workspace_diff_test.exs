@@ -371,6 +371,22 @@ defmodule Elara.WorkspaceDiffTest do
     reopened = start(cwd, [], resume: store.path)
     assert {:ok, ^session} = Elara.workspace_diff(reopened, :session)
 
+    turn_ref =
+      "refs/elara/turns/" <>
+        Base.encode16(:crypto.hash(:sha256, source_turn), case: :lower)
+
+    for {bank, ref, notice} <- [
+          {source_bank, turn_ref, "turn #{source_turn} in #{source} evidence unavailable"},
+          {middle_bank, "refs/elara/origin", "#{middle} copy/handoff origin unavailable"}
+        ] do
+      commit = git(cwd, ["--git-dir=" <> bank, "rev-parse", ref]) |> String.trim()
+      git(cwd, ["--git-dir=" <> bank, "update-ref", "-d", ref])
+      assert {:ok, partial} = Elara.workspace_diff(reopened, :session)
+      assert partial =~ "Partial session view: #{notice}"
+      git(cwd, ["--git-dir=" <> bank, "update-ref", ref, commit])
+      assert {:ok, ^session} = Elara.workspace_diff(reopened, :session)
+    end
+
     File.rename!(source_bank, source_bank <> "-missing")
     assert {:ok, partial} = Elara.workspace_diff(reopened, :session)
     assert partial =~ "Partial session view: predecessor #{source} evidence unavailable"

@@ -209,14 +209,14 @@ defmodule Elara.WorkspaceDiff do
                end)
            ) do
       origin =
-        if store.parent_session do
+        if store.parent_session && "refs/elara/origin" in refs do
           case read_origin(handle, prefix <> "origin") do
             {:ok, origin} -> origin
             _ -> nil
           end
         end
 
-      segment(%{handle | origin: origin}, store, prefix <> "turns/")
+      segment(%{handle | origin: origin}, store, prefix <> "turns/", MapSet.new(refs))
     else
       _ ->
         %{
@@ -230,14 +230,16 @@ defmodule Elara.WorkspaceDiff do
     end
   end
 
-  defp segment(handle, store, prefix \\ "refs/elara/turns/") do
+  defp segment(handle, store, prefix \\ "refs/elara/turns/", available \\ nil) do
     ids = current_turns(handle, store)
 
     turns =
       Enum.map(ids, fn id ->
-        case checkpoint(handle, id, prefix) do
-          {:ok, record} -> record
-          _ -> nil
+        if is_nil(available) or MapSet.member?(available, turn_ref(id)) do
+          case checkpoint(handle, id, prefix) do
+            {:ok, record} -> record
+            _ -> nil
+          end
         end
       end)
 

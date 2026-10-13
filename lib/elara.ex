@@ -229,12 +229,17 @@ defmodule Elara do
   end
 
   @spec fork(session_ref(), String.t()) ::
-          {:ok, String.t(), [Elara.Message.t()]} | {:error, term()}
+          {:ok, String.t(), [Elara.Message.t()]}
+          | {:ok, String.t(), String.t(), [Elara.Message.t()]}
+          | {:error, term()}
   def fork(session, id) when (is_pid(session) or is_binary(session)) and is_binary(id) do
     call(session, {:fork, id})
   end
 
-  @spec clone_session(session_ref()) :: {:ok, nil, [Elara.Message.t()]} | {:error, term()}
+  @spec clone_session(session_ref()) ::
+          {:ok, nil, [Elara.Message.t()]}
+          | {:ok, String.t(), nil, [Elara.Message.t()]}
+          | {:error, term()}
   def clone_session(session) when is_pid(session) or is_binary(session), do: call(session, :clone)
 
   @spec name_session(session_ref(), String.t()) :: :ok | {:error, term()}

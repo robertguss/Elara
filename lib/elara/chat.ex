@@ -93,7 +93,15 @@ defmodule Elara.Chat do
   end
 
   defp loop(session, session_pid, out, phase, opts) do
+    delivery_owner = opts[:delivery_owner]
+
     receive do
+      {:switch_session, id} ->
+        {:ok, pid} = Elara.session_pid(id)
+        Process.monitor(pid)
+        :ok = Elara.subscribe(id)
+        loop(id, pid, out, phase, Map.put(opts, :delivery_owner, id))
+
       {:stdin, :eof} ->
         dispatch(session, session_pid, out, phase, :eof, %{opts | rewrite: false})
 
@@ -103,7 +111,7 @@ defmodule Elara.Chat do
       {:stdin, line} ->
         dispatch(session, session_pid, out, phase, {:line, line}, %{opts | rewrite: tty?(out)})
 
-      {:elara, ^session, event} ->
+      {:elara, id, event} when id == session or id == delivery_owner ->
         dispatch(session, session_pid, out, phase, {:event, event}, %{opts | rewrite: false})
 
       {:DOWN, _ref, :process, ^session_pid, reason} ->
@@ -176,6 +184,10 @@ defmodule Elara.Chat do
           {:cont, {phase, %{opts | rewrite: false}}}
 
         {:ask, prompt} ->
+          owner = Elara.Session.Handoff.owner(session)
+          if owner != session and owner != opts[:delivery_owner], do: Elara.subscribe(owner)
+          opts = Map.put(opts, :delivery_owner, owner)
+
           case Elara.ask_async(session, prompt) do
             :ok ->
               {:cont, {phase, opts}}
@@ -208,8 +220,15 @@ defmodule Elara.Chat do
         :clone_session ->
           result =
             case Elara.clone_session(session) do
-              {:ok, nil, _history} -> :ok
-              {:error, reason} -> {:error, reason}
+              {:ok, nil, _history} ->
+                :ok
+
+              {:ok, id, nil, _history} ->
+                send(self(), {:switch_session, id})
+                :ok
+
+              {:error, reason} ->
+                {:error, reason}
             end
 
           send(self(), {:action_result, :clone, result})
@@ -242,9 +261,21 @@ defmodule Elara.Chat do
 
   defp branch_result(session, kind, index) do
     case Enum.at(Elara.user_entries(session), index - 1) do
-      nil -> {:error, {:invalid_index, index}}
-      %{id: id} when kind == :tree -> Elara.tree(session, id)
-      %{id: id} when kind == :fork -> Elara.fork(session, id)
+      nil ->
+        {:error, {:invalid_index, index}}
+
+      %{id: id} when kind == :tree ->
+        Elara.tree(session, id)
+
+      %{id: id} when kind == :fork ->
+        case Elara.fork(session, id) do
+          {:ok, copied, prompt, history} ->
+            send(self(), {:switch_session, copied})
+            {:ok, prompt, history}
+
+          result ->
+            result
+        end
     end
   end
 

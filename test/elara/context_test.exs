@@ -424,11 +424,17 @@ defmodule Elara.ContextTest do
 
     await(fn ->
       {:ok, s} = Handoff.store(id)
-      get_in(s.context, ["handoff", "stage"]) == "failed"
+      get_in(s.context, ["last_handoff", "stage"]) == "failed"
     end)
 
     assert length(Store.list(root)) == 1
     assert Enum.any?(Elara.transcript(id), &match?(%Message.User{text: ^oversized}, &1))
+
+    assert Elara.snapshot(id).snapshot["inbox"]["handoff"]["error"] =~
+             "handoff_does_not_fit_fresh_context"
+
+    {:ok, store} = Handoff.store(id)
+    refute Handoff.frozen?(store)
     refute_receive {:model, _, _}
   end
 
@@ -757,6 +763,161 @@ defmodule Elara.ContextTest do
       {:ok, store} = Handoff.store(parent)
       Enum.any?(store.inbox, &String.contains?(&1.user.text, "persisted before notification"))
     end)
+  end
+
+  test "legacy failed and stopped handoffs reopen for local use", %{root: root} do
+    for stage <- ~w(failed stopped) do
+      store = Store.new(root)
+      {:ok, store} = Store.append(store, Message.user("retained evidence"))
+
+      {:ok, store} =
+        Store.save(%{
+          store
+          | context: %{"handoff" => %{"stage" => stage, "error" => "fixture failure"}}
+        })
+
+      {:ok, agent} = Agent.start_link(fn -> [{:ok, %Message.Assistant{text: "recovered"}}] end)
+
+      {:ok, id} =
+        Elara.start_session(
+          cwd: root,
+          resume: store.path,
+          provider: {Elara.Provider.Scripted, agent},
+          tools: [],
+          plugins: []
+        )
+
+      assert {:ok, "recovered"} = Elara.ask(id, "continue locally")
+      assert hd(Elara.transcript(id)).text == "retained evidence"
+      assert Elara.snapshot(id).snapshot["inbox"]["handoff"]["stage"] == stage
+      assert {:ok, copied, nil, history} = Elara.clone_session(id)
+      assert copied != id
+      assert List.last(history).text == "recovered"
+    end
+  end
+
+  test "chain cap reports recovery advice and can reopen and fork to continue", %{root: root} do
+    store = Store.new(root)
+    {:ok, store} = Store.append(store, Message.user(String.duplicate("x", 60_000)))
+
+    {:ok, store} =
+      Store.save(%{store | context: %{"sources" => Enum.map(1..8, &%{"id" => "source-#{&1}"})}})
+
+    opts = [cwd: root, provider: {Controlled, self()}, tools: [], plugins: []]
+    {:ok, id} = Elara.start_session(opts ++ [resume: store.path, context_limit: 100_000])
+    assert {:error, {:provider_error, %{message: message}}} = Elara.ask(id, "continue")
+    assert message =~ "handoff_chain_limit"
+    assert message =~ "Fork"
+    {:ok, pid} = Elara.session_pid(id)
+    :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+
+    {:ok, id} = Elara.start_session(opts ++ [resume: store.path, context_limit: 100_000])
+    [entry | _] = Elara.user_entries(id)
+    assert {:ok, copied, _, []} = Elara.fork(id, entry.id)
+    task = Task.async(fn -> Elara.ask(copied, "fresh chain") end)
+    assert_receive {:model, worker, _}, 1000
+    send(worker, {:answer, "continued"})
+    assert {:ok, "continued"} = Task.await(task)
+  end
+
+  test "stopped transferred source reopens, routes input and copies retained evidence", %{
+    root: root
+  } do
+    opts = [
+      cwd: root,
+      provider: {Controlled, self()},
+      context_limit: 100_000,
+      max_tool_output_bytes: 1024,
+      tools: [],
+      plugins: []
+    ]
+
+    {:ok, source} =
+      Elara.start_session(
+        opts ++
+          [
+            pause_inputs: true,
+            seed_history: [%Message.Assistant{text: String.duplicate("x", 60_000)}]
+          ]
+      )
+
+    assert {:error, :interrupted} = Elara.ask(source, "retain original goal")
+
+    h =
+      await(fn ->
+        {:ok, store} = Handoff.store(source)
+        if get_in(store.context, ["handoff", "stage"]) == "started", do: store.context["handoff"]
+      end)
+
+    Elara.interrupt(source)
+    await(fn -> Elara.snapshot(source).snapshot["inbox"]["handoff"]["stage"] == "stopped" end)
+    {:ok, original} = Handoff.store(source)
+
+    for id <- [source, h["id"]] do
+      {:ok, pid} = Elara.session_pid(id)
+      :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+    end
+
+    {:ok, successor} = Handoff.store(h["id"])
+    {:ok, _} = Store.put_inbox(successor, successor.inbox, false)
+
+    {:ok, ^source} = Elara.start_session(opts ++ [resume: original.path])
+    await(fn -> match?({:ok, _}, Elara.session_pid(h["id"])) end)
+    assert Handoff.owner(source) == h["id"]
+    assert Elara.snapshot(h["id"]).snapshot["inbox"]["paused"]
+    refute_receive {:model, _, _}, 100
+
+    for ask <- [
+          fn -> Elara.ask(source, "routed ask") end,
+          fn -> Elara.ask_input(source, "routed attachment input", [], []) end
+        ] do
+      task = Task.async(ask)
+      assert_receive {:model, worker, request}, 1000
+      assert List.last(request.messages).text =~ "routed"
+      send(worker, {:answer, "delivered"})
+      assert {:ok, "delivered"} = Task.await(task)
+    end
+
+    task = Task.async(fn -> Elara.ask(source, "interrupt routed turn") end)
+    assert_receive {:model, _, _}, 1000
+    Elara.interrupt(source)
+    assert {:error, :interrupted} = Task.await(task)
+
+    {:ok, pid} = Elara.session_pid(source)
+    assert {:ok, _} = GenServer.call(pid, {:attach, :control})
+    assert {:ok, clone, nil} = GenServer.call(pid, :session_clone)
+    [entry] = Elara.user_entries(source)
+    assert {:ok, fork, "retain original goal"} = GenServer.call(pid, {:session_fork, entry.id})
+
+    for id <- [clone, fork] do
+      {:ok, store} = Handoff.store(id)
+
+      {:ok, agent} =
+        Agent.start_link(fn -> [{:ok, %Message.Assistant{text: "copy continued"}}] end)
+
+      {:ok, ^id} =
+        Elara.start_session(
+          cwd: root,
+          resume: store.path,
+          context_limit: 500_000,
+          provider: {Elara.Provider.Scripted, agent},
+          tools: [],
+          plugins: []
+        )
+
+      assert {:ok, "copy continued"} = Elara.ask(id, "continue copy")
+    end
+
+    assert {:ok, legacy_clone, nil, _} = Elara.clone_session(source)
+    assert {:ok, legacy_fork, _, _} = Elara.fork(source, entry.id)
+    assert legacy_clone != source
+    assert legacy_fork != source
+    task = Task.async(fn -> Elara.ask(source, "still routed after copying") end)
+    assert_receive {:model, worker, request}, 1000
+    assert Enum.any?(request.messages, &match?(%Message.Assistant{text: "delivered"}, &1))
+    send(worker, {:answer, "owner preserved"})
+    assert {:ok, "owner preserved"} = Task.await(task)
+    assert Elara.transcript(source) == Store.history(original)
   end
 
   test "fresh BEAM recovery at every durable stage including activation before consumption", %{

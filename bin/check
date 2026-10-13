@@ -1,0 +1,25 @@
+#!/bin/sh
+# Every check a change must pass before it is pushed: compile, format, both
+# Rust programs, then the test suite (slowest last). Stops at the first failure.
+set -eu
+cd "$(dirname "$0")/.."
+# Golden tests rewrite their files instead of comparing when this is set.
+unset ELARA_UPDATE_GOLDENS
+
+step() { printf '\n==> %s\n' "$*"; }
+
+step "mix compile --warnings-as-errors"
+mix compile --warnings-as-errors
+
+step "mix format --check-formatted"
+mix format --check-formatted
+
+for crate in native/exec-stub native/elara-tui; do
+  step "$crate: cargo fmt --check, clippy, test"
+  (cd "$crate" && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked) || exit
+done
+
+step "mix test"
+mix test
+
+printf '\nAll checks passed.\n'

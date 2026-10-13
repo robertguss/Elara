@@ -15,6 +15,7 @@ defmodule Elara.Tool do
   defmodule Ctx do
     @type t :: %__MODULE__{
             session_id: String.t() | nil,
+            output_owner: String.t() | nil,
             cwd: String.t(),
             plugin: PluginRef.t() | nil,
             tool_name: String.t() | nil,
@@ -25,6 +26,7 @@ defmodule Elara.Tool do
           }
     defstruct [
       :session_id,
+      :output_owner,
       :cwd,
       :plugin,
       :tool_name,
@@ -73,6 +75,7 @@ defmodule Elara.Tool do
       write_tool(),
       edit_tool(),
       bash_tool(),
+      output_read_tool(),
       grep_tool(),
       glob_tool(),
       Elara.Skills.tool(),
@@ -182,7 +185,9 @@ defmodule Elara.Tool do
   defp bash_tool do
     %__MODULE__{
       name: "bash",
-      description: "Run a shell command in the working directory. stdout and stderr are merged.",
+      version: "2",
+      description:
+        "Run a local shell command in the working directory. stdout and stderr are merged, retained privately, and previewed with an output_read handle.",
       parameters: %{
         "type" => "object",
         "properties" => %{
@@ -197,8 +202,31 @@ defmodule Elara.Tool do
         "required" => ["command"]
       },
       capabilities: ["shell"],
+      placement: :local,
       mutating: true,
       run: {Elara.Tools, :bash}
+    }
+  end
+
+  defp output_read_tool do
+    %__MODULE__{
+      name: "output_read",
+      description:
+        "Read this session's retained output by opaque handle. One-based line offset defaults to 1; limit defaults to 100 (maximum 200). Optional pattern is a literal, not a regex. Long lines are explicitly clipped; literal reads show the matching snippet.",
+      parameters: %{
+        "type" => "object",
+        "properties" => %{
+          "handle" => %{"type" => "string"},
+          "offset" => %{"type" => "integer", "minimum" => 1},
+          "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 200},
+          "pattern" => %{"type" => "string", "minLength" => 1}
+        },
+        "required" => ["handle"]
+      },
+      capabilities: ["filesystem:read"],
+      placement: :local,
+      cancel_on_interrupt: true,
+      run: {Elara.Tools, :output_read}
     }
   end
 

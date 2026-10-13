@@ -9,6 +9,7 @@ defmodule Elara.Executor do
             operation_digest: String.t() | nil,
             tool_call_id: String.t(),
             session_id: String.t(),
+            output_owner: String.t() | nil,
             tool_name: String.t(),
             tool_version: String.t(),
             arguments: map(),
@@ -26,6 +27,7 @@ defmodule Elara.Executor do
       :operation_digest,
       :tool_call_id,
       :session_id,
+      :output_owner,
       :tool_name,
       :tool_version,
       :arguments,
@@ -45,6 +47,7 @@ defmodule Elara.Executor do
         "operation_digest" => request.operation_digest,
         "tool_call_id" => request.tool_call_id,
         "session_id" => request.session_id,
+        "output_owner" => request.output_owner,
         "tool_name" => request.tool_name,
         "tool_version" => request.tool_version,
         "arguments" => request.arguments,
@@ -81,9 +84,11 @@ defmodule Elara.Executor do
                is_binary(cancellation_id) and is_list(capabilities) and is_boolean(mutating) do
       job_id = Map.get(encoded, "job_id")
       operation_digest = Map.get(encoded, "operation_digest")
+      output_owner = Map.get(encoded, "output_owner")
 
       with {:ok, placement} <- decode_placement(placement),
            true <- Enum.all?(capabilities, &is_binary/1),
+           true <- is_nil(output_owner) or (is_binary(output_owner) and output_owner != ""),
            true <- valid_job_identity?(job_id, operation_digest) do
         {:ok,
          %__MODULE__{
@@ -91,6 +96,7 @@ defmodule Elara.Executor do
            operation_digest: operation_digest,
            tool_call_id: call_id,
            session_id: session_id,
+           output_owner: output_owner,
            tool_name: name,
            tool_version: version,
            arguments: arguments,

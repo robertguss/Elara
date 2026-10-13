@@ -587,7 +587,7 @@ defmodule Elara.Threads do
             Enum.filter(
               config.tools,
               &(&1 in Enum.filter(Elara.Tool.builtins(), fn t ->
-                  t.name in ["read", "skill"] or
+                  t.name in ["read", "output_read", "skill"] or
                     t.run in [{Elara.Threads.Communication, :run}, {Elara.Completion, :run}]
                 end))
             )
@@ -649,7 +649,8 @@ defmodule Elara.Threads do
           "options" => Base.encode64(:erlang.term_to_binary(options))
         }
 
-        with :ok <- save(record),
+        with :ok <- Elara.Output.inherit(config.output_owner, store.id, history),
+             :ok <- save(record),
              :ok <- provision_workspace(record),
              {:ok, _id} <-
                Elara.start_session(

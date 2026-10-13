@@ -137,7 +137,7 @@ defmodule Elara.CLIWorkspaceTest do
 
     assert results["read"] == {:ok, "target input"}
     assert {:ok, pwd} = results["pwd"]
-    assert String.trim(pwd) == ctx.target
+    assert String.ends_with?(pwd, "\n" <> ctx.target <> "\n")
     assert {:ok, skill_body} = results["skill"]
     assert skill_body =~ "TARGET_SKILL_BODY"
     system = hd(Elara.recording(session.id).segments).seed.config.system

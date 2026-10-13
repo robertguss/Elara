@@ -563,6 +563,7 @@ defmodule Elara.Session do
       provider:
         Elara.Provider.Visibility.configure(shell.provider, shell.core.config.provider_settings),
       cwd: shell.cwd,
+      output_owner: shell.store.id,
       tools: Map.values(shell.base_tools),
       system: shell.base_system,
       skill_options: shell.skill_options,
@@ -1873,6 +1874,7 @@ defmodule Elara.Session do
         ctx = %Ctx{
           cwd: shell.cwd,
           session_id: shell.id,
+          output_owner: request.output_owner,
           tool_name: tool.name,
           plugin: plugin,
           job_id: request.job_id,
@@ -3333,6 +3335,7 @@ defmodule Elara.Session do
     %Request{
       tool_call_id: call.id,
       session_id: shell.id,
+      output_owner: shell.store.id,
       tool_name: call.name,
       tool_version: tool.version,
       arguments: args,

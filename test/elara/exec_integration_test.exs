@@ -154,13 +154,15 @@ defmodule Elara.ExecIntegrationTest do
     assert {:ok, "continued"} = Task.await(task, @event_timeout)
 
     # The session deadline and the stub's own timeout race; both fail closed.
-    assert %ToolResult{outcome: {:indeterminate, "timed out while running" <> _}} =
+    assert %ToolResult{outcome: {:indeterminate, timed_out}} =
              Enum.find(Elara.transcript(session), &match?(%ToolResult{call_id: "timeout"}, &1))
+
+    assert timed_out =~ "timed out while running"
 
     assert_eventually(fn -> marker_pids(fixture.marker) == [] end)
   end
 
-  test "public byte flood is killed at source with truthful accounting" do
+  test "public byte flood is killed at the retained-object cap, not the preview budget" do
     fixture = fixture("elara_flood")
     go = Path.join(fixture.root, "go")
 
@@ -176,27 +178,24 @@ defmodule Elara.ExecIntegrationTest do
           {:ok, assistant("continued")}
         ],
         cwd: fixture.root,
-        max_tool_output_bytes: 128,
-        tool_timeout_ms: 10_000
+        max_tool_output_bytes: 1024,
+        tool_timeout_ms: 30_000
       )
 
     task = Task.async(fn -> Elara.ask(session, "flood") end)
     assert_eventually(fn -> File.exists?(fixture.ready) end)
     assert_eventually(fn -> marker_pids(fixture.marker) != [] end)
     File.touch!(go)
-    assert {:ok, "continued"} = Task.await(task, @event_timeout)
+    assert {:ok, "continued"} = Task.await(task, 30_000)
 
     # Killed at the cap mid-run, so the command fails closed.
     %ToolResult{outcome: {:indeterminate, message}} =
       Enum.find(Elara.transcript(session), &match?(%ToolResult{call_id: "flood"}, &1))
 
-    assert message =~ "killed at the output cap"
-
-    assert [_, total, sent] =
-             Regex.run(~r/bytes_total=(\d+) bytes_sent=(\d+)/, message)
-
-    assert String.to_integer(sent) == 128
-    assert String.to_integer(total) > String.to_integer(sent)
+    assert message =~ "stopped and reaped at the 128 MiB retained-output cap"
+    assert message =~ "bytes=134217728;"
+    assert message =~ "capture=partial"
+    assert byte_size(message) <= 1024
     assert_eventually(fn -> marker_pids(fixture.marker) == [] end)
   end
 
@@ -234,8 +233,10 @@ defmodule Elara.ExecIntegrationTest do
 
     assert {:ok, "continued"} = Elara.ask(session, "run after restart")
 
-    assert %ToolResult{outcome: {:ok, "replacement"}} =
+    assert %ToolResult{outcome: {:ok, replacement}} =
              Enum.find(Elara.transcript(session), &match?(%ToolResult{call_id: "second"}, &1))
+
+    assert String.ends_with?(replacement, "\nreplacement")
   end
 
   test "raw execution timeout and flood expose terminal metadata" do

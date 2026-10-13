@@ -181,6 +181,7 @@ defmodule Elara.ThreadsTest do
 
     assert Enum.map(Elara.child_config(research["id"]).tools, & &1.name) |> Enum.sort() == [
              "completion_wait",
+             "output_read",
              "read",
              "skill",
              "thread_read",
@@ -617,7 +618,7 @@ defmodule Elara.ThreadsTest do
              request(observer, %{"command" => "child_list"})
 
     assert Enum.sort(tools) ==
-             ~w(completion_wait read skill thread_read thread_send thread_status thread_wait)
+             ~w(completion_wait output_read read skill thread_read thread_send thread_status thread_wait)
 
     assert %{
              "type" => "session_error",
@@ -1288,14 +1289,14 @@ defmodule Elara.ThreadsTest do
             %ToolCall{
               id: "pty-uncertain",
               name: "bash",
-              args: {:ok, %{"command" => "yes"}}
+              args: {:ok, %{"command" => "sleep 5", "timeout_ms" => 100}}
             }
           ]),
           answer("PTY coding answer"),
           {:error, %Elara.Provider.Error{kind: :bad_response, message: "PTY research failure"}},
           answer("PTY resumed answer")
         ],
-        max_tool_output_bytes: 256
+        max_tool_output_bytes: 16_384
       )
 
     :ok = Elara.name_session(parent, "PTY parent")

@@ -454,7 +454,8 @@ defmodule Elara.SessionTest do
 
     assert {:ok, "finished"} = Elara.ask(session, "run commands")
     results = for %Message.ToolResult{outcome: outcome} <- Elara.transcript(session), do: outcome
-    assert [{:ok, "completed"}, {:error, rejected}, {:indeterminate, timed_out}] = results
+    assert [{:ok, completed}, {:error, rejected}, {:indeterminate, timed_out}] = results
+    assert String.ends_with?(completed, "\ncompleted")
     assert rejected =~ "1 to 1000"
     refute File.exists?(Path.join(cwd, "rejected"))
     assert timed_out =~ "timed out"
@@ -505,10 +506,13 @@ defmodule Elara.SessionTest do
     send(provider, {:reply, asst("active finished")})
     assert {:ok, "active finished"} = Task.await(task)
 
-    assert Enum.any?(
-             Elara.transcript(session),
-             &match?(%Message.ToolResult{outcome: {:ok, "survived"}}, &1)
-           )
+    assert %Message.ToolResult{outcome: {:ok, survived}} =
+             Enum.find(
+               Elara.transcript(session),
+               &match?(%Message.ToolResult{call_id: "active-bash"}, &1)
+             )
+
+    assert String.ends_with?(survived, "\nsurvived")
 
     task = Task.async(fn -> Elara.ask(session, "next") end)
     assert_receive {:provider_blocked, provider, _}, 2_000

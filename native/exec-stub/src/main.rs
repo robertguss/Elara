@@ -20,6 +20,12 @@ struct Request {
     max_bytes: u64,
     timeout_ms: u64,
     head_tail: bool,
+    capture: Option<Capture>,
+}
+
+struct Capture {
+    path: String,
+    max_bytes: u64,
 }
 
 struct ManagedJob {
@@ -34,6 +40,7 @@ enum Trigger {
     Cancelled,
     TimedOut,
     Truncated,
+    CaptureLimited,
 }
 
 fn main() {
@@ -91,7 +98,7 @@ fn manager_loop() -> io::Result<()> {
             "ev": "ready",
             "protocol": PROTOCOL_VERSION,
             "stub_version": env!("CARGO_PKG_VERSION"),
-            "output_policies": ["truncate", "head_tail"]
+            "output_policies": ["truncate", "head_tail", "capture"]
         }),
     )?;
 
@@ -282,6 +289,29 @@ fn parse_request(line: &[u8]) -> Result<Request, String> {
         _ => return Err("unknown output_policy".to_owned()),
     };
 
+    let capture = match object.get("capture") {
+        None => None,
+        Some(value) => {
+            let path = value
+                .get("path")
+                .and_then(Value::as_str)
+                .filter(|path| !path.contains('\0') && std::path::Path::new(path).is_absolute())
+                .ok_or_else(|| "capture path must be absolute".to_owned())?;
+            let cap = value
+                .get("max_bytes")
+                .and_then(Value::as_u64)
+                .filter(|cap| *cap > 0)
+                .ok_or_else(|| "capture max_bytes must be positive".to_owned())?;
+            if !head_tail {
+                return Err("capture requires head_tail".to_owned());
+            }
+            Some(Capture {
+                path: path.to_owned(),
+                max_bytes: cap,
+            })
+        }
+    };
+
     Ok(Request {
         id,
         op,
@@ -291,6 +321,7 @@ fn parse_request(line: &[u8]) -> Result<Request, String> {
         max_bytes,
         timeout_ms,
         head_tail,
+        capture,
     })
 }
 
@@ -441,6 +472,28 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
         Control::ManagerGone => return Ok(()),
     }
 
+    let mut capture = match &request.capture {
+        None => None,
+        Some(spec) => match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&spec.path)
+        {
+            Ok(file) => Some(file),
+            Err(error) => {
+                write_json_fd(
+                    event_fd,
+                    &json!({
+                        "id": request.id, "ev": "rejected", "stage": "capture", "message": error.to_string()
+                    }),
+                )?;
+                return Ok(());
+            }
+        },
+    };
+
     let output = pipe()?;
     set_nonblocking(output[0])?;
     let stdout_fd = duplicate_fd(output[1])?;
@@ -488,6 +541,7 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
     let mut trigger = Trigger::None;
     let mut bytes_total = 0_u64;
     let mut bytes_sent = 0_u64;
+    let mut bytes_persisted = 0_u64;
     let mut tail = Vec::new();
     let mut output_closed = false;
     let mut status: Option<ExitStatus> = None;
@@ -534,7 +588,7 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
         }
 
         if fds[1].revents != 0 && !output_closed {
-            output_closed = !drain_output(
+            let drained = drain_output(
                 output[0],
                 event_fd,
                 &request.id,
@@ -545,7 +599,20 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
                 &mut bytes_sent,
                 request.head_tail,
                 &mut tail,
-            )?;
+                &mut capture,
+                request.capture.as_ref().map(|spec| spec.max_bytes),
+                &mut bytes_persisted,
+            );
+            match drained {
+                Ok(open) => output_closed = !open,
+                Err(error) => {
+                    kill_group(pgid);
+                    let _ = child.wait();
+                    close_fd(output[0]);
+                    reap_descendants();
+                    return Err(error);
+                }
+            }
         }
 
         if trigger == Trigger::None && Instant::now() >= deadline {
@@ -577,6 +644,9 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
     reap_descendants();
 
     if manager_present {
+        if let Some(file) = &capture {
+            file.sync_all()?;
+        }
         let status = status.expect("loop waits for child status");
         let mut terminal = json!({
             "id": request.id,
@@ -593,6 +663,10 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
         if request.head_tail {
             terminal["output_capped"] = json!(bytes_total > bytes_sent + tail.len() as u64);
             terminal["tail"] = json!(tail);
+        }
+        if request.capture.is_some() {
+            terminal["bytes_persisted"] = json!(bytes_persisted);
+            terminal["capture_limited"] = json!(trigger == Trigger::CaptureLimited);
         }
         write_json_fd(event_fd, &terminal)?;
     }
@@ -638,9 +712,18 @@ fn drain_output(
     bytes_sent: &mut u64,
     head_tail: bool,
     tail: &mut Vec<u8>,
+    capture: &mut Option<std::fs::File>,
+    capture_limit: Option<u64>,
+    bytes_persisted: &mut u64,
 ) -> io::Result<bool> {
     let mut buffer = [0_u8; 8192];
-    let head_limit = if head_tail { max_bytes / 2 } else { max_bytes };
+    let head_limit = if !head_tail {
+        max_bytes
+    } else if capture.is_some() {
+        max_bytes * 3 / 8
+    } else {
+        max_bytes / 2
+    };
     let tail_limit = (max_bytes - head_limit) as usize;
 
     // Return to the control/deadline poll even with a continuously full pipe.
@@ -662,6 +745,16 @@ fn drain_output(
 
         let count = count as usize;
         *bytes_total += count as u64;
+        if let Some(file) = capture {
+            let limit = capture_limit.expect("capture has a limit");
+            let kept = count.min(limit.saturating_sub(*bytes_persisted) as usize);
+            file.write_all(&buffer[..kept])?;
+            *bytes_persisted += kept as u64;
+            if *bytes_persisted == limit && *trigger == Trigger::None {
+                *trigger = Trigger::CaptureLimited;
+                kill_group(pgid);
+            }
+        }
         let room = head_limit.saturating_sub(*bytes_sent) as usize;
         let sent = count.min(room);
 
@@ -873,6 +966,7 @@ mod tests {
                 max_bytes: 128,
                 timeout_ms: 1000,
                 head_tail: false,
+                capture: None,
             };
             guardian_loop(&request, control[0], events[1]).unwrap();
             close_fd(control[0]);

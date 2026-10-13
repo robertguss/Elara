@@ -466,7 +466,7 @@ defmodule Elara.ThreadsTest do
 
     records = Path.wildcard(Path.join(root, "sessions/_threads/*.json"))
     workspaces = Path.wildcard(Path.join(root, "sessions/_threads/workspaces/*"))
-    other = Elara.Provider.Simulated.new(seed: 1, id: "other")
+    other = offline_codex("other-model", "low")
 
     assert {:error, :provider_mismatch} =
              Threads.start_child(parent, "wrong module", coding: true, provider: other)

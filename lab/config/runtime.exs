@@ -1,0 +1,46 @@
+import Config
+
+# The lab's copy of the product's test isolation (../config/runtime.exs). Mix
+# evaluates this before starting :elara, so the execution stub and the job and
+# thread managers never see the developer's environment or state.
+if config_env() == :test do
+  for {name, _value} <- System.get_env(),
+      String.starts_with?(name, "ELARA_") or name == "XAI_API_KEY",
+      do: System.delete_env(name)
+
+  # One directory per run holds TMPDIR and every state root, so a crashed run's
+  # leftovers never collide with a later run's unique_integer names. Mix may
+  # evaluate this file more than once, and TMPDIR changes after the first pass,
+  # so the directory is chosen once per VM with a random suffix (a reused OS pid
+  # never reopens an old run).
+  run_dir =
+    case :persistent_term.get(:elara_lab_test_run_dir, nil) do
+      nil ->
+        name = "elara-lab-test-run-#{System.pid()}-#{:rand.uniform(1_000_000_000)}"
+        dir = Path.join(System.tmp_dir!(), name)
+        :persistent_term.put(:elara_lab_test_run_dir, dir)
+        dir
+
+      dir ->
+        dir
+    end
+
+  File.mkdir_p!(run_dir)
+  System.put_env("TMPDIR", run_dir)
+  System.put_env("ELARA_SERVER_TOKEN", "isolated-test-gateway-token-not-a-real-credential")
+
+  # Recovery scenarios kill Elara.TestJobs and Elara.Exec on purpose; under
+  # OTP's default of 3 restarts in 5 seconds some test orders would stop the
+  # whole application.
+  config :elara,
+    max_restarts: 100,
+    test_run_dir: run_dir,
+    sessions_root: Path.join(run_dir, "sessions"),
+    skills_home: Path.join(run_dir, "home"),
+    # The checkout's own agent skills serve whoever develops Elara. Sessions
+    # whose workspace sits inside the checkout (the default cwd, ExUnit's
+    # tmp_dir) must not load them, or their prompt size depends on what the
+    # repo happens to hold.
+    ignored_skill_dirs: [Path.expand("../../.agents/skills", __DIR__)],
+    plugin_trust_root: Path.join(run_dir, "plugin-trust")
+end

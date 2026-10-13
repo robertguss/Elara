@@ -5,7 +5,8 @@ defmodule Mix.Tasks.Elara.Lab do
 
   @shortdoc "Run a seeded lab scenario"
   @moduledoc """
-  Run a seeded lab scenario and record its results.
+  Run a seeded lab scenario and record its results. Run it from `lab/`, the
+  lab's own Mix project; a relative DIR is relative to `lab/`.
 
       mix elara.lab run SCENARIO [--n N] [--seed S] [--set KEY=VALUE ...] [--results DIR]
                                  [--provider simulated|real --max-requests R]
@@ -14,7 +15,7 @@ defmodule Mix.Tasks.Elara.Lab do
   skills home, so it never touches `~/.elara` state (a real provider still reads
   its saved credentials). `--provider real` uses the configured provider and
   spends real quota; it requires `--max-requests`. Result lines are appended under
-  `lab/results/SCENARIO/` (gitignored) and a summary is printed. The task fails
+  `results/SCENARIO/` (gitignored) and a summary is printed. The task fails
   when any check fails or a repetition's cleanup is unconfirmed. Scenarios:
   #{Enum.join(Elara.Lab.scenarios(), ", ")}.
 
@@ -24,7 +25,7 @@ defmodule Mix.Tasks.Elara.Lab do
   Runs one fresh `mix elara.lab run` process per value and seed (seed-major:
   every value at seed `S`, then every value at `S + 1`, ...), each with its own
   TMPDIR, and writes `repetitions.jsonl`, `summary.json`, child logs and results
-  under `lab/results/SCENARIO/<stamp>-sweep-KEY-seed<S>/`. It runs every child,
+  under `results/SCENARIO/<stamp>-sweep-KEY-seed<S>/`. It runs every child,
   then fails if any exited non-zero, left no valid result, failed a check, was
   retained or is incomplete. A bound that fails is a measurement, not a failure.
 
@@ -93,7 +94,7 @@ defmodule Mix.Tasks.Elara.Lab do
     try do
       case Elara.Lab.run(scenario, lab_opts) do
         {:ok, results} ->
-          path = Elara.Lab.write_results(Keyword.get(opts, :results, "lab/results"), results)
+          path = Elara.Lab.write_results(Keyword.get(opts, :results, "results"), results)
           summary = Elara.Lab.summarize(results)
           Mix.shell().info(JSON.encode!(summary))
           Mix.shell().info("results: #{path}")
@@ -145,7 +146,7 @@ defmodule Mix.Tasks.Elara.Lab do
     if n < 1, do: Mix.raise("--n must be at least 1")
     seed = Keyword.get(opts, :seed, 1)
     stamp = DateTime.utc_now() |> DateTime.to_iso8601(:basic) |> String.replace(~r/[^0-9TZ]/, "")
-    root = opts |> Keyword.get(:results, "lab/results") |> Path.expand()
+    root = opts |> Keyword.get(:results, "results") |> Path.expand()
     dir = Path.join([root, scenario, "#{stamp}-sweep-#{key}-seed#{seed}"])
     total = n * length(values)
 

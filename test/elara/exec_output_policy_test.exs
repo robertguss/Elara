@@ -29,7 +29,7 @@ defmodule Elara.ExecOutputPolicyTest do
               end
 
             for observed <- Enum.reject([os_pid, current], &is_nil/1),
-                do: eventually(fn -> Elara.Lab.ProcessProbe.stopped?(observed) end)
+                do: eventually(fn -> os_stopped?(observed) end)
         end
       end
 
@@ -318,6 +318,15 @@ defmodule Elara.ExecOutputPolicyTest do
     case System.cmd("pgrep", ["-f", marker]) do
       {out, 0} -> String.split(out, "\n", trim: true)
       {_, 1} -> []
+    end
+  end
+
+  # The OS process is gone or a zombie.
+  defp os_stopped?(pid) do
+    case System.cmd("ps", ["-p", to_string(pid), "-o", "stat="], stderr_to_stdout: true) do
+      {"", 1} -> true
+      {stat, 0} -> String.starts_with?(String.trim(stat), "Z")
+      _ -> false
     end
   end
 

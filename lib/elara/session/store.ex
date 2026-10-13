@@ -249,7 +249,8 @@ defmodule Elara.Session.Store do
           ])
     }
 
-    save(target)
+    with :ok <- Elara.Output.inherit(source.id, target.id, Enum.map(entries, & &1.message)),
+         do: save(target)
   end
 
   @spec fork_before_user(t(), String.t()) :: {:ok, t(), String.t()} | {:error, term()}

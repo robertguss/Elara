@@ -320,9 +320,25 @@ defmodule Elara.Session.Handoff do
          ] do
         {:error, :handoff_does_not_fit_fresh_context}
       else
-        with {:ok, _} <- Store.append(store, assistant), do: :ok
+        with :ok <- inherit_outputs(shell, sources, store.id),
+             {:ok, _} <- Store.append(store, assistant),
+             do: :ok
       end
     end
+  end
+
+  defp inherit_outputs(shell, sources, target) do
+    Enum.reduce_while(sources, :ok, fn source, :ok ->
+      opened =
+        if source["id"] == shell.id, do: {:ok, shell.store}, else: Store.open(source["path"])
+
+      with {:ok, store} <- opened,
+           :ok <- Elara.Output.inherit(store.id, target, Enum.map(store.entries, & &1.message)) do
+        {:cont, :ok}
+      else
+        error -> {:halt, error}
+      end
+    end)
   end
 
   # Extractive, deterministic generation cannot invent completion or promote a

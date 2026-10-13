@@ -166,6 +166,15 @@ group so cancel/timeout/byte-cap can SIGKILL the group. Stub loss reports
 placement-independent request boundary; `Elara.Executor.Router` picks a local
 or remote executor by capability, health, affinity, and load.
 
+**Retained output (`lib/elara/output.ex`).** Local `bash` spools merged bytes
+into a private transcript-owned vault before discarding its middle preview.
+Capture and `output_read` return ordinary string outcomes, bounded to 16 KiB.
+The 128 MiB object cap stops and reaps the command with a partial, indeterminate
+result. Copies install only handles in copied tool evidence; handoff uses trusted
+source history. No eviction or query language. `Ctx.output_owner` follows the
+transcript ID when older in-place fork paths keep the actor's `session_id`.
+Remote overrides retain the old unretained command path, not remote handles.
+
 **Durable effects (`lib/elara/effect/`).** Frozen at PROD-1 scope:
 receipt-backed local `write` only. A job is admitted once by
 `{job_id, operation_digest}`; only an accepted job whose callback never started

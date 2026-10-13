@@ -963,12 +963,14 @@ call. Saved handoff headers require this build for resume.
   and after mutation.
 - `edit` replaces exactly one occurrence of `old_text` with `new_text`, or every
   non-overlapping literal occurrence when `replace_all: true`.
-- `bash` runs a shell command with stdout and stderr merged. A supervised Rust
+- `bash` runs a local shell command with stdout and stderr merged. A supervised Rust
   stub runs each command in its own process group and kills the group on
-  interruption, timeout, or output overflow. A killed command, or one lost with
+  interruption, timeout, or the 128 MiB retained-output cap. A killed command, or one lost with
   the stub, reports an `indeterminate` outcome because it may have partially
   changed the workspace. Commands that exit on their own report success or
   their exit status.
+- `output_read` pages or searches retained output by an opaque, session-owned
+  handle. It accepts a line range or a literal pattern, never a path or regex.
 - `grep` searches workspace file contents for a regular expression and returns
   `path:line:text` per match.
 - `glob` lists workspace files whose path matches a glob pattern, one per line.
@@ -1081,8 +1083,38 @@ handoff successors, but reopening after a session/server restart restores
 startup config. Help shows the same effective limits; observe mode can read
 them but cannot change them.
 
-Shell output is capped at 16 KiB in the execution stub, and the session keeps
-the same 16 KiB cap as a second line before output enters model history.
+Local shell output is retained in private session files, up to 128 MiB per
+object. The model gets an envelope of at most 16 KiB, with about 6 KiB of head
+and 10 KiB of tail, the total bytes and lines, and an `out_…` handle. Crossing
+the preview budget does not kill the command. At the retained-output cap,
+Elara stops and reaps the process group and reports an unknown result with
+an explicit partial-output handle. Timeout and interruption also remain unknown.
+
+`output_read` accepts `handle`, one-based line `offset` (default 1), and `limit`
+(default 100, maximum 200). An optional `pattern` matches literal UTF-8 text,
+up to 4096 bytes. Results stay within the preview budget and give the next line
+offset. Long lines carry a clipping notice; a literal search can show a matching
+snippet beyond the clipped prefix. Displayed text replaces invalid UTF-8, but
+the retained file preserves the original bytes. Retention requires a preview
+budget of at least 1024 bytes; smaller configured budgets refuse capture before
+the command starts.
+
+Handles cannot read another session's output. Forks, clones and history-copying
+children inherit only the handles in their copied tool evidence. Handoff
+successors inherit handles from trusted source history. Clearing old tool results
+and rewinding do not delete retained evidence. Objects are immutable and never
+evicted; session deletion does not yet remove them.
+
+Retained `bash` and `output_read` run locally. Explicit remote overrides keep
+the worker's older unretained, kill-at-cap behavior. Remote retained-output
+transport is deferred to Phase 5.
+
+Trusted tools reuse `Elara.Output.capture(ctx, {:content, kind, chunks})`, where
+`kind` is `:ok`, `:error`, or `:indeterminate` and `chunks` is an enumerable of
+binaries. Command capture uses `{:command, argv, opts}`. Both return an ordinary
+tool outcome. `Elara.Output.read(ctx, handle, {:range, offset, limit})` and
+`{:literal, pattern, offset, limit}` use the same retrieval path. Ownership
+comes from the trusted execution context, never tool arguments.
 
 Consecutive calls with identical tool names and arguments in one model response
 are rejected as duplicates. An intervening call or a later model response can

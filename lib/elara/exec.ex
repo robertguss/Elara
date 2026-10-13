@@ -27,7 +27,9 @@ defmodule Elara.Exec do
       :bytes_total,
       :bytes_sent,
       :elapsed_ms,
-      output_capped: false
+      output_capped: false,
+      bytes_persisted: nil,
+      capture_limited: false
     ]
 
     @type termination :: :exited | :cancelled | :timed_out | :truncated
@@ -39,7 +41,9 @@ defmodule Elara.Exec do
             bytes_total: non_neg_integer(),
             bytes_sent: non_neg_integer(),
             elapsed_ms: non_neg_integer(),
-            output_capped: boolean()
+            output_capped: boolean(),
+            bytes_persisted: non_neg_integer() | nil,
+            capture_limited: boolean()
           }
   end
 
@@ -168,10 +172,15 @@ defmodule Elara.Exec do
           chunks: [],
           bytes_seen: 0,
           max_bytes: request.max_bytes,
+          capture: request.capture,
           output_policy: request.output_policy,
           head_limit:
             if(request.output_policy == :head_tail,
-              do: div(request.max_bytes, 2),
+              do:
+                if(request.capture,
+                  do: div(request.max_bytes * 3, 8),
+                  else: div(request.max_bytes, 2)
+                ),
               else: request.max_bytes
             )
         }
@@ -194,6 +203,9 @@ defmodule Elara.Exec do
           if request.output_policy == :head_tail,
             do: Map.put(command, "output_policy", "head_tail"),
             else: command
+
+        command =
+          if request.capture, do: Map.put(command, "capture", request.capture), else: command
 
         if send_command(state.port, command) do
           {:noreply, state}
@@ -283,6 +295,7 @@ defmodule Elara.Exec do
     max_bytes = Keyword.get(opts, :max_bytes, 16_384)
     timeout_ms = Keyword.get(opts, :timeout_ms, 30_000)
     output_policy = Keyword.get(opts, :output_policy, :truncate)
+    capture = Keyword.get(opts, :capture)
 
     cond do
       not (is_list(argv) and argv != [] and Enum.all?(argv, &valid_string?/1)) ->
@@ -306,6 +319,12 @@ defmodule Elara.Exec do
       output_policy == :head_tail and "head_tail" not in policies ->
         {:error, "execution stub does not support head_tail output"}
 
+      not valid_capture?(capture, output_policy) ->
+        {:error, "capture requires head_tail, an absolute path and a positive max_bytes"}
+
+      not is_nil(capture) and "capture" not in policies ->
+        {:error, "execution stub does not support retained output"}
+
       true ->
         with {:ok, environment} <- Elara.Exec.Environment.command(Map.new(env)) do
           {:ok,
@@ -315,13 +334,22 @@ defmodule Elara.Exec do
              env: environment,
              max_bytes: max_bytes,
              timeout_ms: timeout_ms,
-             output_policy: output_policy
+             output_policy: output_policy,
+             capture: capture
            }}
         end
     end
   end
 
   defp valid_string?(value), do: is_binary(value) and not String.contains?(value, <<0>>)
+
+  defp valid_capture?(nil, _policy), do: true
+
+  defp valid_capture?(%{"path" => path, "max_bytes" => max}, :head_tail) do
+    valid_string?(path) and Path.type(path) == :absolute and is_integer(max) and max > 0
+  end
+
+  defp valid_capture?(_capture, _policy), do: false
 
   defp valid_environment?(environment) when is_map(environment) or is_list(environment) do
     Enum.all?(environment, fn
@@ -470,7 +498,8 @@ defmodule Elara.Exec do
          true <- valid_counter?(bytes_total),
          true <- valid_counter?(bytes_sent),
          true <- valid_counter?(elapsed_ms),
-         {:ok, tail, capped} <- output_accounting(event, job, bytes_total, bytes_sent, truncated) do
+         {:ok, tail, capped} <- output_accounting(event, job, bytes_total, bytes_sent, truncated),
+         {:ok, persisted, limited} <- capture_accounting(event, job, bytes_total) do
       termination =
         cond do
           cancelled -> :cancelled
@@ -488,7 +517,9 @@ defmodule Elara.Exec do
          bytes_total: bytes_total,
          bytes_sent: bytes_sent,
          elapsed_ms: elapsed_ms,
-         output_capped: capped
+         output_capped: capped,
+         bytes_persisted: persisted,
+         capture_limited: limited
        }}
     else
       _invalid -> {:error, "stub returned inconsistent terminal accounting"}
@@ -518,6 +549,24 @@ defmodule Elara.Exec do
   end
 
   defp output_accounting(_, _, _, _, _), do: :error
+
+  defp capture_accounting(event, %{capture: nil}, _total) do
+    if Map.has_key?(event, "bytes_persisted") or Map.has_key?(event, "capture_limited"),
+      do: :error,
+      else: {:ok, nil, false}
+  end
+
+  defp capture_accounting(event, %{capture: %{"path" => path, "max_bytes" => cap}}, total) do
+    with persisted when is_integer(persisted) and persisted >= 0 <- event["bytes_persisted"],
+         limited when is_boolean(limited) <- event["capture_limited"],
+         true <- persisted == min(total, cap),
+         true <- limited == (total >= cap and not event["cancelled"] and not event["timed_out"]),
+         {:ok, %{type: :regular, size: ^persisted}} <- File.lstat(path) do
+      {:ok, persisted, limited}
+    else
+      _ -> :error
+    end
+  end
 
   defp valid_exit_identity?(code, signal) do
     (is_integer(code) and code >= 0 and is_nil(signal)) or

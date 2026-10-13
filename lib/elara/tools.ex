@@ -1,7 +1,7 @@
 defmodule Elara.Tools do
   @moduledoc "Built-in tool implementations."
 
-  alias Elara.Exec
+  alias Elara.{Exec, Output}
   alias Elara.Tool.Ctx
 
   @spec read(map(), Ctx.t()) :: Elara.Tool.outcome()
@@ -67,7 +67,9 @@ defmodule Elara.Tools do
   def edit(_args, _ctx), do: {:error, "edit requires path, old_text, and new_text"}
 
   @spec bash(map(), Ctx.t()) :: Elara.Tool.outcome()
-  def bash(%{"command" => command}, %Ctx{} = ctx) when is_binary(command) do
+  # The remote worker and direct legacy callers have no session vault. The
+  # shipped bash tool is local; explicit remote overrides retain the old cap.
+  def bash(%{"command" => command}, %Ctx{session_id: nil} = ctx) when is_binary(command) do
     case Exec.run(["/bin/sh", "-c", command],
            cwd: ctx.cwd,
            max_bytes: ctx.max_output_bytes || 16_384,
@@ -77,6 +79,10 @@ defmodule Elara.Tools do
       {:error, {:not_started, message}} -> {:error, "execution failed: #{message}"}
       {:indeterminate, _message} = result -> result
     end
+  end
+
+  def bash(%{"command" => command}, %Ctx{} = ctx) when is_binary(command) do
+    Output.capture(ctx, {:command, ["/bin/sh", "-c", command], []})
   end
 
   def bash(_args, _ctx), do: {:error, "bash requires command"}
@@ -93,8 +99,6 @@ defmodule Elara.Tools do
   defp bash_result(%Exec.Result{termination: :exited, signal: signal, output: output}),
     do: {:error, "signal #{signal}\n" <> output}
 
-  # The stub killed these commands mid-run, so any changes they made may be
-  # partial: fail closed. Commands that exited on their own report above.
   defp bash_result(%Exec.Result{termination: :cancelled}),
     do: {:indeterminate, "cancelled while running; #{@partial}"}
 
@@ -109,6 +113,22 @@ defmodule Elara.Tools do
      "killed at the output cap (bytes_total=#{result.bytes_total} " <>
        "bytes_sent=#{result.bytes_sent}); #{@partial}\n" <> result.output}
   end
+
+  @spec output_read(map(), Ctx.t()) :: Elara.Tool.outcome()
+  def output_read(%{"handle" => handle} = args, %Ctx{} = ctx) do
+    offset = Map.get(args, "offset", 1)
+    limit = Map.get(args, "limit", 100)
+
+    selector =
+      case Map.fetch(args, "pattern") do
+        :error -> {:range, offset, limit}
+        {:ok, pattern} -> {:literal, pattern, offset, limit}
+      end
+
+    Output.read(ctx, handle, selector)
+  end
+
+  def output_read(_args, _ctx), do: {:error, "output_read requires handle"}
 
   defp write_edit(full, path, updated) do
     case File.write(full, updated) do

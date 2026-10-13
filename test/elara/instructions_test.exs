@@ -165,7 +165,8 @@ defmodule Elara.InstructionsTest do
           }
         end,
         fn request ->
-          assert List.last(request.messages).outcome == {:ok, "script-ok"}
+          assert {:ok, output} = List.last(request.messages).outcome
+          assert String.ends_with?(output, "\nscript-ok")
           %Assistant{text: "skill done"}
         end
       ])
@@ -224,7 +225,9 @@ defmodule Elara.InstructionsTest do
           }
         end,
         fn request ->
-          assert {:error, "exit 127\n" <> _} = List.last(request.messages).outcome
+          assert {:error, output} = List.last(request.messages).outcome
+          assert output =~ "\nexit 127\n"
+          assert output =~ "elara-deliberately-missing-command: not found"
           %Assistant{text: "missing"}
         end
       ])

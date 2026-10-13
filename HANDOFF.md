@@ -57,6 +57,10 @@ README.md and `docs/plugins.md`. It has no default shortcut under D22.
 The TUI's `/limits` and session-local overrides are documented in README.md's
 execution section. They follow delivery ownership and reset to startup config
 when a session restarts, including children and handoff successors.
+Retained local command output and `output_read` are documented in that section.
+`Elara.Output.capture/2` also accepts content chunks for fetch and MCP tools.
+Transcript-owned vaults copy only referenced handles; source history authorizes
+handoff inheritance. Remote retained-output transport remains Phase 5 work.
 The lab's current async-site inventory is pinned in
 `lab/test/elara/lab_profile_test.exs`; its classifier distinguishes server
 connections from session handoff relay tasks. Historical registrations stay

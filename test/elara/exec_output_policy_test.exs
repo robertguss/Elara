@@ -162,6 +162,73 @@ defmodule Elara.ExecOutputPolicyTest do
     refute File.exists?(Path.join(ctx.root, "must-not-start"))
   end
 
+  test "capture retains one MiB while transporting bounded head and tail", ctx do
+    path = Path.join(ctx.root, "full-output")
+
+    task =
+      run(
+        ctx,
+        [
+          "bash",
+          "-c",
+          "printf HEAD; head -c 1048568 /dev/zero | tr '\\000' x; printf TAIL; touch completed"
+        ],
+        max_bytes: 32,
+        output_policy: :head_tail,
+        capture: %{"path" => path, "max_bytes" => 2_097_152}
+      )
+
+    assert {:ok, result} = Task.await(task, 10_000)
+    assert result.code == 0
+    assert result.termination == :exited
+    assert result.output == "HEAD" <> String.duplicate("x", 24) <> "TAIL"
+    assert result.bytes_total == 1_048_576
+    assert result.bytes_persisted == 1_048_576
+    assert result.bytes_sent == 32
+    refute result.capture_limited
+    assert File.exists?(Path.join(ctx.root, "completed"))
+    assert File.read!(path) == "HEAD" <> String.duplicate("x", 1_048_568) <> "TAIL"
+    assert Bitwise.band(File.stat!(path).mode, 0o777) == 0o600
+  end
+
+  test "capture limit stops the command and keeps a verified partial file", ctx do
+    path = Path.join(ctx.root, "partial-output")
+
+    task =
+      run(
+        ctx,
+        ["bash", "-c", "printf '#{String.duplicate("x", 128)}'; sleep 1; touch must-not-run"],
+        max_bytes: 31,
+        output_policy: :head_tail,
+        capture: %{"path" => path, "max_bytes" => 64}
+      )
+
+    assert {:ok, result} = Task.await(task, 5_000)
+    assert result.capture_limited
+    assert result.signal == 9
+    assert result.bytes_total == 128
+    assert result.bytes_persisted == 64
+    assert result.bytes_sent == 31
+    assert File.read!(path) == String.duplicate("x", 64)
+    refute File.exists?(Path.join(ctx.root, "must-not-run"))
+  end
+
+  test "capture refuses an existing destination before command effects", ctx do
+    path = Path.join(ctx.root, "existing-output")
+    File.write!(path, "original")
+
+    task =
+      run(ctx, ["touch", "must-not-start"],
+        output_policy: :head_tail,
+        capture: %{"path" => path, "max_bytes" => 1024}
+      )
+
+    assert {:error, {:not_started, reason}} = Task.await(task, 5_000)
+    assert reason =~ "capture"
+    assert File.read!(path) == "original"
+    refute File.exists?(Path.join(ctx.root, "must-not-start"))
+  end
+
   test "default policy still kills at the cap and reports omitted output", ctx do
     task = run(ctx, ["yes"], max_bytes: 5, timeout_ms: 5_000)
     assert {:ok, result} = Task.await(task, 5_000)

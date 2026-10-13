@@ -2,7 +2,6 @@ defmodule Elara.InputQueueRecoveryTest do
   use ExUnit.Case, async: false
 
   alias Elara.Effect.ControllerJournal
-  alias Elara.Effect.ExecutorLedger
   alias Elara.Effect.ExecutorLedger.Record
   alias Elara.Effect.Executor
   alias Elara.Message
@@ -104,7 +103,7 @@ defmodule Elara.InputQueueRecoveryTest do
     assert_eventually(fn -> Agent.get(resumed_agent, & &1) == [] end)
   end
 
-  test "restored queued input waits for an authoritative terminal receipt despite an indeterminate result" do
+  test "restored queued input continues after startup proves the attempted callback orphaned" do
     root =
       Path.join(System.tmp_dir!(), "elara-input-recovery-#{System.unique_integer([:positive])}")
 
@@ -159,8 +158,15 @@ defmodule Elara.InputQueueRecoveryTest do
     {:ok, executor} = Executor.start_link(id: "executor-1", path: executor_path)
     Process.unlink(executor)
 
-    assert {:accepted, %Record{callback_attempt_count: 1} = accepted} =
+    assert {:indeterminate,
+            %Record{
+              callback_attempt_count: 1,
+              terminal_count: 1,
+              result: {:indeterminate, orphan}
+            }} =
              Executor.query(executor, job_id)
+
+    assert orphan =~ "orphaned at startup"
 
     queued_reply = {:ok, assistant("queued done")}
     {:ok, resumed_agent} = Agent.start_link(fn -> [queued_reply] end)
@@ -183,33 +189,6 @@ defmodule Elara.InputQueueRecoveryTest do
     end)
 
     assert [%ToolResult{outcome: {:indeterminate, _}}] = tool_results(resumed)
-    assert {:ok, %{state: :consumed}} = Elara.input_status(resumed, "active")
-    assert {:ok, %{state: :queued}} = Elara.input_status(resumed, "queued")
-    assert Agent.get(resumed_agent, & &1) == [queued_reply]
-
-    Process.sleep(75)
-    assert {:ok, %{state: :consumed}} = Elara.input_status(resumed, "active")
-    assert {:ok, %{state: :queued}} = Elara.input_status(resumed, "queued")
-    assert Agent.get(resumed_agent, & &1) == [queued_reply]
-
-    # Supply the terminal receipt that the crashed executor would have committed
-    # after the already-proven callback invocation.
-    {:ok, ledger} = ExecutorLedger.open(executor_path)
-
-    assert {:ok, %Record{state: :completed}} =
-             ExecutorLedger.finish(
-               ledger,
-               "executor-1",
-               job_id,
-               accepted.operation_digest,
-               {:ok, "mutation committed"}
-             )
-
-    assert :ok = ExecutorLedger.close(ledger)
-
-    assert_eventually(fn ->
-      match?({:completed, %Record{}}, Executor.query(executor, job_id))
-    end)
 
     assert_eventually(fn ->
       match?({:ok, %{state: :failed}}, Elara.input_status(resumed, "active"))

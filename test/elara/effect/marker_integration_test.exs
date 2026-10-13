@@ -317,29 +317,45 @@ defmodule Elara.Effect.MarkerIntegrationTest do
 
     reopened = start_executor(context.executor_path)
 
-    assert {:accepted, %Record{callback_attempt_count: 1, terminal_count: 0}} =
+    assert {:indeterminate, %Record{callback_attempt_count: 1, terminal_count: 1}} =
              Executor.query(reopened, job.job_id)
 
     recovered =
       start_marker_session(context, reopened, script([]), fn _point -> :ok end, store_path)
 
     assert [%ToolResult{outcome: {:indeterminate, message}}] = tool_results(recovered)
-    assert message =~ "job_id=#{job.job_id}"
-    assert message =~ "operation_digest=#{job.operation_digest}"
-    assert message =~ "workspace_id=#{job.workspace_id}"
-    assert message =~ "last_proven=callback_invoked"
-    assert message =~ "missing=completed_or_failed"
+    assert message =~ "effect outcome unknown: orphaned at startup"
     assert message =~ "action=do_not_retry_or_fail_over"
     assert length(marker_records(context.marker_path)) == 1
 
-    assert {:accepted, attempted} = Executor.query(reopened, job.job_id)
-    assert ExecutorLedger.last_proven_fact(attempted) == :callback_invoked
+    assert {:indeterminate, attempted} = Executor.query(reopened, job.job_id)
+    assert attempted.job_id == job.job_id
+    assert attempted.operation_digest == job.operation_digest
+    assert ExecutorLedger.last_proven_fact(attempted) == :indeterminate
 
     assert %Observation{result_persisted?: true, executor_record: ^attempted} =
              observation(context.journal_path, job.job_id)
 
     stop_session(recovered)
     assert :ok = Executor.close(reopened)
+  end
+
+  test "a live executor refuses a second writer on its ledger", context do
+    executor = start_executor(context.executor_path)
+    parent = self()
+
+    spawn(fn ->
+      Process.flag(:trap_exit, true)
+
+      send(
+        parent,
+        {:replacement_start, Executor.start_link(id: "executor-2", path: context.executor_path)}
+      )
+    end)
+
+    assert_receive {:replacement_start, {:error, :locked}}, 1_000
+    assert Process.alive?(executor)
+    assert :ok = Executor.close(executor)
   end
 
   test "nonmutating tools retain the direct path when the sidecar is configured", context do

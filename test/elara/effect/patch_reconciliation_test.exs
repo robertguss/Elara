@@ -316,6 +316,9 @@ defmodule Elara.Effect.PatchReconciliationTest do
                end)
     end
 
+    send(task.pid, {:continue, :after_accept_observation_before_continue})
+    assert_completed(Task.await(task, @bound_ms), executor, job)
+    assert :ok = Executor.close(executor)
     replacement = start_executor(context.executor_path, no_fault(), "executor-2")
 
     assert {:error, :wrong_executor} =
@@ -324,9 +327,7 @@ defmodule Elara.Effect.PatchReconciliationTest do
              end)
 
     assert :ok = Executor.close(replacement)
-    send(task.pid, {:continue, :after_accept_observation_before_continue})
-    assert_completed(Task.await(task, @bound_ms), executor, job)
-    close(executor, journal)
+    assert :ok = ControllerJournal.close(journal)
   end
 
   @tag repeated_cross_class: true
@@ -518,7 +519,11 @@ defmodule Elara.Effect.PatchReconciliationTest do
                causal: :unproven,
                historical: :invoked,
                safe_action: :postcondition_satisfied_no_retry,
-               executor_record: %Record{callback_attempt_count: 1, terminal_count: 0}
+               executor_record: %Record{
+                 state: :indeterminate,
+                 callback_attempt_count: 1,
+                 terminal_count: 1
+               }
              } = result
 
       assert :atomics.get(counter, 1) == 1
@@ -614,7 +619,11 @@ defmodule Elara.Effect.PatchReconciliationTest do
              causal: :unproven,
              historical: :invoked,
              safe_action: ^safe_action,
-             executor_record: %Record{callback_attempt_count: 1, terminal_count: 0}
+             executor_record: %Record{
+               state: :indeterminate,
+               callback_attempt_count: 1,
+               terminal_count: 1
+             }
            } = result = LiteralPatch.reconcile(reopened, journal, job, context.cwd)
 
     assert File.read!(context.target) == preimage()

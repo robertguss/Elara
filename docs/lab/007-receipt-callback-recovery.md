@@ -1,5 +1,17 @@
 # 007 — Receipt callback ownership
 
+> Current behavior note, 2026-10-13 (R7): startup now records an indeterminate
+> terminal for an orphaned attempted job with an incarnation only when exclusive
+> writer and callback locks plus durable VM/writer/callback identity prove the
+> old owners are dead. A different live VM refuses takeover. It
+> never replays a callback. Schema 3 migrates schemas 1 and 2 in place with
+> `attempt_incarnation: nil` for legacy attempts, which never auto-terminalize.
+> Those sessions stay idle and refuse new turns for missing proof; `/clone` or
+> `/fork` permits a separate session. Live timeout barriers remain until terminal.
+> The original registration, findings, results, pinned build `e564b68`, and
+> evidence below are preserved unchanged. Writer and VM loss remain outside
+> LAB-007's surviving-writer claim; R7 does not extend that historical result.
+
 - **Question:** Can a lost receipt-backed TCP callback release queued inputs
   without replaying the uncertain operation or inventing completion?
 - **Hypothesis:** Separating the callback from its surviving ledger writer

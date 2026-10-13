@@ -1,13 +1,14 @@
 defmodule Elara.Effect.ExecutorLedger do
   @moduledoc false
 
+  alias Elara.Effect.Ownership
   alias Exqlite.Sqlite3
 
   # Schema 2 adds the terminal `indeterminate` state: the callback returned (or
   # crashed) but whether its mutation took effect is unknown. Schema 1 rows are
   # migrated in place and keep the version that admitted them; a row still
   # accepted at migration may later finish in any terminal state.
-  @schema_version 2
+  @schema_version 3
   @result_digest_version 1
 
   @doc "Terminal ledger states: the callback will never be invoked again."
@@ -34,6 +35,7 @@ defmodule Elara.Effect.ExecutorLedger do
       :state,
       :result,
       :result_digest,
+      :attempt_incarnation,
       :admission_count,
       :callback_attempt_count,
       :terminal_count,
@@ -48,6 +50,7 @@ defmodule Elara.Effect.ExecutorLedger do
             state: :accepted | :completed | :failed | :indeterminate,
             result: {:ok | :error | :indeterminate, term()} | nil,
             result_digest: String.t() | nil,
+            attempt_incarnation: String.t() | nil,
             admission_count: 1,
             callback_attempt_count: 0 | 1,
             terminal_count: 0 | 1,
@@ -141,15 +144,15 @@ defmodule Elara.Effect.ExecutorLedger do
     select_one(ledger, job_id)
   end
 
-  @spec begin_attempt(t(), String.t(), String.t(), String.t()) ::
+  @spec begin_attempt(t(), String.t(), String.t(), String.t(), String.t() | nil) ::
           {:ok, Record.t()} | {:error, term()}
-  def begin_attempt(ledger, executor_id, job_id, operation_digest) do
+  def begin_attempt(ledger, executor_id, job_id, operation_digest, incarnation \\ nil) do
     transaction(ledger, fn ->
       with {:ok, %Record{} = record} <- require_record(ledger, job_id),
            :ok <- require_digest(record, operation_digest),
            :ok <- require_owner(record, executor_id),
            :ok <- require_attemptable(record),
-           :ok <- update_attempt_count(ledger, job_id),
+           :ok <- update_attempt_count(ledger, job_id, incarnation),
            {:ok, %Record{} = updated} <- select_one(ledger, job_id) do
         {:ok, updated}
       end
@@ -187,12 +190,63 @@ defmodule Elara.Effect.ExecutorLedger do
 
   def last_proven_fact(%Record{state: state}) when is_terminal_state(state), do: state
 
+  @doc "Claims the writer and settles proven orphans in one transaction under both exclusive locks."
+  @spec claim_writer(t(), String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
+  def claim_writer(ledger, owner) do
+    transaction(ledger, fn ->
+      sql = """
+      SELECT job_id, attempt_incarnation FROM executor_jobs
+      WHERE state = 'accepted' AND callback_attempt_count = 1
+        AND terminal_count = 0 AND attempt_incarnation IS NOT NULL
+      """
+
+      with {:ok, previous} <- scalar(ledger.db, "SELECT owner FROM executor_owner WHERE id = 1"),
+           :ok <- Ownership.require_dead(previous),
+           {:ok, count} <- with_statement(ledger, sql, &orphan_rows(ledger, &1, 0)),
+           :ok <-
+             execute_statement(ledger, "UPDATE executor_owner SET owner = ?1 WHERE id = 1", [
+               owner
+             ]) do
+        {:ok, count}
+      end
+    end)
+  end
+
+  defp orphan_rows(ledger, statement, count) do
+    case Sqlite3.step(ledger.db, statement) do
+      {:row, [job_id, incarnation]} ->
+        with :ok <- Ownership.require_dead(incarnation),
+             result <-
+               {:indeterminate,
+                "effect outcome unknown: orphaned at startup; attempt_count=1; " <>
+                  "last_known_incarnation=#{Ownership.describe(incarnation)}; action=do_not_retry_or_fail_over"},
+             :ok <- update_terminal(ledger, job_id, result),
+             do: orphan_rows(ledger, statement, count + 1)
+
+      :done ->
+        {:ok, count}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   defp initialize(db) do
     with :ok <- Sqlite3.execute(db, "PRAGMA journal_mode=WAL"),
          :ok <- Sqlite3.execute(db, "PRAGMA synchronous=FULL"),
          :ok <- Sqlite3.execute(db, "PRAGMA busy_timeout=1000"),
          {:ok, version} <- scalar(db, "PRAGMA user_version"),
          :ok <- initialize_schema(db, version),
+         :ok <-
+           Sqlite3.execute(
+             db,
+             "CREATE TABLE IF NOT EXISTS executor_owner (id INTEGER PRIMARY KEY CHECK (id = 1), owner TEXT)"
+           ),
+         :ok <-
+           Sqlite3.execute(
+             db,
+             "INSERT OR IGNORE INTO executor_owner (id, owner) VALUES (1, NULL)"
+           ),
          {:ok, journal_mode} <- scalar(db, "PRAGMA journal_mode"),
          {:ok, synchronous} <- scalar(db, "PRAGMA synchronous") do
       {:ok,
@@ -212,6 +266,23 @@ defmodule Elara.Effect.ExecutorLedger do
   end
 
   defp initialize_schema(db, 1), do: migrate_from_v1(db)
+
+  defp initialize_schema(db, 2) do
+    with :ok <- Sqlite3.execute(db, "BEGIN IMMEDIATE") do
+      result =
+        with :ok <-
+               Sqlite3.execute(
+                 db,
+                 "ALTER TABLE executor_jobs ADD COLUMN attempt_incarnation TEXT"
+               ),
+             :ok <- Sqlite3.execute(db, "PRAGMA user_version=#{@schema_version}"),
+             do: Sqlite3.execute(db, "COMMIT")
+
+      if result != :ok, do: Sqlite3.execute(db, "ROLLBACK")
+      result
+    end
+  end
+
   defp initialize_schema(db, @schema_version), do: Sqlite3.execute(db, schema_sql())
   defp initialize_schema(_db, version), do: {:error, {:unsupported_schema_version, version}}
 
@@ -256,6 +327,7 @@ defmodule Elara.Effect.ExecutorLedger do
       result_digest TEXT,
       schema_version INTEGER NOT NULL,
       result_digest_version INTEGER NOT NULL,
+      attempt_incarnation TEXT,
       UNIQUE (job_id, operation_digest),
       CHECK (
         (state = 'accepted' AND terminal_count = 0 AND result IS NULL AND result_digest IS NULL) OR
@@ -292,14 +364,14 @@ defmodule Elara.Effect.ExecutorLedger do
     execute_statement(ledger, sql, values)
   end
 
-  defp update_attempt_count(ledger, job_id) do
+  defp update_attempt_count(ledger, job_id, incarnation) do
     sql = """
     UPDATE executor_jobs
-    SET callback_attempt_count = 1
+    SET callback_attempt_count = 1, attempt_incarnation = ?2
     WHERE job_id = ?1 AND state = 'accepted' AND callback_attempt_count = 0
     """
 
-    execute_one_change(ledger, sql, [job_id])
+    execute_one_change(ledger, sql, [job_id, incarnation])
   end
 
   defp update_terminal(ledger, job_id, {kind, _payload} = result) do
@@ -324,7 +396,7 @@ defmodule Elara.Effect.ExecutorLedger do
     sql = """
     SELECT job_id, operation_digest, executor_id, state, admission_count,
            callback_attempt_count, terminal_count, result, result_digest,
-           schema_version, result_digest_version
+           schema_version, result_digest_version, attempt_incarnation
     FROM executor_jobs
     WHERE job_id = ?1
     """
@@ -351,7 +423,8 @@ defmodule Elara.Effect.ExecutorLedger do
          result_binary,
          stored_result_digest,
          schema_version,
-         result_digest_version
+         result_digest_version,
+         attempt_incarnation
        ]) do
     with {:ok, state} <- decode_state(state),
          {:ok, result} <- decode_result(state, result_binary, stored_result_digest),
@@ -366,7 +439,10 @@ defmodule Elara.Effect.ExecutorLedger do
              callback_attempt_count,
              terminal_count
            ),
-         true <- schema_version in [1, @schema_version],
+         true <- schema_version in [1, 2, @schema_version],
+         true <-
+           is_nil(attempt_incarnation) or
+             (is_binary(attempt_incarnation) and attempt_incarnation != ""),
          true <- result_digest_version == @result_digest_version do
       {:ok,
        %Record{
@@ -380,7 +456,8 @@ defmodule Elara.Effect.ExecutorLedger do
          callback_attempt_count: callback_attempt_count,
          terminal_count: terminal_count,
          schema_version: schema_version,
-         result_digest_version: result_digest_version
+         result_digest_version: result_digest_version,
+         attempt_incarnation: attempt_incarnation
        }}
     else
       _ -> {:error, :invalid_executor_record}

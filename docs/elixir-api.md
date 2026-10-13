@@ -96,8 +96,17 @@ not by calling the low-level `Elara.Tools.write/2` helper directly.
 
 Receipt callbacks run in workers linked to the single serial executor writer.
 Worker loss while that writer survives commits an indeterminate terminal;
-writer loss leaves an attempted receipt unresolved and prevents reinvocation.
-This lifetime rule does not prove whether external side effects completed.
+R7 startup commits an indeterminate terminal for an orphaned attempt with an
+incarnation only under exclusive writer and callback locks plus durable
+VM/writer/callback identity proving the old owners are dead. A different live
+VM refuses takeover, naming its OS PID, node and start time: stop it first.
+Startup never reinvokes a callback.
+Each new attempt records `attempt_incarnation`. Ledger schema 3 migrates schemas
+1 and 2 in place, leaving legacy attempts with `attempt_incarnation: nil`.
+Legacy attempts never auto-terminalize. Their sessions remain idle and refuse
+new turns for missing proof; `/clone` or `/fork` creates a separate session.
+A live callback timeout retains the queue barrier until a durable terminal
+exists. None of these rules proves whether external side effects completed.
 
 ## Bounded command output
 

@@ -27,7 +27,7 @@ defmodule Elara.Effect.ExecutorLedgerTest do
 
     assert ledger.configuration == %{
              journal_mode: "wal",
-             schema_version: 2,
+             schema_version: 3,
              synchronous: 2
            }
 
@@ -41,7 +41,7 @@ defmodule Elara.Effect.ExecutorLedgerTest do
     assert accepted.admission_count == 1
     assert accepted.callback_attempt_count == 0
     assert accepted.terminal_count == 0
-    assert accepted.schema_version == 2
+    assert accepted.schema_version == 3
     assert accepted.result_digest_version == 1
 
     assert {:ok, :existing, ^accepted} =
@@ -251,7 +251,7 @@ defmodule Elara.Effect.ExecutorLedgerTest do
     :ok = Sqlite3.close(db)
 
     ledger = open_ledger(context.path)
-    assert ledger.configuration.schema_version == 2
+    assert ledger.configuration.schema_version == 3
 
     assert {:ok, %Record{state: :completed, result: {:ok, "done"}} = done} =
              ExecutorLedger.query(ledger, "job-done")
@@ -275,8 +275,8 @@ defmodule Elara.Effect.ExecutorLedgerTest do
                {:indeterminate, "lost"}
              )
 
-    # New admissions use schema 2; the rebuilt table still enforces its constraints.
-    assert {:ok, :new, %Record{schema_version: 2}} =
+    # New admissions use schema 3; the rebuilt table still enforces its constraints.
+    assert {:ok, :new, %Record{schema_version: 3}} =
              ExecutorLedger.admit(ledger, "executor-1", "job-new", digest("e"))
 
     assert {:error, _constraint} =
@@ -293,8 +293,39 @@ defmodule Elara.Effect.ExecutorLedgerTest do
              ExecutorLedger.query(reopened, "job-invoked")
 
     {:ok, [[version]]} = pragma(reopened.db, "PRAGMA user_version")
-    assert version == 2
+    assert version == 3
     :ok = ExecutorLedger.close(reopened)
+  end
+
+  test "malformed ownership evidence cannot terminalize an attempted job", context do
+    owner = Elara.Effect.Ownership.writer()
+    proof = owner |> Base.decode64!() |> :erlang.binary_to_term([:safe])
+
+    malformed = [
+      put_in(proof, ["vm", "os_pid"], "not-a-pid"),
+      Map.update!(
+        proof,
+        "vm",
+        &(Map.drop(&1, ["nonce", "node"]) |> Map.put("boot", "unsupported-boot"))
+      ),
+      Map.put(proof, "callback", "not-an-erlang-pid")
+    ]
+
+    for {proof, index} <- Enum.with_index(malformed) do
+      ledger = open_ledger(context.path <> "-#{index}")
+      incarnation = proof |> :erlang.term_to_binary() |> Base.encode64()
+      assert {:ok, :new, _} = ExecutorLedger.admit(ledger, "executor-1", "job", digest("a"))
+
+      assert {:ok, _} =
+               ExecutorLedger.begin_attempt(ledger, "executor-1", "job", digest("a"), incarnation)
+
+      assert {:error, {:effect_ownership_unknown, _}} = ExecutorLedger.claim_writer(ledger, owner)
+
+      assert {:ok, %Record{state: :accepted, callback_attempt_count: 1, terminal_count: 0}} =
+               ExecutorLedger.query(ledger, "job")
+
+      :ok = ExecutorLedger.close(ledger)
+    end
   end
 
   defp v1_digest(result) do

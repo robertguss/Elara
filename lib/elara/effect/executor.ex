@@ -53,10 +53,19 @@ defmodule Elara.Effect.Executor.Server do
 
   alias Elara.Effect.ExecutorLedger
   alias Elara.Effect.ExecutorLedger.Record
+  alias Elara.Effect.Ownership
 
   defmodule State do
     @moduledoc false
-    defstruct [:id, :ledger, :fault_hook, operations: %{}]
+    defstruct [
+      :id,
+      :ledger,
+      :fault_hook,
+      :writer_lock,
+      :callback_lock_path,
+      :incarnation,
+      operations: %{}
+    ]
   end
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -67,11 +76,50 @@ defmodule Elara.Effect.Executor.Server do
   @impl true
   def init(opts) do
     id = Keyword.fetch!(opts, :id)
-    path = Keyword.fetch!(opts, :path)
     fault_hook = Keyword.get(opts, :fault_hook, fn _point -> :ok end)
+    incarnation = Ownership.writer()
 
-    case ExecutorLedger.open(path) do
-      {:ok, ledger} -> {:ok, %State{id: id, ledger: ledger, fault_hook: fault_hook}}
+    with {:ok, path} <- Ownership.canonical_path(Keyword.fetch!(opts, :path)),
+         {:ok, writer_lock} <- Ownership.acquire(path <> ".writer.lock", :exclusive) do
+      result =
+        with {:ok, callbacks} <- Ownership.acquire(path <> ".callbacks.lock", :exclusive) do
+          try do
+            case ExecutorLedger.open(path) do
+              {:ok, ledger} ->
+                case ExecutorLedger.claim_writer(ledger, incarnation) do
+                  {:ok, _} ->
+                    {:ok,
+                     %State{
+                       id: id,
+                       ledger: ledger,
+                       fault_hook: fault_hook,
+                       writer_lock: writer_lock,
+                       callback_lock_path: path <> ".callbacks.lock",
+                       incarnation: incarnation
+                     }}
+
+                  {:error, reason} ->
+                    ExecutorLedger.close(ledger)
+                    {:error, reason}
+                end
+
+              error ->
+                error
+            end
+          after
+            :ok = Ownership.release(callbacks)
+          end
+        end
+
+      case result do
+        {:ok, state} ->
+          {:ok, state}
+
+        {:error, reason} ->
+          Ownership.release(writer_lock)
+          {:stop, reason}
+      end
+    else
       {:error, reason} -> {:stop, reason}
     end
   end
@@ -131,9 +179,7 @@ defmodule Elara.Effect.Executor.Server do
   def handle_continue({:execute, recipient, job_id, operation_digest, operation}, state) do
     :ok = state.fault_hook.(:after_accept_reply_before_callback)
 
-    with {:ok, %Record{}} <-
-           ExecutorLedger.begin_attempt(state.ledger, state.id, job_id, operation_digest) do
-      result = invoke_worker(operation)
+    with {:ok, result} <- invoke_worker(state, job_id, operation_digest, operation) do
       :ok = state.fault_hook.(:after_external_mutation_before_completion_commit)
 
       case ExecutorLedger.finish(state.ledger, state.id, job_id, operation_digest, result) do
@@ -153,9 +199,15 @@ defmodule Elara.Effect.Executor.Server do
   @impl true
   def handle_info({:EXIT, _worker, _reason}, state), do: {:noreply, state}
 
+  def handle_info({port, {:exit_status, status}}, %{writer_lock: port} = state),
+    do: {:stop, {:executor_ownership_lost, status}, state}
+
+  def handle_info({_port, {:exit_status, _status}}, state), do: {:noreply, state}
+
   @impl true
-  def terminate(_reason, %State{ledger: ledger}) do
+  def terminate(_reason, %State{ledger: ledger, writer_lock: writer_lock}) do
     ExecutorLedger.close(ledger)
+    Ownership.release(writer_lock)
     :ok
   end
 
@@ -196,21 +248,66 @@ defmodule Elara.Effect.Executor.Server do
 
   defp response(%Record{state: state} = record), do: {state, record}
 
-  # Keep the writer and its serial callback ordering, but own the callback in a
-  # linked worker. Losing that worker is a causal uncertainty fact; losing the
-  # writer still kills the worker and leaves its attempted receipt unresolved.
-  defp invoke_worker(operation) do
+  # The linked worker holds its own shared lifetime lock before attempt commit. Writer
+  # death cannot release that hold while the callback is still alive.
+  defp invoke_worker(state, job_id, operation_digest, operation) do
     previous = Process.flag(:trap_exit, true)
+    writer = self()
 
     try do
-      task = Task.async(fn -> invoke(operation) end)
-      await_worker(task)
+      task =
+        Task.async(fn ->
+          result = Ownership.acquire(state.callback_lock_path, :shared)
+          send(writer, {:callback_owned, self(), result})
+
+          case result do
+            {:ok, _hold} ->
+              receive do
+                :invoke -> invoke(operation)
+              end
+
+            {:error, reason} ->
+              {:indeterminate, "callback ownership unavailable: #{inspect(reason)}"}
+          end
+        end)
+
+      receive do
+        {:callback_owned, worker, {:ok, _hold}} when worker == task.pid ->
+          case ExecutorLedger.begin_attempt(
+                 state.ledger,
+                 state.id,
+                 job_id,
+                 operation_digest,
+                 Ownership.attempt(state.incarnation, worker)
+               ) do
+            {:ok, %Record{}} ->
+              send(worker, :invoke)
+              {:ok, await_worker(task, state.writer_lock)}
+
+            {:error, reason} ->
+              Task.shutdown(task, :brutal_kill)
+              {:error, reason}
+          end
+
+        {:callback_owned, worker, {:error, reason}} when worker == task.pid ->
+          Task.shutdown(task, :brutal_kill)
+          {:error, {:callback_ownership_unavailable, reason}}
+
+        {:DOWN, ref, :process, _worker, reason} when ref == task.ref ->
+          {:error, {:callback_start_failed, reason}}
+
+        {port, {:exit_status, status}} when port == state.writer_lock ->
+          exit({:executor_ownership_lost, status})
+
+        {:EXIT, _pid, reason} when reason != :normal ->
+          exit(reason)
+      end
     after
       Process.flag(:trap_exit, previous)
     end
   end
 
-  defp await_worker(%Task{ref: ref, pid: worker} = task) do
+  defp await_worker(%Task{ref: ref, pid: worker} = task, writer_lock) do
     receive do
       {^ref, result} ->
         Process.demonitor(ref, [:flush])
@@ -222,10 +319,13 @@ defmodule Elara.Effect.Executor.Server do
         {:indeterminate, "callback worker lost: #{Exception.format_exit(reason)}; #{@partial}"}
 
       {:EXIT, ^worker, _reason} ->
-        await_worker(task)
+        await_worker(task, writer_lock)
 
       {:EXIT, _pid, :normal} ->
-        await_worker(task)
+        await_worker(task, writer_lock)
+
+      {^writer_lock, {:exit_status, status}} ->
+        exit({:executor_ownership_lost, status})
 
       {:EXIT, _pid, reason} ->
         exit(reason)

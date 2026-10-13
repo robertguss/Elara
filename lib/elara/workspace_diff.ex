@@ -29,27 +29,28 @@ defmodule Elara.WorkspaceDiff do
       ref = "refs/elara/origin"
 
       result =
-        case bank(handle, ["log", "-1", "--format=%B", ref]) do
-          {:ok, encoded} ->
-            with {:ok, origin} <- JSON.decode(String.trim(encoded)),
-                 true <- origin["root"] == handle.root,
-                 {:ok, tree} <- bank(handle, ["rev-parse", ref <> "^{tree}"]) do
-              {:ok, Map.put(origin, "tree", String.trim(tree))}
-            end
+        case read_origin(handle, ref) do
+          {:ok, _} = result ->
+            result
 
           _ ->
-            notice =
-              if Map.get(store, :context, %{})["source"],
-                do:
-                  "Unavailable before successor start; showing from there (#{DateTime.utc_now()}).\n",
-                else: "Fresh baseline at fork/clone copy time (#{DateTime.utc_now()}).\n"
+            if File.dir?(handle.repo) do
+              {:error, :missing_origin}
+            else
+              notice =
+                if Map.get(store, :context, %{})["source"],
+                  do:
+                    "Unavailable before successor start; showing from there (#{DateTime.utc_now()}).\n",
+                  else: "Fresh baseline at fork/clone copy time (#{DateTime.utc_now()}).\n"
 
-            origin = %{"root" => handle.root, "entry" => store.leaf, "notice" => notice}
+              origin = %{"root" => handle.root, "entry" => store.leaf, "notice" => notice}
 
-            with {:ok, tree} <- capture(handle),
-                 {:ok, commit} <- bank(handle, ["commit-tree", tree, "-m", JSON.encode!(origin)]),
-                 {:ok, _} <- bank(handle, ["update-ref", ref, String.trim(commit), @zero]) do
-              {:ok, Map.put(origin, "tree", tree)}
+              with {:ok, tree} <- capture(handle),
+                   {:ok, commit} <-
+                     bank(handle, ["commit-tree", tree, "-m", JSON.encode!(origin)]),
+                   {:ok, _} <- bank(handle, ["update-ref", ref, String.trim(commit), @zero]) do
+                {:ok, Map.put(origin, "tree", tree)}
+              end
             end
         end
 
@@ -94,6 +95,16 @@ defmodule Elara.WorkspaceDiff do
   def report(%{error: error}, _store, _scope) when not is_nil(error), do: {:error, error}
 
   def report(handle, store, scope) when scope in [:turn, :session] do
+    sources = store.context["sources"] || []
+
+    if scope == :session and sources != [] do
+      report_chain(handle, store, sources)
+    else
+      report_local(handle, store, scope)
+    end
+  end
+
+  defp report_local(handle, store, scope) do
     ids = current_turns(handle, store)
 
     origin =
@@ -132,6 +143,205 @@ defmodule Elara.WorkspaceDiff do
       {:ok, text}
     else
       _ -> {:error, "Workspace diff unavailable: no complete baseline for this session path."}
+    end
+  end
+
+  defp report_chain(handle, store, sources) do
+    segments = Enum.map(sources, &source_segment(handle, &1)) ++ [segment(handle, store)]
+    owner = List.last(segments)
+    first = Enum.find_value(segments, & &1.baseline)
+    latest = owner.endpoint
+
+    with true <- not is_nil(first) and not is_nil(latest),
+         {:ok, current} <- capture(handle),
+         {:ok, _} <- keep_live(handle, current),
+         endpoint = if(latest.closed?, do: latest.tree, else: current),
+         {:ok, changes} <- compare(handle, first.before, endpoint),
+         {:ok, outside} <- chain_outside(handle, segments, current) do
+      coverage = Enum.flat_map(segments, & &1.notices) |> Enum.join()
+
+      {:ok,
+       "Scope: git-visible files; ignored files not shown. Submodules: gitlink-only.\n" <>
+         "Session net diff · handoff chain" <>
+         if(latest.closed?,
+           do: " · closed endpoint\n",
+           else: " · live workspace (endpoint not sealed)\n"
+         ) <>
+         coverage <> changes <> outside}
+    else
+      _ ->
+        {:error,
+         "Workspace diff unavailable: no complete baseline/endpoint for the handoff chain."}
+    end
+  end
+
+  defp source_segment(handle, %{"id" => id, "path" => path}) do
+    prefix = "refs/elara/chain/" <> component(id) <> "/"
+
+    with {:ok, store} <- Store.open(path),
+         true <- store.id == id,
+         {:ok, root} <- git(store.cwd, ["rev-parse", "--show-toplevel"]),
+         true <- String.trim(root) == handle.root,
+         {:ok, state} <- Store.root(),
+         source = %{handle | repo: Path.join([state, "_workspace_snapshots", component(id)])},
+         {:ok, refs} <-
+           bank(source, [
+             "for-each-ref",
+             "--format=%(refname)",
+             "refs/elara/turns/",
+             "refs/elara/origin"
+           ]),
+         refs = String.split(refs),
+         true <- refs != [],
+         {:ok, _} <-
+           bank(
+             handle,
+             [
+               "fetch",
+               "--no-tags",
+               "--no-write-fetch-head",
+               "--no-auto-maintenance",
+               "--no-recurse-submodules",
+               source.repo
+             ] ++
+               Enum.map(refs, fn ref ->
+                 "+" <> ref <> ":" <> prefix <> String.replace_prefix(ref, "refs/elara/", "")
+               end)
+           ) do
+      origin =
+        if store.parent_session && "refs/elara/origin" in refs do
+          case read_origin(handle, prefix <> "origin") do
+            {:ok, origin} -> origin
+            _ -> nil
+          end
+        end
+
+      segment(%{handle | origin: origin}, store, prefix <> "turns/", MapSet.new(refs))
+    else
+      _ ->
+        %{
+          id: id,
+          baseline: nil,
+          start: nil,
+          endpoint: nil,
+          turns: [],
+          notices: ["Partial session view: predecessor #{id} evidence unavailable.\n"]
+        }
+    end
+  end
+
+  defp segment(handle, store, prefix \\ "refs/elara/turns/", available \\ nil) do
+    ids = current_turns(handle, store)
+
+    turns =
+      Enum.map(ids, fn id ->
+        if is_nil(available) or MapSet.member?(available, turn_ref(id)) do
+          case checkpoint(handle, id, prefix) do
+            {:ok, record} -> record
+            _ -> nil
+          end
+        end
+      end)
+
+    origin =
+      if handle.origin,
+        do: %{before: handle.origin["tree"], tree: handle.origin["tree"], closed?: true}
+
+    notices =
+      Enum.zip(ids, turns)
+      |> Enum.flat_map(fn
+        {id, nil} -> ["Partial session view: turn #{id} in #{store.id} evidence unavailable.\n"]
+        _ -> []
+      end)
+
+    notices =
+      if not is_nil(store.parent_session) and is_nil(origin),
+        do: ["Partial session view: #{store.id} copy/handoff origin unavailable.\n" | notices],
+        else: notices
+
+    notices =
+      if handle.origin && is_nil(store.context["source"]),
+        do: [handle.origin["notice"] | notices],
+        else: notices
+
+    %{
+      id: store.id,
+      baseline: origin || Enum.find(turns, & &1),
+      start: origin || List.first(turns),
+      endpoint: if(turns == [], do: origin, else: List.last(turns)),
+      turns: turns,
+      notices: notices
+    }
+  end
+
+  defp chain_outside(handle, segments, current) do
+    pairs =
+      Enum.flat_map(segments, fn segment ->
+        turns =
+          if segment.baseline && segment.baseline not in segment.turns,
+            do: [segment.baseline | segment.turns],
+            else: segment.turns
+
+        Enum.chunk_every(turns, 2, 1, :discard)
+        |> Enum.map(fn [left, right] -> {left, right, "in #{segment.id}"} end)
+      end)
+
+    joins =
+      Enum.chunk_every(segments, 2, 1, :discard)
+      |> Enum.map(fn [left, right] ->
+        {left.endpoint, right.start, "at handoff #{left.id} → #{right.id}"}
+      end)
+
+    owner = List.last(segments)
+    latest = owner.endpoint
+
+    tail =
+      if latest && latest.closed?,
+        do: [{latest, %{before: current}, "after latest closed turn"}],
+        else: []
+
+    Enum.reduce_while(pairs ++ joins ++ tail, {:ok, ""}, fn {left, right, label}, {:ok, text} ->
+      result =
+        if left && right && left.closed?,
+          do: compare(handle, left.tree, right.before),
+          else:
+            {:ok,
+             "Outside-edit boundary unavailable #{label}; source work and outside edits cannot be separated.\n"}
+
+      case result do
+        {:ok, "No changes.\n"} ->
+          {:cont, {:ok, text}}
+
+        {:ok, gap} when byte_size(text) + byte_size(gap) <= @report_limit ->
+          {:cont, {:ok, text <> gap}}
+
+        {:ok, _} ->
+          {:halt, {:ok, text <> "Outside changes truncated at 256 KiB.\n"}}
+
+        error ->
+          {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, ""} ->
+        {:ok, ""}
+
+      {:ok, gaps} ->
+        {:ok,
+         "\nChanged outside Elara (observed between turns; unavailable boundaries labelled):\n" <>
+           gaps}
+
+      error ->
+        error
+    end
+  end
+
+  defp read_origin(handle, ref) do
+    with {:ok, encoded} <- bank(handle, ["log", "-1", "--format=%B", ref]),
+         {:ok, origin} <- JSON.decode(String.trim(encoded)),
+         true <- origin["root"] == handle.root,
+         {:ok, tree} <- bank(handle, ["rev-parse", ref <> "^{tree}"]) do
+      {:ok, Map.put(origin, "tree", String.trim(tree))}
     end
   end
 
@@ -610,10 +820,12 @@ defmodule Elara.WorkspaceDiff do
     end
   end
 
-  defp checkpoint(_handle, nil), do: {:error, :missing_checkpoint}
+  defp checkpoint(handle, id, prefix \\ "refs/elara/turns/")
 
-  defp checkpoint(handle, id) do
-    ref = turn_ref(id)
+  defp checkpoint(_handle, nil, _prefix), do: {:error, :missing_checkpoint}
+
+  defp checkpoint(handle, id, prefix) do
+    ref = prefix <> component(id)
 
     with {:ok, message} <- bank(handle, ["log", "-1", "--format=%B", ref]),
          {:ok, %{"version" => 1, "root" => root, "entry" => ^id}} <-

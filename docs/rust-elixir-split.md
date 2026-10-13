@@ -1,11 +1,12 @@
 # Rust + Elixir split: decision and implementation plan
 
-> **Status:** adopted 2026-09-02. [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215)
+> **Status:** adopted 2026-09-02. [Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1)
 > holds current planning and status; this file holds the decision, evidence,
 > architecture, and reversal signals. Do not track status here.
 > The dated addenda and implementation sequence below are historical evidence;
 > their references to `ROADMAP.md` describe the former tracking location, now
-> a pointer to Linear. They do not authorize queued or canceled work.
+> a pointer to Notion, and they do not authorize queued or canceled work.
+> Linear, which tracked Elara in between, is archived in `docs/archive/linear/`.
 
 ## 2026-09-26 lab-pivot addendum
 

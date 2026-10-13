@@ -6,31 +6,34 @@ code in this repository.
 ## What this is
 
 Elara is a BEAM-native coding agent (Mix app `:elara`) that runs from source —
-there is no installed `elara` executable. User-facing surfaces are
+there is no installed `elara` executable; `bin/elara` is a source-backed
+launcher that starts the TUI in the caller's directory. User-facing surfaces are
 `mix elara.ask`, `mix elara.chat`, `mix elara.tui`, `mix elara.server`,
 `mix elara.worker`, `mix elara.login`, and the public `Elara` Elixir API. There
 is no web UI.
 
-Elara balances **BEAM harness research and daily-use improvements** under the
-owner's 2026-10-07 direction decision. Work follows the research questions
-(RQ-n), lab queue (LAB-n), and bounded usability issues in
-[Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215).
-Product features may serve daily use directly; experiments still require
-refutable hypotheses and separately recorded evidence.
+Elara is **Robert's own daily-driver coding agent** (decision D2, 2026-10-13).
+It is being built around two bets, neither implemented yet. **Uniforms**
+(Roadmap Phase 2): the harness fits itself to the language, framework and
+project it works in, with tools that return structured results, a feedback
+loop, knowledge, guardrails and workflow, so the same model does measurably
+better than in a generic harness (D4). **Surgical context** (Phase 3): tool
+results stay in BEAM processes the model queries through handles, instead of
+filling the window and compacting it (D13). The first uniform is Elixir (D5).
+Research serves daily use; it is not a goal of its own.
 
-Linear is the sole current planning and status source. `ROADMAP.md` and
-`HANDOFF.md` are durable pointers, not duplicate tracking documents. Follow
-the delivery rules in `AGENTS.md`. The active agent performs the work in the
-current session. Record continuation and review evidence in
-Linear. Ready requires explicit selection; dependencies alone do not authorize
-work. Allow no executable item while paused and at most one otherwise. The
-active agent reviews queue discipline in Linear; `test/elara/roadmap_test.exs`
-checks repository pointers only, without network access.
-Experiment notes live in `docs/lab/`, one
-page each; raw results go under `lab/results/`, not `docs/`.
-`docs/harness-experiments.md` is the pre-pivot experiment log. `AGENTS.md` holds
-environment notes; `MANUAL_TEST_CHECKLIST.md` is a manual verification
-worksheet, not a status source.
+[Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1)
+is the sole current planning and status source: the Product Brief, the Roadmap
+and its phases, the Working Agreement, the Decision Log, and tasks in Dev Hub's
+Tasks database. `ROADMAP.md` and `HANDOFF.md` are durable pointers, not
+duplicate tracking documents. Follow the delivery rules in `AGENTS.md`. The
+active agent performs the work of the current phase in the current session;
+`test/elara/roadmap_test.exs` checks repository pointers only, without network
+access. Linear is retired; its history is archived in `docs/archive/linear/`.
+Experiment notes live in `docs/lab/`, one page each; raw results go under
+`lab/results/`, not `docs/`. `docs/harness-experiments.md` is the pre-pivot
+experiment log. `AGENTS.md` holds environment notes; `MANUAL_TEST_CHECKLIST.md`
+is a manual verification worksheet, not a status source.
 
 ## Toolchain
 
@@ -42,6 +45,7 @@ this in cloud environments.
 ## Commands
 
 ```bash
+bin/check                       # compile, format, both Rust crates, then mix test; run before pushing
 mix deps.get
 mix compile --warnings-as-errors
 mix format                      # mix format --check-formatted to lint only
@@ -49,8 +53,8 @@ mix test
 mix test test/elara/session_test.exs          # one file
 mix test test/elara/session_test.exs:120      # one test by line
 
-cd native/exec-stub  && cargo fmt --check && cargo clippy && cargo test
-cd native/elara-tui  && cargo fmt --check && cargo clippy && cargo test
+(cd native/exec-stub && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked)
+(cd native/elara-tui && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked)
 ```
 
 - `mix compile` always rebuilds `native/exec-stub` through the custom
@@ -70,9 +74,11 @@ cd native/elara-tui  && cargo fmt --check && cargo clippy && cargo test
   (production keeps OTP's 3 in 5 seconds) because crash-recovery tests kill
   `Elara.TestJobs` and `Elara.Exec` on purpose. `test/elara/test_environment_test.exs`
   proves the launch clearing in a subprocess. Tests tagged `:requires_app` are
-  excluded under `mix test --no-start`. Tests that need skills pass `home:` or
-  `skill_paths:` explicitly. Reproduce order-dependent failures with
-  `mix test --seed N`.
+  excluded under `mix test --no-start`. The checkout's own `.agents/skills`
+  (tooling for whoever develops Elara) is ignored in tests through
+  `:ignored_skill_dirs`, so sessions whose cwd sits inside the checkout don't
+  load it. Tests that need skills pass `home:` or `skill_paths:` explicitly.
+  Reproduce order-dependent failures with `mix test --seed N`.
 - `.cursor/skills/verify-elara/` is a user-path verification harness
   (`bin/launch`, `bin/doctor`, `bin/drive`, `bin/cleanup`) that runs Elara under
   an isolated `HOME` and a disposable git worktree. Use it — not `mix test` — to
@@ -125,8 +131,9 @@ deterministic recordings of the facts fed to Core and replays them offline to
 detect divergence.
 
 **Protocol and clients.** `Elara.Protocol` (v2, 16 MiB line limit) is the
-versioned JSON command/event protocol; `Elara.Protocol.Projector` materializes a
-snapshot so a fresh client gets state rather than only missed events.
+versioned JSON command/event protocol; the server sends a fresh client a
+snapshot (`Elara.Protocol`) rather than only missed events.
+`Elara.Protocol.Projector` is used only by tests.
 `Elara.Server` is the local TCP gateway for detachable sessions; the Rust TUI
 (`native/elara-tui`) is a pure projection over it. `mix elara.tui` starts an
 _embedded_ server (dies with the command) when the port is free;
@@ -136,8 +143,8 @@ _embedded_ server (dies with the command) when the port is free;
 (`native/exec-stub`) over an Erlang Port; each command runs in its own process
 group so cancel/timeout/byte-cap can SIGKILL the group. Stub loss reports
 `indeterminate`, never success. `Elara.Executor` is the serializable
-placement-independent request boundary; `Elara.Executor.Router` picks
-local/plugin/remote by capability, health, affinity, and load.
+placement-independent request boundary; `Elara.Executor.Router` picks a local
+or remote executor by capability, health, affinity, and load.
 
 **Durable effects (`lib/elara/effect/`).** Frozen at PROD-1 scope:
 receipt-backed local `write` only. A job is admitted once by
@@ -175,7 +182,7 @@ summarization.
 **Prompt surface.** `Elara.Prompt` composes the system prompt from `AGENTS.md`
 ancestry plus `Elara.Skills` metadata (Agent Skills format). Skills load
 _metadata_ into context; bodies load selectively through the `skill` tool.
-`Elara.Plugin` loads trusted local `.elara/plugins/*.exs` tools with
+`Elara.Plugin` loads trusted local `.elara/plugins/*.{ex,exs}` tools with
 generation/lease-based atomic reload. Project check evidence/diagnosis tools
 belong to the project plugin, not the built-in roster. Session binds evidence
 and provider updates to the current tool caller/incarnation; plugins may opt
@@ -183,30 +190,31 @@ read-only tools into immediate interruption with `cancel_on_interrupt: true`.
 
 ## Conventions that matter here
 
-- Start each experiment from a refutable hypothesis in Linear. A result
-  against the hypothesis is a finding; record it rather than tuning the
-  experiment until it passes.
-- Prefer seeded, repeatable runs against simulated or scripted providers.
-  Real-model runs are opt-in, capped, and reported separately. Many seeded runs
-  beat one annotated anecdote.
-- Lab infrastructure (simulated providers, fault injection, the seeded runner)
-  is in scope when a queued experiment needs it. Build it once for reuse; do not
-  write single-use drivers.
+- Judge work by the current phase of the Notion Roadmap and by Robert's daily
+  use. New ideas go to the Notion Idea Parking Lot with the phase where they
+  belong; say so when a task starts drifting toward one.
+- Experiments come in two tiers. Probes are quick, unregistered and labelled as
+  anecdotes. Claims are registered with a refutable hypothesis before they run;
+  a result against the hypothesis is a finding, so record it rather than tuning
+  the experiment until it passes.
+- Measure the harness on the bench: the same model on real tasks, with and
+  without the change. Real-model runs stay under the paid-API cap (US$100 a
+  month, D14) and are reported separately from scripted runs.
 - Lab infrastructure establishes runtime properties, not user-visible behavior.
   Claims about what a user sees still need the public product path (the
   verify-elara harness).
-- Keep write-ups proportional: one page per experiment in `docs/lab/`, issue
-  Results of at most five lines, and raw data out of `docs/`.
+- Keep write-ups proportional: one page per experiment in `docs/lab/`, and raw
+  data out of `docs/`.
 - Moduledocs are one-line statements of authority and boundary (e.g. "Mechanical
   shell around Core. Bookkeeping only."). Keep that register; state what a
   module does _not_ guarantee.
 - Do not describe durable delivery, receipts, or worktrees as exactly-once
   external effects or as an OS sandbox — the docs are deliberately precise about
   this, and `write`/`edit`/`bash` are explicitly not sandboxed.
-- Under the applicable authorization, review, commit and push evidence, then
-  link it and update the Linear issue before starting its successor. Done means
-  merged; a pushed branch is not Done.
+- One task, one branch, one pull request. Run `bin/check` before pushing; a
+  reviewer agent approves before an agent merges; then update the Notion task
+  and phase page. Done means merged; a pushed branch is not Done.
 
 ## Tracking
 
-Linear: team ROB, project Elara
+Notion: Dev Hub → Projects → Elara. Tasks: Dev Hub's Tasks database, Project = Elara.

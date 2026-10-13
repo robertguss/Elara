@@ -783,9 +783,10 @@ cancellation and the Rust inspector.
   session alive after a client disconnects and execute tools elsewhere.
 - [Elixir API](docs/elixir-api.md): target another directory, subscribe to
   events, configure sessions, replay recordings, and coordinate child sessions.
-- [Elara in Linear](https://linear.app/robert-guss/project/elara-7ee4b27c1215):
+- [Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1):
   the sole current planning and status source; [Roadmap](ROADMAP.md) links the
-  research agenda, handoff, and historical inventory.
+  Product Brief, Roadmap and Working Agreement. Linear's history is archived in
+  [docs/archive/linear](docs/archive/linear/README.md).
 
 ## Develop
 

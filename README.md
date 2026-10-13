@@ -795,8 +795,8 @@ at the first failure:
 ```bash
 mix compile --warnings-as-errors
 mix format --check-formatted
-cd native/exec-stub && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
-cd native/elara-tui && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+(cd native/exec-stub && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked)
+(cd native/elara-tui && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked)
 mix test
 ```
 

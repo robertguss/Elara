@@ -32,7 +32,7 @@ while not gate.with_suffix(".release").exists():
     if pid == 0:
         os.environ["TERM"] = "xterm-256color"
         os.environ["VISUAL"] = f'{shlex.quote(sys.executable)} {shlex.quote(str(gate))}'
-        os.execv(binary, [binary, "--port", server_port, "--", session])
+        os.execv(binary, [binary, "--diagnostics", "--port", server_port, "--", session])
     output = bytearray()
 
     def drain(seconds=0.2):
@@ -58,7 +58,11 @@ while not gate.with_suffix(".release").exists():
     def wait_for(needle, start=0):
         until = time.monotonic() + 8
         while time.monotonic() < until:
-            drain()
+            # Full redraws keep diagnostic words contiguous in the PTY bytes.
+            for width in (119, 120):
+                fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 32, width, 0, 0))
+                os.kill(pid, signal.SIGWINCH)
+                drain()
             if needle in output[start:]:
                 return
         raise AssertionError(f"missing {needle!r}: {bytes(output[-2500:])!r}")
@@ -119,7 +123,9 @@ while not gate.with_suffix(".release").exists():
                 finally:
                     os.kill(pid, signal.SIGCONT)
             wait_for(result, before)
-            drain(0.3)
+            # Reply text and early Idle precede the final turn event. Its
+            # diagnostic redraw occurs after the notifier has handled it.
+            wait_for(b"provider_error" if prompt == b"error-turn" else b"completed", before)
             emitted = bytes(output[before:])
             assert emitted.count(notice) == int(notify), (prompt, emitted[-1500:])
             if notify:

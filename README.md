@@ -272,6 +272,15 @@ the sum is partial. No priced responses means `estimated_usd_nanos: null`,
 not $0. Codex and Grok OAuth are subscription usage, with token counts only;
 Elara does not turn those tokens into API spend or estimate a subscription bill.
 
+The TUI footer shows session input, cached-input and output tokens. `cached(in)`
+names the subset already included in input, and `?` marks an unreported counter.
+An API estimate appears as `~$0.0489`; `(partial)` marks a sum with unpriced
+responses. No price means no dollar value, including subscription-only usage.
+Positive estimates below $0.0001 appear as `~<$0.0001`, not zero.
+The `Ctx ~used/window` meter reads `inbox.context`, not cumulative session tokens.
+It labels low confidence, near-limit warnings and required handoffs. Fields wrap
+on narrow terminals and remain visible in tool inspection and appearance views.
+
 Standard prices are pinned for OpenAI `gpt-4.1` and its `2025-04-14` snapshot,
 and xAI `grok-4.6` and `grok-4.7`. xAI prices double at 200K input tokens for
 the whole request. Rates are saved with each response and survive reopening,

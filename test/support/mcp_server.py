@@ -35,7 +35,18 @@ def answer(request, headers=None):
     if mode == "legacy" and not initialized:
         return {"error": {"code": -32000, "message": "not initialized"}}
     if method == "tools/list":
+        if (root / "hold-list").exists():
+            (root / "list-waiting").touch()
+            until = time.monotonic() + 5
+            while (root / "hold-list").exists() and time.monotonic() < until:
+                time.sleep(0.01)
         tools = json.loads((root / "catalog.json").read_text())
+        pages = root / "pages"
+        if pages.exists():
+            page = int(request["params"].get("cursor", "1"))
+            if page == int(pages.read_text()):
+                return {"result": {"tools": tools}}
+            return {"result": {"tools": [], "nextCursor": str(page + 1)}}
         if request["params"].get("cursor") == "second":
             return {"result": {"tools": tools[1:]}}
         return {"result": {"tools": tools[:1], "nextCursor": "second"}}

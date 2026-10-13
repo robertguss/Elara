@@ -290,6 +290,50 @@ defmodule Elara.MCPTest do
     assert File.read!(Path.join(fixture.root, "calls")) == "slow\n"
   end
 
+  for transport <- [:stdio, :http] do
+    @transport transport
+    test "#{transport}: config edited during catalog retrieval refuses before tool dispatch",
+         ctx do
+      fixture = fixture(ctx.root, @transport, "modern")
+      put_config(ctx.cwd, %{"guarded" => fixture.spec})
+      approve(ctx.cwd, "guarded")
+      project = Path.join(ctx.cwd, ".elara/mcp.json")
+      original = File.read!(project)
+      hold = Path.join(fixture.root, "hold-list")
+      File.touch!(hold)
+      call = Task.async(fn -> MCP.call(ctx.cwd, "guarded", "echo", %{}) end)
+      wait_for(fn -> File.exists?(Path.join(fixture.root, "list-waiting")) end)
+      File.write!(project, original <> "\n")
+      File.rm!(hold)
+      assert {:error, :mcp_config_changed} = Task.await(call)
+      refute File.exists?(Path.join(fixture.root, "calls"))
+      File.write!(project, original)
+      assert {:ok, _} = MCP.call(ctx.cwd, "guarded", "echo", %{})
+      assert File.read!(Path.join(fixture.root, "calls")) == "echo\n"
+    end
+  end
+
+  test "catalog allows a terminating page 100 but never requests page 101", ctx do
+    for pages <- [100, 101] do
+      fixture = fixture(ctx.root, :stdio, "modern")
+      File.write!(Path.join(fixture.root, "pages"), Integer.to_string(pages))
+      put_config(ctx.cwd, %{"pages" => fixture.spec})
+      {:ok, config} = Config.read(ctx.cwd, "pages")
+      :ok = Trust.approve_config(config)
+      result = MCP.discover(ctx.cwd, "pages")
+
+      if pages == 100 do
+        assert {:ok, %{tools: tools}} = result
+        assert Enum.map(tools, & &1["name"]) == ~w(echo flood input lost slow)
+      else
+        assert {:error, :catalog_too_large} = result
+      end
+
+      requested = File.read!(Path.join(fixture.root, "requests")) |> String.split("\n")
+      assert Enum.count(requested, &(&1 == "tools/list")) == 100
+    end
+  end
+
   defp approve(cwd, name) do
     {:ok, config} = Config.read(cwd, name)
     :ok = Trust.approve_config(config)

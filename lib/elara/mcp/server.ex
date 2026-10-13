@@ -31,15 +31,12 @@ defmodule Elara.MCP.Server do
                do: :ok,
                else: {:error, :deadline_before_send}
              ),
-           {:ok, current} <- Config.read(cwd, config.name),
-           true <- current.path == config.path and current.sha256 == config.sha256,
-           :ok <- Trust.check_config(config) do
+           :ok <- current_config(config, cwd) do
         case connect(state, config, deadline, monitor) do
-          {:ok, ready} -> perform(operation, ready, deadline, monitor)
+          {:ok, ready} -> perform(operation, ready, cwd, deadline, monitor)
           {error, failed} -> {error, disconnected(failed)}
         end
       else
-        false -> {{:error, :mcp_config_changed}, state}
         error -> {error, state}
       end
 
@@ -65,6 +62,17 @@ defmodule Elara.MCP.Server do
 
   @impl true
   def terminate(_reason, state), do: Transport.close(state.transport)
+
+  defp current_config(config, cwd) do
+    with {:ok, current} <- Config.read(cwd, config.name),
+         true <- current.path == config.path and current.sha256 == config.sha256,
+         :ok <- Trust.check_config(current) do
+      :ok
+    else
+      false -> {:error, :mcp_config_changed}
+      error -> error
+    end
+  end
 
   defp disconnected(state) do
     Transport.close(state.transport)
@@ -151,11 +159,11 @@ defmodule Elara.MCP.Server do
     end
   end
 
-  defp perform(:diagnostics, state, _deadline, _monitor) do
+  defp perform(:diagnostics, state, _cwd, _deadline, _monitor) do
     {{:ok, diagnostics(state)}, state}
   end
 
-  defp perform(operation, state, deadline, monitor) do
+  defp perform(operation, state, cwd, deadline, monitor) do
     case list_tools(state, deadline, monitor, nil, [], [], 0) do
       {{:ok, tools}, state} ->
         case operation do
@@ -173,7 +181,7 @@ defmodule Elara.MCP.Server do
             end
 
           {:call, name, args} ->
-            invoke(state, tools, name, args, deadline, monitor)
+            invoke(state, tools, name, args, cwd, deadline, monitor)
         end
 
       {error, state} ->
@@ -191,7 +199,7 @@ defmodule Elara.MCP.Server do
         next = result["nextCursor"]
 
         cond do
-          bytes > 8_388_608 or length(seen) >= 100 ->
+          bytes > 8_388_608 ->
             {{:error, :catalog_too_large}, state}
 
           next == nil ->
@@ -214,6 +222,9 @@ defmodule Elara.MCP.Server do
           not is_binary(next) or next in seen ->
             {{:error, :invalid_catalog_cursor}, state}
 
+          length(seen) >= 99 ->
+            {{:error, :catalog_too_large}, state}
+
           true ->
             list_tools(state, deadline, monitor, next, [next | seen], tools ++ page, bytes)
         end
@@ -226,10 +237,11 @@ defmodule Elara.MCP.Server do
     end
   end
 
-  defp invoke(state, tools, name, args, deadline, monitor) do
+  defp invoke(state, tools, name, args, cwd, deadline, monitor) do
     with {:ok, marks} <- Trust.check_catalog(state.config, tools),
          %{} = tool <- Enum.find(tools, &(&1["name"] == name)),
-         {:ok, headers} <- headers(state, tool, args) do
+         {:ok, headers} <- headers(state, tool, args),
+         :ok <- current_config(state.config, cwd) do
       {result, state} =
         rpc(
           state,

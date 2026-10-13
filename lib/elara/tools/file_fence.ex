@@ -69,7 +69,9 @@ defmodule Elara.Tools.FileFence do
       Path.join(home, ".ssh"),
       Path.join(home, ".codex/auth.json"),
       sessions,
-      Application.get_env(:elara, :plugin_trust_root, Path.join(home, ".elara/plugin-trust"))
+      Application.get_env(:elara, :plugin_trust_root, Path.join(home, ".elara/plugin-trust")),
+      Application.get_env(:elara, :mcp_trust_root, Path.join(home, ".elara/mcp-trust")),
+      Path.join(Application.get_env(:elara, :mcp_home, home), ".elara")
     ]
     |> Enum.flat_map(fn root ->
       case canonical(root) do

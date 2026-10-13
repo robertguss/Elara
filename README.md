@@ -344,6 +344,74 @@ variable. It lists forwarded and withheld names without exposing values.
 Environment scrubbing is **not an OS sandbox**: commands and trusted local
 plugins can still read credential files through ordinary filesystem access.
 
+## Approve an MCP server
+
+MCP configuration lives in `~/.elara/mcp.json` for personal servers or
+`.elara/mcp.json` for workspace servers. Project entries add to user entries.
+If both files contain the same server name, Elara refuses and names both paths.
+The user file and approval records are internal reads, fenced from model file tools.
+No servers are configured or contacted by default.
+
+Use this shape, substituting the executable or complete MCP endpoint:
+
+```json
+{
+	"servers": {
+		"local": {
+			"transport": "stdio",
+			"command": "/absolute/path/to/server",
+			"args": [],
+			"env": {"SERVER_TOKEN": "MY_SERVER_TOKEN"}
+		},
+		"remote": {
+			"transport": "http",
+			"url": "https://example.com/mcp",
+			"token_env": "MY_REMOTE_TOKEN"
+		}
+	}
+}
+```
+
+Keep token values in the operator's startup environment, not in config, argv,
+or URLs. `env` maps stdio variable names to operator variable names. Stdio gets
+only these references plus `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`,
+`LC_CTYPE`, `TMPDIR`, `TMP`, and `TEMP`. HTTP uses `token_env` as a Bearer token
+on that endpoint only; redirects and automatic retries are disabled.
+Stdio runs in the directory containing `.elara`, without a shell.
+
+```bash
+mix elara.mcp trust local --read-only lookup,list_items
+mix elara.mcp trust remote --cwd /path/to/workspace
+```
+
+First review and approve the exact config bytes before Elara starts code or
+contacts an endpoint. Then review the full catalog and read-only marks at the
+second prompt. Every tool is mutating unless you mark it read-only here; remote
+`readOnlyHint` annotations grant nothing. Omitting `--read-only` clears earlier
+marks when you approve again. Config edits, including whitespace or other
+server entries, need new approval. A changed catalog requires approval before
+any tool call. The digest includes complete definitions and read-only marks,
+with object keys and tool names sorted to ignore ordering-only changes.
+Elara refuses the whole HTTP catalog if its header annotations cannot be honored.
+Unsupported definitions are never silently left out of approval.
+
+The client API is `Elara.MCP.catalog(cwd, server)` and
+`Elara.MCP.call(cwd, server, tool, arguments, timeout_ms: 30_000)`.
+It returns decoded MCP results, preserving `isError` and structured content.
+Model-facing search and call tools are a separate integration.
+Each configured server starts on first use under supervision and serializes
+its calls. A crash, lost response, or in-flight timeout returns `indeterminate`,
+never a replay or a claim that a remote write did not happen. The next explicit
+call reconnects and checks the catalog again. Requests and responses are
+bounded to 8 MiB; catalogs to 8 MiB and 100 pages. Unsupported input requests
+return uncertainty rather than automatically supplying data or calling a model.
+
+The client supports stateless MCP `2026-07-28` and the older initialize
+handshake over stdio or Streamable HTTP, including POST JSON and SSE replies.
+It does not support OAuth, the deprecated separate HTTP+SSE transport, resources,
+prompts, or subscriptions. Config approval trusts code and an endpoint, not an
+OS sandbox or a guarantee about future server-side behavior.
+
 ## File-tool fence
 
 The model's `read`, `write`, `edit`, `grep`, and `glob` tools stay inside the

@@ -297,6 +297,42 @@ variable. It lists forwarded and withheld names without exposing values.
 Environment scrubbing is **not an OS sandbox**: commands and trusted local
 plugins can still read credential files through ordinary filesystem access.
 
+## File-tool fence
+
+The model's `read`, `write`, and `edit` tools stay inside the session workspace
+and any extra folders you name in the startup environment. To allow another
+checkout or shared source directory, use existing absolute folder paths:
+
+```bash
+export ELARA_FILE_ROOTS='/Users/robert/shared:/Users/robert/other-app'
+bin/elara --cwd /Users/robert/phoenix-app
+```
+
+The colon-separated list belongs in operator configuration, not a project
+file or tool argument. Restart an existing server to change its environment.
+Symlinks are resolved: links inside allowed roots work, including
+`CLAUDE.md → AGENTS.md`; escaping links are refused unless the destination is
+in an explicitly allowed root. Writes change the resolved destination, not
+the link. Receipt-backed writes pin that destination and check it again
+before execution or recovery; a changed or newly forbidden target returns
+an ordinary tool error instead of freezing the session. Remote workers
+retain their stricter relative-path, no-symlink policy.
+
+**Protected paths always win**, even inside the workspace or an extra root:
+`~/.elara/**`, `~/.codex/auth.json`, `~/.ssh/**`, configured session and plugin
+trust storage, `.git/config`, `.git/hooks/**`, shell startup files (including
+`.profile`, `.bashrc`, `.bash_profile`, `.zshrc`, `.zshenv`, and
+`fish/config.fish`), `.envrc`, and `.iex.exs`. Protected names apply at any
+depth, and aliases to protected destinations are refused too.
+Older coding children whose saved worktrees are inside `~/.elara` can still
+reopen with retained evidence, but their model file tools refuse those paths.
+Start a new coding child to work in the unprotected worktree root; existing
+worktrees are not moved or deleted.
+
+This fence does **not** wrap Elara's internal skill, session, or plugin reads.
+It is **not an OS sandbox**: `bash`, search, other tools, and trusted plugins
+are not granted filesystem isolation by it.
+
 ## Ask or chat
 
 Run one turn and exit:

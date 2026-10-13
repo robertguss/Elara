@@ -1288,12 +1288,10 @@ defmodule Elara.Session do
       job.tool_call_id == call.id and
       job.tool_name == "declarative_write" and
       job.tool_version == "1" and
-      job.arguments["path"] == args["path"] and
-      job.arguments["desired"]["content"] == args["content"] and
+      DeclarativeWrite.matches_call?(job, args) and
       job.workspace_id == recovery.workspace_id and
       job.required_capabilities == ["filesystem:write"] and
-      job.authority_scope == authority_scope and
-      DeclarativeWrite.validate(job, recovery.cwd) == :ok
+      job.authority_scope == authority_scope
   end
 
   defp declarative_write_job?(%Job{operation_kind: :declarative_write}), do: true
@@ -1772,21 +1770,25 @@ defmodule Elara.Session do
 
   defp instruction_preflight(shell, %Tool{run: {Elara.Tools, action}}, %{"path" => path})
        when action in [:read, :write, :edit] and is_binary(path) do
-    applicable = Elara.Prompt.instructions(shell.cwd, [path])
-    targets = Enum.uniq([path | shell.instruction_targets])
-    instructions = Elara.Prompt.instructions(shell.cwd, targets)
-    shell = %{shell | instruction_targets: targets, instructions: instructions}
+    with {:ok, {_root, full}} <- Elara.Tools.FileFence.resolve(path, shell.cwd) do
+      applicable = Elara.Prompt.instructions(shell.cwd, [full])
+      targets = Enum.uniq([full | shell.instruction_targets])
+      instructions = Elara.Prompt.instructions(shell.cwd, targets)
+      shell = %{shell | instruction_targets: targets, instructions: instructions}
 
-    cond do
-      Enum.any?(applicable, fn {_path, result} -> match?({:error, _}, result) end) ->
-        {:error, "Cannot execute with unreadable project instructions: #{inspect(applicable)}",
-         shell}
+      cond do
+        Enum.any?(applicable, fn {_path, result} -> match?({:error, _}, result) end) ->
+          {:error, "Cannot execute with unreadable project instructions: #{inspect(applicable)}",
+           shell}
 
-      Enum.any?(applicable, fn {path, value} -> shell.presented_instructions[path] != value end) ->
-        {:defer, shell}
+        Enum.any?(applicable, fn {path, value} -> shell.presented_instructions[path] != value end) ->
+          {:defer, shell}
 
-      true ->
-        {:ok, shell}
+        true ->
+          {:ok, shell}
+      end
+    else
+      {:error, message} -> {:error, message, shell}
     end
   end
 

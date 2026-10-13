@@ -11,6 +11,7 @@ defmodule Elara.Effect.DeclarativeWrite do
   alias Elara.Effect.Sidecar
 
   @schema "elara.declarative_write.v1"
+  @file_schema "elara.declarative_write.v2"
   @tool_name "declarative_write"
   @tool_version "1"
   @required_capabilities ["filesystem:write"]
@@ -107,13 +108,20 @@ defmodule Elara.Effect.DeclarativeWrite do
   @spec prepare_arguments(map(), String.t()) :: {:ok, map()} | {:error, String.t()}
   def prepare_arguments(%{"path" => path, "content" => content}, cwd)
       when is_binary(path) and is_binary(content) and is_binary(cwd) do
-    with {:ok, target} <- AtomicFile.target(path, cwd) do
+    with {:ok, {root, full}} <- Elara.Tools.FileFence.resolve(path, cwd),
+         {:ok, target} <- AtomicFile.target(Path.relative_to(full, root), root) do
+      prepared = fn expected ->
+        arguments(full, expected, content)
+        |> Map.put("schema", @file_schema)
+        |> Map.put("display_path", path)
+      end
+
       case AtomicFile.snapshot(target) do
         :absent ->
-          {:ok, arguments(path, :absent, content)}
+          {:ok, prepared.(:absent)}
 
         {:regular, _current, digest} ->
-          {:ok, arguments(path, {:regular, digest}, content)}
+          {:ok, prepared.({:regular, digest})}
 
         {:symlink, link_target} ->
           {:error,
@@ -129,10 +137,20 @@ defmodule Elara.Effect.DeclarativeWrite do
     else
       {:error, :path_outside_workspace} ->
         {:error, "write rejected: path=#{path} reason=path_outside_workspace"}
+
+      {:error, message} ->
+        {:error, message}
     end
   end
 
   def prepare_arguments(_arguments, _cwd), do: {:error, "write requires path and content"}
+
+  def matches_call?(%Job{} = job, args) do
+    validate_job_identity(job) == :ok and
+      match?({:ok, _}, validate_arguments(job.arguments)) and
+      Map.get(job.arguments, "display_path", job.arguments["path"]) == args["path"] and
+      job.arguments["desired"]["content"] == args["content"]
+  end
 
   @spec sha256(binary()) :: String.t()
   def sha256(content) when is_binary(content) do
@@ -172,7 +190,9 @@ defmodule Elara.Effect.DeclarativeWrite do
           success(spec, :already_satisfied, opts)
 
         %Observation{state: :expected_preimage} ->
-          replace(spec, job, operation_hook, effect_observer, opts)
+          with {:ok, {_root, _full}} <- Elara.Tools.FileFence.resolve(spec.target.full_path, cwd) do
+            replace(spec, job, operation_hook, effect_observer, opts)
+          end
 
         %Observation{} = observation ->
           observation_error(observation)
@@ -311,15 +331,27 @@ defmodule Elara.Effect.DeclarativeWrite do
   defp parse(%Job{} = job, cwd) do
     with :ok <- validate_job_identity(job),
          {:ok, args} <- validate_arguments(job.arguments),
-         {:ok, target} <- AtomicFile.target(args["path"], cwd) do
+         {:ok, target} <- target(args, cwd) do
       {:ok,
        %{
          target: target,
-         path: args["path"],
+         path: Map.get(args, "display_path", args["path"]),
          expected: decode_expected(args["expected"]),
          content: args["desired"]["content"],
          desired_sha256: args["desired"]["sha256"]
        }}
+    end
+  end
+
+  defp target(%{"schema" => @schema, "path" => path}, cwd), do: AtomicFile.target(path, cwd)
+
+  defp target(%{"schema" => @file_schema, "path" => path}, cwd) do
+    with {:ok, {root, full}} <- Elara.Tools.FileFence.resolve(path, cwd),
+         true <- Path.type(path) == :absolute and path == full do
+      AtomicFile.target(Path.relative_to(full, root), root)
+    else
+      false -> {:error, :resolved_target_changed}
+      {:error, _} = error -> error
     end
   end
 
@@ -337,9 +369,11 @@ defmodule Elara.Effect.DeclarativeWrite do
 
   defp validate_arguments(args) when is_map(args) do
     keys = ["desired", "expected", "parent_policy", "path", "replacement", "schema"]
+    keys = if args["schema"] == @file_schema, do: Enum.sort(["display_path" | keys]), else: keys
 
     with true <- Enum.sort(Map.keys(args)) == keys,
-         true <- args["schema"] == @schema,
+         true <- args["schema"] in [@schema, @file_schema],
+         true <- args["schema"] != @file_schema or is_binary(args["display_path"]),
          true <- is_binary(args["path"]) and args["path"] != "",
          :ok <- validate_expected(args["expected"]),
          :ok <- validate_desired(args["desired"]),

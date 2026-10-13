@@ -8,9 +8,8 @@ defmodule Elara.Tools do
   def read(%{"path" => path} = args, %Ctx{cwd: cwd}) when is_binary(path) do
     with {:ok, offset} <- positive_integer_arg(args, "offset", 1),
          {:ok, limit} <- positive_integer_arg(args, "limit", 200),
-         {:ok, line_numbers} <- read_boolean_arg(args, "line_numbers", false) do
-      full = Path.expand(path, cwd)
-
+         {:ok, line_numbers} <- read_boolean_arg(args, "line_numbers", false),
+         {:ok, {_root, full}} <- Elara.Tools.FileFence.resolve(path, cwd) do
       case File.read(full) do
         {:ok, content} -> {:ok, maybe_range(content, args, offset, limit, line_numbers)}
         {:error, reason} -> {:error, "read failed: #{describe_posix(reason)} (#{path})"}
@@ -23,12 +22,12 @@ defmodule Elara.Tools do
   @spec write(map(), Ctx.t()) :: Elara.Tool.outcome()
   def write(%{"path" => path, "content" => content}, %Ctx{cwd: cwd})
       when is_binary(path) and is_binary(content) do
-    full = Path.expand(path, cwd)
-
-    with :ok <- File.mkdir_p(Path.dirname(full)),
+    with {:ok, {_root, full}} <- Elara.Tools.FileFence.resolve(path, cwd),
+         :ok <- File.mkdir_p(Path.dirname(full)),
          :ok <- File.write(full, content) do
       {:ok, "wrote #{byte_size(content)} bytes to #{path}"}
     else
+      {:error, message} when is_binary(message) -> {:error, message}
       {:error, reason} -> {:error, "write failed: #{describe_posix(reason)} (#{path})"}
     end
   end
@@ -41,9 +40,8 @@ defmodule Elara.Tools do
       })
       when is_binary(path) and is_binary(old_text) and is_binary(new_text) do
     with {:ok, replace_all} <- boolean_arg(args, "replace_all", false),
-         :ok <- nonempty_old_text(old_text) do
-      full = Path.expand(path, cwd)
-
+         :ok <- nonempty_old_text(old_text),
+         {:ok, {_root, full}} <- Elara.Tools.FileFence.resolve(path, cwd) do
       case File.read(full) do
         {:ok, content} ->
           case :binary.matches(content, old_text) do

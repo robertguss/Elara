@@ -165,6 +165,52 @@ defmodule Elara.SessionTest do
   end
 
   @tag :tmp_dir
+  test "reopening chooses the client's approval mode rather than saved handoff options", %{
+    tmp_dir: cwd
+  } do
+    for wait? <- [false, true] do
+      store = Elara.Session.Store.new(cwd)
+      options = Base.encode64(:erlang.term_to_binary(approval_wait: not wait?))
+      {:ok, store} = Elara.Session.Store.save(%{store | context: %{"options" => options}})
+
+      call = %ToolCall{
+        id: "drop",
+        name: "bash",
+        args: {:ok, %{"command" => "mix ecto.drop"}}
+      }
+
+      {:ok, session} =
+        Elara.start_session(
+          cwd: cwd,
+          resume: store.path,
+          approval_wait: wait?,
+          provider: script([{:ok, asst(nil, [call])}, {:ok, asst("refused")}]),
+          plugins: []
+        )
+
+      :ok = Elara.subscribe(session)
+      {:ok, _} = Elara.attach(session, :control)
+      :ok = Elara.ask_async(session, "drop")
+
+      if wait? do
+        assert_receive {:elara, ^session, {:approval_required, _}}, 2_000
+        :ok = Elara.interrupt(session)
+      else
+        assert_receive {:elara, ^session,
+                        {:message_appended,
+                         %Message.ToolResult{
+                           outcome: {:error, "approval required:" <> _}
+                         }}},
+                       2_000
+
+        assert_receive {:elara, ^session, {:turn_ended, {:completed, "refused"}}}, 2_000
+      end
+
+      GenServer.stop(session_pid(session))
+    end
+  end
+
+  @tag :tmp_dir
   test "project deny rules are captured before the model can rewrite them", %{tmp_dir: cwd} do
     File.mkdir_p!(Path.join(cwd, ".elara"))
     File.write!(Path.join(cwd, ".elara/command-rules.json"), ~s({"deny":["printf forbidden"]}))

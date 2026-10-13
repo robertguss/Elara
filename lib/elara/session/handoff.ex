@@ -129,7 +129,14 @@ defmodule Elara.Session.Handoff do
       with {:ok, {module, _}} <- provider,
            true <-
              is_nil(store.context["provider"]) or inspect(module) == store.context["provider"] do
-        saved = Keyword.drop(saved, [:max_iterations, :tool_timeout_ms, :max_tool_timeout_ms])
+        saved =
+          Keyword.drop(saved, [
+            :max_iterations,
+            :tool_timeout_ms,
+            :max_tool_timeout_ms,
+            :approval_wait
+          ])
+
         {:ok, Keyword.merge(opts, saved)}
       else
         false -> {:error, :handoff_provider_mismatch}

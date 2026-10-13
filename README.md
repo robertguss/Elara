@@ -427,6 +427,9 @@ recorded with their transcript positions and replay facts.
 `mix elara.ask` refuses an ask-matched call without execution and tells the model
 and operator to use the TUI. The turn can continue with other tools. If its last
 tool result still requires approval, the command exits with status 1.
+Line chat also refuses the call and points to the TUI, then returns to its
+prompt. A refusal does not change chat's exit status. Reopened sessions use
+the opening client's approval mode, not a saved client's mode.
 
 Command rules are **text matching, not an OS sandbox or a shell parser**.
 Alternate spellings, scripts, interpreters, and trusted plugins can bypass

@@ -22,7 +22,7 @@ defmodule Elara.Chat do
       {:ok, provider} ->
         session_opts =
           Keyword.take(opts, [:cwd]) ++
-            [provider: provider, resume: resume_opt(continue?), name: name]
+            [provider: provider, resume: resume_opt(continue?), name: name, approval_wait: false]
 
         case Elara.start_session(session_opts) do
           {:ok, session} ->

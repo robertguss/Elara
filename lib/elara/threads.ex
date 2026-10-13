@@ -111,7 +111,13 @@ defmodule Elara.Threads do
          {:ok, provider} <- provider(opts),
          true <- inspect(elem(provider, 0)) == r["provider"],
          {:ok, saved} <- decode_options(r["options"]) do
-      saved = Keyword.drop(saved, [:max_iterations, :tool_timeout_ms, :max_tool_timeout_ms])
+      saved =
+        Keyword.drop(saved, [
+          :max_iterations,
+          :tool_timeout_ms,
+          :max_tool_timeout_ms,
+          :approval_wait
+        ])
 
       {:ok,
        opts

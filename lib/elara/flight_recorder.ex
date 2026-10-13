@@ -176,14 +176,15 @@ defmodule Elara.FlightRecorder do
 
   @doc "Records the shell's context branch before attempting handoff or dispatch."
   def context_decision(%State{} = recorder, effect_id, budget, frozen, branch)
-      when branch in [:interrupt_frozen, :attempt_handoff, :attempt_dispatch] do
+      when branch in [:interrupt_frozen, :clear_tool_results, :attempt_handoff, :attempt_dispatch] do
     # Earlier effects can feed nested transitions; use the original causal ID.
     transition = Enum.find(recorder.transitions, &(&1.id == Map.delete(effect_id, :effect_index)))
 
     entry = %{
       type: :context_decision,
-      version: 1,
-      semantics: :fixed_reserves_v1,
+      version: if(branch == :clear_tool_results, do: 2, else: 1),
+      semantics:
+        if(branch == :clear_tool_results, do: :tool_result_clearing_v2, else: :fixed_reserves_v1),
       effect: effect_id,
       segment: transition.segment,
       limit: budget["limit"],
@@ -545,10 +546,14 @@ defmodule Elara.FlightRecorder do
     defaults = %Core.Config{}
 
     config =
-      Enum.reduce([:tool_timeout_ms, :max_tool_timeout_ms], config, fn key, config ->
-        value = Map.fetch!(state.config, key)
-        if value == Map.fetch!(defaults, key), do: config, else: Map.put(config, key, value)
-      end)
+      Enum.reduce(
+        [:tool_timeout_ms, :max_tool_timeout_ms, :context_keep_results, :context_keep_tokens],
+        config,
+        fn key, config ->
+          value = Map.fetch!(state.config, key)
+          if value == Map.fetch!(defaults, key), do: config, else: Map.put(config, key, value)
+        end
+      )
 
     normalized = %{
       config: config,
@@ -556,6 +561,15 @@ defmodule Elara.FlightRecorder do
       phase: normalize_phase(state.phase),
       next_ref: state.next_ref
     }
+
+    normalized =
+      if map_size(state.cleared_tools) > 0,
+        do:
+          Map.merge(normalized, %{
+            cleared_tools: state.cleared_tools,
+            context_usage_after: state.context_usage_after
+          }),
+        else: normalized
 
     normalized =
       if state.pending_runtime_limits,
@@ -606,6 +620,10 @@ defmodule Elara.FlightRecorder do
         max_tool_timeout_ms:
           Map.get(state.config, :max_tool_timeout_ms, defaults.max_tool_timeout_ms),
         max_tool_output_bytes: state.config.max_tool_output_bytes,
+        context_keep_results:
+          Map.get(state.config, :context_keep_results, defaults.context_keep_results),
+        context_keep_tokens:
+          Map.get(state.config, :context_keep_tokens, defaults.context_keep_tokens),
         provider_settings: Map.get(state.config, :provider_settings),
         retry: denormalize_retry_policy(Map.get(state.config, :retry))
       },
@@ -616,6 +634,8 @@ defmodule Elara.FlightRecorder do
       retry: Map.get(state, :retry),
       pending_runtime_limits: Map.get(state, :pending_runtime_limits),
       runtime_limit_sources: Map.get(state, :runtime_limit_sources, %{}),
+      cleared_tools: Map.get(state, :cleared_tools, %{}),
+      context_usage_after: Map.get(state, :context_usage_after, 0),
       deferred_calls: Map.get(state, :deferred_calls, []),
       next_ref: state.next_ref
     }
@@ -646,6 +666,9 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_fact({:runtime_limits, limits, keys}),
     do: %{kind: :runtime_limits, limits: limits, keys: keys}
+
+  defp normalize_fact({:clear_tool_results, ref, entries, bytes_freed}),
+    do: %{kind: :clear_tool_results, ref: ref, entries: entries, bytes_freed: bytes_freed}
 
   defp normalize_fact({:ask_input, user}), do: %{kind: :ask_input, user: normalize_message(user)}
 
@@ -689,6 +712,9 @@ defmodule Elara.FlightRecorder do
   defp denormalize_fact(%{kind: :runtime_limits, limits: limits, keys: keys}),
     do: {:runtime_limits, limits, keys}
 
+  defp denormalize_fact(%{kind: :clear_tool_results} = fact),
+    do: {:clear_tool_results, fact.ref, fact.entries, fact.bytes_freed}
+
   defp denormalize_fact(%{kind: :ask_input, user: user}),
     do: {:ask_input, denormalize_message(user)}
 
@@ -727,6 +753,8 @@ defmodule Elara.FlightRecorder do
   defp denormalize_fact(%{kind: :runtime_limits_changed}), do: :runtime_limits_changed
 
   defp normalize_effect({:emit, event}, _tools), do: %{kind: :emit, event: normalize_event(event)}
+
+  defp normalize_effect(:persist_context_clearing, _tools), do: %{kind: :persist_context_clearing}
 
   defp normalize_effect({:call_provider, ref, request}, tools) do
     %{

@@ -76,6 +76,8 @@ defmodule Elara.Session.Handoff do
         allowed_capabilities: shell.allowed_capabilities,
         max_iterations: limits.max_iterations,
         max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
+        context_keep_results: shell.core.config.context_keep_results,
+        context_keep_tokens: shell.core.config.context_keep_tokens,
         provider_retry: shell.core.config.retry,
         tool_timeout_ms: limits.tool_timeout_ms,
         max_tool_timeout_ms: limits.max_tool_timeout_ms,

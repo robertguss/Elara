@@ -16,6 +16,9 @@ independent copies are documented in README.md's "Automatic context handoff"
 section. The runtime catalog supplies model windows through
 `Elara.Provider.Visibility.context_window/1`; the TUI meter uses
 `snapshot.inbox.context`.
+That section also documents oldest-first tool-result clearing, configurable
+recent-output protection, retained originals and independent copies of cleared
+sessions. Clearing entries and freed bytes are Core facts in flight recordings.
 Command environment forwarding and `mix elara.env` diagnostics are documented
 in README.md's "Command environment" section. Extra project names belong in
 operator startup config, never an agent-editable project file.

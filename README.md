@@ -822,17 +822,42 @@ their preprocessing cost is unknown; encoded image blobs are not counted as
 text tokens.
 
 The selected model's window is looked up before each request (128K fallback
-when unknown). Warning starts at 80%; automatic handoff starts at 90%, leaving
+when unknown). Warning starts at 80%; context recovery starts at 90%, leaving
 one 10% headroom allocation rather than stacked output, handoff, tool, and
 uncertainty reserves. The authoritative meter is exposed in the session
 snapshot as `inbox.context`, including `estimate_tokens`, `limit`, `confidence`,
 and `basis`. It is an **estimate**, not exact tokenizer occupancy, and is
 independent of the 16 MiB protocol and attachment/snapshot admission limits.
 
-At a safe boundary, Elara freezes the source and automatically continues in a
-linked fresh session. Original messages and durable attachments remain available
-through `thread_read`. The handoff is an assistant-authored, extractive evidence
-index, not a claim that every obligation has been summarized: it points to the
+Before handing off, Elara clears old tool-result bodies from model context,
+oldest first, including results from the running turn. It protects the last
+five results and at least the newest approximately 20K tokens of tool output
+(UTF-8 bytes ÷ 4), whichever retains more. Results from the current provider
+response that the model has not seen yet are never cleared. Configure these
+positive limits with `ELARA_CONTEXT_KEEP_RESULTS` and
+`ELARA_CONTEXT_KEEP_TOKENS`, the `:elara` application config keys
+`:context_keep_results` and `:context_keep_tokens`, or session options with
+the same names (session options take precedence). Children and successors
+inherit the limits.
+
+Each placeholder names the tool, original byte size, exact transcript entry,
+and a `thread_read` call to page the original. Transcript views and stored
+messages keep the full bodies, including error and unknown outcomes; reopening,
+forking and cloning preserve the clearing metadata and retrieval paths.
+Clearing drops the old usage anchor: the meter estimates the smaller request
+at low confidence until fresh main-provider usage arrives. A child that copies
+history from a cleared parent keeps the full evidence but drops inherited
+assistant usage, then budgets and clears its own first request. The parent's
+history and usage stay unchanged. Clearing facts
+record entries and bytes freed for deterministic replay. The offline fixed-cutoff
+census excludes clearing gates as unknown rather than pretending to simulate
+clearing under a different cutoff.
+
+Only if clearing cannot free enough space, Elara freezes the source at a safe
+boundary and continues in a linked fresh session. Original messages and durable
+attachments remain available through `thread_read`. The handoff is an
+assistant-authored, extractive evidence index, not a claim that every obligation
+has been summarized: it points to the
 goal, recent owner decisions, tool/test outcomes, unresolved work, attachments,
 queued inputs, and children. The successor is instructed to retrieve originals;
 later owner corrections override earlier requests. Tool and child text do not
@@ -858,8 +883,9 @@ source also reopens that successor. Fork and clone remain available from the
 source's retained evidence; they start independent sessions, not new delivery
 owners for the original chain.
 
-For a context-bearing session, the public `Elara.fork/2` and
-`Elara.clone_session/1` APIs return `{:ok, copied_session_id, prompt, history}`.
+For a context-bearing session (cleared results or a handoff), the public
+`Elara.fork/2` and `Elara.clone_session/1` APIs return
+`{:ok, copied_session_id, prompt, history}`.
 Use the returned session ID to continue the copy. `prompt` is `nil` for a clone.
 Ordinary sessions keep the existing three-element result and in-place history
 switch. The chat commands switch to the copy automatically.

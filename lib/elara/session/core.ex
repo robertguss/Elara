@@ -18,6 +18,8 @@ defmodule Elara.Session.Core do
             tool_timeout_ms: pos_integer(),
             max_tool_timeout_ms: pos_integer(),
             max_tool_output_bytes: pos_integer(),
+            context_keep_results: pos_integer(),
+            context_keep_tokens: pos_integer(),
             retry: Elara.Provider.Retry.Policy.t()
           }
     defstruct [
@@ -28,6 +30,8 @@ defmodule Elara.Session.Core do
       tool_timeout_ms: 600_000,
       max_tool_timeout_ms: 3_600_000,
       max_tool_output_bytes: 16_384,
+      context_keep_results: 5,
+      context_keep_tokens: 20_000,
       retry: %Elara.Provider.Retry.Policy{}
     ]
   end
@@ -70,6 +74,8 @@ defmodule Elara.Session.Core do
             retry: Elara.Session.Core.retry() | nil,
             pending_runtime_limits: Elara.Session.Core.runtime_limits() | nil,
             runtime_limit_sources: %{optional(Elara.Session.Core.runtime_limit_key()) => :session},
+            cleared_tools: %{optional(non_neg_integer()) => map()},
+            context_usage_after: non_neg_integer(),
             next_ref: pos_integer()
           }
     defstruct [
@@ -81,6 +87,8 @@ defmodule Elara.Session.Core do
       retry: nil,
       pending_runtime_limits: nil,
       runtime_limit_sources: %{},
+      cleared_tools: %{},
+      context_usage_after: 0,
       next_ref: 1,
       deferred_calls: [],
       steering?: false
@@ -93,6 +101,7 @@ defmodule Elara.Session.Core do
           | {:provider_delta, ref(), Provider.delta()}
           | {:provider_settings, Elara.Provider.Visibility.settings()}
           | {:runtime_limits, runtime_limits(), [runtime_limit_key()]}
+          | {:clear_tool_results, ref(), [map()], bytes_freed :: pos_integer()}
           | :runtime_limits_changed
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
           | {:retry_elapsed, ref()}
@@ -107,6 +116,7 @@ defmodule Elara.Session.Core do
 
   @type effect ::
           {:call_provider, ref(), Provider.Request.t()}
+          | :persist_context_clearing
           | {:await_retry, ref(), min_ms :: non_neg_integer(), max_ms :: non_neg_integer()}
           | {:run_tool, ref(), ToolCall.t(), Tool.t()}
           | {:emit, Elara.Event.t()}
@@ -130,7 +140,7 @@ defmodule Elara.Session.Core do
 
   @spec rebase_history(State.t(), [Message.t()]) :: State.t()
   def rebase_history(%State{phase: :idle} = state, history) when is_list(history) do
-    %{state | history: repair_history(history)}
+    %{state | history: repair_history(history), cleared_tools: %{}, context_usage_after: 0}
   end
 
   @spec replace_tools(State.t(), %{String.t() => Tool.t()}) :: State.t()
@@ -246,6 +256,21 @@ defmodule Elara.Session.Core do
 
   def step(state, :inbox_changed), do: {state, [{:emit, :inbox_changed}]}
   def step(state, :runtime_limits_changed), do: {state, [{:emit, :runtime_limits_changed}]}
+
+  def step(
+        %State{phase: {:calling_provider, ref, _}} = state,
+        {:clear_tool_results, ref, entries, _bytes_freed}
+      ) do
+    cleared = Enum.reduce(entries, state.cleared_tools, &Map.put(&2, &1.index, &1))
+    state = %{state | cleared_tools: cleared, context_usage_after: length(state.history)}
+
+    {state,
+     [
+       :persist_context_clearing,
+       {:emit, :provider_view_changed},
+       call_provider_effect(state, ref)
+     ]}
+  end
 
   def step(%State{phase: :idle} = state, _fact), do: {state, []}
 
@@ -608,7 +633,7 @@ defmodule Elara.Session.Core do
   defp call_provider_effect(state, ref) do
     request = %Provider.Request{
       system: state.config.system,
-      messages: state.history,
+      messages: Elara.Session.Context.messages(state),
       tools: Map.values(state.config.tools),
       settings: state.config.provider_settings
     }

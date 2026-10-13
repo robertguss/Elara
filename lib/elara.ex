@@ -34,9 +34,15 @@ defmodule Elara do
     cwd = Keyword.get_lazy(opts, :cwd, &File.cwd!/0)
 
     with {:ok, limits} <- Elara.Config.runtime_limits(opts),
+         {:ok, retention} <- Elara.Config.context_retention(opts),
          {:ok, provider} <- fetch_provider(opts),
          {:ok, store} <- prepare_store(opts, cwd) do
-      start_prepared_session(supervisor, Keyword.merge(opts, limits), provider, store)
+      start_prepared_session(
+        supervisor,
+        opts |> Keyword.merge(limits) |> Keyword.merge(retention),
+        provider,
+        store
+      )
     end
   end
 
@@ -69,6 +75,8 @@ defmodule Elara do
         tool_timeout_ms: tool_timeout_ms,
         max_tool_timeout_ms: Keyword.fetch!(opts, :max_tool_timeout_ms),
         max_tool_output_bytes: max_tool_output_bytes,
+        context_keep_results: Keyword.fetch!(opts, :context_keep_results),
+        context_keep_tokens: Keyword.fetch!(opts, :context_keep_tokens),
         retry: provider_retry
       }
 

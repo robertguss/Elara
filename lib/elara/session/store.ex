@@ -238,7 +238,8 @@ defmodule Elara.Session.Store do
       | entries: entries,
         leaf: leaf,
         parent_session: source.path,
-        provider_settings: source.provider_settings
+        provider_settings: source.provider_settings,
+        context: Map.take(source.context, ["clearing"])
     }
 
     save(target)

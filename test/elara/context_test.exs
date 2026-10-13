@@ -6,6 +6,7 @@ defmodule Elara.ContextTest do
   defmodule Controlled do
     @behaviour Elara.Provider
     def noop(_arguments, _context), do: {:ok, "ok"}
+    def output(%{"bytes" => bytes}, _context), do: {:ok, String.duplicate("r", bytes)}
 
     def chat(owner, request) do
       send(owner, {:model, self(), request})
@@ -50,6 +51,307 @@ defmodule Elara.ContextTest do
     end)
 
     %{root: root}
+  end
+
+  test "clearing protects recent counts, recent bytes, and every unseen result", %{root: root} do
+    for {keep_count, keep_tokens, protected_count} <- [{5, 1, 5}, {2, 1000, 4}] do
+      sizes = [12_000, 12_000, 3000, 2000, 1000, 500]
+      history = clearing_history(sizes)
+      {:ok, store} = Store.append_all(Store.memory(root), history)
+
+      core =
+        Core.new(
+          %Core.Config{
+            system: "",
+            tools: %{},
+            provider_settings: %{"model" => "gpt-5.5", "effort" => "low"},
+            context_keep_results: keep_count,
+            context_keep_tokens: keep_tokens
+          },
+          history
+        )
+
+      {entries, freed} = Context.clearing(core, store, 1, nil)
+      assert Enum.map(entries, & &1.index) == Enum.map(0..(5 - protected_count), &(&1 * 2 + 2))
+      assert freed > 0
+
+      {waiting, _} = Core.step(core, {:ask, "continue"})
+      {cleared, effects} = Core.step(waiting, {:clear_tool_results, 1, entries, freed})
+      assert cleared.history == waiting.history
+      assert Context.budget(cleared)["confidence"] == "low"
+
+      {fresh, _} =
+        Core.step(
+          cleared,
+          {:provider_result, 1,
+           {:ok, %Message.Assistant{text: "fresh", usage: %{"input_tokens" => 1200}}}}
+        )
+
+      assert Context.budget(fresh)["confidence"] == "estimated"
+      assert Context.budget(fresh)["estimate_tokens"] == 1200
+      assert {:call_provider, 1, request} = List.last(effects)
+      retained = Enum.filter(request.messages, &is_struct(&1, Message.ToolResult))
+
+      assert Enum.take(retained, -protected_count) ==
+               Enum.take(history_results(history), -protected_count)
+
+      assert Enum.all?(
+               Enum.take(retained, length(entries)),
+               &(elem(&1.outcome, 1) =~ "thread_read")
+             )
+    end
+
+    history = clearing_history([12_000, 12_000, 12_000])
+
+    unseen =
+      for n <- 1..3,
+          do: %Message.ToolResult{
+            call_id: "unseen-#{n}",
+            name: "echo",
+            outcome: {:ok, String.duplicate("u", 12_000)}
+          }
+
+    history = history ++ unseen
+    {:ok, store} = Store.append_all(Store.memory(root), history)
+
+    core =
+      Core.new(
+        %Core.Config{system: "", tools: %{}, context_keep_results: 1, context_keep_tokens: 1},
+        history
+      )
+
+    {entries, _} = Context.clearing(core, store, 1, nil)
+    assert Enum.map(entries, & &1.index) == [2, 4, 6]
+  end
+
+  test "seeded session clears before handoff, retrieves originals and replays across reopening",
+       %{root: root} do
+    original = "original-evidence " <> String.duplicate("x", 160_000)
+    history = clearing_history([byte_size(original) | List.duplicate(16_000, 6)])
+    history = List.update_at(history, 2, &%{&1 | outcome: {:error, original}})
+    history = List.update_at(history, -1, &%{&1 | usage: %{"input_tokens" => 63_000}})
+
+    opts = [
+      cwd: root,
+      provider: {Controlled, self()},
+      plugins: [],
+      system: "",
+      context_limit: 70_000
+    ]
+
+    {:ok, id} = Elara.start_session(opts ++ [seed_history: history])
+    assert :ok = Elara.ask_async(id, "continue")
+    assert_receive {:model, worker, request}, 3000
+    result = Enum.at(request.messages, 2)
+    assert {:error, placeholder} = result.outcome
+    assert placeholder =~ "cleared echo result: #{byte_size(original)} bytes"
+    assert Enum.at(Elara.transcript(id), 2).outcome == {:error, original}
+    {:ok, store} = Handoff.store(id)
+    entry = Enum.at(Store.path_entries(store, store.leaf), 2)
+    assert placeholder =~ entry.id
+    refute Handoff.outgoing(store)
+    assert Elara.snapshot(id).snapshot["inbox"]["context"]["confidence"] == "low"
+
+    read = %Message.ToolCall{
+      id: "retrieve",
+      name: "thread_read",
+      args: {:ok, %{"thread_id" => id, "source_message_id" => entry.id, "character_offset" => 0}}
+    }
+
+    send(
+      worker,
+      {:answer, %Message.Assistant{tool_calls: [read], usage: %{"input_tokens" => 25_000}}}
+    )
+
+    assert_receive {:model, worker, retrieved}, 3000
+    assert %Message.ToolResult{outcome: {:ok, page}} = List.last(retrieved.messages)
+    assert page =~ "original-evidence"
+    assert page =~ "next_character_offset"
+    send(worker, {:answer, "continued"})
+
+    await(fn ->
+      match?(%Message.Assistant{text: "continued"}, List.last(Elara.transcript(id)))
+    end)
+
+    assert Elara.snapshot(id).snapshot["inbox"]["context"]["confidence"] == "low"
+
+    recording = Elara.recording(id)
+    clearing = Enum.find(recording.transitions, &(&1.fact.kind == :clear_tool_results)).fact
+    assert [target] = clearing.entries
+    assert target.entry_id == entry.id
+    assert clearing.bytes_freed == byte_size(original) - byte_size(placeholder)
+    assert {:ok, %{status: :match}} = Elara.replay(recording)
+    assert {:ok, loaded} = Elara.FlightRecorder.load(Elara.status(id).recording_path)
+    assert {:ok, %{status: :match}} = Elara.replay(loaded)
+
+    assert {:ok, %{segments: [%{status: :unknown, unknown: %{reason: :unsupported_semantics}}]}} =
+             Elara.FlightRecorder.ContextCensus.compare(loaded, 70_000)
+
+    {:ok, pid} = Elara.session_pid(id)
+    :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+    {:ok, ^id} = Elara.start_session(opts ++ [resume: store.path])
+    assert :ok = Elara.ask_async(id, "after reopening")
+    assert_receive {:model, worker, reopened}, 3000
+    assert Enum.at(reopened.messages, 2).outcome == {:error, placeholder}
+    send(worker, {:answer, %Message.Assistant{text: "fresh", usage: %{"input_tokens" => 1200}}})
+    await(fn -> match?(%Message.Assistant{text: "fresh"}, List.last(Elara.transcript(id))) end)
+    assert Elara.snapshot(id).snapshot["inbox"]["context"]["estimate_tokens"] == 1200
+    assert Enum.at(Elara.transcript(id), 2).outcome == {:error, original}
+
+    [last_user | _] = Enum.reverse(Elara.user_entries(id))
+
+    for {copy, copied_history} <- [
+          case Elara.clone_session(id) do
+            {:ok, copy, nil, history} -> {copy, history}
+          end,
+          case Elara.fork(id, last_user.id) do
+            {:ok, copy, "after reopening", history} -> {copy, history}
+          end
+        ] do
+      assert copy != id
+      assert Enum.at(copied_history, 2).outcome == {:error, original}
+      assert :ok = Elara.ask_async(copy, "read copied evidence")
+      assert_receive {:model, worker, copied}, 3000
+      assert elem(Enum.at(copied.messages, 2).outcome, 1) =~ copy
+      copied_read = %{read | args: {:ok, %{"thread_id" => copy, "source_message_id" => entry.id}}}
+      send(worker, {:answer, %Message.Assistant{tool_calls: [copied_read]}})
+      assert_receive {:model, worker, retrieved}, 3000
+      assert elem(List.last(retrieved.messages).outcome, 1) =~ "original-evidence"
+      send(worker, {:answer, "copied"})
+
+      await(fn ->
+        match?(%Message.Assistant{text: "copied"}, List.last(Elara.transcript(copy)))
+      end)
+    end
+
+    assert List.last(Elara.transcript(id)).text == "fresh"
+  end
+
+  test "a running turn clears seen output without clearing the current response's results", %{
+    root: root
+  } do
+    turns =
+      [160_000 | List.duplicate(16_000, 6)]
+      |> Enum.with_index()
+      |> Enum.map(fn {bytes, index} ->
+        call = %Message.ToolCall{
+          id: "call-#{index}",
+          name: "output",
+          args: {:ok, %{"bytes" => bytes}}
+        }
+
+        {:ok,
+         %Message.Assistant{
+           tool_calls: [call],
+           usage: %{"input_tokens" => if(index == 6, do: 63_000, else: 1000)}
+         }}
+      end)
+
+    {:ok, agent} = Agent.start_link(fn -> turns ++ [{:ok, %Message.Assistant{text: "done"}}] end)
+
+    tool = %Elara.Tool{
+      name: "output",
+      description: "output",
+      parameters: %{"type" => "object"},
+      run: {Controlled, :output}
+    }
+
+    {:ok, id} =
+      Elara.start_session(
+        cwd: root,
+        plugins: [],
+        provider: {Elara.Provider.Scripted, agent},
+        tools: [tool],
+        context_limit: 70_000,
+        max_tool_output_bytes: 200_000
+      )
+
+    assert {:ok, "done"} = Elara.ask(id, "one long turn")
+    recording = Elara.recording(id)
+
+    assert [%{fact: %{entries: [%{index: 2}]}}] =
+             Enum.filter(recording.transitions, &(&1.fact.kind == :clear_tool_results))
+
+    assert Enum.count(Elara.transcript(id), &is_struct(&1, Message.User)) == 1
+
+    last_call =
+      recording.transitions
+      |> Enum.flat_map(& &1.effects)
+      |> Enum.filter(&(&1.value.kind == :call_provider))
+      |> List.last()
+
+    results = Enum.filter(last_call.value.request.messages, &(&1.kind == :tool_result))
+    assert hd(results).outcome.text =~ "cleared output result"
+    assert List.last(results).outcome.text == String.duplicate("r", 16_000)
+    {:ok, store} = Handoff.store(id)
+    refute Handoff.outgoing(store)
+    assert {:ok, %{status: :match}} = Elara.replay(recording)
+  end
+
+  defp history_results(history), do: Enum.filter(history, &is_struct(&1, Message.ToolResult))
+
+  test "a child resets copied usage from a cleared parent and clears its own first request", %{
+    root: root
+  } do
+    history = clearing_history([160_000 | List.duplicate(16_000, 6)])
+    history = List.update_at(history, -1, &%{&1 | usage: %{"input_tokens" => 63_000}})
+
+    {:ok, agent} =
+      Agent.start_link(fn ->
+        [
+          {:ok, %Message.Assistant{text: "parent", usage: %{"input_tokens" => 1200}}},
+          {:ok, %Message.Assistant{text: "child"}}
+        ]
+      end)
+
+    {:ok, parent} =
+      Elara.start_session(
+        cwd: root,
+        plugins: [],
+        provider: {Elara.Provider.Scripted, agent},
+        seed_history: history,
+        context_limit: 70_000
+      )
+
+    assert {:ok, "parent"} = Elara.ask(parent, "continue")
+
+    {:ok, child} =
+      Elara.Threads.start_child(parent, "use the copied evidence",
+        coding: false,
+        history: true,
+        pause_inputs: true
+      )
+
+    child_id = child["id"]
+    copied = Elara.transcript(child_id)
+    assert Enum.at(copied, 2).outcome == Enum.at(history, 2).outcome
+    assert Enum.all?(Enum.filter(copied, &is_struct(&1, Message.Assistant)), &is_nil(&1.usage))
+    assert :ok = Elara.resume_inputs(child_id)
+
+    await(fn ->
+      match?(%Message.Assistant{text: "child"}, List.last(Elara.transcript(child_id)))
+    end)
+
+    decisions = Elara.recording(child_id).context_decisions
+    assert [%{branch: :clear_tool_results}, %{branch: :attempt_dispatch} = dispatch] = decisions
+    assert dispatch.estimate_tokens + dispatch.reserves["output"] < dispatch.limit
+
+    assert Enum.find(Elara.transcript(parent), &match?(%Message.Assistant{text: "parent"}, &1)).usage ==
+             %{"input_tokens" => 1200}
+
+    assert {:ok, %{status: :match}} = Elara.replay(Elara.recording(child_id))
+  end
+
+  defp clearing_history(sizes) do
+    [Message.user("one long turn")] ++
+      Enum.flat_map(sizes, fn size ->
+        call = %Message.ToolCall{id: "reused-id", name: "echo", args: {:ok, %{}}}
+
+        [
+          %Message.Assistant{tool_calls: [call]},
+          Message.tool_result(call, {:ok, String.duplicate("r", size)})
+        ]
+      end) ++ [%Message.Assistant{text: "seen"}]
   end
 
   test "preflight uses main-provider usage, then estimates only newer messages at bytes / 4" do

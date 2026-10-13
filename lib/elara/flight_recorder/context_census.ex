@@ -123,7 +123,7 @@ defmodule Elara.FlightRecorder.ContextCensus do
       |> Enum.with_index()
       |> Enum.reduce_while({:ok, [], sequence}, fn
         {%{index: index, value: %{kind: kind}}, index}, {:ok, gates, sequence}
-        when kind in [:call_provider, :await_retry, :run_tool, :emit] ->
+        when kind in [:call_provider, :await_retry, :run_tool, :emit, :persist_context_clearing] ->
           next =
             if kind == :call_provider,
               do: gates ++ [%{effect: Map.put(id, :effect_index, index), segment: segment}],

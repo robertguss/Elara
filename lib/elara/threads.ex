@@ -608,13 +608,15 @@ defmodule Elara.Threads do
             allowed_capabilities: caps,
             max_iterations: config.max_iterations,
             max_tool_output_bytes: config.max_tool_output_bytes,
+            context_keep_results: config.context_keep_results,
+            context_keep_tokens: config.context_keep_tokens,
             provider_retry: config.provider_retry,
             tool_timeout_ms: config.tool_timeout_ms,
             max_tool_timeout_ms: config.max_tool_timeout_ms,
             context_limit: config.context_limit
           ]
 
-      history = if Keyword.get(opts, :history, false), do: Elara.transcript(parent), else: []
+      history = if Keyword.get(opts, :history, false), do: config.history, else: []
       paused = Keyword.get(opts, :pause_inputs, false)
       store = Store.new(cwd, String.slice(assignment, 0, 80))
 

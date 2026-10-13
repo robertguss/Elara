@@ -48,6 +48,46 @@ defmodule Elara.ExecIntegrationTest do
     %{root: root, marker: marker, ready: ready}
   end
 
+  test "concurrent commands retain their own large head and tail frames" do
+    fixture = fixture("elara_frames")
+    python = System.find_executable("python3") || flunk("python3 is required")
+
+    1..32
+    |> Task.async_stream(
+      fn index ->
+        Exec.run(
+          [
+            python,
+            "-c",
+            "import os; os.write(1, bytes([#{128 + index}])*65536 + bytes([#{192 + index}])*65536)"
+          ],
+          cwd: fixture.root,
+          max_bytes: 65_536,
+          output_policy: :head_tail,
+          timeout_ms: 10_000
+        )
+      end,
+      max_concurrency: 32,
+      timeout: 15_000
+    )
+    |> Enum.with_index(1)
+    |> Enum.each(fn {response, index} ->
+      assert {:ok,
+              {:ok,
+               %Exec.Result{
+                 code: 0,
+                 termination: :exited,
+                 bytes_total: 131_072,
+                 bytes_sent: 65_536,
+                 output_capped: true
+               } = result}} = response
+
+      head = 128 + index
+      tail = 192 + index
+      assert result.output == :binary.copy(<<head>>, 32_768) <> :binary.copy(<<tail>>, 32_768)
+    end)
+  end
+
   test "public interrupt kills a shell and all background descendants" do
     fixture = fixture("elara_interrupt")
 

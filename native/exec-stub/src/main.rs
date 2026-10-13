@@ -32,6 +32,7 @@ struct ManagedJob {
     guardian_pid: libc::pid_t,
     control_fd: RawFd,
     event_fd: RawFd,
+    event_buffer: Vec<u8>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -143,11 +144,11 @@ fn manager_loop() -> io::Result<()> {
                 continue;
             }
 
-            let Some(job) = jobs.get(id) else {
+            let Some(job) = jobs.get_mut(id) else {
                 continue;
             };
 
-            if !forward_events(job.event_fd, &mut stdout)? {
+            if !forward_events(job.event_fd, &mut job.event_buffer, &mut stdout)? {
                 finished.push(id.clone());
             }
         }
@@ -442,6 +443,7 @@ fn spawn_guardian(
         guardian_pid: pid,
         control_fd: control[1],
         event_fd: events[0],
+        event_buffer: Vec::new(),
     })
 }
 
@@ -791,12 +793,18 @@ fn drain_output(
     Ok(true)
 }
 
-fn forward_events(fd: RawFd, stdout: &mut impl Write) -> io::Result<bool> {
+fn forward_events(fd: RawFd, pending: &mut Vec<u8>, stdout: &mut impl Write) -> io::Result<bool> {
     let mut buffer = [0_u8; 8192];
 
     loop {
         let count = unsafe { libc::read(fd, buffer.as_mut_ptr().cast(), buffer.len()) };
         if count == 0 {
+            if !pending.is_empty() {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "guardian closed with an incomplete event",
+                ));
+            }
             return Ok(false);
         }
         if count < 0 {
@@ -810,7 +818,16 @@ fn forward_events(fd: RawFd, stdout: &mut impl Write) -> io::Result<bool> {
             }
             return Err(error);
         }
-        stdout.write_all(&buffer[..count as usize])?;
+        let bytes = &buffer[..count as usize];
+        let previous = pending.len();
+        pending.extend_from_slice(bytes);
+        // A pipe read may stop inside a frame. Never interleave that suffix
+        // with another guardian's frames on the shared protocol stream.
+        if let Some(end) = bytes.iter().rposition(|byte| *byte == b'\n') {
+            let complete = previous + end + 1;
+            stdout.write_all(&pending[..complete])?;
+            pending.drain(..complete);
+        }
     }
 }
 

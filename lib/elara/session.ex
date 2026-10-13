@@ -31,6 +31,7 @@ defmodule Elara.Session do
             provider: {module(), term()},
             cwd: String.t(),
             tool_timeout_ms: pos_integer(),
+            max_tool_timeout_ms: pos_integer(),
             effect_journal: pid() | nil,
             effect_journal_path: String.t(),
             effect_executor: GenServer.server() | nil,
@@ -53,6 +54,7 @@ defmodule Elara.Session do
       :provider,
       :cwd,
       :tool_timeout_ms,
+      :max_tool_timeout_ms,
       :id,
       :incarnation,
       :router,
@@ -119,7 +121,8 @@ defmodule Elara.Session do
 
     core_config = restore_provider_settings(core_config, store, provider)
 
-    tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
+    tool_timeout_ms = Keyword.fetch!(opts, :tool_timeout_ms)
+    max_tool_timeout_ms = Keyword.fetch!(opts, :max_tool_timeout_ms)
     plugin_paths = Keyword.get(opts, :plugin_paths, [])
     router = Keyword.fetch!(opts, :router)
     workspace_id = Keyword.fetch!(opts, :workspace_id)
@@ -175,6 +178,7 @@ defmodule Elara.Session do
             context_limit: Keyword.get(opts, :context_limit),
             handoff_fault_hook: Keyword.fetch!(opts, :handoff_fault_hook),
             tool_timeout_ms: tool_timeout_ms,
+            max_tool_timeout_ms: max_tool_timeout_ms,
             base_tools: core.config.tools,
             discover_plugins?: Keyword.get(opts, :discover_plugins?, false),
             plugins: plugins
@@ -506,6 +510,7 @@ defmodule Elara.Session do
       max_iterations: shell.core.config.max_iterations,
       max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
       tool_timeout_ms: shell.tool_timeout_ms,
+      max_tool_timeout_ms: shell.max_tool_timeout_ms,
       router: shell.router,
       workspace_id: shell.workspace_id,
       allowed_capabilities: shell.allowed_capabilities,
@@ -1823,7 +1828,27 @@ defmodule Elara.Session do
   end
 
   defp run_routed_tool(shell, effect_id, core_ref, call, tool, args) do
-    request = tool_request(shell, call, tool, args)
+    case tool_timeout(shell, tool, args) do
+      {:ok, timeout} ->
+        run_routed_tool(shell, effect_id, core_ref, call, tool, args, timeout)
+
+      {:error, message} ->
+        feed({:tool_result, core_ref, {:error, message}}, shell)
+    end
+  end
+
+  defp tool_timeout(shell, %Tool{run: {Elara.Tools, :bash}}, args) do
+    timeout = Map.get(args, "timeout_ms", shell.tool_timeout_ms)
+
+    if is_integer(timeout) and timeout > 0 and timeout <= shell.max_tool_timeout_ms,
+      do: {:ok, timeout},
+      else: {:error, "timeout_ms must be an integer from 1 to #{shell.max_tool_timeout_ms}"}
+  end
+
+  defp tool_timeout(shell, _tool, _args), do: {:ok, shell.tool_timeout_ms}
+
+  defp run_routed_tool(shell, effect_id, core_ref, call, tool, args, timeout) do
+    request = tool_request(shell, call, tool, args, timeout)
     {shell, request, job} = commit_tool_intent(shell, effect_id, request, tool)
 
     task =
@@ -1849,7 +1874,9 @@ defmodule Elara.Session do
         )
       end
 
-    track_tool_task(shell, task, core_ref, nil)
+    # Let bash's runner settle its deadline before the shell's backstop fires.
+    grace = if tool.run == {Elara.Tools, :bash}, do: 1_000, else: 0
+    track_tool_task(shell, task, core_ref, nil, timeout + grace)
   end
 
   defp emit(event, effect_id, shell, patch_context) do
@@ -1922,8 +1949,9 @@ defmodule Elara.Session do
 
   defp active_tool(_shell, _caller), do: {:error, "No active tool invocation"}
 
-  defp track_tool_task(shell, task, core_ref, plugin_lease) do
-    timer = Process.send_after(self(), {:tool_deadline, core_ref}, shell.tool_timeout_ms)
+  defp track_tool_task(shell, task, core_ref, plugin_lease, timeout \\ nil) do
+    timer =
+      Process.send_after(self(), {:tool_deadline, core_ref}, timeout || shell.tool_timeout_ms)
 
     shell
     |> track_task(task, :tool, core_ref, plugin_lease)
@@ -2774,7 +2802,7 @@ defmodule Elara.Session do
     12 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
   end
 
-  defp tool_request(shell, call, tool, args) do
+  defp tool_request(shell, call, tool, args, timeout \\ nil) do
     %Request{
       tool_call_id: call.id,
       session_id: shell.id,
@@ -2782,7 +2810,7 @@ defmodule Elara.Session do
       tool_version: tool.version,
       arguments: args,
       workspace_id: shell.workspace_id,
-      deadline_ms: System.system_time(:millisecond) + shell.tool_timeout_ms,
+      deadline_ms: System.system_time(:millisecond) + (timeout || shell.tool_timeout_ms),
       max_output_bytes: shell.core.config.max_tool_output_bytes,
       cancellation_id: new_cancellation_id(),
       required_capabilities: tool.capabilities,

@@ -73,7 +73,7 @@ defmodule Elara.Tools do
     case Exec.run(["/bin/sh", "-c", command],
            cwd: ctx.cwd,
            max_bytes: ctx.max_output_bytes || 16_384,
-           timeout_ms: ctx.timeout_ms || 30_000
+           timeout_ms: ctx.timeout_ms || 600_000
          ) do
       {:ok, result} -> bash_result(result)
       {:error, {:not_started, message}} -> {:error, "execution failed: #{message}"}
@@ -101,7 +101,10 @@ defmodule Elara.Tools do
     do: {:indeterminate, "cancelled while running; #{@partial}"}
 
   defp bash_result(%Exec.Result{termination: :timed_out}),
-    do: {:indeterminate, "timed out while running; #{@partial}"}
+    do:
+      {:indeterminate,
+       "timed out while running; #{@partial}. Inspect the workspace before rerunning " <>
+         "the bash call with a longer timeout_ms, up to the configured ceiling."}
 
   defp bash_result(%Exec.Result{termination: :truncated} = result) do
     {:indeterminate,

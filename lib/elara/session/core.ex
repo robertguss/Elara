@@ -20,7 +20,7 @@ defmodule Elara.Session.Core do
       :system,
       :tools,
       :provider_settings,
-      max_iterations: 12,
+      max_iterations: 100,
       max_tool_output_bytes: 16_384
     ]
   end
@@ -304,7 +304,14 @@ defmodule Elara.Session.Core do
   end
 
   def step(%State{phase: {:running_tool, r, call, rest, it}} = state, {:tool_timeout, r}) do
-    outcome = running_outcome(state, call, "timed out", "timed out while running")
+    message =
+      if match?(%Tool{run: {Elara.Tools, :bash}}, state.config.tools[call.name]),
+        do:
+          "timed out while running; inspect the workspace before rerunning the bash call " <>
+            "with a longer timeout_ms, up to the configured ceiling",
+        else: "timed out while running"
+
+    outcome = running_outcome(state, call, "timed out", message)
     finish_tool(state, call, rest, it, outcome)
   end
 

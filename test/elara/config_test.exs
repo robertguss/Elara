@@ -24,6 +24,52 @@ defmodule Elara.ConfigTest do
     {:ok, root: root}
   end
 
+  test "runtime limits prefer options, then environment, then application config" do
+    keys = [:max_iterations, :tool_timeout_ms, :max_tool_timeout_ms]
+    previous = Map.new(keys, &{&1, Application.get_env(:elara, &1)})
+
+    on_exit(fn ->
+      for {key, value} <- previous do
+        if is_nil(value),
+          do: Application.delete_env(:elara, key),
+          else: Application.put_env(:elara, key, value)
+      end
+    end)
+
+    for key <- keys, do: Application.delete_env(:elara, key)
+    assert {:ok, defaults} = Config.runtime_limits([], %{})
+    assert defaults[:max_iterations] == 100
+    assert defaults[:tool_timeout_ms] == 600_000
+    assert defaults[:max_tool_timeout_ms] == 3_600_000
+
+    Application.put_env(:elara, :max_iterations, 55)
+    Application.put_env(:elara, :tool_timeout_ms, 120_000)
+    Application.put_env(:elara, :max_tool_timeout_ms, 900_000)
+    assert {:ok, configured} = Config.runtime_limits([], %{})
+    assert configured[:max_iterations] == 55
+    assert configured[:tool_timeout_ms] == 120_000
+    assert configured[:max_tool_timeout_ms] == 900_000
+
+    env = %{
+      "ELARA_MAX_ITERATIONS" => "75",
+      "ELARA_TOOL_TIMEOUT_MS" => "240000",
+      "ELARA_MAX_TOOL_TIMEOUT_MS" => "1200000"
+    }
+
+    assert {:ok, overridden} = Config.runtime_limits([max_iterations: 80], env)
+    assert overridden[:max_iterations] == 80
+    assert overridden[:tool_timeout_ms] == 240_000
+    assert overridden[:max_tool_timeout_ms] == 1_200_000
+
+    for value <- ["0", "-1", "12ms", "1.5", "nonsense"] do
+      assert {:error, {:invalid_runtime_limit, :max_iterations}} =
+               Config.runtime_limits([], Map.put(env, "ELARA_MAX_ITERATIONS", value))
+    end
+
+    assert {:error, {:invalid_runtime_limit, :tool_timeout_ms}} =
+             Config.runtime_limits([tool_timeout_ms: 900_001, max_tool_timeout_ms: 900_000], %{})
+  end
+
   test "resolve prefers ELARA_API_KEY with xAI defaults" do
     assert {:ok,
             {OpenAI, %OpenAI{api_key: "k", model: "grok-4", base_url: "https://api.x.ai/v1"}}} =

@@ -232,7 +232,10 @@ defmodule Elara.ExecutorTest do
     request = worker_request(context.workspace_id, "bash", %{"command" => "sleep 5"}, 300)
 
     # The worker deadline and the stub's own timeout race; both fail closed.
-    assert {:indeterminate, _message} = Remote.execute(config, request, tool("bash"))
+    assert {:indeterminate, message} = Remote.execute(config, request, tool("bash"))
+    assert message =~ "timed out"
+    assert message =~ "partially changed the workspace"
+    assert message =~ "longer timeout_ms"
     Process.sleep(100)
     assert_worker_serves(worker, context.workspace_id, token, context.worker)
   end

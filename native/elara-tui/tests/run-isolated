@@ -1,0 +1,15 @@
+#!/bin/sh
+# Cargo puts test executables in deps; ordinary cargo run keeps real user state.
+set -eu
+case "$1" in
+  */deps/*)
+    root=$(mktemp -d "${TMPDIR:-/tmp}/elara-tui-tests.XXXXXX")
+    trap 'rm -rf "$root"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    export ELARA_TUI_STATE_DIR="$root/state"
+    export ELARA_TUI_APPEARANCE_FILE="$root/appearance.json"
+    "$@"
+    ;;
+  *) exec "$@" ;;
+esac

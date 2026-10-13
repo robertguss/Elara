@@ -806,6 +806,13 @@ The interactive TUI tests also require Python 3 and a Unix PTY. Tests use
 crash-recovery test intentionally logs a `RuntimeError) boom` error; the final
 test result determines whether the run passed.
 
+Run Rust TUI tests from `native/elara-tui`, as above: its Cargo runner gives
+each test executable a fresh TUI state directory and appearance file, overriding
+developer settings, and removes them on exit (including test failures). This
+isolates integration tests as well as unit tests from the real pending inbox.
+Ordinary `cargo run` keeps the user's state. Cargo does not discover this local
+runner when invoked from the repo root with only `--manifest-path`.
+
 Tests that are not exercising discovery should supply a fixture `home` and
 `skill_paths: []` when starting sessions, so local user skills cannot change
 request size or trigger a context handoff. Large-history protocol fixtures use

@@ -37,8 +37,11 @@ defmodule Elara.Provider.Grok do
         }
 
         case OpenAI.chat(openai, request) do
-          {:ok, assistant, _} -> {:ok, assistant, config}
-          {:error, %Error{} = err, _} -> {:error, classify_error(err), config}
+          {:ok, assistant, _} ->
+            {:ok, Elara.Provider.Billing.stamp(assistant, "grok_oauth"), config}
+
+          {:error, %Error{} = err, _} ->
+            {:error, classify_error(err), config}
         end
 
       {:error, err, config} ->
@@ -58,8 +61,11 @@ defmodule Elara.Provider.Grok do
         }
 
         case OpenAI.stream(openai, request, sink) do
-          {:ok, assistant, _} -> {:ok, assistant, config}
-          {:error, %Error{} = err, _} -> {:error, classify_error(err), config}
+          {:ok, assistant, _} ->
+            {:ok, Elara.Provider.Billing.stamp(assistant, "grok_oauth"), config}
+
+          {:error, %Error{} = err, _} ->
+            {:error, classify_error(err), config}
         end
 
       {:error, err, config} ->

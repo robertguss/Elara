@@ -35,6 +35,7 @@ defmodule Elara.Message do
             public_content: [Elara.Provider.Visibility.public_part()],
             usage: Elara.Provider.Visibility.usage() | nil,
             response_model: String.t() | nil,
+            billing_receipt: Elara.Provider.Billing.receipt() | nil,
             request_settings: Elara.Provider.Visibility.settings() | nil,
             interrupted: boolean()
           }
@@ -45,6 +46,7 @@ defmodule Elara.Message do
               public_content: [],
               usage: nil,
               response_model: nil,
+              billing_receipt: nil,
               request_settings: nil,
               interrupted: false
   end

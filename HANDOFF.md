@@ -22,6 +22,11 @@ section. The runtime catalog supplies model windows through
 That section also documents oldest-first tool-result clearing, configurable
 recent-output protection, retained originals and independent copies of cleared
 sessions. Clearing entries and freed bytes are Core facts in flight recordings.
+Provider token counters, actual response models and immutable billing receipts
+are documented in README.md's "Provider usage and estimated cost" section.
+The authoritative cost summary is `snapshot.provider_view.usage.cost`.
+Subscription usage has no API estimate; unknown prices remain unknown, and
+partial sums are marked incomplete. Original C3 history remains billing evidence.
 Command environment forwarding and `mix elara.env` diagnostics are documented
 in README.md's "Command environment" section. Extra project names belong in
 operator startup config, never an agent-editable project file.

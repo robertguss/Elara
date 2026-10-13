@@ -6,6 +6,7 @@ defmodule Elara.Provider.OpenAI do
   alias Elara.Message
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
   alias Elara.Provider
+  alias Elara.Provider.Billing
   alias Elara.Provider.Error
   alias Elara.Provider.Retry
   alias Elara.Tool
@@ -36,7 +37,7 @@ defmodule Elara.Provider.OpenAI do
         receive_timeout: 120_000
       )
 
-    case parse_response(result) do
+    case parse_response(result, Billing.source(config.base_url)) do
       {:ok, assistant} -> {:ok, assistant, config}
       {:error, err} -> {:error, err, config}
     end
@@ -52,7 +53,13 @@ defmodule Elara.Provider.OpenAI do
 
   defp stream_text_request(%__MODULE__{} = config, %Provider.Request{} = request, sink) do
     url = String.trim_trailing(config.base_url, "/") <> "/chat/completions"
-    body = config |> build_body(request) |> Map.put("stream", true)
+
+    body =
+      config
+      |> build_body(request)
+      |> Map.put("stream", true)
+      |> Map.put("stream_options", %{"include_usage" => true})
+
     state_key = {__MODULE__, :stream, make_ref()}
     Process.put(state_key, new_stream_state())
 
@@ -95,8 +102,12 @@ defmodule Elara.Provider.OpenAI do
       end
 
     case finish_stream(result, state) do
-      {:ok, assistant} -> {:ok, assistant, config}
-      {:error, error} -> {:error, error, config}
+      {:ok, assistant} ->
+        {:ok, Billing.stamp(assistant, Billing.source(config.base_url), state.service_tier),
+         config}
+
+      {:error, error} ->
+        {:error, error, config}
     end
   end
 
@@ -154,11 +165,15 @@ defmodule Elara.Provider.OpenAI do
   @doc "Pure. Wire response to domain."
   @spec parse_response({:ok, Req.Response.t()} | {:error, Exception.t()}) ::
           {:ok, Assistant.t()} | {:error, Error.t()}
-  def parse_response({:error, exception}) do
+  @spec parse_response({:ok, Req.Response.t()} | {:error, Exception.t()}, String.t() | nil) ::
+          {:ok, Assistant.t()} | {:error, Error.t()}
+  def parse_response(result, billing_source \\ nil)
+
+  def parse_response({:error, exception}, _billing_source) do
     {:error, %Error{kind: :transport, message: Exception.message(exception)}}
   end
 
-  def parse_response({:ok, %Req.Response{status: status, body: body} = response})
+  def parse_response({:ok, %Req.Response{status: status, body: body} = response}, _billing_source)
       when status != 200 do
     snippet = body_snippet(body)
 
@@ -171,11 +186,21 @@ defmodule Elara.Provider.OpenAI do
      }}
   end
 
-  def parse_response({:ok, %Req.Response{status: 200, body: body}}) do
+  def parse_response({:ok, %Req.Response{status: 200, body: body}}, billing_source) do
     with {:ok, decoded} <- decode_body(body),
          {:ok, message} <- pick_message(decoded),
          {:ok, assistant} <- to_assistant(message) do
-      {:ok, assistant}
+      assistant = %{
+        assistant
+        | usage: Elara.Provider.Visibility.usage(decoded["usage"]),
+          response_model: response_model(decoded["model"])
+      }
+
+      {:ok,
+       if(billing_source,
+         do: Billing.stamp(assistant, billing_source, decoded["service_tier"]),
+         else: assistant
+       )}
     else
       {:error, %Error{} = err} -> {:error, err}
     end
@@ -304,7 +329,18 @@ defmodule Elara.Provider.OpenAI do
   end
 
   defp new_stream_state do
-    %{buffer: "", text: "", calls: %{}, done: false, error: nil, error_body: ""}
+    %{
+      buffer: "",
+      text: "",
+      calls: %{},
+      done: false,
+      error: nil,
+      error_body: "",
+      usage: nil,
+      model: nil,
+      model_conflict: false,
+      service_tier: nil
+    }
   end
 
   defp consume_stream_data(%{done: true} = state, _data, _sink), do: {:ok, state}
@@ -369,9 +405,31 @@ defmodule Elara.Provider.OpenAI do
     end
   end
 
-  defp merge_stream_event(state, %{"choices" => []}), do: {:ok, state, []}
+  defp merge_stream_event(state, decoded) do
+    model = response_model(decoded["model"])
+    usage = decoded["usage"] || get_in_choice_usage(decoded)
 
-  defp merge_stream_event(state, %{"choices" => [%{"delta" => delta} | _]})
+    state = %{
+      state
+      | usage: Elara.Provider.Visibility.usage(usage) || state.usage,
+        model: model || state.model,
+        model_conflict:
+          state.model_conflict or
+            (not is_nil(model) and not is_nil(state.model) and model != state.model),
+        service_tier: decoded["service_tier"] || state.service_tier
+    }
+
+    merge_stream_choices(state, decoded)
+  end
+
+  defp get_in_choice_usage(%{"choices" => [choice | _]}) when is_map(choice), do: choice["usage"]
+  defp get_in_choice_usage(_), do: nil
+  defp response_model(model) when is_binary(model) and model != "", do: model
+  defp response_model(_), do: nil
+
+  defp merge_stream_choices(state, %{"choices" => []}), do: {:ok, state, []}
+
+  defp merge_stream_choices(state, %{"choices" => [%{"delta" => delta} | _]})
        when is_map(delta) do
     with {:ok, text} <- stream_text(delta),
          {:ok, calls} <- merge_stream_calls(state.calls, Map.get(delta, "tool_calls", [])) do
@@ -380,11 +438,11 @@ defmodule Elara.Provider.OpenAI do
     end
   end
 
-  defp merge_stream_event(_state, %{"error" => error}) do
+  defp merge_stream_choices(_state, %{"error" => error}) do
     {:error, %Error{kind: :bad_response, message: "stream error: #{inspect(error)}"}}
   end
 
-  defp merge_stream_event(_state, _decoded) do
+  defp merge_stream_choices(_state, _decoded) do
     {:error, %Error{kind: :bad_response, message: "missing streaming choices"}}
   end
 
@@ -483,7 +541,15 @@ defmodule Elara.Provider.OpenAI do
          is_binary(call["id"]) and is_binary(get_in(call, ["function", "name"]))
        end) do
       text = if state.text == "", do: nil, else: state.text
-      to_assistant(%{"content" => text, "tool_calls" => calls})
+
+      with {:ok, assistant} <- to_assistant(%{"content" => text, "tool_calls" => calls}) do
+        {:ok,
+         %{
+           assistant
+           | usage: state.usage,
+             response_model: if(state.model_conflict, do: nil, else: state.model)
+         }}
+      end
     else
       {:error, %Error{kind: :bad_response, message: "incomplete streaming tool call"}}
     end

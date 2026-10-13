@@ -100,7 +100,8 @@ defmodule Elara.Provider.Visibility do
       "active_request" => if(core.streaming, do: core.streaming.settings, else: nil),
       "usage" => %{
         "last_request" => if(last, do: last.usage, else: nil),
-        "session_totals" => totals(core.history)
+        "session_totals" => totals(core.history),
+        "cost" => Elara.Provider.Billing.summary(core.history)
       },
       "context" => %{
         "advertised_limit" => budget["advertised_limit"],
@@ -128,17 +129,25 @@ defmodule Elara.Provider.Visibility do
   def usage(nil), do: nil
 
   def usage(value) when is_map(value) do
-    value
-    |> Map.take(["input_tokens", "output_tokens", "total_tokens"])
-    |> Map.put("cached_input_tokens", get_in(value, ["input_tokens_details", "cached_tokens"]))
-    |> Map.put(
-      "cache_write_tokens",
-      get_in(value, ["input_tokens_details", "cache_write_tokens"])
-    )
-    |> Map.put("reasoning_tokens", get_in(value, ["output_tokens_details", "reasoning_tokens"]))
+    input_details = value["input_tokens_details"] || value["prompt_tokens_details"]
+    output_details = value["output_tokens_details"] || value["completion_tokens_details"]
+
+    %{
+      "input_tokens" => value["input_tokens"] || value["prompt_tokens"],
+      "output_tokens" => value["output_tokens"] || value["completion_tokens"],
+      "total_tokens" => value["total_tokens"],
+      "cached_input_tokens" => detail(input_details, "cached_tokens"),
+      "cache_write_tokens" => detail(input_details, "cache_write_tokens"),
+      "reasoning_tokens" => detail(output_details, "reasoning_tokens")
+    }
     |> Enum.filter(fn {_key, n} -> is_integer(n) and n >= 0 end)
     |> Map.new()
+    |> then(fn fields -> if map_size(fields) == 0, do: nil, else: fields end)
   end
+
+  def usage(_), do: nil
+  defp detail(details, key) when is_map(details), do: Map.get(details, key)
+  defp detail(_, _), do: nil
 
   def totals(history) do
     Enum.reduce(history, %{}, fn

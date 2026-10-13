@@ -67,6 +67,8 @@ defmodule Elara.Session do
       :context_limit,
       :handoff_fault_hook,
       :workspace_diff,
+      :undo_preview,
+      :undo_recovery,
       skills: %{skills: %{}, diagnostics: []},
       skill_options: [],
       instructions: %{},
@@ -200,11 +202,12 @@ defmodule Elara.Session do
           shell = %{shell | effect_recovery_pending: pending_receipt_effects(shell)}
           {shell, recovered?} = finish_restart_recovery(shell)
           recorder = FlightRecorder.new(shell.core, shell.id, incarnation, store.path)
+          shell = recover_workspace_undo(%{shell | recorder: recorder})
           if recovered?, do: send(self(), :inbox_changed)
           if shell.effect_recovery_pending == [], do: send(self(), :drain_inputs)
           if shell.effect_recovery_pending != [], do: send(self(), :check_effect_recovery)
           if Handoff.frozen?(store), do: send(self(), :advance_handoff)
-          {:ok, %{shell | recorder: recorder}}
+          {:ok, shell}
         else
           {:error, reason} ->
             close_effect_journal(effect_journal)
@@ -721,6 +724,9 @@ defmodule Elara.Session do
   end
 
   def handle_call({:attached_input, {:ask_input, _, _, _} = command}, _from, shell),
+    do: handle_attached_command(command, shell)
+
+  def handle_call({:undo_input, {:undo, _, _} = command}, _from, shell),
     do: handle_attached_command(command, shell)
 
   def handle_call(:pause_handoff, _from, shell),
@@ -2499,7 +2505,117 @@ defmodule Elara.Session do
   defp handle_attached_command({:read_only, enabled}, shell),
     do: change_read_only(shell, enabled)
 
+  defp handle_attached_command({:undo, _, _} = command, shell) do
+    if Handoff.frozen?(shell.store),
+      do: {:reply, forward_handoff(shell, {:undo_input, command}, :infinity), shell},
+      else: workspace_undo(command, shell)
+  end
+
   defp handle_attached_command(_command, shell), do: {:reply, {:error, :invalid_command}, shell}
+
+  defp workspace_undo({:undo, :cancel, token}, shell) do
+    preview =
+      if shell.undo_preview && shell.undo_preview.plan.id == token,
+        do: nil,
+        else: shell.undo_preview
+
+    {:reply, :ok, %{shell | undo_preview: preview}}
+  end
+
+  defp workspace_undo({:undo, action, value}, shell) when action in [:preview, :apply] do
+    with :ok <- input_ready(shell, []),
+         true <- map_size(shell.tasks) == 0 and map_size(shell.pending_effects) == 0 do
+      case action do
+        :preview ->
+          case Elara.WorkspaceDiff.undo_preview(shell.workspace_diff, shell.store, value) do
+            {:ok, plan} ->
+              preview = %{plan: plan, leaf: shell.store.leaf}
+
+              response = %{
+                token: plan.id,
+                turn_id: plan.turn,
+                files: Elara.WorkspaceDiff.undo_paths(plan),
+                notice: Elara.WorkspaceDiff.undo_limits()
+              }
+
+              {:reply, {:ok, response}, %{shell | undo_preview: preview}}
+
+            {:error, reason} ->
+              {:reply, {:error, reason}, %{shell | undo_preview: nil}}
+          end
+
+        :apply ->
+          case shell.undo_preview do
+            %{plan: %{id: ^value} = plan, leaf: leaf} when leaf == shell.store.leaf ->
+              shell = %{shell | undo_preview: nil}
+
+              case Elara.WorkspaceDiff.undo_apply(shell.workspace_diff, plan) do
+                {:notice, notice, result} ->
+                  shell = feed({:system_notice, notice}, shell)
+                  shell = undo_recorded(shell, notice.undo_id)
+
+                  response =
+                    if result == :ok, do: {:ok, %{text: notice.text}}, else: {:error, notice.text}
+
+                  {:reply, response, shell}
+
+                {:error, reason} ->
+                  {:reply, {:error, reason}, recover_workspace_undo(shell)}
+              end
+
+            _ ->
+              {:reply, {:error, "Undo confirmation expired; run /undo again."},
+               %{shell | undo_preview: nil}}
+          end
+      end
+    else
+      {:error, :busy} ->
+        {:reply, {:error, "Undo refused: interrupt first."}, %{shell | undo_preview: nil}}
+
+      false ->
+        {:reply, {:error, "Undo refused: interrupt first; tool work is still outstanding."},
+         %{shell | undo_preview: nil}}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, %{shell | undo_preview: nil}}
+    end
+  end
+
+  defp workspace_undo(_command, shell), do: {:reply, {:error, :invalid_command}, shell}
+
+  defp recover_workspace_undo(shell) do
+    case Elara.WorkspaceDiff.undo_recovery(shell.workspace_diff) do
+      :none ->
+        %{shell | undo_recovery: nil}
+
+      {:error, reason} ->
+        %{shell | undo_recovery: reason}
+
+      {:notice, notice} ->
+        recorded? =
+          Enum.any?(
+            shell.core.history,
+            &match?(%Message.System{undo_id: id} when id == notice.undo_id, &1)
+          )
+
+        shell = if recorded?, do: shell, else: feed({:system_notice, notice}, shell)
+        undo_recorded(shell, notice.undo_id)
+    end
+  end
+
+  defp undo_recorded(shell, id) do
+    case Elara.WorkspaceDiff.undo_recorded(shell.workspace_diff, id) do
+      :ok ->
+        %{shell | undo_recovery: nil}
+
+      _ ->
+        %{
+          shell
+          | undo_recovery:
+              "Undo notice recorded, but recovery cleanup failed; reopen before continuing."
+        }
+    end
+  end
 
   defp input_ready(shell, images, queue? \\ false) do
     with :ok <- effect_input_ready(shell, queue?) do
@@ -2546,6 +2662,9 @@ defmodule Elara.Session do
       end)
 
     cond do
+      shell.undo_recovery ->
+        {:error, shell.undo_recovery}
+
       legacy ->
         {:error,
          {:legacy_effect_ownership_unknown, legacy.job_id,

@@ -163,6 +163,10 @@ defmodule Elara.Provider.OpenAICodex do
     ]
   end
 
+  defp encode_message(%Elara.Message.System{text: text}) do
+    [%{"role" => "developer", "content" => [%{"type" => "input_text", "text" => text}]}]
+  end
+
   defp encode_message(%User{} = user) do
     images =
       for %{"kind" => "image", "mime_type" => mime, "base64" => data} <- user.attachments,

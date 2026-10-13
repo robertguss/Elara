@@ -104,6 +104,7 @@ defmodule Elara.Session.Core do
           | {:provider_settings, Elara.Provider.Visibility.settings()}
           | {:runtime_limits, runtime_limits(), [runtime_limit_key()]}
           | {:read_only, boolean()}
+          | {:system_notice, Message.System.t()}
           | {:clear_tool_results, ref(), [map()], bytes_freed :: pos_integer()}
           | :runtime_limits_changed
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
@@ -208,6 +209,10 @@ defmodule Elara.Session.Core do
   @spec step(State.t(), fact()) :: {State.t(), [effect()]}
   def step(state, {:instruction_context, system}) when is_binary(system) do
     {%{state | config: %{state.config | system: system}}, []}
+  end
+
+  def step(%State{phase: :idle} = state, {:system_notice, %Message.System{} = notice}) do
+    {%{state | history: state.history ++ [notice]}, [{:emit, {:message_appended, notice}}]}
   end
 
   def step(%State{phase: :idle} = state, {:ask, prompt}) when is_binary(prompt) do

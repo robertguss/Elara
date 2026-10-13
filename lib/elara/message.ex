@@ -1,7 +1,13 @@
 defmodule Elara.Message do
   @moduledoc """
-  History is a list of these three structs, oldest first. Nothing else.
+  History is a list of these four structs, oldest first. Nothing else.
   """
+
+  defmodule System do
+    @moduledoc "Persisted operator notices, not user turns or assistant output."
+    @type t :: %__MODULE__{text: String.t(), undo_id: String.t()}
+    defstruct [:text, :undo_id]
+  end
 
   defmodule ToolCall do
     @type args :: {:ok, map()} | {:malformed, String.t()}
@@ -53,7 +59,7 @@ defmodule Elara.Message do
     defstruct [:call_id, :name, :outcome, :usage]
   end
 
-  @type t :: User.t() | Assistant.t() | ToolResult.t()
+  @type t :: User.t() | Assistant.t() | ToolResult.t() | System.t()
 
   @doc "Build a completed text/tool assistant. Public-only interrupted messages are built by Core."
   @spec assistant(String.t() | nil, [ToolCall.t()], map() | nil) ::

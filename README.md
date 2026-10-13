@@ -457,6 +457,25 @@ land, `/diff session` explicitly labels the successor-only view as unavailable
 before successor start. Fork and clone start a fresh copy-time baseline and
 say so in `/diff session`; inherited turns are not attributed to the copy.
 
+`/undo` previews the latest closed turn's changed files; `/undo TURN_ID` selects
+an older turn on the current path. Enter confirms, and Esc cancels without
+restoring anything. Undo includes `bash` changes and leaves files the turn did
+not touch alone. It refuses the whole operation, naming the files, if a touched
+file changed since the endpoint or the turn changed a submodule gitlink.
+Interrupt an active turn first. Undo follows the active handoff owner; missing
+or inherited pre-copy snapshots are unavailable, never replaced with HEAD.
+
+Undo cannot reverse migrations that ran, ignored folders such as `deps/` and
+`_build/`, or pushes. It restores Git-visible bytes, symlinks, and executable
+status, not ownership, timestamps, or full permission metadata. Existing file
+read/write permissions remain; recreated files start private. A persisted
+**SYSTEM** notice names the turn and files in the transcript and model context.
+Handoff indexes retain those notices with references to the original entries.
+Filesystem errors or concurrent edits during restoration can leave a partial
+undo, which the notice reports. Reopening after an interrupted attempt records
+uncertainty and never replays filesystem writes. Corrupt recovery records block
+new turns rather than guessing.
+
 **Ctrl-T** hides/shows thinking and retains that choice through layout switches.
 `/thinking-view` opens its full view; **Ctrl-R** opens turn navigation. Esc closes either view
 and restores focus. Turn navigation shows short summaries; the transcript

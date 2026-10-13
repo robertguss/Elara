@@ -625,6 +625,47 @@ defmodule Elara.Server do
     end
   end
 
+  defp handle_versioned_command(
+         session,
+         2,
+         %{"command" => "workspace_undo"} = request,
+         _provider,
+         _lifetime
+       ) do
+    action = request["action"]
+
+    command =
+      case {action, request["target"] || "latest", request["token"]} do
+        {"preview", target, _}
+        when is_binary(target) and target != "" and byte_size(target) <= 128 ->
+          {:undo, :preview, if(target == "latest", do: :latest, else: target)}
+
+        {action, _, token}
+        when action in ["apply", "cancel"] and is_binary(token) and token != "" and
+               byte_size(token) <= 128 ->
+          {:undo, if(action == "apply", do: :apply, else: :cancel), token}
+
+        _ ->
+          nil
+      end
+
+    result =
+      if command,
+        do: Elara.attached_command(session, command),
+        else: {:error, :invalid_undo_command}
+
+    case result do
+      {:ok, result} ->
+        %{"type" => "workspace_undo", "version" => 2, "action" => action, "result" => result}
+
+      :ok ->
+        %{"type" => "workspace_undo", "version" => 2, "action" => action}
+
+      {:error, reason} ->
+        session_error("workspace_undo", reason)
+    end
+  end
+
   defp handle_versioned_command(session, version, %{"command" => "inspect"}, _provider, _lifetime) do
     case Elara.status(session) do
       %{} = status ->

@@ -1,0 +1,28 @@
+ ✳ elara                                                                                    control
+────────────────────────────────────────────────────────────────────────────────────────────────────
+     ┌ Undo · Enter confirms · Esc cancels · ↑/↓ scroll ──────────────────────────────────────┐
+ ▌ YO│Undo turn turn-1?                                                                       │
+ ▌ in│                                                                                        │
+     │Restore only these 2 git-visible paths (including bash changes):                        │
+ ELAR│  "lib/demo.ex"                                                                         │
+ I’ll│  "created by bash.txt"                                                                 │
+     │                                                                                        │
+     │Cannot reverse migrations that ran, ignored folders such as deps/ and _build/, or       │
+     │pushes. Submodules are gitlink-only.                                                    │
+     │                                                                                        │
+     │Files changed since this turn ended will refuse the entire undo.                        │
+     │                                                                                        │
+     │                                                                                        │
+     │                                                                                        │
+     │                                                                                        │
+     │                                                                                        │
+     │                                                                                        │
+     │                                                                                        │
+     │                                                                                        │
+     │                                                                                        │
+     │                                                                                        │
+ ✓ Id│                                                                                        │
+┌ PRO└────────────────────────────────────────────────────────────────────────────────────────┘elp ┐
+│                                                                                                  │
+└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────┘
+ elara · elara                   │ ember / ember · Thinking expanded · ? help │

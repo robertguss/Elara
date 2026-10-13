@@ -14,6 +14,7 @@ mod syntax;
 mod tools;
 mod transcript;
 mod workspace_diff;
+mod workspace_undo;
 pub use editor::{Editor, MAX_INPUT_BYTES};
 use std::cell::RefCell;
 use std::fs;
@@ -182,6 +183,7 @@ pub struct Model {
     session_detail: Option<String>,
     session_detail_scroll: u16,
     workspace_diff: Option<workspace_diff::Panel>,
+    workspace_undo: Option<workspace_undo::Panel>,
     pub metrics: Metrics,
     ask_sent_at: Option<Instant>,
 }
@@ -231,6 +233,7 @@ impl Model {
             session_detail: None,
             session_detail_scroll: 0,
             workspace_diff: None,
+            workspace_undo: None,
             metrics: Metrics::default(),
             ask_sent_at: None,
         }
@@ -272,6 +275,7 @@ impl Model {
         self.session_picker = None;
         self.viewer = None;
         self.workspace_diff = None;
+        self.workspace_undo = None;
         self.transcript.borrow_mut().source_key = None;
         self.notice = Some("Reattached; local draft and view restored.".into());
     }
@@ -754,6 +758,9 @@ pub fn handle_input(
             }
         }
         return InputAction::None;
+    }
+    if let Some(action) = workspace_undo::input(model, &event) {
+        return action;
     }
     if !model.safe_paste {
         if let Event::Key(key) = &event
@@ -1444,6 +1451,7 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
     inbox::draw(frame, model);
     draw_session_detail(frame, model);
     workspace_diff::draw(frame, model);
+    workspace_undo::draw(frame, model);
     if model.quit_confirmation {
         let area = frame.area();
         let rect = Rect::new(area.x + 1, area.y + 1, area.width.saturating_sub(2), 5);
@@ -2054,6 +2062,13 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
         for (index, message) in messages.iter().enumerate() {
             let id = format!("{}:message:{index}", model.session_id);
             match message["role"].as_str() {
+                Some("system") => {
+                    let text = message["text"].as_str().unwrap_or_default();
+                    let mut entry = Entry::plain(&id, text, false);
+                    entry.above = vec![presentation::eyebrow("SYSTEM", Vec::new())];
+                    entry.below = vec![transcript::Synthetic::Blank];
+                    entries.push(entry);
+                }
                 Some("user") => {
                     let text = message["text"].as_str().unwrap_or_default();
                     let agent = message["agent_source"].is_object();
@@ -2463,6 +2478,12 @@ fn validate_message(message: &Value) -> Result<(), String> {
     }
     match message["role"].as_str() {
         Some("user") if message["text"].is_string() => Ok(()),
+        Some("system")
+            if message["text"].is_string()
+                && message["undo_id"].as_str().is_some_and(|id| !id.is_empty()) =>
+        {
+            Ok(())
+        }
         Some("assistant")
             if (message["text"].is_string() || message["text"].is_null())
                 && message["tool_calls"].is_array() =>

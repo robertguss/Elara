@@ -144,7 +144,7 @@ defmodule Elara.Session.Store do
   @spec append(t(), Message.t()) :: {:ok, t()} | {:error, term()}
   def append(%__MODULE__{} = store, message)
       when is_struct(message, User) or is_struct(message, Assistant) or
-             is_struct(message, ToolResult) do
+             is_struct(message, ToolResult) or is_struct(message, Message.System) do
     entry = %Entry{
       id: generate_id(),
       parent_id: store.leaf,
@@ -163,7 +163,8 @@ defmodule Elara.Session.Store do
       Enum.map_reduce(messages, store.leaf, fn message, parent_id
                                                when is_struct(message, User) or
                                                       is_struct(message, Assistant) or
-                                                      is_struct(message, ToolResult) ->
+                                                      is_struct(message, ToolResult) or
+                                                      is_struct(message, Message.System) ->
         entry = %Entry{
           id: generate_id(),
           parent_id: parent_id,
@@ -478,6 +479,9 @@ defmodule Elara.Session.Store do
   end
 
   @doc false
+  def encode_message(%Message.System{text: text, undo_id: id}),
+    do: %{"system" => %{"text" => text, "undoId" => id}}
+
   def encode_message(%User{agent_source: source} = user) when is_map(source) do
     %{"user" => body} = encode_message(%{user | agent_source: nil})
     %{"user" => Map.put(body, "agentSource", source)}
@@ -516,6 +520,11 @@ defmodule Elara.Session.Store do
   end
 
   @doc false
+  def decode_message(%{"system" => %{"text" => text, "undoId" => id} = body} = encoded)
+      when map_size(encoded) == 1 and map_size(body) == 2 and is_binary(text) and
+             is_binary(id) and id != "",
+      do: {:ok, %Message.System{text: text, undo_id: id}}
+
   def decode_message(%{"user" => %{"agentSource" => source} = body} = encoded)
       when map_size(encoded) == 1 do
     with %{"sender" => sender, "recipient" => recipient, "message_id" => id} <- source,
@@ -963,7 +972,9 @@ defmodule Elara.Session.Store do
   end
 
   defp decode_entry(encoded, legacy?, legacy_parent) when is_map(encoded) do
-    payload_keys = Enum.filter(["user", "assistant", "toolResult"], &Map.has_key?(encoded, &1))
+    payload_keys =
+      Enum.filter(["user", "assistant", "toolResult", "system"], &Map.has_key?(encoded, &1))
+
     expected_size = if legacy?, do: 3, else: 4
     parent = if legacy?, do: legacy_parent, else: Map.get(encoded, "parentId", :missing)
 

@@ -38,6 +38,12 @@ Turn and session workspace diffs are documented in that section. The shell's
 private checkpoints live in `Elara.WorkspaceDiff`; the Rust diff panel lives in
 `native/elara-tui/src/workspace_diff.rs`. Snapshots include bash changes but
 never alter the workspace index or HEAD. Missing baselines report unavailable.
+Confirmed turn undo is documented beside `/diff` in README.md. The shell owns
+preflight, restore, and interrupted-attempt records in the same snapshot bank;
+Rust owns only the confirmation panel in `workspace_undo.rs`. System notices
+persist in history and provider context, and handoff indexes retain their
+original entry references. Reopening records uncertainty without replaying
+filesystem writes. Changed touched paths or gitlinks refuse the whole undo.
 New coding worktrees are kept outside protected Elara state; the location and
 operator override are documented under "Persistent delegated children".
 Existing children keep their recorded paths, without relocation or deletion.

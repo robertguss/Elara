@@ -345,6 +345,7 @@ defmodule Elara.Chat.Core do
       %User{text: text} -> user_block(text)
       %Assistant{} = assistant -> CLI.render({:message_appended, assistant})
       %ToolResult{outcome: outcome} -> tool_result_line(outcome)
+      %Message.System{} = notice -> CLI.render({:message_appended, notice})
     end)
   end
 

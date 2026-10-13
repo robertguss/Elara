@@ -364,6 +364,15 @@ defmodule Elara.Session.Handoff do
             "complete" => byte_size(JSON.encode!(Store.encode_message(e.message))) <= 1000
           })
         end),
+      "workspace_undo_notices" =>
+        for %{message: %Message.System{} = notice} = entry <- entries do
+          Map.merge(ref.(entry), %{
+            "role" => "system",
+            "undo_id" => notice.undo_id,
+            "exact_notice_excerpt" => String.slice(notice.text, 0, 1000),
+            "complete" => byte_size(notice.text) <= 1000
+          })
+        end,
       "unresolved_work" =>
         "Original requests remain obligations unless original completion evidence or a later owner correction resolves them. Read the latest source messages; do not infer success from this index.",
       "recent_evidence" => entries |> Enum.take(-6) |> Enum.map(ref),

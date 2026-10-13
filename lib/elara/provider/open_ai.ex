@@ -181,6 +181,9 @@ defmodule Elara.Provider.OpenAI do
     end
   end
 
+  defp encode_message(%Elara.Message.System{text: text}),
+    do: %{"role" => "system", "content" => text}
+
   defp encode_message(%User{} = user),
     do: %{"role" => "user", "content" => Elara.Attachment.provider_text(user)}
 

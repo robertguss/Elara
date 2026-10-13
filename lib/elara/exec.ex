@@ -307,15 +307,17 @@ defmodule Elara.Exec do
         {:error, "execution stub does not support head_tail output"}
 
       true ->
-        {:ok,
-         %{
-           argv: argv,
-           cwd: cwd,
-           env: Map.new(env),
-           max_bytes: max_bytes,
-           timeout_ms: timeout_ms,
-           output_policy: output_policy
-         }}
+        with {:ok, environment} <- Elara.Exec.Environment.command(Map.new(env)) do
+          {:ok,
+           %{
+             argv: argv,
+             cwd: cwd,
+             env: environment,
+             max_bytes: max_bytes,
+             timeout_ms: timeout_ms,
+             output_policy: output_policy
+           }}
+        end
     end
   end
 

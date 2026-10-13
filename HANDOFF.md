@@ -16,6 +16,9 @@ independent copies are documented in README.md's "Automatic context handoff"
 section. The runtime catalog supplies model windows through
 `Elara.Provider.Visibility.context_window/1`; the TUI meter uses
 `snapshot.inbox.context`.
+Command environment forwarding and `mix elara.env` diagnostics are documented
+in README.md's "Command environment" section. Extra project names belong in
+operator startup config, never an agent-editable project file.
 
 ## Where Elara stands
 

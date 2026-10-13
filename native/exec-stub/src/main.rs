@@ -450,6 +450,7 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
     command
         .args(&request.argv[1..])
         .current_dir(request.cwd.as_deref().expect("validated cwd"))
+        .env_clear()
         .envs(&request.env)
         .stdin(Stdio::null())
         .stdout(unsafe { Stdio::from_raw_fd(stdout_fd) })

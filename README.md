@@ -246,6 +246,42 @@ replay divergence; replay them with the
 [last format 1 build](https://github.com/robertguss/Elara/commit/daa06f281368d0a532721695c6a656ec12ec14a5).
 Session JSONL history is unchanged and remains reopenable.
 
+## Command environment
+
+Commands run by `bash`, search, jobs, and the shipped Elixir project plugin get
+a strict build/cache environment, not the whole shell environment. The runner
+clears inherited variables before supplying allowed values. Defaults include
+`PATH`, `HOME`, locale and temporary-directory settings, and Mix, Hex, Cargo,
+Rustup, and compiler settings. Internal git and session-lock subprocesses are
+unchanged.
+
+To pass your app's variables through, name them in **operator startup config**.
+For example, after your shell or direnv has exported the app's values:
+
+```bash
+export ELARA_COMMAND_ENV='DATABASE_URL,SECRET_KEY_BASE,PORT'
+mix elara.env                     # forwarded and withheld names; never values
+bin/elara --cwd /path/to/phoenix-app
+```
+
+The comma-separated list selects existing values; it does not set them. Keep
+this list in your own shell/startup configuration, not an agent-editable
+project file. Restart an existing Elara server after changing its environment.
+Tool arguments cannot add names. Elara currently has no user-level command
+environment config file.
+
+**Elara's own credentials never pass through, even when named:** provider keys,
+Exa, server and worker tokens, and Codex/Grok auth variables. The `ELARA_`,
+`XAI_`, `EXA_`, `OPENAI_`, `CODEX_`, `GROK_`, and `ANTHROPIC_` namespaces and
+`CLAUDE_CODE_OAUTH_TOKEN` stay withheld. **Project credentials you explicitly
+name do pass through**, including `DATABASE_URL` and `SECRET_KEY_BASE`; only
+name values you intend the model's commands to use.
+
+Run `mix elara.env` with the same startup environment to diagnose a missing
+variable. It lists forwarded and withheld names without exposing values.
+Environment scrubbing is **not an OS sandbox**: commands and trusted local
+plugins can still read credential files through ordinary filesystem access.
+
 ## Ask or chat
 
 Run one turn and exit:

@@ -25,6 +25,59 @@ defmodule Elara.TestEnvironmentTest do
     refute String.starts_with?(root, System.user_home!())
   end
 
+  test "production command boundary scrubs inherited keys and permits named project variables" do
+    script = ~S"""
+    for name <- ~w(ELARA_API_KEY XAI_API_KEY EXA_API_KEY PRIVATE_OTHER_TOKEN PHX_PORT DATABASE_URL SECRET_KEY_BASE) do
+      System.put_env(name, "fake-test-value")
+    end
+    System.put_env("ELARA_COMMAND_ENV", " PHX_PORT, DATABASE_URL,SECRET_KEY_BASE,ELARA_API_KEY,XAI_API_KEY,EXA_API_KEY")
+    {:ok, _} = Application.ensure_all_started(:elara)
+    call = %Elara.Message.ToolCall{id: "environment", name: "bash",
+      args: {:ok, %{"command" => "env | cut -d= -f1; set -e; mix --version; git --version; cargo --version"}}}
+    {:ok, agent} = Agent.start_link(fn -> [
+      {:ok, %Elara.Message.Assistant{tool_calls: [call]}},
+      {:ok, %Elara.Message.Assistant{text: "checked"}}
+    ] end)
+    {:ok, session} = Elara.start_session(provider: {Elara.Provider.Scripted, agent},
+      cwd: System.tmp_dir!(), persist: false, plugins: [], home: System.tmp_dir!(), skill_paths: [])
+    {:ok, "checked"} = Elara.ask(session, "check environment and tools")
+    result = Enum.find(Elara.transcript(session), &match?(%Elara.Message.ToolResult{}, &1))
+    {:ok, output} = result.outcome
+    IO.puts(output)
+    {:error, {:not_started, message}} = Elara.Exec.run(["env"], env: %{"XAI_API_KEY" => "fake-test-value"})
+    IO.puts(message)
+    {:error, {:not_started, message}} = Elara.Exec.run(["env"], env: %{"UNNAMED_PROJECT_VARIABLE" => "fake-test-value"})
+    IO.puts(message)
+    Mix.Task.run("elara.env")
+    """
+
+    {output, 0} =
+      System.cmd("mix", ["run", "--no-compile", "--no-deps-check", "--no-start", "-e", script],
+        cd: @root,
+        env: [{"MIX_ENV", "test"}],
+        stderr_to_stdout: true
+      )
+
+    for name <- ~w(ELARA_API_KEY XAI_API_KEY EXA_API_KEY PRIVATE_OTHER_TOKEN ELARA_COMMAND_ENV) do
+      refute name in String.split(output, "\n")
+    end
+
+    for name <- ~w(PHX_PORT DATABASE_URL SECRET_KEY_BASE),
+        do: assert(name in String.split(output, "\n"))
+
+    assert output =~ "command environment overrides are not allowed: [\"XAI_API_KEY\"]"
+
+    assert output =~
+             "command environment overrides are not allowed: [\"UNNAMED_PROJECT_VARIABLE\"]"
+
+    assert output =~ "Forwarded (names only):"
+    assert output =~ "Withheld (names only):"
+    assert output =~ "Mix "
+    assert output =~ "git version"
+    assert output =~ "cargo "
+    refute output =~ "fake-test-value"
+  end
+
   @tag :requires_app
   test "commands run through the execution stub see no ELARA_* or XAI_API_KEY" do
     # Print only offending names so a large environment cannot hit the output cap.

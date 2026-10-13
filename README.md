@@ -680,9 +680,25 @@ continuation after restart. A consumed continuation interrupted by VM loss is
 reported failed and paused, not blindly replayed. This is **not** a generic
 exactly-once model-request or external-effect guarantee.
 
-Generation/validation failures preserve the source and surface an error. A fresh
-context that cannot fit is rejected; automatic chains are bounded to eight
-handoffs. Nonpersistent sessions cannot hand off. The legacy synchronous
+Generation/validation failures before ownership transfers return the source to
+local use, including after reopening; the failure notice and original evidence
+are retained. After transfer, input sent to the source routes to its successor,
+and the TUI shows `input routed to <session>`. Interrupting the source stops and
+pauses the successor without taking back delivery ownership. Reopening the
+source also reopens that successor. Fork and clone remain available from the
+source's retained evidence; they start independent sessions, not new delivery
+owners for the original chain.
+
+For a context-bearing session, the public `Elara.fork/2` and
+`Elara.clone_session/1` APIs return `{:ok, copied_session_id, prompt, history}`.
+Use the returned session ID to continue the copy. `prompt` is `nil` for a clone.
+Ordinary sessions keep the existing three-element result and in-place history
+switch. The chat commands switch to the copy automatically.
+
+A fresh context that cannot fit is rejected; automatic chains are bounded to
+eight handoffs. Reaching the cap reports a turn error, not a frozen session:
+fork before an earlier turn to start a fresh chain, or select a model with a
+larger window. Nonpersistent sessions cannot hand off. The legacy synchronous
 `Elara.ask/2` call returns `:interrupted` when its source hands off; automatic
 continuation is delivered through the successor's session/events, not that old
 call. Saved handoff headers require this build for resume.

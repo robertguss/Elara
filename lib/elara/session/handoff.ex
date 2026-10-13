@@ -6,6 +6,21 @@ defmodule Elara.Session.Handoff do
   def outgoing(store), do: store.context["handoff"]
   def frozen?(store), do: outgoing(store) != nil
 
+  def recover(store) do
+    case outgoing(store) do
+      %{"stage" => stage} = h when stage in ["failed", "stopped"] ->
+        if h["delivery_owner"] do
+          {:ok, store}
+        else
+          context = store.context |> Map.delete("handoff") |> Map.put("last_handoff", h)
+          Store.save(%{store | context: context})
+        end
+
+      _ ->
+        {:ok, store}
+    end
+  end
+
   def store(id) do
     {:ok, root} = Store.root()
 
@@ -150,6 +165,13 @@ defmodule Elara.Session.Handoff do
       %{"stage" => "started"} = h ->
         with {:ok, _} <- start_successor(shell, h), do: {:ok, shell}
 
+      %{"stage" => stage, "delivery_owner" => _} = h when stage in ["failed", "stopped"] ->
+        with {:ok, id} <- start_successor(shell, h),
+             :ok <- Session.start_handoff(id, true),
+             {:ok, pid} <- Elara.session_pid(id),
+             :ok <- GenServer.call(pid, :pause_handoff),
+             do: {:ok, shell}
+
       _ ->
         {:ok, shell}
     end
@@ -166,6 +188,7 @@ defmodule Elara.Session.Handoff do
         else: context
 
     with {:ok, store} <- Store.save(%{shell.store | context: context}),
+         {:ok, store} <- recover(store),
          do: {:ok, %{shell | store: store}}
   end
 
@@ -175,6 +198,7 @@ defmodule Elara.Session.Handoff do
 
     with {:ok, store} <-
            Store.save(%{shell.store | context: Map.put(shell.store.context, "handoff", h)}),
+         {:ok, store} <- recover(store),
          do: {:ok, %{shell | store: store}}
   end
 
@@ -189,6 +213,7 @@ defmodule Elara.Session.Handoff do
             [
               provider: shell.provider,
               resume: h["path"],
+              pause_inputs: h["stage"] in ["failed", "stopped"],
               handoff_fault_hook: shell.handoff_fault_hook
             ]
         )

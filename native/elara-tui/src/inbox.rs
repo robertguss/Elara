@@ -264,11 +264,15 @@ pub(crate) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
 
 pub(crate) fn summary(model: &Model) -> String {
     let view = &model.projection.view["inbox"];
-    let context = if view["handoff"]["stage"] == "failed" {
+    let context = if let Some(owner) = view["handoff"]["delivery_owner"].as_str() {
+        format!("input routed to {owner} · ")
+    } else if view["handoff"]["stage"] == "failed" {
         format!(
             "handoff failed: {} · ",
             view["handoff"]["error"].as_str().unwrap_or("unknown error")
         )
+    } else if view["handoff"]["stage"] == "stopped" {
+        "handoff stopped; source usable · ".to_owned()
     } else if let Some(stage) = view["handoff"]["stage"].as_str() {
         format!(
             "handoff {stage} → {} · ",

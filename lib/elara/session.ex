@@ -150,7 +150,8 @@ defmodule Elara.Session do
             do: %{store | inputs_paused: true},
             else: store
 
-        with {:ok, store} <- Store.set_provider_settings(store, core.config.provider_settings),
+        with {:ok, store} <- Handoff.recover(store),
+             {:ok, store} <- Store.set_provider_settings(store, core.config.provider_settings),
              {:ok, _} <- Registry.register(Elara.Sessions, store.id, nil),
              {:ok, plugins, tools} <- start_plugins(plugin_paths, cwd, core.config.tools) do
           incarnation = new_incarnation()
@@ -213,8 +214,8 @@ defmodule Elara.Session do
   end
 
   @impl true
-  def handle_call({:ask, _}, _from, %{store: %{context: %{"handoff" => h}}} = shell) do
-    {:reply, {:error, {:handoff, Map.take(h, ["id", "stage"])}}, shell}
+  def handle_call({:ask, _} = command, from, %{store: %{context: %{"handoff" => _}}} = shell) do
+    relay_handoff_ask(shell, command, from)
   end
 
   def handle_call({:ask, prompt}, from, shell) do
@@ -223,6 +224,14 @@ defmodule Elara.Session do
     else
       {:reply, {:error, :busy}, shell}
     end
+  end
+
+  def handle_call(
+        {:ask_input, _, _, _} = command,
+        from,
+        %{store: %{context: %{"handoff" => _}}} = shell
+      ) do
+    relay_handoff_ask(shell, command, from)
   end
 
   def handle_call({:ask_input, prompt, references, images}, from, shell) do
@@ -553,7 +562,7 @@ defmodule Elara.Session do
   end
 
   def handle_call(:clone, _from, shell) do
-    if Elara.Threads.managed?(shell.id) or shell.store.context != %{} do
+    if Elara.Threads.managed?(shell.id) do
       {:reply, {:error, :managed_child_use_delegate_history}, shell}
     else
       idle_store_change(shell, fn store ->
@@ -565,7 +574,7 @@ defmodule Elara.Session do
   end
 
   def handle_call({:fork, id}, _from, shell) do
-    if Elara.Threads.managed?(shell.id) or shell.store.context != %{} do
+    if Elara.Threads.managed?(shell.id) do
       {:reply, {:error, :managed_child_use_delegate_history}, shell}
     else
       idle_store_change(shell, fn store -> Store.fork_before_user(store, id) end)
@@ -650,6 +659,12 @@ defmodule Elara.Session do
       {:reply, {:error, :not_controller}, shell}
     end
   end
+
+  def handle_call({:attached_input, {:ask_input, _, _, _} = command}, _from, shell),
+    do: handle_attached_command(command, shell)
+
+  def handle_call(:pause_handoff, _from, shell),
+    do: handle_attached_command(:interrupt, shell)
 
   def handle_call({:await_completion, correlation}, from, shell),
     do: handle_call({:await_completion, correlation, nil}, from, shell)
@@ -761,11 +776,15 @@ defmodule Elara.Session do
 
   def handle_info(:advance_handoff, shell) do
     case Handoff.outgoing(shell.store) do
-      %{"stage" => stage} when stage in ["prepared", "created", "transferred", "started"] ->
+      %{"stage" => stage}
+      when stage in ["prepared", "created", "transferred", "started", "failed", "stopped"] ->
         case Handoff.advance(shell) do
           {:ok, shell} ->
             shell.handoff_fault_hook.(Handoff.outgoing(shell.store)["stage"])
-            if stage != "started", do: send(self(), :advance_handoff)
+
+            if stage in ["prepared", "created", "transferred"],
+              do: send(self(), :advance_handoff)
+
             {:noreply, inbox_changed(shell)}
 
           {:error, reason} ->
@@ -1422,6 +1441,14 @@ defmodule Elara.Session do
   defp idle_store_change(shell, change) do
     if Core.idle?(shell.core) do
       case change.(shell.store) do
+        {:ok, store, prompt} when shell.store.context != %{} and store.path != shell.store.path ->
+          case Elara.start_session(
+                 Handoff.options(shell) ++ [provider: shell.provider, resume: store.path]
+               ) do
+            {:ok, id} -> {:reply, {:ok, id, prompt, Store.history(store)}, shell}
+            {:error, reason} -> {:reply, {:error, reason}, shell}
+          end
+
         {:ok, store, prompt} ->
           case Store.claim(store) do
             {:ok, store} ->
@@ -2176,6 +2203,13 @@ defmodule Elara.Session do
   defp handle_attached_command(:reload_plugins, shell),
     do: handle_call(:reload_plugins, nil, shell)
 
+  defp handle_attached_command(
+         {:ask_input, _, _, _} = command,
+         %{store: %{context: %{"handoff" => _}}} = shell
+       ) do
+    {:reply, forward_handoff(shell, {:attached_input, command}), shell}
+  end
+
   defp handle_attached_command({:ask_input, prompt, references, images}, shell) do
     with :ok <- input_ready(shell, images),
          {:ok, user} <- Elara.Attachment.prepare(shell.cwd, prompt, references, images) do
@@ -2261,7 +2295,7 @@ defmodule Elara.Session do
       shell.controller != caller ->
         {:reply, {:error, :not_controller}, shell}
 
-      Elara.Threads.managed?(shell.id) or shell.store.context != %{} ->
+      Elara.Threads.managed?(shell.id) ->
         {:reply, {:error, :managed_child_use_delegate_history}, shell}
 
       not Core.idle?(shell.core) ->
@@ -2707,7 +2741,10 @@ defmodule Elara.Session do
       "paused" => shell.store.inputs_paused,
       "context" => Context.budget(shell.core, shell.context_limit),
       "handoff" =>
-        if(Handoff.outgoing(shell.store), do: Map.drop(Handoff.outgoing(shell.store), ["path"])),
+        case Handoff.outgoing(shell.store) || shell.store.context["last_handoff"] do
+          nil -> nil
+          h -> Map.drop(h, ["path"])
+        end,
       "source" => shell.store.context["source"],
       "wake_budget_exhausted" => shell.store.agent_wake_count >= 8,
       "execution" => %{
@@ -2747,7 +2784,8 @@ defmodule Elara.Session do
            {:error,
             %Provider.Error{
               kind: :resource_limit,
-              message: "Context handoff blocked: #{inspect(reason)}; original evidence preserved"
+              message:
+                "Context handoff blocked: #{inspect(reason)}; original evidence preserved. Fork before an earlier turn to start a fresh chain, or select a model with a larger context window."
             }}},
           shell
         )
@@ -2769,16 +2807,25 @@ defmodule Elara.Session do
     end
   end
 
-  defp forward_handoff(shell, command) do
+  defp forward_handoff(shell, command, timeout \\ 5000) do
     case Handoff.outgoing(shell.store) do
       %{"delivery_owner" => id} ->
-        with {:ok, pid} <- Elara.session_pid(id), do: GenServer.call(pid, command)
+        with {:ok, pid} <- Elara.session_pid(id), do: GenServer.call(pid, command, timeout)
 
       _ ->
         {:error, :handoff_not_ready}
     end
   catch
     :exit, _ -> {:error, :handoff_successor_unavailable}
+  end
+
+  defp relay_handoff_ask(shell, command, from) do
+    {:ok, _} =
+      Task.Supervisor.start_child(Elara.TaskSup, fn ->
+        GenServer.reply(from, forward_handoff(shell, command, :infinity))
+      end)
+
+    {:noreply, shell}
   end
 
   defp grant_control(:observe, _pid, _shell), do: :ok

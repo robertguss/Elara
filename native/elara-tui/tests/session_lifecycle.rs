@@ -162,4 +162,10 @@ fn handoff_links_never_grant_observers_control_or_claim_disconnected_success() {
     let frame = elara_tui::render_frame(&model, 80, 24).unwrap();
     assert!(frame.contains("handoff failed: fresh context cannot fit"));
     assert!(frame.contains("Ctrl-X stop · F12 queue · Ctrl-J newline"));
+    for stage in ["transferred", "started", "stopped", "failed"] {
+        model.projection.view["inbox"]["handoff"]["stage"] = json!(stage);
+        model.projection.view["inbox"]["handoff"]["delivery_owner"] = json!("next");
+        let frame = elara_tui::render_frame(&model, 80, 24).unwrap();
+        assert!(frame.contains("input routed to next"));
+    }
 }

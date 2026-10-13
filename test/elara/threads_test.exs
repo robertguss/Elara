@@ -9,6 +9,8 @@ defmodule Elara.ThreadsTest do
     File.mkdir_p!(cwd)
     previous = Application.get_env(:elara, :sessions_root)
     Application.put_env(:elara, :sessions_root, Path.join(root, "sessions"))
+    previous_worktrees = System.get_env("ELARA_WORKTREES_ROOT")
+    System.put_env("ELARA_WORKTREES_ROOT", Path.join(root, "worktrees"))
     git(cwd, ["init", "-q"])
     git(cwd, ["config", "user.email", "test@example.invalid"])
     git(cwd, ["config", "user.name", "Test"])
@@ -32,6 +34,11 @@ defmodule Elara.ThreadsTest do
       end
 
       Application.put_env(:elara, :sessions_root, previous)
+
+      if previous_worktrees,
+        do: System.put_env("ELARA_WORKTREES_ROOT", previous_worktrees),
+        else: System.delete_env("ELARA_WORKTREES_ROOT")
+
       File.rm_rf!(root)
     end)
 
@@ -133,6 +140,7 @@ defmodule Elara.ThreadsTest do
     File.write!(Path.join(cwd, "parent-only.txt"), "uncommitted")
     {:ok, coding} = Threads.start_child(parent, "Implement isolated change", coding: true)
     assert coding["cwd"] != cwd
+    assert coding["cwd"] =~ ~r"/worktrees/project-[a-f0-9]{10}/[^/]+$"
     refute File.exists?(Path.join(coding["cwd"], "parent-only.txt"))
     assert coding["base_revision"] == git(cwd, ["rev-parse", "HEAD"])
 
@@ -465,14 +473,14 @@ defmodule Elara.ThreadsTest do
     assert length(Agent.get(parent_agent, & &1)) == 1
 
     records = Path.wildcard(Path.join(root, "sessions/_threads/*.json"))
-    workspaces = Path.wildcard(Path.join(root, "sessions/_threads/workspaces/*"))
+    workspaces = Path.wildcard(Path.join(root, "worktrees/*/*"))
     other = offline_codex("other-model", "low")
 
     assert {:error, :provider_mismatch} =
              Threads.start_child(parent, "wrong module", coding: true, provider: other)
 
     assert Path.wildcard(Path.join(root, "sessions/_threads/*.json")) == records
-    assert Path.wildcard(Path.join(root, "sessions/_threads/workspaces/*")) == workspaces
+    assert Path.wildcard(Path.join(root, "worktrees/*/*")) == workspaces
   end
 
   # Expired Codex-sourced tokens fail before any refresh or request, and the
@@ -1075,6 +1083,7 @@ defmodule Elara.ThreadsTest do
 
     common = """
     Application.put_env(:elara, :sessions_root, #{inspect(sessions)})
+    System.put_env("ELARA_WORKTREES_ROOT", #{inspect(Path.join(root, "ack-worktrees"))})
     alias Elara.{Message, Threads}
     alias Elara.Session.Store
     {:ok, reply} = Message.assistant("done", [])
@@ -1167,6 +1176,7 @@ defmodule Elara.ThreadsTest do
        %{cwd: cwd, root: root} do
     common = """
     Application.put_env(:elara, :sessions_root, #{inspect(Path.join(root, "vm-sessions"))})
+    System.put_env("ELARA_WORKTREES_ROOT", #{inspect(Path.join(root, "vm-sessions/_threads/workspaces"))})
     alias Elara.{Message, Threads}
     {:ok, reply} = Message.assistant("explicit restart answer", [])
     """
@@ -1195,10 +1205,12 @@ defmodule Elara.ThreadsTest do
     restart_code =
       common <>
         """
+        System.put_env("ELARA_WORKTREES_ROOT", #{inspect(Path.join(root, "new-worktrees"))})
         child = JSON.decode!(File.read!(#{inspect(Path.join(root, "identity.json"))}))
         {:ok, agent} = Agent.start_link(fn -> [{:ok, reply}] end)
         {:ok, id} = Threads.resume(child["id"], provider: {Elara.Provider.Scripted, agent})
         true = id == child["id"]
+        true = Elara.cwd(id) == child["cwd"]
         true = File.read!(Path.join(Elara.cwd(id), "restart.txt")) == "preserved on VM exit"
         [%Message.User{text: "durable restart assignment"}] = Elara.transcript(id)
         true = Elara.snapshot(id).snapshot["inbox"]["paused"]

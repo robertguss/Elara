@@ -27,6 +27,7 @@ if config_env() == :test do
   File.mkdir_p!(run_dir)
   System.put_env("TMPDIR", run_dir)
   System.put_env("ELARA_SERVER_TOKEN", "isolated-test-gateway-token-not-a-real-credential")
+  System.put_env("ELARA_WORKTREES_ROOT", Path.join(run_dir, "worktrees"))
 
   # Crash-recovery tests kill Elara.TestJobs and Elara.Exec on purpose; under
   # OTP's default of 3 restarts in 5 seconds some test orders stop the whole

@@ -718,9 +718,15 @@ defmodule Elara.Threads do
   end
 
   defp workspace(cwd, token, true) do
-    path = Path.join(root(), "workspaces/#{token}")
+    root =
+      System.get_env("ELARA_WORKTREES_ROOT") || Path.join(System.user_home!(), ".elara-worktrees")
 
-    with :ok <- File.mkdir_p(Path.dirname(path)),
+    with {:ok, common} <- git(cwd, ["rev-parse", "--git-common-dir"]),
+         common = Path.expand(String.trim(common), cwd),
+         repo = Path.basename(Path.dirname(common)),
+         hash = Base.encode16(:crypto.hash(:sha256, common), case: :lower) |> String.slice(0, 10),
+         path = Path.join([Path.expand(root), "#{repo}-#{hash}", token]),
+         :ok <- File.mkdir_p(Path.dirname(path)),
          {:ok, base} <- git(cwd, ["rev-parse", "HEAD"]) do
       {:ok, path, String.trim(base)}
     end

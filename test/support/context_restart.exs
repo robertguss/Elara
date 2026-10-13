@@ -49,7 +49,12 @@ if mode == "prepare" do
       context_limit: 100_000,
       max_tool_output_bytes: 1024,
       handoff_fault_hook: hook,
-      seed_history: [%Elara.Message.Assistant{text: String.duplicate("archive", 9000)}]
+      seed_history: [
+        %Elara.Message.Assistant{
+          text: String.duplicate("archive", 9000),
+          usage: %{"input_tokens" => 90_000}
+        }
+      ]
     )
 
   File.write!(Path.join(root, "source"), id)

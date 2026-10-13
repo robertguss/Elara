@@ -340,7 +340,8 @@ defmodule Elara.AttachmentTest do
     end
 
     text_core = Elara.Session.Core.new(config, [%{user | attachments: []}])
-    assert Elara.Provider.Visibility.view(text_core)["context"]["estimate_tokens"] > 4096
+
+    assert Elara.Provider.Visibility.view(text_core)["context"]["estimate_tokens"] in 1024..1100
   end
 
   test "replaced FIFO input fails promptly and session accepts a corrected draft", %{cwd: cwd} do

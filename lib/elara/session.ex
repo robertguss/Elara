@@ -1610,7 +1610,7 @@ defmodule Elara.Session do
   end
 
   defp run_effect({:call_provider, core_ref, request}, effect_id, shell, _patch_context) do
-    budget = Context.budget(shell.core, shell.context_limit)
+    budget = Context.budget(shell.core, shell.context_limit, shell.provider)
     frozen = Handoff.frozen?(shell.store)
 
     branch =
@@ -2739,7 +2739,7 @@ defmodule Elara.Session do
           end)
         end),
       "paused" => shell.store.inputs_paused,
-      "context" => Context.budget(shell.core, shell.context_limit),
+      "context" => Context.budget(shell.core, shell.context_limit, shell.provider),
       "handoff" =>
         case Handoff.outgoing(shell.store) || shell.store.context["last_handoff"] do
           nil -> nil

@@ -659,14 +659,21 @@ communication, not hosted sharing or an OS sandbox.
 
 ### Automatic context handoff
 
-Persistent sessions check a conservative context budget before every model
-request. The footer warns early with an **estimate**, not exact tokenizer
-occupancy. Accounting uses the selected model's catalog limit (128K fallback
-when unknown), UTF-8 request bytes, provider-reported usage as a floor, and an
-image allowance. Output, tool results, handoff, and uncertainty reserves are
-included in the warning threshold. This is independent of the 16 MiB protocol
-and attachment/snapshot admission limits; a warning can appear well below the
-model's nominal limit because of those reserves.
+Sessions check an estimated context budget before every model request. The
+meter uses the last main-provider input plus output token count, then UTF-8
+bytes ÷ 4 for newer messages. Without reported usage, it estimates the system,
+history, tool schemas, and framing at bytes ÷ 4. Tool/submodel usage does not
+reset the meter. Unreported images retain a 32K allowance per image because
+their preprocessing cost is unknown; encoded image blobs are not counted as
+text tokens.
+
+The selected model's window is looked up before each request (128K fallback
+when unknown). Warning starts at 80%; automatic handoff starts at 90%, leaving
+one 10% headroom allocation rather than stacked output, handoff, tool, and
+uncertainty reserves. The authoritative meter is exposed in the session
+snapshot as `inbox.context`, including `estimate_tokens`, `limit`, `confidence`,
+and `basis`. It is an **estimate**, not exact tokenizer occupancy, and is
+independent of the 16 MiB protocol and attachment/snapshot admission limits.
 
 At a safe boundary, Elara freezes the source and automatically continues in a
 linked fresh session. Original messages and durable attachments remain available

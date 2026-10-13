@@ -455,7 +455,12 @@ defmodule Elara.TestJobsTest do
         max_tool_output_bytes: 1024,
         system: "test",
         tools: [TestJobs.tool()],
-        seed_history: [%Message.Assistant{text: String.duplicate("e", 60_000)}]
+        seed_history: [
+          %Message.Assistant{
+            text: String.duplicate("e", 60_000),
+            usage: %{"input_tokens" => 90_000}
+          }
+        ]
       )
 
     ctx = %Tool.Ctx{session_id: source, cwd: root, tool_name: "test_job"}

@@ -225,14 +225,31 @@ defmodule Elara.WorkspaceDiffTest do
     end
   end
 
-  test "diff follows the handoff owner and labels the successor-only session view", %{cwd: cwd} do
+  test "session diff spans handoff work, separates outside edits and survives reopening", %{
+    cwd: cwd
+  } do
     git(cwd, ["init", "--quiet"])
     File.write!(Path.join(cwd, "file.txt"), "before\n")
+    File.write!(Path.join(cwd, "source.txt"), "before\n")
+    git(cwd, ["add", "."])
+    index = File.read!(Path.join(cwd, ".git/index"))
+    head = File.read!(Path.join(cwd, ".git/HEAD"))
 
     source =
       start(
         cwd,
         [
+          {:ok,
+           %Assistant{
+             tool_calls: [
+               call("edit", %{
+                 "path" => "source.txt",
+                 "old_text" => "before",
+                 "new_text" => "source work"
+               })
+             ]
+           }},
+          {:ok, %Assistant{text: "source done", usage: %{"input_tokens" => 90_000}}},
           {:ok,
            %Assistant{
              tool_calls: [
@@ -243,15 +260,24 @@ defmodule Elara.WorkspaceDiffTest do
                })
              ]
            }},
-          {:ok, %Assistant{text: "successor done"}}
+          {:ok, %Assistant{text: "successor done", usage: %{"input_tokens" => 90_000}}},
+          {:ok,
+           %Assistant{
+             tool_calls: [
+               call("edit", %{
+                 "path" => "source.txt",
+                 "old_text" => "source work",
+                 "new_text" => "before"
+               })
+             ]
+           }},
+          {:ok, %Assistant{text: "third owner done"}}
         ],
-        context_limit: 100_000,
-        seed_history: [
-          Elara.Message.user("goal"),
-          %Assistant{text: String.duplicate("x", 60_000), usage: %{"input_tokens" => 90_000}}
-        ]
+        context_limit: 100_000
       )
 
+    assert {:ok, "source done"} = Elara.ask(source, "source work")
+    File.write!(Path.join(cwd, "outside.txt"), "between turns\n")
     assert {:error, :interrupted} = Elara.ask(source, "continue the goal")
     deadline = System.monotonic_time(:millisecond) + 5000
 
@@ -285,9 +311,85 @@ defmodule Elara.WorkspaceDiffTest do
 
     assert {:ok, latest} = report
     assert {:ok, ^latest} = Elara.workspace_diff(owner)
+    {:ok, source_store} = Elara.Session.Handoff.store(source)
+    source_bank = Elara.WorkspaceDiff.open(source_store).repo
+    source_refs = git(cwd, ["--git-dir=" <> source_bank, "show-ref"])
     assert {:ok, session} = Elara.workspace_diff(source, :session)
-    assert session =~ "Unavailable before successor start; showing from there"
+    assert {:ok, ^session} = Elara.workspace_diff(owner, :session)
+    refute session =~ "Unavailable before successor start"
+    assert session =~ "handoff chain"
+    assert session =~ "+source work"
     assert session =~ "+successor"
+    [_, outside] = String.split(session, "Changed outside Elara", parts: 2)
+    assert outside =~ "+between turns"
+    assert outside =~ "Outside-edit boundary unavailable at handoff"
+
+    middle = owner
+    assert {:error, :interrupted} = Elara.ask(middle, "restore the source file")
+    deadline = System.monotonic_time(:millisecond) + 5000
+
+    session =
+      Stream.repeatedly(fn ->
+        if System.monotonic_time(:millisecond) > deadline,
+          do: flunk("third owner did not finish")
+
+        Process.sleep(10)
+        Elara.workspace_diff(source, :session)
+      end)
+      |> Enum.find_value(fn
+        {:ok, text} ->
+          if text =~ "closed endpoint" and text =~ "+successor" and not (text =~ "+source work"),
+            do: text
+
+        _ ->
+          nil
+      end)
+
+    owner = Elara.Session.Handoff.owner(source)
+    assert owner != middle
+    on_exit(fn -> stop(owner) end)
+    assert {:ok, ^session} = Elara.workspace_diff(middle, :session)
+    assert {:ok, ^session} = Elara.workspace_diff(owner, :session)
+    [net, _] = String.split(session, "Changed outside Elara", parts: 2)
+    refute net =~ "source.txt"
+
+    {:ok, store} = Elara.Session.Handoff.store(owner)
+    owner_bank = Elara.WorkspaceDiff.open(store).repo
+    {:ok, middle_store} = Elara.Session.Handoff.store(middle)
+    middle_bank = Elara.WorkspaceDiff.open(middle_store).repo
+    assert git(cwd, ["--git-dir=" <> source_bank, "show-ref"]) == source_refs
+
+    for bank <- [source_bank, middle_bank, owner_bank],
+        do: git(cwd, ["--git-dir=" <> bank, "gc", "--prune=now"])
+
+    assert {:ok, ^session} = Elara.workspace_diff(owner, :session)
+
+    source_turn = Enum.find(source_store.entries, &is_struct(&1.message, Elara.Message.User)).id
+    assert {:ok, _} = Elara.attach(owner, :control)
+    assert {:error, _} = Elara.attached_command(owner, {:undo, :preview, source_turn})
+    stop(owner)
+    reopened = start(cwd, [], resume: store.path)
+    assert {:ok, ^session} = Elara.workspace_diff(reopened, :session)
+
+    File.rename!(source_bank, source_bank <> "-missing")
+    assert {:ok, partial} = Elara.workspace_diff(reopened, :session)
+    assert partial =~ "Partial session view: predecessor #{source} evidence unavailable"
+    assert partial =~ "+successor"
+    refute partial =~ "+source work"
+    File.rename!(source_bank <> "-missing", source_bank)
+
+    File.rename!(source_store.path, source_store.path <> "-missing")
+    assert {:ok, ^partial} = Elara.workspace_diff(reopened, :session)
+    File.rename!(source_store.path <> "-missing", source_store.path)
+    assert {:ok, ^session} = Elara.workspace_diff(reopened, :session)
+    assert File.read!(Path.join(cwd, ".git/index")) == index
+    assert File.read!(Path.join(cwd, ".git/HEAD")) == head
+
+    stop(reopened)
+    git(cwd, ["--git-dir=" <> owner_bank, "update-ref", "-d", "refs/elara/origin"])
+    missing_origin = start(cwd, [], resume: store.path)
+    assert {:error, notice} = Elara.workspace_diff(missing_origin, :session)
+    assert notice =~ "baseline failed"
   end
 
   test "confirmed undo restores edit and bash changes, preserves unrelated files and records model-visible history",

@@ -1866,10 +1866,6 @@ fn composer_help(model: &Model) -> Vec<Line<'static>> {
             "Legacy keys: Ctrl-J fallback; Alt-Enter depends on terminal mapping."
         }),
     ];
-    lines.extend(actions::help());
-    lines.push(Line::from(
-        "Mouse wheel/drag: scroll/select; native selection: terminal modifier.",
-    ));
     lines.push(Line::from(
         "/limits · /limits calls 150 · /limits timeout 20m (s/m/h)",
     ));
@@ -1878,6 +1874,10 @@ fn composer_help(model: &Model) -> Vec<Line<'static>> {
             .into_iter()
             .map(Line::from),
     );
+    lines.extend(actions::help());
+    lines.push(Line::from(
+        "Mouse wheel/drag: scroll/select; native selection: terminal modifier.",
+    ));
     lines
 }
 

@@ -40,7 +40,7 @@ def wait_for(*parts):
                 os.write(master, b"\x1b[?1;2c")
             if b"\x1b[6n" in chunk:
                 os.write(master, b"\x1b[1;1R")
-        if all(part in output[start:] for part in parts):
+        if all(part in output[start:] for part in parts) and not select.select([master], [], [], 0.1)[0]:
             return
     raise AssertionError(f"Missing {parts!r}: {bytes(output[-5000:])!r}")
 

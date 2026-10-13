@@ -25,6 +25,9 @@ Colored Elixir and edit frames for all four themes live in
 New coding worktrees are kept outside protected Elara state; the location and
 operator override are documented under "Persistent delegated children".
 Existing children keep their recorded paths, without relocation or deletion.
+File-tool roots, protected paths, and resolved symlinks are documented in
+README.md's "File-tool fence" section. Internal skill/session/plugin reads are
+separate; the fence is not an OS sandbox.
 
 ## Where Elara stands
 

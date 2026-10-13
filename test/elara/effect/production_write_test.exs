@@ -65,7 +65,8 @@ defmodule Elara.Effect.ProductionWriteTest do
     {job, observation} = controller_evidence(context.journal_path)
     assert job.operation_kind == :declarative_write
     assert job.tool_name == "declarative_write"
-    assert job.arguments["path"] == "nested/output.txt"
+    assert job.arguments["path"] == context.target
+    assert job.arguments["display_path"] == "nested/output.txt"
     assert observation.result_persisted?
 
     assert %Record{state: :completed, callback_attempt_count: 1, terminal_count: 1} =
@@ -77,6 +78,38 @@ defmodule Elara.Effect.ProductionWriteTest do
 
     stop_session(session)
     stop_local_executor(executor)
+  end
+
+  test "public receipt-backed writes follow allowed links and refuse protected paths", context do
+    File.write!(Path.join(context.cwd, "AGENTS.md"), "original")
+    File.ln_s!("AGENTS.md", Path.join(context.cwd, "CLAUDE.md"))
+
+    calls = [
+      write_call("allowed", "CLAUDE.md", "updated"),
+      write_call("protected", ".envrc", "never written"),
+      write_call("protected-git", ".git/config", "never written")
+    ]
+
+    provider = script([{:ok, assistant(nil, calls)}, {:ok, assistant("done")}])
+    assert {:ok, session} = start_session(context, provider, persist: false)
+    assert {:ok, "done"} = Elara.ask(session, "write files")
+    assert File.read!(Path.join(context.cwd, "AGENTS.md")) == "updated"
+    assert File.read_link!(Path.join(context.cwd, "CLAUDE.md")) == "AGENTS.md"
+    refute File.exists?(Path.join(context.cwd, ".envrc"))
+    refute File.exists?(Path.join(context.cwd, ".git/config"))
+
+    results = Enum.filter(Elara.transcript(session), &match?(%ToolResult{}, &1))
+
+    assert [
+             %ToolResult{outcome: {:ok, _}},
+             %ToolResult{outcome: {:error, first}},
+             %ToolResult{outcome: {:error, second}}
+           ] = results
+
+    assert first =~ "file access refused: protected_path"
+    assert second =~ "file access refused: protected_path"
+    stop_session(session)
+    stop_local_executor(local_executor(context))
   end
 
   test "the local executor reopens terminal and attempted state and rejects digest changes",
@@ -227,6 +260,48 @@ defmodule Elara.Effect.ProductionWriteTest do
 
     stop_session(resumed)
     stop_local_executor(executor)
+  end
+
+  test "reopening refuses a retargeted write without freezing the session", context do
+    call = write_call("pinned-write", "nested/output.txt", "never written")
+    parent = self()
+
+    hook = fn
+      :after_accept_observation_before_continue = point -> block(context, parent, point)
+      _point -> :ok
+    end
+
+    assert {:ok, session} =
+             start_session(context, script([{:ok, assistant(nil, [call])}]),
+               effect_fault_hook: hook
+             )
+
+    ask_unlinked(context, session)
+
+    assert_receive {:blocked, :after_accept_observation_before_continue, effect_task},
+                   @lifecycle_wait_ms
+
+    session_path = newest_session_path(context.cwd)
+    kill_session(session)
+    Process.exit(effect_task, :kill)
+    File.mkdir_p!(Path.dirname(context.target))
+    other = Path.join(context.cwd, "other.txt")
+    File.write!(other, "unchanged")
+    File.ln_s!(other, context.target)
+
+    assert {:ok, resumed} =
+             start_session(context, script([{:ok, assistant("still usable")}]),
+               resume: session_path
+             )
+
+    assert %ToolResult{call_id: "pinned-write", outcome: {:error, message}} =
+             List.last(Elara.transcript(resumed))
+
+    assert message =~ "resolved_target_changed"
+    assert File.read!(other) == "unchanged"
+    assert {:ok, "still usable"} = Elara.ask(resumed, "continue safely")
+    stop_session(resumed)
+    stop_local_executor(local_executor(context))
   end
 
   test "persisted continuation reports attempted writes without terminal evidence as indeterminate",

@@ -797,6 +797,23 @@ mod tests {
         current.mode = "observe".into();
         current.editor.insert("/approve exact-id");
         assert_eq!(palette_command(&mut current), Some(InputAction::None));
+        current.editor.clear();
+        current.editor.insert(&"draft retained\n".repeat(9));
+        current.session_detail = Some(detail);
+        current.session_detail_scroll = 9;
+        current.projection.view["inbox"] = json!({"execution":{"read_only":true}});
+        for layout in crate::appearance::ViewLayout::ALL {
+            current.appearance.layout = *layout;
+            for (width, height) in [(40, 24), (120, 40)] {
+                let rendered = crate::render_frame(&current, width, height).unwrap();
+                assert!(rendered.contains("Approval required"), "{rendered}");
+                assert!(rendered.contains("draft retained"), "{rendered}");
+                assert!(
+                    rendered.lines().last().unwrap().contains("READ-ONLY"),
+                    "{rendered}"
+                );
+            }
+        }
     }
 
     #[test]

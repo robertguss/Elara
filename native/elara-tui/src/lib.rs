@@ -869,6 +869,9 @@ pub fn handle_input(
         match model.keymap.lookup(*key, false) {
             Some(actions::Action::Queue) => return inbox::open(model),
             Some(actions::Action::Steer) => return InputAction::Steer,
+            Some(actions::Action::Approve) => {
+                return sessions::command_action(model, "approve").unwrap_or(InputAction::None);
+            }
             _ => {}
         }
     }
@@ -1551,22 +1554,48 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
 fn draw_session_detail(frame: &mut ratatui::Frame<'_>, model: &Model) {
     if let Some(text) = &model.session_detail {
         let area = frame.area();
+        let awaiting =
+            model.command_approvals_supported && model.turn_state() == "approval_waiting";
+        let height = if awaiting {
+            let editor_height = model
+                .editor
+                .layout(area.width.saturating_sub(2).max(1) as usize)
+                .rows
+                .len()
+                .clamp(1, (area.height as usize / 3).max(1)) as u16;
+            let fixed_rows = editor_height
+                + 4
+                + u16::from(model.appearance.diagnostics)
+                + model.attachments.selections.len() as u16;
+            (area.height * 3 / 4).min(area.height.saturating_sub(area.height / 8 + fixed_rows))
+        } else {
+            area.height * 3 / 4
+        };
         let rect = ratatui::layout::Rect::new(
             area.x + area.width / 10,
             area.y + area.height / 8,
             area.width * 4 / 5,
-            area.height * 3 / 4,
+            height,
         );
+        let block = if awaiting {
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!(
+                    " Approval required · {} ",
+                    model.keymap.keys(actions::Action::Approve)
+                ))
+                .title_bottom(" ↑/↓ scroll · Esc closes ")
+        } else {
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Inspection · ↑/↓ scroll · Esc closes ")
+        };
         frame.render_widget(ratatui::widgets::Clear, rect);
         frame.render_widget(
             Paragraph::new(text.as_str())
                 .wrap(ratatui::widgets::Wrap { trim: false })
                 .scroll((model.session_detail_scroll, 0))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title(" Inspection · ↑/↓ scroll · Esc closes "),
-                ),
+                .block(block),
             rect,
         );
     }
@@ -3410,6 +3439,43 @@ mod transcript_input_tests {
             InputAction::None
         } else {
             action
+        }
+    }
+    #[test]
+    fn bound_approve_uses_pending_id_in_inspection_and_preserves_draft() {
+        let path = std::env::temp_dir().join(format!("elara-approve-{}.json", std::process::id()));
+        fs::write(&path, r#"{"approve":"Ctrl+K"}"#).unwrap();
+        let keymap = actions::Keymap::load(&path);
+        fs::remove_file(path).unwrap();
+        assert!(keymap.errors.is_empty());
+        let binding = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL);
+        assert_eq!(actions::Keymap::default().lookup(binding, false), None);
+        for inspection in [false, true] {
+            let mut model = fixture_model("idle");
+            model.keymap = keymap.clone();
+            model.mode = "control".into();
+            model.command_approvals_supported = true;
+            model.projection.view["turn"] = json!({"state":"approval_waiting",
+                "approval":{"id":"exact-request-id","kind":"call","tool":"bash",
+                    "args":{"command":"git push origin -f"}}});
+            model.editor.insert("unsent draft");
+            if inspection {
+                model.session_detail = Some(sessions::approval_detail(
+                    &model.projection.view["turn"]["approval"],
+                ));
+            }
+            assert_eq!(
+                key(&mut model, binding),
+                InputAction::Session(json!({"version":2,"extension":"command_approvals_v1",
+                    "command":"approve","approval_id":"exact-request-id"}))
+            );
+            assert_eq!(model.editor.text(), "unsent draft");
+            model.command_approvals_supported = false;
+            assert_eq!(key(&mut model, binding), InputAction::None);
+            model.command_approvals_supported = true;
+            model.mode = "observe".into();
+            assert_eq!(key(&mut model, binding), InputAction::None);
+            assert_eq!(model.editor.text(), "unsent draft");
         }
     }
     #[test]

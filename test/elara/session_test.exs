@@ -115,6 +115,55 @@ defmodule Elara.SessionTest do
     )
   end
 
+  test "base command rules deny production and ask for destructive Git and Ecto variants" do
+    rules = Elara.CommandRules.startup()
+
+    assert Elara.CommandRules.classify(rules, "MIX_ENV=prod mix compile") ==
+             {:deny, "MIX_ENV=prod"}
+
+    for command <- [
+          "git push --force origin main",
+          "git push origin main -f",
+          "git push origin main -vf",
+          "git push origin --force-with-lease",
+          "git push origin --force-with-lease=main:expected",
+          "git -C 'nested workspace' push origin -f",
+          "git reset HEAD~1 --hard",
+          "git -c advice.detachedHead=false reset HEAD~1 --hard",
+          "git clean -fdx",
+          "git clean -fxd",
+          "git clean -dfx",
+          "git clean -dxf",
+          "git clean -xfd",
+          "git clean -xdf",
+          "git clean -d -x -f",
+          "git -C nested clean --force -dx",
+          "mix ecto.drop --force",
+          "mix   ecto.drop --force"
+        ] do
+      assert {:ask, _} = Elara.CommandRules.classify(rules, command), command
+    end
+
+    for command <- ["MIX_ENV=test mix compile", "git push --follow-tags", "git clean -fd"] do
+      assert Elara.CommandRules.classify(rules, command) == :allow
+    end
+
+    previous = System.get_env("ELARA_COMMAND_RULES")
+
+    on_exit(fn ->
+      if previous,
+        do: System.put_env("ELARA_COMMAND_RULES", previous),
+        else: System.delete_env("ELARA_COMMAND_RULES")
+    end)
+
+    System.put_env("ELARA_COMMAND_RULES", "{}")
+    assert Elara.CommandRules.startup() == rules
+    System.put_env("ELARA_COMMAND_RULES", ~s({"deny":["git push --force"]}))
+
+    assert Elara.CommandRules.classify(Elara.CommandRules.startup(), "git push origin -f") ==
+             {:deny, "git push --force"}
+  end
+
   @tag :tmp_dir
   test "project deny rules are captured before the model can rewrite them", %{tmp_dir: cwd} do
     File.mkdir_p!(Path.join(cwd, ".elara"))

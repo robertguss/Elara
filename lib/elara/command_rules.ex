@@ -2,16 +2,20 @@ defmodule Elara.CommandRules do
   @moduledoc "Command-text guardrails, not a shell parser or OS sandbox."
 
   @empty %{"deny" => [], "ask" => []}
+  @base %{
+    "deny" => ["MIX_ENV=prod"],
+    "ask" => ["git push --force", "git reset --hard", "git clean -fdx", "mix ecto.drop"]
+  }
   @max_bytes 65_536
 
   def startup do
     case System.get_env("ELARA_COMMAND_RULES") do
       nil ->
-        @empty
+        @base
 
       bytes ->
         case parse(bytes) do
-          {:ok, rules} -> rules
+          {:ok, rules} -> merge(@base, rules)
           {:error, reason} -> raise ArgumentError, "ELARA_COMMAND_RULES: #{reason}"
         end
     end
@@ -37,9 +41,12 @@ defmodule Elara.CommandRules do
   end
 
   def classify(rules, command) do
-    case Enum.find(rules["deny"], &String.contains?(command, &1)) do
+    texts = match_texts(command)
+    matches = fn rule -> Enum.any?(texts, &String.contains?(&1, rule)) end
+
+    case Enum.find(rules["deny"], matches) do
       nil ->
-        case Enum.find(rules["ask"], &String.contains?(command, &1)) do
+        case Enum.find(rules["ask"], matches) do
           nil -> :allow
           rule -> {:ask, rule}
         end
@@ -47,6 +54,46 @@ defmodule Elara.CommandRules do
       rule ->
         {:deny, rule}
     end
+  end
+
+  # Text aliases cover common Git flag placements, not shell evaluation.
+  defp match_texts(command) do
+    aliases =
+      Regex.scan(
+        ~r/\bgit\s+(?:(?:-C|-c)\s+(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s+)*(push|reset|clean)\b([^;&|\n]*)/,
+        command,
+        capture: :all_but_first
+      )
+      |> Enum.flat_map(fn [verb, tail] ->
+        flags = tail |> String.split() |> Enum.map(&(&1 |> String.trim("\"") |> String.trim("'")))
+
+        case verb do
+          "push" ->
+            if Enum.any?(flags, fn flag ->
+                 String.starts_with?(flag, "--force") or
+                   Regex.match?(~r/^-[A-Za-z]*f[A-Za-z]*$/, flag)
+               end),
+               do: ["git push --force"],
+               else: []
+
+          "reset" ->
+            if "--hard" in flags, do: ["git reset --hard"], else: []
+
+          "clean" ->
+            letters =
+              Enum.flat_map(flags, fn
+                "--force" -> ["f"]
+                "--" <> _ -> []
+                "-" <> short -> String.graphemes(short)
+                _ -> []
+              end)
+
+            if Enum.all?(~w(f d x), &(&1 in letters)), do: ["git clean -fdx"], else: []
+        end
+      end)
+
+    normalized = command |> String.replace(~r/['"]/, "") |> String.replace(~r/\s+/, " ")
+    [command, normalized | aliases]
   end
 
   def parse(nil), do: {:ok, @empty}

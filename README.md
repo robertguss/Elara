@@ -378,8 +378,15 @@ match returns a tool error. An ask match waits for the controlling TUI to
 approve that exact call. The approval view shows the command and the matching
 rule. Esc closes the view, then `/approve` confirms the displayed request.
 `/approve REQUEST_ID` selects an explicit request. There is no default key.
+The `approve` action can be bound in `keymap.json`; that key approves the exact
+pending request even from the inspection view, without clearing the draft.
 Observers cannot approve. Esc outside a panel interrupts the waiting turn
 without running its pending calls.
+
+The base rules deny `MIX_ENV=prod` and ask for force pushes (`--force`, `-f`,
+`--force-with-lease`), `git reset --hard`, `git clean -fdx`, and `mix ecto.drop`.
+Common Git flag placements, reordered or split clean flags, and `-C`/`-c`
+prefixes match the same base rule. Ordinary pushes and `git clean -fd` do not.
 
 Project rules live in `.elara/command-rules.json`:
 
@@ -388,6 +395,8 @@ Project rules live in `.elara/command-rules.json`:
 ```
 
 These are literal, case-sensitive substrings, not regular expressions.
+Deny/ask lists match the raw text and a quote-stripped, whitespace-normalized
+copy, plus the common Git aliases above. They do not evaluate the shell.
 Deny wins over ask. Rules apply to the whole command string, including compound
 commands. Invalid or oversized files fail closed. Files are limited to 64 KiB.
 The session captures project rules before the model starts and rereads them
@@ -398,8 +407,8 @@ restrictions remain. Approving a rule change does not approve a command that
 still matches an ask rule.
 
 `ELARA_COMMAND_RULES` accepts the same JSON object from the operator's startup
-environment. These rules can only add restrictions. A repository cannot remove
-them, and changing a running server's environment does not replace them.
+environment. These rules can only add to or tighten the base rules. A repository
+cannot remove them. Changing a running server's environment does not replace them.
 Saved sessions, copies, children, and handoff successors retain project
 restrictions, but never inherit pending approvals. Restarting a waiting session
 never executes its unapproved call. Approval rereads the rules and still checks

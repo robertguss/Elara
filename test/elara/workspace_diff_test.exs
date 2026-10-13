@@ -428,7 +428,7 @@ defmodule Elara.WorkspaceDiffTest do
     File.write!(Path.join(cwd, "c/file"), "old c")
     File.mkdir_p!(Path.join(cwd, "outside"))
     File.write!(Path.join(cwd, "outside/file"), "do not touch")
-    File.write!(Path.join(cwd, ".gitignore"), "outside/\n")
+    File.write!(Path.join(cwd, ".gitignore"), "outside/\nignored/\n")
 
     session =
       start(cwd, [
@@ -437,7 +437,7 @@ defmodule Elara.WorkspaceDiffTest do
            tool_calls: [
              call("bash", %{
                "command" =>
-                 "rm a; mkdir a; printf new > a/new; rm b/deep/file; rmdir b/deep b; printf new > b; rm c/file; rmdir c; ln -s outside c"
+                 "rm a; mkdir -p a/deep; printf new > a/deep/new; rm b/deep/file; rmdir b/deep b; printf new > b; rm c/file; rmdir c; ln -s outside c"
              })
            ]
          }},
@@ -452,6 +452,16 @@ defmodule Elara.WorkspaceDiffTest do
     assert text =~ "a"
     assert File.read!(Path.join(cwd, "b")) == "new"
     File.rm!(Path.join(cwd, "a/unrelated"))
+    assert {:ok, preview} = Elara.attached_command(session, {:undo, :preview, :latest})
+    File.mkdir_p!(Path.join(cwd, "a/ignored/empty"))
+    assert {:error, text} = Elara.attached_command(session, {:undo, :apply, preview.token})
+    assert text =~ "a"
+    assert File.dir?(Path.join(cwd, "a/ignored/empty"))
+    assert File.read!(Path.join(cwd, "a/deep/new")) == "new"
+    assert File.read!(Path.join(cwd, "b")) == "new"
+    assert {:error, _} = Elara.attached_command(session, {:undo, :preview, :latest})
+    File.rmdir!(Path.join(cwd, "a/ignored/empty"))
+    File.rmdir!(Path.join(cwd, "a/ignored"))
     assert {:ok, preview} = Elara.attached_command(session, {:undo, :preview, :latest})
     assert {:ok, _} = Elara.attached_command(session, {:undo, :apply, preview.token})
     assert File.read!(Path.join(cwd, "a")) == "old a"

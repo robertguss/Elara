@@ -281,11 +281,12 @@ defmodule Elara.WorkspaceDiff do
          "Undo refused: changed submodules or unsupported paths: #{undo_names(Enum.map(unsupported, & &1.path))}. No files restored."}
   end
 
-  defp undo_preflight(handle, changes) do
+  defp undo_preflight(handle, changes, removals \\ nil) do
     removals =
-      changes
-      |> Enum.filter(&(&1.before.mode == "000000"))
-      |> MapSet.new(& &1.path)
+      removals ||
+        changes
+        |> Enum.filter(&(&1.before.mode == "000000"))
+        |> MapSet.new(& &1.path)
 
     conflicts =
       Enum.filter(changes, fn change ->
@@ -323,9 +324,15 @@ defmodule Elara.WorkspaceDiff do
               child = Path.join(path, name)
 
               case File.lstat(Path.join(handle.root, child)) do
-                {:ok, %{type: :directory}} -> removable_directory?(handle, child, removals)
-                {:ok, _} -> MapSet.member?(removals, child)
-                _ -> false
+                {:ok, %{type: :directory}} ->
+                  Enum.any?(removals, &String.starts_with?(&1, child <> "/")) and
+                    removable_directory?(handle, child, removals)
+
+                {:ok, _} ->
+                  MapSet.member?(removals, child)
+
+                _ ->
+                  false
               end
             end)
 
@@ -442,11 +449,12 @@ defmodule Elara.WorkspaceDiff do
 
   defp restore_paths(handle, changes) do
     {removals, restorations} = Enum.split_with(changes, &(&1.before.mode == "000000"))
+    removed_paths = MapSet.new(removals, & &1.path)
 
     result =
       Enum.reduce_while(removals ++ restorations, :ok, fn change, :ok ->
-        with :ok <- undo_preflight(handle, [change]),
-             :ok <- restore_path(handle, change) do
+        with :ok <- undo_preflight(handle, [change], removed_paths),
+             :ok <- restore_path(handle, change, removed_paths) do
           {:cont, :ok}
         else
           false -> {:halt, {:error, :path_changed}}
@@ -470,10 +478,10 @@ defmodule Elara.WorkspaceDiff do
     end
   end
 
-  defp restore_path(handle, %{before: %{mode: "000000"}} = change),
+  defp restore_path(handle, %{before: %{mode: "000000"}} = change, _removals),
     do: File.rm(Path.join(handle.root, change.path))
 
-  defp restore_path(handle, change) do
+  defp restore_path(handle, change, removals) do
     destination = Path.join(handle.root, change.path)
     temporary = destination <> ".elara-undo-" <> component(change.source)
 
@@ -508,7 +516,7 @@ defmodule Elara.WorkspaceDiff do
         with :ok <- result,
              :ok <- safe_undo_path?(handle, change.path),
              true <- current_entry(handle, change.path) == {:ok, change.after},
-             :ok <- remove_empty_directory(destination),
+             :ok <- remove_empty_directory(handle, change.path, removals),
              do: File.rename(temporary, destination)
       after
         File.rm(temporary)
@@ -516,17 +524,20 @@ defmodule Elara.WorkspaceDiff do
     end
   end
 
-  defp remove_empty_directory(path) do
-    case File.lstat(path) do
+  defp remove_empty_directory(handle, path, removals) do
+    full = Path.join(handle.root, path)
+
+    case File.lstat(full) do
       {:ok, %{type: :directory}} ->
-        with {:ok, names} <- File.ls(path),
+        with true <- Enum.any?(removals, &String.starts_with?(&1, path <> "/")),
+             {:ok, names} <- File.ls(full),
              :ok <-
                Enum.reduce_while(names, :ok, fn name, :ok ->
                  child = Path.join(path, name)
 
-                 case File.lstat(child) do
+                 case File.lstat(Path.join(handle.root, child)) do
                    {:ok, %{type: :directory}} ->
-                     case remove_empty_directory(child) do
+                     case remove_empty_directory(handle, child, removals) do
                        :ok -> {:cont, :ok}
                        error -> {:halt, error}
                      end
@@ -535,7 +546,7 @@ defmodule Elara.WorkspaceDiff do
                      {:halt, {:error, :directory_not_empty}}
                  end
                end),
-             do: File.rmdir(path)
+             do: File.rmdir(full)
 
       _ ->
         :ok

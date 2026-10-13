@@ -167,6 +167,108 @@ defmodule Elara.Session.CoreTest do
     assert usage["session_totals"] == %{"input_tokens" => 12}
   end
 
+  test "snapshot prices each actual model, separates subscriptions and leaves unknown spend unknown" do
+    alias Elara.Provider.Billing
+
+    api = %{
+      asst("api")
+      | response_model: "gpt-4.1",
+        usage: %{"input_tokens" => 10, "cached_input_tokens" => 4, "output_tokens" => 3}
+    }
+
+    openai = Billing.stamp(api, Billing.source("https://api.openai.com/v1"))
+    grok = Billing.stamp(%{api | response_model: "grok-4.7"}, "xai")
+    subscription = Billing.stamp(%{api | response_model: "gpt-5.5"}, "openai_codex")
+    unknown = Billing.stamp(api, Billing.source("https://api.openai.com.proxy.example/v1"))
+    state = Core.new(config([]), [openai, grok, subscription, unknown])
+    snapshot = Elara.Protocol.snapshot("id", "incarnation", state)
+    cost = snapshot["provider_view"]["usage"]["cost"]
+
+    assert snapshot["usage"] == %{
+             "input_tokens" => 40,
+             "cached_input_tokens" => 16,
+             "output_tokens" => 12
+           }
+
+    assert cost["estimated_usd_nanos"] == 70_000
+    assert cost["priced_records"] == 2
+    assert cost["subscription_records"] == 1
+    assert cost["unpriced_records"] == 1
+    assert cost["complete"] == false
+
+    assert Enum.map(cost["models"], &{&1["provider"], &1["estimated_usd_nanos"]}) == [
+             {"compatible", nil},
+             {"openai", 38_000},
+             {"openai_codex", nil},
+             {"xai", 32_000}
+           ]
+
+    assert Enum.at(snapshot["messages"], 0)["billing_receipt"] == openai.billing_receipt
+
+    assert {:ok, restored} =
+             openai
+             |> Elara.Session.Store.encode_message()
+             |> Elara.Session.Store.decode_message()
+
+    assert restored == openai
+
+    for message <- [unknown, subscription, %{api | response_model: nil}] do
+      summary = Billing.summary([message])
+      assert summary["estimated_usd_nanos"] == nil
+      assert summary["subscription_records"] == if(message == subscription, do: 1, else: 0)
+    end
+
+    # Historical rates are evidence, not silently replaced by today's table.
+    frozen = put_in(openai.billing_receipt["price"]["output_usd_micros_per_million"], 9_000_000)
+
+    assert {:ok, frozen} =
+             frozen
+             |> Elara.Session.Store.encode_message()
+             |> Elara.Session.Store.decode_message()
+
+    assert Billing.summary([frozen])["estimated_usd_nanos"] == 41_000
+  end
+
+  test "pricing respects the long-context boundary and declines incomplete or ambiguous telemetry" do
+    alias Elara.Provider.Billing
+
+    for {input, expected} <- [{199_999, 325_040_000}, {200_000, 650_084_000}] do
+      assistant = %{
+        asst("grok")
+        | response_model: "grok-4.7",
+          usage: %{"input_tokens" => input, "cached_input_tokens" => 50_000, "output_tokens" => 7}
+      }
+
+      assert Billing.summary([Billing.stamp(assistant, "xai")])["estimated_usd_nanos"] == expected
+    end
+
+    assistant = %{
+      asst("api")
+      | response_model: "gpt-4.1",
+        usage: %{"input_tokens" => 10, "cached_input_tokens" => 4, "output_tokens" => 3}
+    }
+
+    for unpriced <- [
+          Billing.stamp(%{assistant | response_model: "future-model"}, "openai"),
+          Billing.stamp(
+            %{assistant | usage: Map.delete(assistant.usage, "cached_input_tokens")},
+            "openai"
+          ),
+          Billing.stamp(
+            %{assistant | usage: %{assistant.usage | "cached_input_tokens" => 11}},
+            "openai"
+          ),
+          Billing.stamp(
+            %{assistant | usage: Map.put(assistant.usage, "cache_write_tokens", 1)},
+            "openai"
+          ),
+          Billing.stamp(assistant, "openai", "priority")
+        ] do
+      assert Billing.summary([unpriced])["estimated_usd_nanos"] == nil
+      assert Billing.summary([unpriced])["unpriced_records"] == 1
+    end
+  end
+
   test "advertised context limit comes from the selected catalog entry" do
     for entry <- Elara.Provider.Visibility.catalog() do
       {state, _} =

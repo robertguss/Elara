@@ -201,6 +201,65 @@ defmodule Elara.Provider.OpenAITest do
     assert truncated =~ "before [DONE]"
   end
 
+  test "chat and fragmented streams retain final counters and actual model without summing frames" do
+    usage = %{
+      "prompt_tokens" => 10,
+      "completion_tokens" => 3,
+      "total_tokens" => 13,
+      "prompt_tokens_details" => %{"cached_tokens" => 4}
+    }
+
+    expected = %{
+      "input_tokens" => 10,
+      "output_tokens" => 3,
+      "total_tokens" => 13,
+      "cached_input_tokens" => 4
+    }
+
+    body = %{
+      "model" => "gpt-4.1",
+      "usage" => usage,
+      "choices" => [%{"message" => %{"content" => "answer"}}]
+    }
+
+    assert {:ok, chat} = OpenAI.parse_response({:ok, %Req.Response{status: 200, body: body}})
+    assert chat.usage == expected
+    assert chat.response_model == "gpt-4.1"
+
+    for final <- [
+          %{"choices" => [], "usage" => usage},
+          %{"choices" => [%{"delta" => %{}, "usage" => usage}]}
+        ] do
+      first = %{
+        "model" => "gpt-4.1",
+        "usage" => %{"prompt_tokens" => 2, "completion_tokens" => 1},
+        "choices" => [%{"delta" => %{"content" => "answer"}}]
+      }
+
+      wire =
+        "data: #{JSON.encode!(first)}\n\ndata: #{JSON.encode!(final)}\n\ndata: [DONE]\n\n"
+
+      assert {:ok, streamed} =
+               OpenAI.parse_stream_chunks(:binary.bin_to_list(wire) |> Enum.map(&<<&1>>), fn _ ->
+                 :ok
+               end)
+
+      assert streamed.text == "answer"
+      assert streamed.usage == expected
+      assert streamed.response_model == "gpt-4.1"
+    end
+
+    for invalid <- [nil, %{}, %{"prompt_tokens" => -1, "completion_tokens" => "3"}] do
+      assert {:ok, assistant} =
+               OpenAI.parse_response(
+                 {:ok, %Req.Response{status: 200, body: %{body | "usage" => invalid}}}
+               )
+
+      assert assistant.usage == nil
+      assert assistant.text == "answer"
+    end
+  end
+
   test "chat succeeds through the loopback HTTP transport" do
     body =
       JSON.encode!(%{
@@ -217,19 +276,33 @@ defmodule Elara.Provider.OpenAITest do
   end
 
   test "stream succeeds when SSE frames are fragmented across HTTP chunks" do
-    event = JSON.encode!(%{"choices" => [%{"delta" => %{"content" => "ok"}}]})
+    event =
+      JSON.encode!(%{
+        "model" => "gpt-4.1",
+        "choices" => [%{"delta" => %{"content" => "ok"}}]
+      })
+
+    usage =
+      JSON.encode!(%{
+        "choices" => [],
+        "usage" => %{
+          "prompt_tokens" => 10,
+          "completion_tokens" => 3,
+          "prompt_tokens_details" => %{"cached_tokens" => 4}
+        }
+      })
 
     fragments = [
       "data: " <> binary_part(event, 0, 12),
       binary_part(event, 12, byte_size(event) - 12) <> "\n",
-      "\ndata: [DO",
+      "\ndata: #{usage}\n\ndata: [DO",
       "NE]\n\n"
     ]
 
     server = start_loopback_server(fn socket -> send_chunked_response(socket, fragments) end)
     owner = self()
 
-    assert {:ok, %Message.Assistant{text: "ok"}, _config} =
+    assert {:ok, %Message.Assistant{text: "ok"} = assistant, _config} =
              run_provider(fn ->
                OpenAI.stream(loopback_config(server.port), request(), fn delta ->
                  send(owner, {:delta, delta})
@@ -237,9 +310,88 @@ defmodule Elara.Provider.OpenAITest do
                end)
              end)
 
+    assert assistant.response_model == "gpt-4.1"
+
+    assert assistant.usage == %{
+             "input_tokens" => 10,
+             "cached_input_tokens" => 4,
+             "output_tokens" => 3
+           }
+
+    assert assistant.billing_receipt == %{
+             "kind" => "unknown",
+             "provider" => "compatible",
+             "price" => nil
+           }
+
     assert_receive {:delta, "ok"}
     request_body = await_server(server.task)
-    assert {:ok, %{"stream" => true}} = JSON.decode(request_body)
+
+    assert {:ok, %{"stream" => true, "stream_options" => %{"include_usage" => true}}} =
+             JSON.decode(request_body)
+  end
+
+  test "Grok OAuth keeps chat and streaming usage but never charges API prices" do
+    body = %{
+      "model" => "grok-4.7",
+      "usage" => %{
+        "prompt_tokens" => 10,
+        "completion_tokens" => 3,
+        "prompt_tokens_details" => %{"cached_tokens" => 4}
+      },
+      "choices" => [%{"message" => %{"content" => "grok"}}]
+    }
+
+    for mode <- [:chat, :stream] do
+      server =
+        start_loopback_server(fn socket ->
+          if mode == :chat do
+            send_content_length_response(socket, JSON.encode!(body))
+          else
+            frame = %{body | "choices" => [%{"delta" => %{"content" => "grok"}}]}
+            send_chunked_response(socket, ["data: #{JSON.encode!(frame)}\n\ndata: [DONE]\n\n"])
+          end
+        end)
+
+      config =
+        Elara.Provider.Grok.new(%Elara.Auth{access_token: "fixture", expires_at: 9_999_999_999},
+          base_url: "http://127.0.0.1:#{server.port}/v1"
+        )
+
+      assert {:ok, assistant, _config} =
+               run_provider(fn ->
+                 if mode == :chat,
+                   do: Elara.Provider.Grok.chat(config, request()),
+                   else: Elara.Provider.Grok.stream(config, request(), fn _ -> :ok end)
+               end)
+
+      assert assistant.text == "grok"
+      assert assistant.response_model == "grok-4.7"
+
+      assert assistant.usage == %{
+               "input_tokens" => 10,
+               "cached_input_tokens" => 4,
+               "output_tokens" => 3
+             }
+
+      assert assistant.billing_receipt == %{"kind" => "subscription", "provider" => "grok_oauth"}
+      assert Elara.Provider.Billing.cost(assistant) == :tokens_only
+      assert {:ok, %{"model" => "grok-4"}} = JSON.decode(await_server(server.task))
+
+      {:ok, recorded} = Agent.start_link(fn -> [{:ok, assistant}] end)
+
+      {:ok, session} =
+        Elara.start_session(
+          provider: {Elara.Provider.Scripted, recorded},
+          tools: [],
+          persist: false
+        )
+
+      assert {:ok, "grok"} = Elara.ask(session, "fixture")
+      assert List.last(Elara.transcript(session)) == assistant
+      {:ok, pid} = Elara.session_pid(session)
+      GenServer.stop(pid)
+    end
   end
 
   test "stream rejects an invalid HTTP chunk-size tail as a transport error" do

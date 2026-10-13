@@ -51,7 +51,14 @@ defmodule Elara.Provider.OpenAICodex do
     case Auth.refresh_if_needed(config.tokens) do
       {:ok, tokens} ->
         config = %{config | tokens: tokens}
-        do_stream(config, request, sink)
+
+        case do_stream(config, request, sink) do
+          {:ok, assistant, config} ->
+            {:ok, Elara.Provider.Billing.stamp(assistant, "openai_codex"), config}
+
+          error ->
+            error
+        end
 
       {:error, reason} ->
         {:error,

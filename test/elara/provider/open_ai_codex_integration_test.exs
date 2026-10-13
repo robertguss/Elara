@@ -137,6 +137,20 @@ defmodule Elara.Provider.OpenAICodexIntegrationTest do
                resume: info.path
              )
 
+    reopened_usage = Elara.materialized_view(resumed)["provider_view"]["usage"]
+
+    assert reopened_usage["last_request"] == %{
+             "input_tokens" => 10,
+             "cached_input_tokens" => 4,
+             "output_tokens" => 3,
+             "total_tokens" => 13
+           }
+
+    assert reopened_usage["cost"]["estimated_usd_nanos"] == nil
+    assert reopened_usage["cost"]["subscription_records"] == 2
+    assert reopened_usage["cost"]["unpriced_records"] == 0
+    assert List.last(Elara.transcript(resumed)).response_model == "gpt-5.5"
+
     assert {:ok, "resumed"} = Elara.ask(resumed, "next")
 
     assert_receive {:request, "/backend-api/codex/responses", _headers, third_raw_body}
@@ -317,8 +331,14 @@ defmodule Elara.Provider.OpenAICodexIntegrationTest do
         "response" => %{
           "id" => "resp_#{id}",
           "status" => "completed",
+          "model" => "gpt-5.5",
           "output" => output,
-          "usage" => %{"input_tokens" => 1, "output_tokens" => 1, "total_tokens" => 2}
+          "usage" => %{
+            "input_tokens" => 10,
+            "input_tokens_details" => %{"cached_tokens" => 4},
+            "output_tokens" => 3,
+            "total_tokens" => 13
+          }
         }
       }
     ]

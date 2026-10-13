@@ -11,7 +11,24 @@ defmodule Elara.Config do
 
   @doc "Resolve positive runtime limits: session options, environment, app config, defaults."
   def runtime_limits(opts \\ [], env \\ System.get_env()) do
-    Enum.reduce_while(@limits, {:ok, []}, fn {key, default}, {:ok, limits} ->
+    resolve_positive(@limits, opts, env)
+    |> case do
+      {:ok, limits} ->
+        if limits[:tool_timeout_ms] <= limits[:max_tool_timeout_ms],
+          do: {:ok, limits},
+          else: {:error, {:invalid_runtime_limit, :tool_timeout_ms}}
+
+      error ->
+        error
+    end
+  end
+
+  def context_retention(opts \\ [], env \\ System.get_env()) do
+    resolve_positive([context_keep_results: 5, context_keep_tokens: 20_000], opts, env)
+  end
+
+  defp resolve_positive(defaults, opts, env) do
+    Enum.reduce_while(defaults, {:ok, []}, fn {key, default}, {:ok, limits} ->
       value =
         Keyword.get_lazy(opts, key, fn ->
           present(env, "ELARA_" <> String.upcase(Atom.to_string(key))) ||
@@ -28,15 +45,6 @@ defmodule Elara.Config do
           {:halt, {:error, {:invalid_runtime_limit, key}}}
       end
     end)
-    |> case do
-      {:ok, limits} ->
-        if limits[:tool_timeout_ms] <= limits[:max_tool_timeout_ms],
-          do: {:ok, limits},
-          else: {:error, {:invalid_runtime_limit, :tool_timeout_ms}}
-
-      error ->
-        error
-    end
   end
 
   @doc """

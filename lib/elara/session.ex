@@ -151,6 +151,7 @@ defmodule Elara.Session do
              {:ok, _} <- Registry.register(Elara.Sessions, store.id, nil),
              {:ok, plugins, tools} <- start_plugins(plugin_paths, cwd, core.config.tools) do
           incarnation = new_incarnation()
+          core = Context.restore(core, store)
 
           shell = %Shell{
             core: Core.replace_tools(core, tools),
@@ -512,6 +513,16 @@ defmodule Elara.Session do
   def handle_call(:child_config, _from, shell) do
     limits = Core.runtime_limits(shell.core)
 
+    history =
+      if map_size(shell.core.cleared_tools) > 0 do
+        Enum.map(shell.core.history, fn
+          %Message.Assistant{} = assistant -> %{assistant | usage: nil}
+          message -> message
+        end)
+      else
+        shell.core.history
+      end
+
     config = %{
       provider:
         Elara.Provider.Visibility.configure(shell.provider, shell.core.config.provider_settings),
@@ -521,6 +532,9 @@ defmodule Elara.Session do
       skill_options: shell.skill_options,
       max_iterations: limits.max_iterations,
       max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
+      context_keep_results: shell.core.config.context_keep_results,
+      context_keep_tokens: shell.core.config.context_keep_tokens,
+      history: history,
       provider_retry: shell.core.config.retry,
       tool_timeout_ms: limits.tool_timeout_ms,
       max_tool_timeout_ms: limits.max_tool_timeout_ms,
@@ -1479,7 +1493,9 @@ defmodule Elara.Session do
                   shell
                 end
 
-              core = Core.rebase_history(shell.core, Store.history(store))
+              core =
+                shell.core |> Core.rebase_history(Store.history(store)) |> Context.restore(store)
+
               recorder = FlightRecorder.segment(shell.recorder, core, :history_rebased)
 
               {:reply, {:ok, prompt, core.history},
@@ -1636,13 +1652,34 @@ defmodule Elara.Session do
     emit(event, effect_id, shell, patch_context)
   end
 
+  defp run_effect(:persist_context_clearing, _effect_id, shell, _patch_context) do
+    entries = Store.path_entries(shell.store, shell.store.leaf)
+
+    clearing = %{
+      "entries" =>
+        shell.core.cleared_tools |> Map.values() |> Enum.map(& &1.entry_id) |> Enum.sort(),
+      "usage_reset_entry" => Enum.at(entries, shell.core.context_usage_after - 1).id
+    }
+
+    case Store.save(%{shell.store | context: Map.put(shell.store.context, "clearing", clearing)}) do
+      {:ok, store} -> %{shell | store: store}
+      {:error, reason} -> raise "context clearing persistence failed: #{inspect(reason)}"
+    end
+  end
+
   defp run_effect({:call_provider, core_ref, request}, effect_id, shell, _patch_context) do
     budget = Context.budget(shell.core, shell.context_limit, shell.provider)
     frozen = Handoff.frozen?(shell.store)
 
+    {entries, freed} =
+      if not frozen and budget["handoff_required"],
+        do: Context.clearing(shell.core, shell.store, shell.context_limit, shell.provider),
+        else: {[], 0}
+
     branch =
       cond do
         frozen -> :interrupt_frozen
+        entries != [] -> :clear_tool_results
         budget["handoff_required"] -> :attempt_handoff
         true -> :attempt_dispatch
       end
@@ -1652,6 +1689,7 @@ defmodule Elara.Session do
 
     case branch do
       :interrupt_frozen -> feed(:interrupt, shell)
+      :clear_tool_results -> feed({:clear_tool_results, core_ref, entries, freed}, shell)
       :attempt_handoff -> begin_handoff(shell, core_ref)
       :attempt_dispatch -> run_effect({:dispatch_provider, core_ref, request}, nil, shell, nil)
     end

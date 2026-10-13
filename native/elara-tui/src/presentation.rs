@@ -930,17 +930,18 @@ pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
             .rev()
             .find_map(|message| message["response_model"].as_str())
             .unwrap_or("unavailable");
-        let lines = vec![
+        let mut lines = vec![
             Line::from("Up/Down model · Left/Right effort · Enter accept · Esc cancel"),
+            Line::from("Or close and type /model ID [EFFORT]; Grok typed IDs may be unverified."),
             Line::from(format!(
                 "Selected: {} · {}",
                 choice["model"].as_str().unwrap_or("?"),
-                choice["efforts"][e].as_str().unwrap_or("?")
+                choice["efforts"][e].as_str().unwrap_or("model only")
             )),
             Line::from(format!(
                 "Next request: {} · {}",
                 next["model"].as_str().unwrap_or("unavailable"),
-                next["effort"].as_str().unwrap_or("?")
+                next["effort"].as_str().unwrap_or("model only")
             )),
             Line::from(format!(
                 "Active request: {} · {}",
@@ -948,9 +949,12 @@ pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
                 active["effort"].as_str().unwrap_or("-")
             )),
             Line::from(format!(
-                "Catalog: {} · tested efforts {}",
+                "Catalog: {} · selected {} · window {}",
+                view["catalog_source"].as_str().unwrap_or("builtin"),
                 choice["provenance"].as_str().unwrap_or("unknown"),
-                choice["tested_efforts"]
+                choice["context_window"]
+                    .as_u64()
+                    .map_or("unknown (fallback)".into(), |n| n.to_string())
             )),
             Line::from(format!("Last served model: {served}")),
             Line::from(format!(
@@ -964,12 +968,44 @@ pub(super) fn finish(frame: &mut ratatui::Frame<'_>, model: &Model) {
             Line::from(format!(
                 "Context: advertised {} · occupancy unavailable",
                 view["context"]["advertised_limit"]
+                    .as_u64()
+                    .map_or("unknown (fallback)".into(), |n| n.to_string())
             )),
             Line::from(format!(
                 "Conservative estimate: {} tokens (history/system/tools bytes + reserve)",
                 view["context"]["estimate_tokens"]
             )),
         ];
+        if let Some(source) = choice["source"].as_str() {
+            lines.push(Line::from(format!(
+                "{source} · {}",
+                choice["date"].as_str().unwrap_or("")
+            )));
+        }
+        if let Some(error) = view["catalog_error"].as_str() {
+            lines.push(Line::from(error.to_owned()));
+        }
+        if let Some(notice) = view["settings_notice"].as_str() {
+            lines.push(Line::from(notice.to_owned()));
+        }
+        if let Some(catalog) = view["catalog"].as_array() {
+            lines.push(Line::from(format!(
+                "Models · {} of {}",
+                m + 1,
+                catalog.len()
+            )));
+            for (index, row) in catalog.iter().enumerate().skip(m.saturating_sub(3)).take(7) {
+                lines.push(Line::from(format!(
+                    "{} {} · {} tokens · {}",
+                    if index == m { "›" } else { " " },
+                    row["model"].as_str().unwrap_or("?"),
+                    row["context_window"]
+                        .as_u64()
+                        .map_or("unknown".into(), |n| n.to_string()),
+                    row["provenance"].as_str().unwrap_or("unknown")
+                )));
+            }
+        }
         frame.render_widget(ratatui::widgets::Clear, frame.area());
         panel(
             frame,
@@ -1322,6 +1358,68 @@ pub(crate) mod tests {
                 .unwrap()
                 .contains("unsupported_provider_settings")
         );
+    }
+
+    #[test]
+    fn model_only_choices_and_typed_ids_use_authority_and_survive_catalog_reordering() {
+        let mut model = fixture_model("idle");
+        let view = json!({"extension":"provider_visibility_v1", "catalog_source":"documented", "catalog":[
+            {"model":"grok-4", "efforts":[], "context_window":null, "provenance":"documented"},
+            {"model":"grok-4.7", "efforts":[], "context_window":500000, "provenance":"documented", "source":"https://docs.x.ai/developers/models/grok-4.7", "date":"2026-10-13"}
+        ], "next_request":{"model":"grok-4"}});
+        model.projection.view["provider_view"] = view.clone();
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
+        );
+        key(&mut model, KeyCode::Down);
+        key(&mut model, KeyCode::Right);
+        for width in [80, 120] {
+            let frame = render_frame(&model, width, 24).unwrap();
+            assert!(frame.contains("grok-4.7") && frame.contains("500000"));
+            assert!(frame.contains("documented") && frame.contains("2026-10-13"));
+            assert!(frame.contains("model only"));
+        }
+        let mut refreshed = view.clone();
+        refreshed["catalog"].as_array_mut().unwrap().reverse();
+        assert_eq!(model.apply_patch_frame(&json!({"incarnation":model.projection.incarnation, "seq":model.projection.head + 1, "ops":[{"op":"set_provider_view", "provider_view":refreshed}]})).unwrap(), Ingest::Applied);
+        assert_eq!(model.provider_picker, Some((0, 0)));
+        assert_eq!(
+            handle_input(
+                &mut model,
+                Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+                78
+            ),
+            InputAction::ProviderSettings(
+                json!({"version":2,"command":"set_provider_settings","extension":"provider_visibility_v1","model":"grok-4.7"})
+            )
+        );
+        assert_eq!(
+            model.projection.view["provider_view"]["next_request"]["model"],
+            "grok-4"
+        );
+        model.editor.insert("/model grok-operator-id");
+        assert_eq!(
+            handle_input(
+                &mut model,
+                Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+                78
+            ),
+            InputAction::ProviderSettings(
+                json!({"version":2,"command":"set_provider_settings","extension":"provider_visibility_v1","model":"grok-operator-id"})
+            )
+        );
+        model.mode = "observe".into();
+        model.editor.insert("/model grok-other");
+        assert_eq!(
+            handle_input(
+                &mut model,
+                Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+                78
+            ),
+            InputAction::None
+        );
+        assert!(model.notice.as_ref().unwrap().contains("read-only"));
     }
 
     #[test]

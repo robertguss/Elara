@@ -543,6 +543,11 @@ defmodule Elara.FlightRecorder do
       retry: normalize_retry_policy(state.config.retry)
     }
 
+    config =
+      if state.config.provider_catalog,
+        do: Map.put(config, :provider_catalog, state.config.provider_catalog),
+        else: config
+
     defaults = %Core.Config{}
 
     config =
@@ -633,6 +638,7 @@ defmodule Elara.FlightRecorder do
           Map.get(state.config, :context_keep_tokens, defaults.context_keep_tokens),
         command_preflight: Map.get(state.config, :command_preflight, false),
         provider_settings: Map.get(state.config, :provider_settings),
+        provider_catalog: Map.get(state.config, :provider_catalog),
         retry: denormalize_retry_policy(Map.get(state.config, :retry))
       },
       history: Enum.map(state.history, &denormalize_message/1),
@@ -672,6 +678,9 @@ defmodule Elara.FlightRecorder do
 
   defp normalize_fact({:provider_settings, settings}),
     do: %{kind: :provider_settings, settings: settings}
+
+  defp normalize_fact({:provider_catalog, catalog}),
+    do: %{kind: :provider_catalog, catalog: catalog}
 
   defp normalize_fact({:runtime_limits, limits, keys}),
     do: %{kind: :runtime_limits, limits: limits, keys: keys}
@@ -730,6 +739,9 @@ defmodule Elara.FlightRecorder do
 
   defp denormalize_fact(%{kind: :provider_settings, settings: settings}),
     do: {:provider_settings, settings}
+
+  defp denormalize_fact(%{kind: :provider_catalog, catalog: catalog}),
+    do: {:provider_catalog, catalog}
 
   defp denormalize_fact(%{kind: :runtime_limits, limits: limits, keys: keys}),
     do: {:runtime_limits, limits, keys}

@@ -31,6 +31,11 @@ The TUI footer renders those totals and `inbox.context` through
 `presentation::usage_footer`, without repricing or recounting history.
 Wide and narrow priced, partial, subscription and unknown footer goldens live
 in `native/elara-tui/tests/goldens/usage-*.txt`.
+README.md's model-controls section documents the account-scoped live catalog,
+offline cache, documented Grok windows and typed unverified model IDs.
+`snapshot.provider_view.catalog` and its source/error fields are authoritative;
+Core records catalog changes so window decisions replay without network IO.
+Saved settings from another provider use startup defaults with a visible notice.
 Command environment forwarding and `mix elara.env` diagnostics are documented
 in README.md's "Command environment" section. Extra project names belong in
 operator startup config, never an agent-editable project file.

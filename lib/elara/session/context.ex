@@ -125,7 +125,13 @@ defmodule Elara.Session.Context do
   end
 
   def budget(core, limit \\ nil, provider \\ nil) do
-    window = Elara.Provider.Visibility.context_window(core.config.provider_settings || provider)
+    window =
+      Elara.Provider.Visibility.context_window(
+        if(core.config.provider_settings,
+          do: {core.config.provider_settings, core.config.provider_catalog},
+          else: provider
+        )
+      )
 
     limit =
       limit ||

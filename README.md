@@ -644,14 +644,38 @@ commentary, and final answers separately; missing summaries are labeled
 unavailable. `--preview-reasoning` explicitly shows a labeled, synthetic
 presentation fixture; it is not saved in preferences or conversation history.
 
-**Ctrl-P** opens Codex model and reasoning-effort controls. Up/Down chooses a model;
-Left/Right chooses effort; Enter accepts and Esc cancels. Accepted settings apply
+**Ctrl-P** or `/model` opens model controls in the TUI. Up/Down chooses a model;
+Left/Right chooses Codex effort; Enter accepts and Esc cancels. Grok choices are
+model-only. `/model ID [EFFORT]` selects directly; in chat, `/model` prints the
+list with windows and provenance. Codex uses the listed default effort when
+EFFORT is omitted. Accepted settings apply
 to the next provider request, including the next tool-loop iteration. The view
 distinguishes the active request from next-request settings, which survive resume
-and are inherited by children. Available choices are pinned to the observed
-subscription catalog; advertised choices may still be rejected by the provider.
+and are inherited by children. A live refresh never silently replaces a selected
+model. Settings saved under a different provider use startup defaults with a
+one-line notice; a missing model within the same provider stays selected.
 Sessions saved with provider settings require a build with provider-visibility
 support; older builds reject the expanded session header.
+
+Codex fetches the authenticated subscription catalog in a supervised task, with
+a 5.5-second overall deadline and a five-minute refresh interval. Its private
+cache is scoped to account and provider URL; API-key Grok caches are scoped to
+key and URL. `/model` labels live, cached or bundled data. Offline Codex uses
+the last valid cache, then the [observed built-in list](docs/subscription-capability-preflight.md).
+The default advertised context window wins over a larger optional maximum.
+Only public IDs, efforts, windows and provenance enter the cache and recorder;
+provider instructions and prices do not. Immutable Core snapshots were chosen
+over shell-only metadata so the same window decisions replay without network IO.
+
+Grok API keys use a live language-model listing when it succeeds. Grok OAuth
+listing entitlement is unverified: the documented fallback lists `grok-4`,
+`grok-4.6` and `grok-4.7`. The latter two have documented 500,000-token windows
+([4.6](https://docs.x.ai/developers/models/grok-4.6),
+[4.7](https://docs.x.ai/developers/models/grok-4.7), checked 2026-10-13).
+`grok-4` has no verified window in this catalog. Any typed Grok ID is accepted;
+unlisted IDs are labelled unverified with the existing conservative 128K
+fallback and low-confidence meter. Documented availability is not an OAuth
+entitlement promise. Provider rejection errors remain visible.
 
 Ctrl-P also shows provider-reported request usage and session totals when available.
 Context size is a labeled conservative byte estimate, with an advertised model

@@ -196,6 +196,7 @@ impl Model {
         editor.set_history(user_prompts(&projection.view));
         let notice = projection.view["inbox"]["execution"]["read_only_notice"]
             .as_str()
+            .or_else(|| projection.view["provider_view"]["settings_notice"].as_str())
             .map(str::to_owned);
         let keymap = actions::Keymap::load(&state_root().join("keymap.json"));
         let notice = if keymap.errors.is_empty() {
@@ -527,10 +528,29 @@ impl Model {
             .get("ops")
             .ok_or_else(|| "patch is missing ops".to_string())?;
 
+        let choice = self.provider_picker.map(|(m, e)| {
+            let row = &self.projection.view["provider_view"]["catalog"][m];
+            (row["model"].clone(), row["efforts"][e].clone())
+        });
         let ingest = self.projection.ingest_patch(incarnation, seq, ops);
         match ingest {
             Ingest::Applied => {
                 self.connection = ConnectionState::Connected;
+                if let Some((id, effort)) = choice {
+                    self.provider_picker = self.projection.view["provider_view"]["catalog"]
+                        .as_array()
+                        .and_then(|rows| {
+                            rows.iter().position(|row| row["model"] == id).map(|m| {
+                                let e = rows[m]["efforts"]
+                                    .as_array()
+                                    .and_then(|levels| {
+                                        levels.iter().position(|level| *level == effort)
+                                    })
+                                    .unwrap_or(0);
+                                (m, e)
+                            })
+                        });
+                }
                 self.observe_ops(ops);
                 if ops.as_array().is_some_and(|ops| {
                     ops.iter()
@@ -559,6 +579,7 @@ impl Model {
         self.projection
             .install_snapshot(snapshot, incarnation, head)?;
         self.connection = ConnectionState::Connected;
+        self.provider_picker = None;
         self.editor.set_history(user_prompts(&self.projection.view));
         Ok(())
     }
@@ -708,11 +729,7 @@ fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<
     let (mut m, mut e) = model.provider_picker.unwrap();
     m = m.min(catalog.len() - 1);
     let count = catalog[m]["efforts"].as_array().map_or(0, Vec::len);
-    if count == 0 {
-        model.provider_picker = None;
-        return Some(InputAction::None);
-    }
-    e = e.min(count - 1);
+    e = e.min(count.max(1) - 1);
     match key.code {
         _ if key.code == KeyCode::Esc
             || model.keymap.lookup(*key, false) == Some(actions::Action::ProviderSettings) =>
@@ -722,24 +739,34 @@ fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<
         }
         KeyCode::Up => m = (m + catalog.len() - 1) % catalog.len(),
         KeyCode::Down => m = (m + 1) % catalog.len(),
-        KeyCode::Left => e = (e + count - 1) % count,
-        KeyCode::Right => e = (e + 1) % count,
+        KeyCode::Left if count > 0 => e = (e + count - 1) % count,
+        KeyCode::Right if count > 0 => e = (e + 1) % count,
         KeyCode::Enter => {
-            let request = json!({"version": 2, "command": "set_provider_settings", "extension": "provider_visibility_v1", "model": catalog[m]["model"], "effort": catalog[m]["efforts"][e]});
+            let mut settings = json!({"model": catalog[m]["model"]});
+            if count > 0 {
+                settings["effort"] = catalog[m]["efforts"][e].clone();
+            }
             model.provider_picker = None;
-            model.pending_replies.push_back(PendingReply::Settings);
-            model.notice = Some("Settings submitted; awaiting authority for next request.".into());
-            return Some(InputAction::ProviderSettings(request));
+            return Some(submit_provider_settings(model, settings));
         }
         _ => {}
     }
     let selected_count = catalog[m]["efforts"].as_array().map_or(0, Vec::len);
-    model.provider_picker = if selected_count == 0 {
-        None
-    } else {
-        Some((m, e.min(selected_count - 1)))
-    };
+    model.provider_picker = Some((m, e.min(selected_count.max(1) - 1)));
     Some(InputAction::None)
+}
+
+pub(crate) fn submit_provider_settings(model: &mut Model, mut settings: Value) -> InputAction {
+    if model.connection != ConnectionState::Connected || model.mode != "control" {
+        model.notice = Some("Provider controls require a connected control session.".into());
+        return InputAction::None;
+    }
+    settings["version"] = json!(2);
+    settings["command"] = json!("set_provider_settings");
+    settings["extension"] = json!("provider_visibility_v1");
+    model.pending_replies.push_back(PendingReply::Settings);
+    model.notice = Some("Settings submitted; awaiting authority for next request.".into());
+    InputAction::ProviderSettings(settings)
 }
 
 pub fn paste_clipboard(model: &mut Model) -> InputAction {

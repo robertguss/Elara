@@ -14,6 +14,7 @@ defmodule Elara.Session.Core do
             system: String.t(),
             tools: %{String.t() => Tool.t()},
             provider_settings: Elara.Provider.Visibility.settings() | nil,
+            provider_catalog: Elara.Provider.Catalog.t() | nil,
             max_iterations: pos_integer(),
             tool_timeout_ms: pos_integer(),
             max_tool_timeout_ms: pos_integer(),
@@ -27,6 +28,7 @@ defmodule Elara.Session.Core do
       :system,
       :tools,
       :provider_settings,
+      :provider_catalog,
       max_iterations: 100,
       tool_timeout_ms: 600_000,
       max_tool_timeout_ms: 3_600_000,
@@ -106,6 +108,7 @@ defmodule Elara.Session.Core do
           | {:ask_input, User.t()}
           | {:provider_delta, ref(), Provider.delta()}
           | {:provider_settings, Elara.Provider.Visibility.settings()}
+          | {:provider_catalog, Elara.Provider.Catalog.t()}
           | {:runtime_limits, runtime_limits(), [runtime_limit_key()]}
           | {:read_only, boolean()}
           | {:system_notice, Message.System.t()}
@@ -253,7 +256,15 @@ defmodule Elara.Session.Core do
   end
 
   def step(state, {:provider_settings, settings}) do
-    {%{state | config: %{state.config | provider_settings: settings}},
+    catalog = state.config.provider_catalog
+    catalog = if catalog, do: Map.delete(catalog, "settings_notice"), else: nil
+
+    {%{state | config: %{state.config | provider_settings: settings, provider_catalog: catalog}},
+     [{:emit, :provider_view_changed}]}
+  end
+
+  def step(state, {:provider_catalog, catalog}) do
+    {%{state | config: %{state.config | provider_catalog: catalog}},
      [{:emit, :provider_view_changed}]}
   end
 

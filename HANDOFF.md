@@ -31,6 +31,9 @@ to schema 4 without losing receipt or ownership evidence.
 The TUI's shared code colors live in `native/elara-tui/src/syntax.rs`.
 Colored Elixir and edit frames for all four themes live in
 `native/elara-tui/tests/goldens/syntax-*.txt`.
+The confirmed TUI controls and clipboard fallback are documented in README.md's
+TUI section. `native/elara-tui/src/actions.rs` owns action bindings and help;
+Esc closes panels or interrupts, and consecutive Ctrl-C requests a safe quit.
 New coding worktrees are kept outside protected Elara state; the location and
 operator override are documented under "Persistent delegated children".
 Existing children keep their recorded paths, without relocation or deletion.
@@ -48,6 +51,11 @@ unchanged. Current lab fixtures use a 16K-token handoff window, trace
 `docs/lab/README.md` describes recovery registration version 2 and reproduction
 of historical versions. Delivery is tracked in
 [Dev Hub](https://app.notion.com/p/3f8700320c4581a59c2cdf3a839a5ae0).
+The [lead thread](https://ampcode.com/threads/T-01a1358b-4a9e-71b9-bed8-90de5e5b14ee)
+coordinates stream dependencies and questions for Robert. Resume the assigned
+stream from its Notion task status and merged code on `origin/main`; do not
+repeat the planning or start replacement threads. Current progress and pending
+decisions stay in Notion, not this file.
 
 ## Where Elara stands
 

@@ -56,7 +56,7 @@ try:
     # The old notice can leave unchanged characters between newly drawn spans.
     # Socket coverage asserts the complete error; here check its visible prefix.
     wait_for(b"elara.trust")
-    os.write(master, b"\x1b")
+    os.write(master, b"\x03\x03")
     wait_for(b"\x1b[?2004l")
     _, status = os.waitpid(pid, 0)
     pid = None

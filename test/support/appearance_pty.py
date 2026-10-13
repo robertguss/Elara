@@ -82,16 +82,15 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
         wait_for(lambda: preferences.exists(), "explicitly saved preferences")
         assert json.loads(preferences.read_text()) == {"layout": "workbench", "theme": "forest", "diagnostics": False, "notifications": False}
         wait_for(lambda: b"Ctrl-J" in output, "attached session")
-        send("left é 👩‍💻 right".encode())
-        send(b"\x1b[1;2D" * 5)  # Keep a selected word through every presentation change.
         send(b"\t\x1b[H/\x1b[200~HIST_MARKER\x1b[201~\r\x1b")
-        send(b"\x1b[14~")  # F4: hide thinking, sticky across layout and theme changes.
+        send(b"\t")  # Slash commands belong to the prompt, not transcript search.
+        send(b"\x14")  # Ctrl-T: hide thinking, sticky across layout and theme changes.
         layouts = ["workbench", "ember", "observatory"]
         themes = ["forest", "ember", "observatory", "workbench"]
         for layout_index, layout in enumerate(layouts):
             for theme_index, theme in enumerate(themes):
                 start = len(output)
-                send(b"\x1bOR")  # F3
+                send(b"/appearance\r")  # /appearance
                 if layout_index and theme_index == 0:
                     send(b"\x1b[C")
                 if theme_index or layout_index:
@@ -103,25 +102,25 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
                 assert b"HIST_MARKER earlier prompt" in fresh(start), "historical body survives reflow"
                 assert b"1/1 matches" in fresh(start), "search survives appearance changes"
                 start = len(output)
-                send(b"\x1b[15~")
+                send(b"/thinking-view\r")
                 wait_for(lambda: b"Hidden by you" in fresh(start), "visibility survives appearance changes")
                 send(b"\x1b")
                 assert json.loads(preferences.read_text()) == {"layout": "workbench", "theme": "forest", "diagnostics": False, "notifications": False}, "apply does not save"
         resize(80, 24)
         start = len(output)
-        send(b"\x1b[15~")  # F5
+        send(b"/thinking-view\r")  # /thinking-view
         wait_for(lambda: b"Hidden by you" in fresh(start), "narrow thinking overlay respects hidden state")
         send(b"\x1b")
-        send(b"\x1b[14~")
+        send(b"\x14")
         start = len(output)
-        send(b"\x1b[15~")
+        send(b"/thinking-view\r")
         wait_for(lambda: b"PREVIEW fixture" in fresh(start), "explicit fixture label")
         assert b"historical" in fresh(start), "thinking remains bound to inspected historical turn"
         send(b"\x1b")
 
         def inspect_turn(source):
             start = len(output)
-            send(b"\x1b[15~")
+            send(b"/thinking-view\r")
             resize(81, 24)
             resize(80, 24)
             wait_for(lambda: source.encode() in fresh(start), source)
@@ -129,7 +128,7 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
             send(b"\x1b")
 
         start = len(output)
-        send(b"\x1b[17~")  # F6 starts from the first historical search match.
+        send(b"\x12")  # Ctrl-R starts from the first historical search match.
         resize(81, 24)
         resize(80, 24)
         wait_for(lambda: b"Up/Down select" in fresh(start), "turn navigator opens")
@@ -137,13 +136,18 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
         assert b"02 SECOND_TURN later prompt" in fresh(start)
         send(b"\x1b[B\x1b")
         inspect_turn("turn 2 · historical")
-        send(b"\x1b[17~\x1b[A\x1b")
+        send(b"\x12\x1b[A\x1b")
         inspect_turn("turn 1 · historical")
-        send(b"\x1b[17~\x1b[F\x1b")
+        send(b"\x12\x1b[F\x1b")
         inspect_turn("turn 2 · live follow · complete")
-        send(b"\tkept\r")
-        wait_for(lambda: prompts()[-1] == "left é 👩‍💻 kept", "switches preserve Unicode draft selection")
-        send(b"\x03")
+        send("left é 👩‍💻 right".encode())
+        send(b"\x1b[1;2D" * 5)
+        send(b"\x12")
+        send(b"\x1b")
+        send(b"\x14\x14")
+        send(b"kept\r")
+        wait_for(lambda: prompts()[-1] == "left é 👩‍💻 kept", "Ctrl panels preserve Unicode draft selection")
+        send(b"\x03\x03")
         wait_for(lambda: b"\x1b[?1006l" in output, "clean terminal exit")
         _, status = os.waitpid(pid, 0)
         pid = None
@@ -209,7 +213,7 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
         wait_for(lambda: b"ember / ember" in fresh(start), "Enter applies unsaved local choice")
         assert b"Ctrl-J" in fresh(start), "Enter proceeds to the session after save failure"
         assert preferences.read_bytes() == saved, "local choice does not overwrite defaults"
-        send(b"\x03")
+        send(b"\x03\x03")
         wait_for(lambda: b"\x1b[?1006l" in output, "save-failure session exits cleanly")
         _, status = os.waitpid(pid, 0)
         pid = None

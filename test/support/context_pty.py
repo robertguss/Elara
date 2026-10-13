@@ -64,7 +64,7 @@ try:
     # terminal diffs need not contain the entire draft as one contiguous string.
     send(b"\r")
     wait("DRAFT_DELIVERED")
-    send(b"\x03")
+    send(b"\x03\x03")
     _, status = os.waitpid(pid, 0)
     pid = None
     assert os.waitstatus_to_exitcode(status) == 0

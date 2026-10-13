@@ -39,6 +39,25 @@ spare_path.write_bytes(original)
 (root / "expected.png").write_bytes(original)
 (root / "oversize.png").write_bytes(original + b"x" * (2 * 1024 * 1024))
 
+# A deterministic OS clipboard boundary; the native client still executes the
+# utility, validates PNG bytes with the server and sends the real attachment.
+clipboard_bin = root / "clipboard-bin"
+clipboard_bin.mkdir()
+clipboard_mode = root / "clipboard-mode"
+clipboard_text = root / "clipboard-text"
+clipboard_mode.write_text("image/png")
+clipboard_text.write_text("\nclipboard é\t\x1b[31m\r\n/interrupt\x03")
+clipboard = clipboard_bin / "wl-paste"
+clipboard.write_text(f"""#!{sys.executable}
+import pathlib, sys
+mode = pathlib.Path({str(clipboard_mode)!r}).read_text()
+if sys.argv[-1] != mode:
+    sys.exit(1)
+source = {str(image_path)!r} if mode == 'image/png' else {str(clipboard_text)!r}
+sys.stdout.buffer.write(pathlib.Path(source).read_bytes())
+""")
+clipboard.chmod(0o700)
+
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *_):
@@ -86,6 +105,7 @@ def snapshot():
 pid, master = pty.fork()
 if pid == 0:
     os.environ["TERM"] = "xterm-256color"
+    os.environ["PATH"] = str(clipboard_bin) + os.pathsep + os.environ["PATH"]
     os.execv(binary, [binary, "--port", str(context["port"]), "--theme", "forest", "--", context["session"]])
 output = bytearray()
 last_frame = b""
@@ -135,7 +155,7 @@ def redraw(cols=180, rows=45):
 
 
 def attach_image(path):
-    send(b"\x1b[20~")
+    send(b"/image\r")
     send(str(path).encode())
     send(b"\r")
     def selected():
@@ -152,42 +172,49 @@ def visible(text, frame):
 try:
     redraw()
     wait_for(lambda: b"Ctrl-J" in output, "initial frame")
-    send("Analyze é 👩‍💻 keep".encode())
-    send(b"\x1b[1;2D" * 4)
-    send(b"\x1b[19~")  # F8 files; choose with the mouse.
+    send(b"\x06")  # Ctrl-F files; choose with the mouse.
     send(b"notes")
     wait_for(lambda: visible("notes α file.txt", redraw()), "Unicode/spaced file discovery")
     send(b"\x1b[<0;48;5M\x1b[<0;48;5m")
-    wait_for(lambda: visible("F10 remove", redraw()), "explicit mouse file selection")
-    attach_image(image_path)
+    wait_for(lambda: visible("/attachments remove", redraw()), "explicit mouse file selection")
+    send(b"\x16")
+    wait_for(lambda: visible("clipboard.png", redraw()), "Ctrl-V validates clipboard PNG")
+    assert requests == [], "image paste never sends a turn"
     image_path.write_bytes(b"original disk image changed after ingestion")
     attach_image(spare_path)
-    send(b"\x1b[21~\x1b[B\x1b[B\x7f")  # F10, third selection, remove duplicate bytes under another name.
+    send(b"/attachments\r\x1b[B\x1b[B\x7f")  # /attachments, third selection, remove duplicate bytes under another name.
     send(b"\x1b")
     selected = redraw()
     assert not visible("remove this duplicate", selected)
-    assert visible("outside blue yellow", selected)
-    send(b"\x1b[20~")
+    assert visible("clipboard.png", selected)
+    send(b"/image\r")
     send(str(root / "oversize.png").encode())
     send(b"\r")
     wait_for(lambda: visible("Image exceeds 2 MiB", redraw()), "oversize image error remains visible")
     send(b"\x1b")
     for layout in ["observatory", "workbench", "ember"]:
-        send(b"\x1bOR\x1b[C\r")
+        send(b"/appearance\r\x1b[C\r")
         frame = redraw(100, 32)
-        assert visible("outside blue yellow", frame), f"{layout} retains image"
+        assert visible("clipboard.png", frame), f"{layout} retains image"
         assert visible("notes α file.txt", frame), f"{layout} retains reference"
     (root / "workspace" / "notes α file.txt").write_text("AT_SUBMISSION")
-    send(b"sent\r")
+    send("Analyze é 👩‍💻 keep".encode())
+    send(b"\x1b[1;2D" * 4)
+    send(b"\x06\x1b")
+    send(b"sent")
+    clipboard_mode.write_text("text")
+    send(b"\x16")
+    assert requests == [], "clipboard text and controls never submit"
+    send(b"\r")
     wait_for(lambda: len(requests) == 1 and snapshot()["provider_view"]["active_request"] is None, "attachment request completes")
     contents = requests[0]["input"][0]["content"]
     assert len([part for part in contents if part["type"] == "input_image"]) == 1, "removed image is not delivered"
     assert next(part["image_url"] for part in contents if part["type"] == "input_image") == "data:image/png;base64," + encoded
     text = "\n".join(part["text"] for part in contents if part["type"] == "input_text")
     assert "AT_SUBMISSION" in text and "BEFORE_SELECTION" not in text
-    assert "Analyze é 👩‍💻 sent" in text, "modal choices preserve selected composer text"
+    assert "Analyze é 👩‍💻 sent\nclipboard é\t[31m\n/interrupt" in text, "clipboard preserves Unicode and normalizes controls without executing them"
     assert encoded.encode() not in output, "image data is never rendered as base64"
-    send(b"\x03")
+    send(b"\x03\x03")
     _, status = os.waitpid(pid, 0)
     pid = None
     assert os.waitstatus_to_exitcode(status) == 0

@@ -93,7 +93,7 @@ with tempfile.TemporaryDirectory(prefix="elara-transcript-pty-") as tmp:
         send(b"\x1b[F")  # return to live tail
         send(b"\t\r")  # prompt focus; submit the preserved draft
         wait_for(lambda: prompts()[-1] == "preserved local draft", "focus/search preserve composer")
-        send(b"\x03")
+        send(b"\x03\x03")
         wait_for(lambda: b"\x1b[?1006l" in output, "mouse reporting disabled on exit")
         _, status = os.waitpid(pid, 0)
         pid = None

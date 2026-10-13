@@ -181,7 +181,7 @@ defmodule Elara.TuiTest do
       )
 
     {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
-    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+    {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]), lifetime: :embedded)
 
     python =
       System.find_executable("python3") ||

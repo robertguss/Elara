@@ -171,42 +171,44 @@ try:
     wait_for(lambda: b"HISTORY_FINAL_ONLY" in output, "initial historical provider content")
     send(b"live provider check\r")
     wait_for(lambda: "LIVE_SUMMARY_START" in json.dumps(snapshot()["provider_view"]), "live summary reaches Core")
-    send("next é 👩‍💻 keep".encode())
-    send(b"\x1b[1;2D" * 4)
-    send(b"\t\x1b[H\x1b[15~")  # Historical turn while the second request remains live.
+    send(b"\t\x1b[H\t/thinking-view\r")  # Historical turn while the second request remains live.
     start = redraw()
     assert b"HISTORY_SUMMARY_ONLY" in fresh(start), "history uses its actual public summary"
     assert b"LIVE_SUMMARY_START" not in fresh(start), "active summary does not replace historical content"
     send(b"\x1b")
-    send(b"\x1b[18~")  # F7 model/effort picker.
+    send(b"\x10")  # Ctrl-P model/effort picker.
     send(b"\x1b[B\x1b[C\x1b[C\r")
     next_settings = dict(model="gpt-5.4-mini", effort="high")
     wait_for(lambda: snapshot()["provider_view"]["next_request"] == next_settings, "settings accepted for next request")
     assert snapshot()["provider_view"]["active_request"] == dict(model="gpt-5.5", effort="low")
     assert requests[1]["model"] == "gpt-5.5" and requests[1]["reasoning"]["effort"] == "low"
-    send(b"\x1b[14~")  # Sticky hide through each layout and completion.
+    send(b"\x14")  # Sticky hide through each layout and completion.
     for layout in ["workbench", "ember", "observatory"]:
-        send(b"\x1bOR\x1b[C\r")
-        send(b"\x1b[15~")
+        send(b"/appearance\r\x1b[C\r")
+        send(b"/thinking-view\r")
         start = redraw()
         assert b"Hidden by you" in fresh(start), f"{layout} retains explicit hide"
         assert b"HISTORY_SUMMARY_ONLY" not in fresh(start)
         send(b"\x1b")
     finish_live.set()
     wait_for(lambda: snapshot()["provider_view"]["active_request"] is None, "live response completes")
-    send(b"\x1b[15~")
+    send(b"/thinking-view\r")
     start = redraw(80, 24)
     assert b"Hidden by you" in fresh(start), "completion preserves hidden state"
-    send(b"\x1b[14~")  # Show within F5, while still inspecting history.
+    send(b"\x14")  # Show within /thinking-view, while still inspecting history.
     start = redraw(80, 24)
     assert b"HISTORY_SUMMARY_ONLY" in fresh(start)
     assert b"LIVE_SUMMARY_END" not in fresh(start)
     send(b"\x1b")
-    send(b"\x1b[F\x1b[15~")
+    send(b"\x12\x1b[F\x1b")
+    send(b"/thinking-view\r")
     start = redraw(80, 24)
     assert b"LIVE_SUMMARY_END" in fresh(start), "follow live binds the completed current summary"
     send(b"\x1b")
-    send(b"\tsent\r")
+    send("next é 👩‍💻 keep".encode())
+    send(b"\x1b[1;2D" * 4)
+    send(b"\x10\x1b")
+    send(b"sent\r")
     wait_for(lambda: len(requests) == 3 and snapshot()["provider_view"]["active_request"] is None,
              "next request completes with accepted settings")
     assert requests[2]["model"] == "gpt-5.4-mini"
@@ -218,14 +220,14 @@ try:
     assert view["provider_view"]["context"]["occupancy"] is None
     assert view["provider_view"]["context"]["advertised_limit"] == 272000
     assert view["provider_view"]["context"]["estimate_tokens"] > 0
-    send(b"\x1b[15~")
+    send(b"/thinking-view\r")
     start = redraw(80, 24)
     assert b"unavailable" in fresh(start).lower(), "no-summary response is explicitly unavailable"
     for canary in ["PRIVATE_REASONING_CANARY", "provider-product-access-canary", "provider-product-refresh-canary"]:
         assert canary not in json.dumps(view), "private provider state is excluded from display DTO"
         assert canary.encode() not in output, "private provider state is excluded from terminal output"
     send(b"\x1b")
-    send(b"\x03")
+    send(b"\x03\x03")
     wait_for(lambda: b"\x1b[?1006l" in output, "terminal reporting restored")
     _, status = os.waitpid(pid, 0)
     pid = None

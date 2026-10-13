@@ -162,7 +162,7 @@ try:
     command("/threads")
     wait(lambda: b"unread" in output, "parent completion indicators survive return")
     send(b"\x1b")
-    send(b"\x1b")
+    send(b"\x03\x03")
     wait(lambda: b"\x1b[?2004l" in output, "terminal state restored")
     _, status = os.waitpid(pid, 0)
     pid = None

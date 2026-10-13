@@ -396,9 +396,9 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
                     " Branch points · read-only · Esc close "
                 }
             } else if model.mode == "control" {
-                " Sessions · F11 refresh · Enter switch · Delete remove "
+                " Sessions · Ctrl-O refresh · Enter switch · Delete remove "
             } else {
-                " Sessions · F11 refresh · Enter observe · read-only "
+                " Sessions · Ctrl-O refresh · Enter observe · read-only "
             },
         )),
         rect,
@@ -534,20 +534,57 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
         }
         "why" => InputAction::Session(json!({"version":2,"command":"inspect"})),
         "interrupt" if control => InputAction::Interrupt,
-        "detach" => InputAction::Detach,
         "editor" => {
             model.editor.clear();
             InputAction::ExternalEditor
         }
+        "detach" | "quit" => {
+            model.editor.clear();
+            model.request_quit()
+        }
+        "clear" => {
+            model.editor.clear();
+            InputAction::None
+        }
         "help" => {
             model.editor.clear();
             model.show_help = true;
+            model.help_scroll = 0;
             InputAction::None
         }
         "appearance" => {
             model.editor.clear();
-            model.appearance_picker = Some(model.appearance);
+            super::presentation::activate(model, super::actions::Action::Appearance);
             InputAction::None
+        }
+        "thinking" | "thinking-view" | "turns" => {
+            model.editor.clear();
+            let action = match name {
+                "thinking" => super::actions::Action::Thinking,
+                "thinking-view" => super::actions::Action::ThinkingView,
+                _ => super::actions::Action::Turns,
+            };
+            super::presentation::activate(model, action);
+            InputAction::None
+        }
+        "files" | "image" | "attachments" => {
+            model.editor.clear();
+            let mode = match name {
+                "files" => super::attachments::Mode::Files,
+                "image" => super::attachments::Mode::Image,
+                _ => super::attachments::Mode::Selected,
+            };
+            super::attachments::open(model, mode, false).unwrap_or(InputAction::None)
+        }
+        "paste" => {
+            model.editor.clear();
+            if argument == "safe" {
+                model.safe_paste = true;
+                model.safe_paste_cr = false;
+                InputAction::None
+            } else {
+                InputAction::Paste
+            }
         }
         "notifications" => {
             let enabled = match argument {
@@ -590,8 +627,7 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
         }
         "model" | "effort" if control => {
             model.editor.clear();
-            model.provider_picker = Some((0, 0));
-            InputAction::None
+            super::open_provider(model)
         }
         _ => {
             model.notice = Some(if !control {

@@ -27,12 +27,13 @@ pub(crate) enum Action {
     Copy,
     CopyEntry,
     Help,
-    SafePaste,
+    Paste,
     ExternalEditor,
     Submit,
     Newline,
     Interrupt,
     Escape,
+    ClearOrQuit,
     Sessions,
     Queue,
     Steer,
@@ -97,14 +98,27 @@ pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
     ("why", "inspect latest event", false),
     ("interrupt", "stop current turn", true),
     ("detach", "leave the session", false),
+    ("quit", "quit; confirm if live sessions will end", false),
+    ("clear", "clear the prompt", false),
     ("help", "show all controls", false),
     ("editor", "edit the prompt in $VISUAL or $EDITOR", false),
-    ("appearance", "choose layout/theme", false),
     (
         "notifications",
         "on|off: save terminal notification preference",
         false,
     ),
+    (
+        "paste",
+        "paste text/image; safe: protected terminal paste",
+        false,
+    ),
+    ("files", "choose file references", true),
+    ("image", "choose an image", true),
+    ("attachments", "inspect/remove draft selections", true),
+    ("appearance", "choose layout/theme", false),
+    ("thinking", "hide/show thinking", false),
+    ("thinking-view", "open full thinking view", false),
+    ("turns", "navigate user turns", false),
     ("diagnostics", "toggle the diagnostic status row", false),
     ("model", "choose model/effort", true),
     ("effort", "choose model/effort", true),
@@ -132,7 +146,13 @@ const fn binding(
     }
 }
 static BINDINGS: &[Binding] = &[
-    binding(KeyCode::F(12), M::NONE, false, Action::Queue, "F12 queue"),
+    binding(
+        KeyCode::Char('q'),
+        M::CONTROL,
+        false,
+        Action::Queue,
+        "Ctrl-Q queue",
+    ),
     binding(
         KeyCode::Char('s'),
         M::CONTROL,
@@ -141,50 +161,40 @@ static BINDINGS: &[Binding] = &[
         "Ctrl-S steer",
     ),
     binding(
-        KeyCode::F(11),
-        M::NONE,
+        KeyCode::Char('o'),
+        M::CONTROL,
         false,
         Action::Sessions,
-        "F11 sessions",
+        "Ctrl-O sessions",
     ),
-    binding(KeyCode::F(8), M::NONE, false, Action::Files, "F8 @files"),
-    binding(KeyCode::F(9), M::NONE, false, Action::Image, "F9 image"),
     binding(
-        KeyCode::F(10),
-        M::NONE,
+        KeyCode::Char('f'),
+        M::CONTROL,
         false,
-        Action::Attachments,
-        "F10 attachments/remove",
+        Action::Files,
+        "Ctrl-F @files",
     ),
     binding(
-        KeyCode::F(7),
-        M::NONE,
+        KeyCode::Char('p'),
+        M::CONTROL,
         false,
         Action::ProviderSettings,
-        "F7 model/effort",
+        "Ctrl-P model/effort",
     ),
     binding(
-        KeyCode::F(3),
-        M::NONE,
-        false,
-        Action::Appearance,
-        "F3 appearance",
-    ),
-    binding(
-        KeyCode::F(4),
-        M::NONE,
+        KeyCode::Char('t'),
+        M::CONTROL,
         false,
         Action::Thinking,
-        "F4 thinking hide/show",
+        "Ctrl-T thinking hide/show",
     ),
     binding(
-        KeyCode::F(5),
-        M::NONE,
+        KeyCode::Char('r'),
+        M::CONTROL,
         false,
-        Action::ThinkingView,
-        "F5 thinking view",
+        Action::Turns,
+        "Ctrl-R turns",
     ),
-    binding(KeyCode::F(6), M::NONE, false, Action::Turns, "F6 turns"),
     binding(
         KeyCode::Char(' '),
         M::NONE,
@@ -206,7 +216,13 @@ static BINDINGS: &[Binding] = &[
         Action::Focus,
         "Tab prompt/transcript",
     ),
-    binding(KeyCode::F(1), M::NONE, false, Action::Help, "F1 help"),
+    binding(
+        KeyCode::Char('?'),
+        M::NONE,
+        false,
+        Action::Help,
+        "? empty prompt: help",
+    ),
     binding(
         KeyCode::Char('g'),
         M::CONTROL,
@@ -215,32 +231,25 @@ static BINDINGS: &[Binding] = &[
         "Ctrl-G external editor",
     ),
     binding(
-        KeyCode::F(2),
-        M::NONE,
+        KeyCode::Char('v'),
+        M::CONTROL,
         false,
-        Action::SafePaste,
-        "F2 safe paste",
+        Action::Paste,
+        "Ctrl-V paste text/image",
     ),
     binding(
         KeyCode::Esc,
         M::NONE,
         false,
         Action::Escape,
-        "Esc back/detach",
+        "Esc close/interrupt",
     ),
     binding(
         KeyCode::Char('c'),
         M::CONTROL,
         false,
-        Action::Escape,
-        "Ctrl-C detach",
-    ),
-    binding(
-        KeyCode::Char('x'),
-        M::CONTROL,
-        false,
-        Action::Interrupt,
-        "Ctrl-X interrupt",
+        Action::ClearOrQuit,
+        "Ctrl-C clear; twice quit",
     ),
     binding(KeyCode::Enter, M::NONE, false, Action::Submit, "Enter send"),
     binding(
@@ -321,6 +330,13 @@ static BINDINGS: &[Binding] = &[
         "y copy entry",
     ),
 ];
+pub(crate) const SLASH_ONLY: &[(Action, &str)] = &[
+    (Action::Appearance, "appearance"),
+    (Action::Attachments, "attachments"),
+    (Action::ThinkingView, "thinking-view"),
+    (Action::Image, "image"),
+    (Action::Interrupt, "interrupt"),
+];
 pub(crate) fn lookup(key: KeyEvent, transcript: bool) -> Option<Action> {
     BINDINGS
         .iter()
@@ -338,20 +354,14 @@ pub(crate) fn hints(transcript: bool) -> String {
         .join(" · ")
 }
 pub(crate) fn prompt_title() -> String {
-    let labels = [
-        Action::Submit,
-        Action::Help,
-        Action::SafePaste,
-        Action::Sessions,
-    ]
-    .map(|action| {
+    let labels = [Action::Submit, Action::Paste, Action::Sessions].map(|action| {
         BINDINGS
             .iter()
             .find(|b| b.action == action)
             .expect("registered action")
             .hint
     });
-    format!(" ask · {} ", labels.join(" · "))
+    format!(" ask · {} · ? help ", labels.join(" · "))
 }
 pub(crate) fn help() -> Vec<ratatui::text::Line<'static>> {
     let hints = BINDINGS
@@ -363,6 +373,14 @@ pub(crate) fn help() -> Vec<ratatui::text::Line<'static>> {
         .chunks(3)
         .map(|chunk| ratatui::text::Line::from(chunk.join(" · ")))
         .collect();
+    lines.push(ratatui::text::Line::from(format!(
+        "Slash-only: {}",
+        SLASH_ONLY
+            .iter()
+            .map(|(_, name)| format!("/{name}"))
+            .collect::<Vec<_>>()
+            .join(" · ")
+    )));
     lines.push(ratatui::text::Line::from("Slash actions:"));
     lines.extend(SLASH_ACTIONS.chunks(3).map(|chunk| {
         ratatui::text::Line::from(

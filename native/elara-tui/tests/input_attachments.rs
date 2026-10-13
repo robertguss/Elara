@@ -9,12 +9,22 @@ fn model() -> Model {
     let fixture = fixture_model("idle");
     attached_model(&json!({"version":2,"type":"attached","session_id":fixture.session_id,"incarnation":fixture.projection.incarnation,"head":fixture.projection.head,"snapshot":fixture.projection.view,"extensions":["input_attachments_v1"]}), "control").unwrap()
 }
-fn key(model: &mut Model, code: KeyCode) -> InputAction {
-    handle_input(
-        model,
-        Event::Key(KeyEvent::new(code, KeyModifiers::NONE)),
-        80,
-    )
+fn key(model: &mut Model, code: impl Into<KeyEvent>) -> InputAction {
+    let action = handle_input(model, Event::Key(code.into()), 80);
+    if action == InputAction::Paste {
+        model.safe_paste = true;
+        InputAction::None
+    } else {
+        action
+    }
+}
+fn slash(model: &mut Model, name: &str) -> InputAction {
+    let draft = model.editor.clone();
+    model.editor.clear();
+    model.editor.insert(&format!("/{name}"));
+    let action = key(model, KeyCode::Enter);
+    model.editor = draft;
+    action
 }
 fn request(action: InputAction) -> Value {
     if let InputAction::Attachment(request) = action {
@@ -24,7 +34,10 @@ fn request(action: InputAction) -> Value {
     }
 }
 fn file(model: &mut Model, path: &str) {
-    let request = request(key(model, KeyCode::F(8)));
+    let request = request(key(
+        model,
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+    ));
     assert!(model.attachment_reply(&json!({"type":"ok","command":"discover_files","request_id":request["request_id"],"files":[{"path":path,"bytes":42}],"truncated":false})));
     key(model, KeyCode::Enter);
 }
@@ -40,7 +53,10 @@ fn attachment_extension_is_requested_and_picker_never_submits_draft() {
     );
     let mut model = model();
     model.editor.insert("keep this draft");
-    let query = request(key(&mut model, KeyCode::F(8)));
+    let query = request(key(
+        &mut model,
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+    ));
     assert_eq!(query["command"], "discover_files");
     assert_eq!(model.editor.text(), "keep this draft");
     key(&mut model, KeyCode::Esc);
@@ -78,7 +94,10 @@ fn explicit_files_preserve_unicode_cursor_and_selection_and_submit_paths() {
 fn stale_discovery_and_attachment_replies_never_consume_ask_acceptance() {
     let mut model = model();
     model.editor.insert("draft");
-    let old = request(key(&mut model, KeyCode::F(8)));
+    let old = request(key(
+        &mut model,
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+    ));
     assert_eq!(key(&mut model, KeyCode::Char('界')), InputAction::None);
     model.attachment_reply(&json!({"type":"ok","command":"discover_files","request_id":old["request_id"],"files":[{"path":"stale","bytes":0}]}));
     let current = model.next_attachment_request().unwrap();
@@ -124,7 +143,8 @@ fn four_selection_limit_removal_and_accepted_revision() {
             .unwrap()
             .contains("Four selections")
     );
-    key(&mut model, KeyCode::F(10));
+    key(&mut model, KeyCode::Esc);
+    slash(&mut model, "attachments");
     key(&mut model, KeyCode::Delete);
     key(&mut model, KeyCode::Esc);
     let ask = model.prepare_submit().unwrap();
@@ -134,7 +154,7 @@ fn four_selection_limit_removal_and_accepted_revision() {
 }
 
 fn image_request(model: &mut Model, path: &std::path::Path) -> Value {
-    key(model, KeyCode::F(9));
+    slash(model, "image");
     handle_input(model, Event::Paste(path.to_str().unwrap().into()), 80);
     request(key(model, KeyCode::Enter))
 }
@@ -166,7 +186,7 @@ fn image_bytes_are_uploaded_once_and_cleanup_does_not_consume_ask_reply() {
     let ask = model.prepare_submit().unwrap();
     assert_eq!(ask["attachment_ids"], json!(["img-1"]));
     assert!(ask.get("base64").is_none());
-    key(&mut model, KeyCode::F(10));
+    slash(&mut model, "attachments");
     let discard = request(key(&mut model, KeyCode::Delete));
     assert_eq!(discard["command"], "discard_attachment");
     key(&mut model, KeyCode::Esc);
@@ -218,7 +238,7 @@ fn image_errors_disconnect_and_safe_paste_preserve_draft() {
         (vec![1; 2 * 1024 * 1024 + 1], "exceeds 2 MiB"),
     ] {
         std::fs::write(&path, bytes).unwrap();
-        key(&mut model, KeyCode::F(9));
+        slash(&mut model, "image");
         handle_input(&mut model, Event::Paste(path.to_str().unwrap().into()), 80);
         assert_eq!(key(&mut model, KeyCode::Enter), InputAction::None);
         assert!(render_frame(&model, 100, 24).unwrap().contains(expected));
@@ -226,7 +246,7 @@ fn image_errors_disconnect_and_safe_paste_preserve_draft() {
         assert_eq!(model.editor.text(), "draft 界");
     }
     std::fs::remove_file(&path).unwrap();
-    key(&mut model, KeyCode::F(9));
+    slash(&mut model, "image");
     handle_input(&mut model, Event::Paste(path.to_str().unwrap().into()), 80);
     key(&mut model, KeyCode::Enter);
     assert!(
@@ -234,10 +254,22 @@ fn image_errors_disconnect_and_safe_paste_preserve_draft() {
             .unwrap()
             .contains("Cannot read image")
     );
-    key(&mut model, KeyCode::F(2));
+    key(
+        &mut model,
+        KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL),
+    );
     assert!(model.safe_paste);
-    assert_eq!(key(&mut model, KeyCode::F(8)), InputAction::None);
-    key(&mut model, KeyCode::F(2));
+    assert_eq!(
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL)
+        ),
+        InputAction::None
+    );
+    key(
+        &mut model,
+        KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL),
+    );
     std::fs::write(&path, b"\x89PNG\r\n\x1a\n").unwrap();
     let upload = image_request(&mut model, &path);
     image_reply(&mut model, &upload, "kept");
@@ -257,7 +289,10 @@ fn file_picker_mouse_and_error_empty_states_work_in_every_layout() {
     for layout in elara_tui::ViewLayout::ALL {
         let mut model = model();
         model.appearance.layout = *layout;
-        let discover = request(key(&mut model, KeyCode::F(8)));
+        let discover = request(key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+        ));
         model.attachment_reply(&json!({"type":"error","command":"discover_files","request_id":discover["request_id"],"error":"unreadable"}));
         assert!(
             render_frame(&model, 80, 24)
@@ -305,7 +340,7 @@ fn repeated_identical_image_is_deduplicated_and_pending_ingest_defers_discard() 
     assert_eq!(ask["attachment_ids"], json!(["same"]));
     model.command_reply(Some("busy"));
     let third = image_request(&mut model, &path);
-    key(&mut model, KeyCode::F(10));
+    slash(&mut model, "attachments");
     assert_eq!(key(&mut model, KeyCode::Delete), InputAction::None);
     image_reply(&mut model, &third, "same");
     assert!(model.next_attachment_request().is_none());
@@ -332,13 +367,22 @@ fn submitted_attachment_metadata_is_visible_without_content_blobs() {
 #[test]
 fn discovery_coalesces_edits_and_cancel_reopen_keeps_one_outstanding_request() {
     let mut model = model();
-    let first = request(key(&mut model, KeyCode::F(8)));
+    let first = request(key(
+        &mut model,
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+    ));
     for c in "several edits".chars() {
         assert_eq!(key(&mut model, KeyCode::Char(c)), InputAction::None);
     }
     assert!(model.next_attachment_request().is_none());
     key(&mut model, KeyCode::Esc);
-    assert_eq!(key(&mut model, KeyCode::F(8)), InputAction::None);
+    assert_eq!(
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL)
+        ),
+        InputAction::None
+    );
     assert_eq!(
         handle_input(&mut model, Event::Paste("new query".into()), 80),
         InputAction::None
@@ -353,7 +397,7 @@ fn discovery_coalesces_edits_and_cancel_reopen_keeps_one_outstanding_request() {
     model.attachment_reply(&json!({"type":"ok","command":"discover_files","request_id":first["request_id"],"files":[]}));
     assert!(model.next_attachment_request().is_none());
     key(&mut model, KeyCode::Esc);
-    key(&mut model, KeyCode::F(9));
+    slash(&mut model, "image");
     model.attachment_reply(&json!({"type":"error","command":"discover_files","request_id":latest["request_id"],"error":"stale error"}));
     assert!(model.next_attachment_request().is_none());
     assert!(
@@ -362,7 +406,10 @@ fn discovery_coalesces_edits_and_cancel_reopen_keeps_one_outstanding_request() {
             .contains("stale error")
     );
     key(&mut model, KeyCode::Esc);
-    let reopened = request(key(&mut model, KeyCode::F(8)));
+    let reopened = request(key(
+        &mut model,
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+    ));
     assert_eq!(reopened["query"], "");
 }
 
@@ -370,12 +417,15 @@ fn discovery_coalesces_edits_and_cancel_reopen_keeps_one_outstanding_request() {
 fn provider_and_attachment_pickers_have_exclusive_keyboard_ownership() {
     let mut model = model();
     model.projection.view["provider_view"] = json!({"catalog":[{"model":"test-model","efforts":["low","high"]}],"next_request":{"model":"test-model","effort":"low"}});
-    key(&mut model, KeyCode::F(7));
+    key(
+        &mut model,
+        KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
+    );
     for code in [
-        KeyCode::F(8),
-        KeyCode::F(9),
-        KeyCode::F(10),
-        KeyCode::Char('@'),
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+        KeyCode::F(9).into(),
+        KeyCode::F(10).into(),
+        KeyCode::Char('@').into(),
     ] {
         assert_eq!(key(&mut model, code), InputAction::None);
     }
@@ -385,8 +435,17 @@ fn provider_and_attachment_pickers_have_exclusive_keyboard_ownership() {
         matches!(action, InputAction::ProviderSettings(_)),
         "{action:?}"
     );
-    request(key(&mut model, KeyCode::F(8)));
-    assert_eq!(key(&mut model, KeyCode::F(7)), InputAction::None);
+    request(key(
+        &mut model,
+        KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL),
+    ));
+    assert_eq!(
+        key(
+            &mut model,
+            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL)
+        ),
+        InputAction::None
+    );
     key(&mut model, KeyCode::Esc);
     model.editor.insert("ordinary draft");
     assert_eq!(key(&mut model, KeyCode::Enter), InputAction::Submit);

@@ -103,7 +103,7 @@ try:
     assert authenticated[0] == "create" and "attach" in authenticated[1:]
     if len(sys.argv) > 3:
         raise AssertionError("forced failure after authenticated reconnect")
-    os.write(master, b"\x1b")
+    os.write(master, b"\x03\x03")
     deadline = time.monotonic() + 8
     while time.monotonic() < deadline:
         found, status = os.waitpid(pid, os.WNOHANG)

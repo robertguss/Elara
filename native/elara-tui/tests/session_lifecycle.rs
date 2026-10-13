@@ -27,12 +27,16 @@ fn attached(mode: &str, extensions: Value) -> elara_tui::Model {
     .unwrap()
 }
 
-fn key(model: &mut elara_tui::Model, code: KeyCode) -> InputAction {
-    handle_input(
-        model,
-        Event::Key(KeyEvent::new(code, KeyModifiers::NONE)),
-        80,
-    )
+fn key(model: &mut elara_tui::Model, code: impl Into<KeyEvent>) -> InputAction {
+    handle_input(model, Event::Key(code.into()), 80)
+}
+fn slash(model: &mut elara_tui::Model, name: &str) -> InputAction {
+    let draft = model.editor.clone();
+    model.editor.clear();
+    model.editor.insert(&format!("/{name}"));
+    let action = key(model, KeyCode::Enter);
+    model.editor = draft;
+    action
 }
 
 #[test]
@@ -84,7 +88,7 @@ fn reconnect_preserves_editor_and_reingests_images_but_accepts_fresh_authority()
         std::process::id()
     ));
     std::fs::write(&image, b"\x89PNG\r\n\x1a\n").unwrap();
-    key(&mut model, KeyCode::F(9));
+    slash(&mut model, "image");
     handle_input(
         &mut model,
         Event::Paste(image.to_string_lossy().into_owned()),
@@ -161,7 +165,7 @@ fn handoff_links_never_grant_observers_control_or_claim_disconnected_success() {
     model.projection.view["inbox"]["handoff"]["error"] = json!("fresh context cannot fit");
     let frame = elara_tui::render_frame(&model, 80, 24).unwrap();
     assert!(frame.contains("handoff failed: fresh context cannot fit"));
-    assert!(frame.contains("Ctrl-X stop · F12 queue · Ctrl-J newline"));
+    assert!(frame.contains("Esc stop · Ctrl-Q queue · Ctrl-J newline"));
     for stage in ["transferred", "started", "stopped", "failed"] {
         model.projection.view["inbox"]["handoff"]["stage"] = json!(stage);
         model.projection.view["inbox"]["handoff"]["delivery_owner"] = json!("next");
@@ -234,4 +238,88 @@ fn limits_use_authoritative_projection_and_parse_human_forms_without_sending_pro
     model.editor.insert("/limits calls 2");
     assert_eq!(key(&mut model, KeyCode::Enter), InputAction::None);
     assert!(model.notice.as_ref().unwrap().contains("read-only"));
+}
+
+#[test]
+fn escape_never_quits_and_double_control_c_confirms_embedded_shutdown() {
+    let mut model = fixture_model("streaming");
+    model.editor.insert("keep while interrupting");
+    model.show_help = true;
+    assert_eq!(key(&mut model, KeyCode::Esc), InputAction::None);
+    assert!(!model.show_help);
+    assert_eq!(key(&mut model, KeyCode::Esc), InputAction::Interrupt);
+    assert_eq!(model.editor.text(), "keep while interrupting");
+
+    let clear = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+    assert_eq!(
+        handle_input(&mut model, clear.clone(), 80),
+        InputAction::None
+    );
+    assert!(model.editor.text().is_empty());
+    assert_eq!(
+        handle_input(&mut model, clear.clone(), 80),
+        InputAction::None
+    );
+    let frame = elara_tui::render_frame(&model, 80, 24).unwrap();
+    assert!(frame.contains("Quit Elara?"));
+    assert!(frame.contains("Enter confirms; Esc cancels."));
+    assert_eq!(
+        handle_input(&mut model, Event::Paste("do not submit".into()), 80),
+        InputAction::None
+    );
+    assert!(model.editor.text().is_empty());
+    assert_eq!(key(&mut model, KeyCode::Esc), InputAction::None);
+    assert!(
+        !elara_tui::render_frame(&model, 80, 24)
+            .unwrap()
+            .contains("Quit Elara?")
+    );
+
+    model.lifetime = "long_lived".into();
+    assert_eq!(
+        handle_input(&mut model, clear.clone(), 80),
+        InputAction::None
+    );
+    // Any intervening typed input disarms quitting, even if the draft was empty.
+    key(&mut model, KeyCode::Char('x'));
+    assert_eq!(
+        handle_input(&mut model, clear.clone(), 80),
+        InputAction::None
+    );
+    assert_eq!(handle_input(&mut model, clear, 80), InputAction::Detach);
+}
+
+#[test]
+fn modal_letters_never_alias_control_keys() {
+    let mut model = attached("control", json!(["input_queue_v1"]));
+    let appearance = model.appearance;
+    slash(&mut model, "appearance");
+    for modifiers in [KeyModifiers::CONTROL, KeyModifiers::ALT] {
+        for letter in ['l', 'd', 't', 'n', 's'] {
+            assert_eq!(
+                key(&mut model, KeyEvent::new(KeyCode::Char(letter), modifiers)),
+                if letter == 's' && modifiers == KeyModifiers::CONTROL {
+                    InputAction::Steer
+                } else {
+                    InputAction::None
+                }
+            );
+        }
+    }
+    key(&mut model, KeyCode::Enter);
+    assert_eq!(model.appearance, appearance);
+
+    slash(&mut model, "queue");
+    for modifiers in [KeyModifiers::CONTROL, KeyModifiers::ALT] {
+        assert_eq!(
+            key(&mut model, KeyEvent::new(KeyCode::Char('r'), modifiers)),
+            InputAction::None
+        );
+    }
+    assert_eq!(
+        key(&mut model, KeyCode::Char('r')),
+        InputAction::Session(
+            json!({"version":2,"extension":"input_queue_v1","command":"resume_inputs"})
+        )
+    );
 }

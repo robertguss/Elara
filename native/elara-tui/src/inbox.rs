@@ -234,9 +234,6 @@ pub(crate) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
     match super::actions::lookup(*key, false) {
         Some(super::actions::Action::Interrupt) => return Some(InputAction::Interrupt),
         Some(super::actions::Action::Steer) => return Some(InputAction::Steer),
-        Some(super::actions::Action::Escape) if key.code != KeyCode::Esc => {
-            return Some(InputAction::Detach);
-        }
         _ => {}
     }
     let entries = model.projection.view["inbox"]["entries"].as_array();
@@ -252,7 +249,7 @@ pub(crate) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
                 ));
             }
         }
-        KeyCode::Char('r') if model.mode == "control" => {
+        KeyCode::Char('r') if key.modifiers.is_empty() && model.mode == "control" => {
             return Some(InputAction::Session(
                 json!({"version":2,"extension":EXTENSION,"command":"resume_inputs"}),
             ));
@@ -297,7 +294,7 @@ pub(crate) fn summary(model: &Model) -> String {
             .count()
     });
     format!(
-        "{context}{count} queued{} · F12 queue · Ctrl-S steer · Ctrl-X stop",
+        "{context}{count} queued{} · Ctrl-Q queue · Ctrl-S steer · Esc stop",
         if view["paused"] == true {
             " (paused)"
         } else if view["wake_budget_exhausted"] == true {
@@ -475,19 +472,13 @@ mod tests {
         assert_eq!(model.editor.text(), "follow up");
         model.inbox.selected = Some(0);
         let stop = Event::Key(crossterm::event::KeyEvent::new(
-            KeyCode::Char('x'),
-            crossterm::event::KeyModifiers::CONTROL,
+            KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
         ));
-        assert!(matches!(
-            input(&mut model, &stop),
-            Some(InputAction::Interrupt)
-        ));
+        assert!(matches!(input(&mut model, &stop), Some(InputAction::None)));
+        assert!(model.inbox.selected.is_none());
         assert!(!model.track_interrupt());
         model.mode = "control".into();
-        assert!(matches!(
-            input(&mut model, &stop),
-            Some(InputAction::Interrupt)
-        ));
         assert!(model.track_interrupt());
     }
 }

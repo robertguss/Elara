@@ -34,7 +34,7 @@ impl Selection {
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Mode {
+pub(super) enum Mode {
     Files,
     Image,
     Selected,
@@ -72,6 +72,38 @@ pub(super) struct Draft {
     rect: Cell<Rect>,
 }
 impl Draft {
+    pub fn status(&self) -> &str {
+        &self.status
+    }
+
+    pub fn close_picker(&mut self) {
+        self.picker = None;
+    }
+
+    pub fn paste_image(&mut self, data: Vec<u8>) -> InputAction {
+        if self.selections.len() + usize::from(self.ingestion.is_some()) >= 4 {
+            self.status = "Four selections maximum; /attachments removes attachments.".into();
+            return InputAction::None;
+        }
+        if self.ingestion.is_some() {
+            self.status = "Image validation pending; draft retained.".into();
+            return InputAction::None;
+        }
+        let name = "clipboard.png";
+        let mut request = self.request("ingest_image");
+        request["name"] = json!(name);
+        request["base64"] = json!(base64::engine::general_purpose::STANDARD.encode(&data));
+        self.ingestion = Some(PendingImage {
+            request_id: request["request_id"].as_str().unwrap().into(),
+            data,
+            cancelled: false,
+            query: name.into(),
+        });
+        self.revision += 1;
+        self.status = "Validating clipboard image…".into();
+        InputAction::Attachment(request)
+    }
+
     pub fn pending_payload(&self) -> Value {
         let image = |name: &str, data: &[u8]| json!({"name":name,"base64":base64::engine::general_purpose::STANDARD.encode(data)});
         let mut entries: Vec<Value> = self
@@ -186,7 +218,7 @@ impl Draft {
     pub fn lines(&self) -> Vec<Line<'static>> {
         self.selections
             .iter()
-            .map(|s| Line::from(format!(" {} · F10 remove", s.label())))
+            .map(|s| Line::from(format!(" {} · /attachments remove", s.label())))
             .collect()
     }
     pub fn augment(&mut self, request: &mut Value) -> Result<(), &'static str> {
@@ -244,7 +276,7 @@ impl Draft {
             return;
         };
         if self.selections.len() + usize::from(self.ingestion.is_some()) >= 4 {
-            self.status = "Four selections maximum; F10 removes attachments.".into();
+            self.status = "Four selections maximum; /attachments removes attachments.".into();
             return;
         }
         if let Some(file) = self.files.get(picker.selected) {
@@ -267,6 +299,36 @@ impl Draft {
     }
 }
 
+pub(super) fn open(model: &mut Model, mode: Mode, inline: bool) -> Option<InputAction> {
+    if !model.attachments.supported
+        || model.connection != ConnectionState::Connected
+        || model.mode != "control"
+    {
+        if inline {
+            return None;
+        }
+        model.notice = Some(
+            "Attachments require a connected control session with input_attachments_v1.".into(),
+        );
+        return Some(InputAction::None);
+    }
+    if inline {
+        model.editor.insert("@");
+    }
+    model.attachments.picker = Some(Picker {
+        mode,
+        query: String::new(),
+        selected: 0,
+        inline,
+    });
+    model.attachments.status = String::new();
+    Some(if mode == Mode::Files {
+        model.attachments.discover()
+    } else {
+        InputAction::None
+    })
+}
+
 pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
     if model.provider_picker.is_some() {
         return None;
@@ -279,18 +341,8 @@ pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
         if key.kind == KeyEventKind::Release {
             return model.attachments.picker.as_ref().map(|_| InputAction::None);
         }
-        if key.modifiers.contains(KeyModifiers::CONTROL) {
-            match key.code {
-                KeyCode::Char('c') if model.attachments.picker.is_some() => {
-                    return Some(InputAction::Detach);
-                }
-                KeyCode::Char('x') if model.attachments.picker.is_some() => {
-                    return Some(InputAction::Interrupt);
-                }
-                _ => {}
-            }
-        }
-        if key.code == KeyCode::F(2) {
+        let action = super::actions::lookup(*key, false);
+        if action == Some(super::actions::Action::Paste) {
             model.attachments.picker = None;
             return None;
         }
@@ -304,42 +356,15 @@ pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
                 .chars()
                 .next_back()
                 .is_none_or(char::is_whitespace);
-        let mode = match key.code {
-            KeyCode::F(8) => Some(Mode::Files),
-            KeyCode::F(9) => Some(Mode::Image),
-            KeyCode::F(10) => Some(Mode::Selected),
+        let mode = match action {
+            Some(super::actions::Action::Files) => Some(Mode::Files),
+            Some(super::actions::Action::Image) => Some(Mode::Image),
+            Some(super::actions::Action::Attachments) => Some(Mode::Selected),
             _ if inline => Some(Mode::Files),
             _ => None,
         };
         if let Some(mode) = mode {
-            if !model.attachments.supported
-                || model.connection != ConnectionState::Connected
-                || model.mode != "control"
-            {
-                if inline {
-                    return None;
-                }
-                model.notice = Some(
-                    "Attachments require a connected control session with input_attachments_v1."
-                        .into(),
-                );
-                return Some(InputAction::None);
-            }
-            if inline {
-                model.editor.insert("@");
-            }
-            model.attachments.picker = Some(Picker {
-                mode,
-                query: String::new(),
-                selected: 0,
-                inline,
-            });
-            model.attachments.status = String::new();
-            return Some(if mode == Mode::Files {
-                model.attachments.discover()
-            } else {
-                InputAction::None
-            });
+            return open(model, mode, inline);
         }
     }
     let draft = &mut model.attachments;
@@ -368,7 +393,8 @@ pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
             KeyCode::Enter if picker.mode == Mode::Files => select = true,
             KeyCode::Enter if picker.mode == Mode::Image => {
                 if draft.selections.len() >= 4 {
-                    draft.status = "Four selections maximum; F10 removes attachments.".into();
+                    draft.status =
+                        "Four selections maximum; /attachments removes attachments.".into();
                 } else if draft.ingestion.is_some() {
                     draft.status = "Image validation pending…".into();
                 } else {
@@ -743,7 +769,7 @@ pub(super) fn draw(frame: &mut ratatui::Frame<'_>, model: &Model) {
             Block::default()
                 .borders(Borders::ALL)
                 .title(title)
-                .title_bottom(" F8 files · F9 image · F10 attachments "),
+                .title_bottom(" Ctrl-F files · /image image · /attachments attachments "),
         ),
         rect,
     );

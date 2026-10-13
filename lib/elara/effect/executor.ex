@@ -29,6 +29,10 @@ defmodule Elara.Effect.Executor do
   @spec query(t(), String.t()) :: response()
   def query(executor, job_id), do: GenServer.call(executor, {:query, job_id})
 
+  @spec reject(t(), String.t(), String.t(), term()) :: response()
+  def reject(executor, job_id, operation_digest, reason),
+    do: GenServer.call(executor, {:reject, job_id, operation_digest, reason})
+
   @spec continue(t(), String.t()) :: :ok | {:error, term()}
   def continue(executor, job_id), do: GenServer.call(executor, {:continue_pending, job_id})
 
@@ -155,6 +159,16 @@ defmodule Elara.Effect.Executor.Server do
       end
 
     {:reply, reply, state}
+  end
+
+  def handle_call({:reject, job_id, operation_digest, reason}, _from, state) do
+    case ExecutorLedger.reject(state.ledger, state.id, job_id, operation_digest, reason) do
+      {:ok, record} ->
+        {:reply, response(record), %{state | operations: Map.delete(state.operations, job_id)}}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
   end
 
   def handle_call({:continue_pending, job_id}, from, state) do

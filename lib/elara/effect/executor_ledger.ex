@@ -8,7 +8,7 @@ defmodule Elara.Effect.ExecutorLedger do
   # crashed) but whether its mutation took effect is unknown. Schema 1 rows are
   # migrated in place and keep the version that admitted them; a row still
   # accepted at migration may later finish in any terminal state.
-  @schema_version 3
+  @schema_version 4
   @result_digest_version 1
 
   @doc "Terminal ledger states: the callback will never be invoked again."
@@ -181,6 +181,22 @@ defmodule Elara.Effect.ExecutorLedger do
     end)
   end
 
+  @doc "Fails an admitted job only if no callback attempt has started."
+  @spec reject(t(), String.t(), String.t(), String.t(), term()) ::
+          {:ok, Record.t()} | {:error, term()}
+  def reject(ledger, executor_id, job_id, operation_digest, reason) do
+    transaction(ledger, fn ->
+      with {:ok, %Record{} = record} <- require_record(ledger, job_id),
+           :ok <- require_digest(record, operation_digest),
+           :ok <- require_owner(record, executor_id),
+           :ok <- require_attemptable(record),
+           :ok <- update_terminal(ledger, job_id, {:error, reason}, 0),
+           {:ok, %Record{} = updated} <- select_one(ledger, job_id) do
+        {:ok, updated}
+      end
+    end)
+  end
+
   @spec last_proven_fact(Record.t()) ::
           :accepted | :callback_invoked | :completed | :failed | :indeterminate
   def last_proven_fact(%Record{state: :accepted, callback_attempt_count: 0}), do: :accepted
@@ -265,45 +281,32 @@ defmodule Elara.Effect.ExecutorLedger do
     end
   end
 
-  defp initialize_schema(db, 1), do: migrate_from_v1(db)
-
-  defp initialize_schema(db, 2) do
-    with :ok <- Sqlite3.execute(db, "BEGIN IMMEDIATE") do
-      result =
-        with :ok <-
-               Sqlite3.execute(
-                 db,
-                 "ALTER TABLE executor_jobs ADD COLUMN attempt_incarnation TEXT"
-               ),
-             :ok <- Sqlite3.execute(db, "PRAGMA user_version=#{@schema_version}"),
-             do: Sqlite3.execute(db, "COMMIT")
-
-      if result != :ok, do: Sqlite3.execute(db, "ROLLBACK")
-      result
-    end
-  end
+  defp initialize_schema(db, version) when version in [1, 2, 3],
+    do: migrate_schema(db, version)
 
   defp initialize_schema(db, @schema_version), do: Sqlite3.execute(db, schema_sql())
   defp initialize_schema(_db, version), do: {:error, {:unsupported_schema_version, version}}
 
-  # SQLite cannot alter a CHECK constraint, so rebuild the table with the schema 2
+  # SQLite cannot alter a CHECK constraint, so rebuild the table with the current
   # constraint in one transaction, copying every row and its digests unchanged.
-  defp migrate_from_v1(db) do
+  defp migrate_schema(db, version) do
     columns =
       "job_id, operation_digest, executor_id, state, admission_count, " <>
         "callback_attempt_count, terminal_count, result, result_digest, " <>
         "schema_version, result_digest_version"
 
+    columns = if version == 3, do: columns <> ", attempt_incarnation", else: columns
+
     with :ok <- Sqlite3.execute(db, "BEGIN IMMEDIATE") do
       result =
-        with :ok <- Sqlite3.execute(db, schema_sql("executor_jobs_v2")),
+        with :ok <- Sqlite3.execute(db, schema_sql("executor_jobs_new")),
              :ok <-
                Sqlite3.execute(
                  db,
-                 "INSERT INTO executor_jobs_v2 (#{columns}) SELECT #{columns} FROM executor_jobs"
+                 "INSERT INTO executor_jobs_new (#{columns}) SELECT #{columns} FROM executor_jobs"
                ),
              :ok <- Sqlite3.execute(db, "DROP TABLE executor_jobs"),
-             :ok <- Sqlite3.execute(db, "ALTER TABLE executor_jobs_v2 RENAME TO executor_jobs"),
+             :ok <- Sqlite3.execute(db, "ALTER TABLE executor_jobs_new RENAME TO executor_jobs"),
              :ok <- Sqlite3.execute(db, "PRAGMA user_version=#{@schema_version}") do
           Sqlite3.execute(db, "COMMIT")
         end
@@ -331,6 +334,8 @@ defmodule Elara.Effect.ExecutorLedger do
       UNIQUE (job_id, operation_digest),
       CHECK (
         (state = 'accepted' AND terminal_count = 0 AND result IS NULL AND result_digest IS NULL) OR
+        (state = 'failed' AND callback_attempt_count = 0 AND attempt_incarnation IS NULL AND
+          terminal_count = 1 AND result IS NOT NULL AND result_digest IS NOT NULL) OR
         (state IN ('completed', 'failed', 'indeterminate') AND callback_attempt_count = 1 AND
           terminal_count = 1 AND result IS NOT NULL AND result_digest IS NOT NULL)
       )
@@ -374,7 +379,7 @@ defmodule Elara.Effect.ExecutorLedger do
     execute_one_change(ledger, sql, [job_id, incarnation])
   end
 
-  defp update_terminal(ledger, job_id, {kind, _payload} = result) do
+  defp update_terminal(ledger, job_id, {kind, _payload} = result, attempt_count \\ 1) do
     state =
       case kind do
         :ok -> "completed"
@@ -385,10 +390,10 @@ defmodule Elara.Effect.ExecutorLedger do
     sql = """
     UPDATE executor_jobs
     SET state = ?1, terminal_count = 1, result = ?2, result_digest = ?3
-    WHERE job_id = ?4 AND state = 'accepted' AND callback_attempt_count = 1
+    WHERE job_id = ?4 AND state = 'accepted' AND callback_attempt_count = ?5
     """
 
-    values = [state, {:blob, encode(result)}, result_digest(result), job_id]
+    values = [state, {:blob, encode(result)}, result_digest(result), job_id, attempt_count]
     execute_one_change(ledger, sql, values)
   end
 
@@ -439,7 +444,7 @@ defmodule Elara.Effect.ExecutorLedger do
              callback_attempt_count,
              terminal_count
            ),
-         true <- schema_version in [1, 2, @schema_version],
+         true <- schema_version in [1, 2, 3, @schema_version],
          true <-
            is_nil(attempt_incarnation) or
              (is_binary(attempt_incarnation) and attempt_incarnation != ""),
@@ -522,7 +527,10 @@ defmodule Elara.Effect.ExecutorLedger do
        do: true
 
   defp valid_state_values?(:completed, {:ok, _payload}, 1, 1), do: true
-  defp valid_state_values?(:failed, {:error, _payload}, 1, 1), do: true
+
+  defp valid_state_values?(:failed, {:error, _payload}, attempts, 1) when attempts in [0, 1],
+    do: true
+
   defp valid_state_values?(:indeterminate, {:indeterminate, _payload}, 1, 1), do: true
   defp valid_state_values?(_state, _result, _callback_attempt_count, _terminal_count), do: false
 

@@ -71,7 +71,12 @@ naming its OS PID, node and start time: stop it first. Startup never replays the
 callback. A live callback timeout leaves the queue barrier in place until a
 durable terminal exists.
 
-Ledger schema 3 migrates schemas 1 and 2 in place. Legacy attempts retain
+If a write is refused during reopen before its callback ever started (for
+example, its pinned path now points elsewhere), its receipt is durably failed
+with zero attempts. No write runs, and the next turn can proceed.
+
+Ledger schema 4 migrates schemas 1–3 in place without changing their receipts
+or incarnation evidence. Legacy attempts from schemas 1 and 2 retain
 `attempt_incarnation: nil`, so startup never auto-terminalizes them. A session
 blocked by a legacy attempt stays idle and refuses a new turn for missing proof.
 Use `/clone` or `/fork` to continue in a separate session. Neither command repairs

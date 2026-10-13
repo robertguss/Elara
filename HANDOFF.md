@@ -5,6 +5,11 @@ is the sole planning and status source. Read its page first: "You are here",
 "This week" and "Decisions waiting for Robert" are kept current. Tasks live in
 Dev Hub's Tasks database with Project set to Elara.
 
+The next session is the **Phase 1 lead** (D20). Start by reading the Phase 1
+spec and the Working Agreement in Notion, then plan Phase 1 into tasks for the
+three streams below, and ask Robert whether he wants to start the stream
+threads himself before any are started.
+
 ## Where Elara stands
 
 On 12–13 Oct 2026 Robert reoriented the project in an interview recorded as
@@ -18,17 +23,22 @@ decisions D1 to D20 in the Notion Decision Log:
   window (D13, Phase 3). The first uniform is Elixir (D5).
 - Three ways of working: one session, a lead with helpers, and many sessions
   (D6). Pace is all-in (D9).
+- Today's code is being simplified toward the daily driver: the lab moved out,
+  honest "unknown" results stay, and recording is to get cheap (D7).
 - Robert decides direction and anything he would notice as a user; agents
   decide the rest, including merges (D8). Paid model APIs are capped at
   US$100 a month (D14).
 
 ## Phase 0, Reset: done
 
-- main is green, and `bin/check` runs every check in about 3 minutes
-  (pull requests #69 and #70).
+- main is green, and `bin/check` runs every product check (not the lab) in
+  about 3 minutes (pull requests #69 and #70).
 - Linear is retired; its history is in `docs/archive/linear/` (#71, D11).
 - The lab is its own Mix project in `lab/`; the product app no longer ships it
-  (#72, D7). Root `mix test`: 695 tests. Lab: `cd lab && mix test`, 390 tests.
+  (#72, D7). Root `mix test`: 684 tests and 11 properties. Lab:
+  `cd lab && mix deps.get && mix test`, 390 tests and properties.
+- A known flake: `test/elara/context_test.exs:213` can fail with
+  `{:error, :locked}` under load (a Phase 1 task in Notion).
 
 ## Now: Phase 1, Usable every day
 

@@ -50,6 +50,14 @@ pub(super) fn open(model: &mut Model) -> InputAction {
 
 pub(super) fn reply(model: &mut Model, frame: &Value) -> bool {
     match frame["type"].as_str() {
+        Some("read_only_changed") if frame["version"] == 2 => {
+            model.notice = Some(if frame["enabled"] == true {
+                "Read-only from the next tool call; Esc stops the running one".into()
+            } else {
+                "Mutating tools restored from the next tool call".into()
+            });
+            true
+        }
         Some("runtime_limits") if frame["version"] == 2 => {
             if crate::limits::validate(&frame["runtime_limits"]).is_err() {
                 model.notice = Some("Server returned invalid runtime limits.".into());
@@ -418,6 +426,19 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
     let argument = words.next().unwrap_or("").trim();
     let control = model.mode == "control";
     let result = match name {
+        "read-only" if control => {
+            let mut request = json!({"version":2,"command":"read_only"});
+            match argument {
+                "" => {}
+                "on" => request["enabled"] = json!(true),
+                "off" => request["enabled"] = json!(false),
+                _ => {
+                    model.notice = Some("Use /read-only [on|off]".into());
+                    return Some(InputAction::None);
+                }
+            }
+            InputAction::Session(request)
+        }
         "limits" => crate::limits::command(model, argument),
         "job" | "ack-job-stopped" if name == "job" || control => {
             let id = if argument.starts_with('"') {
@@ -686,6 +707,57 @@ mod tests {
             mode.into(),
             Projection::new(empty_snapshot("current", "i"), "i".into(), 0).unwrap(),
         )
+    }
+
+    #[test]
+    fn read_only_is_controller_only_and_footer_uses_authoritative_projection() {
+        let mut controller = model("control");
+        controller.editor.insert("/read-only");
+        assert_eq!(
+            palette_command(&mut controller),
+            Some(InputAction::Session(
+                json!({"version":2,"command":"read_only"})
+            ))
+        );
+        assert!(!crate::inbox::read_only(&controller));
+        reply(
+            &mut controller,
+            &json!({"type":"read_only_changed","version":2,"enabled":true}),
+        );
+        assert!(!crate::inbox::read_only(&controller));
+        assert!(controller.notice.as_ref().unwrap().contains("Esc stops"));
+        controller.projection.view["inbox"] = json!({"execution":{"read_only":true}});
+        for layout in crate::appearance::ViewLayout::ALL {
+            controller.appearance.layout = *layout;
+            for width in [40, 80, 120] {
+                let rendered = crate::render_frame(&controller, width, 24).unwrap();
+                assert!(
+                    rendered.lines().last().unwrap().contains("READ-ONLY"),
+                    "{rendered}"
+                );
+            }
+        }
+        controller.editor.insert("/read-only off");
+        assert_eq!(
+            palette_command(&mut controller),
+            Some(InputAction::Session(
+                json!({"version":2,"command":"read_only","enabled":false})
+            ))
+        );
+        let mut observer = model("observe");
+        observer.editor.insert("/read-only off");
+        assert_eq!(palette_command(&mut observer), Some(InputAction::None));
+
+        controller.projection.view["inbox"]["execution"]["read_only_notice"] =
+            json!("Delivery owner unavailable; this copy is read-only. /read-only off lifts it.");
+        let copy = Model::new(
+            "current".into(),
+            "control".into(),
+            controller.projection.clone(),
+        );
+        let frame = crate::render_frame(&copy, 120, 24).unwrap();
+        assert!(frame.contains("owner unavailable"));
+        assert!(frame.contains("/read-only off"));
     }
 
     #[test]

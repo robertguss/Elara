@@ -546,6 +546,26 @@ submission. The inbox shows effective execution capabilities; trusted local
 execution adds no approval prompts. Observers can inspect the inbox but cannot
 mutate it.
 
+Use **`/read-only`** to toggle the session's model tools, or `/read-only on|off`
+to choose explicitly. The footer always labels read-only sessions. You can still
+ask questions: `read`, `grep`, and `glob` remain available; `write`, `edit`, `bash`,
+delegation and other mutating tools return permission refusals. The change takes
+effect at the next tool call, including within the current turn. A running call
+is not undone or stopped: **Esc stops the running one**. Turning it off restores
+tools within the session's original capability grants, never expanding them.
+This is distinct from attaching as an observer, which cannot control the session.
+There is no default shortcut (D22); the action can be bound by the keymap feature.
+
+Mode and transition positions are saved in the transcript's context metadata
+and flight recording. Reopen, handoff, copies and newly created children retain
+the mode; existing children are independent. Copies of a mode-bearing session
+return a new session ID and leave the source intact. Copies made through a
+handoff source use its delivery owner's current mode. If that owner is
+unavailable, the copy starts read-only with a notice; `/read-only off` lifts it.
+Trusted plugins must declare
+`capabilities` and `mutating: false` to run in read-only mode; undeclared tools
+are mutating. Plugin declarations are trusted code, not an OS sandbox.
+
 Only authoritative acceptance clears an unchanged draft; edits made while
 waiting survive. Pending submission IDs and image payloads are saved privately
 under the TUI state directory. Reconnect queries the original ID rather than

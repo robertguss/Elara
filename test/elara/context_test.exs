@@ -541,9 +541,34 @@ defmodule Elara.ContextTest do
     assert Elara.snapshot(source).snapshot["runtime_limits"]["next_turn"]["tool_timeout_ms"] ==
              120_000
 
+    for enabled <- [true, false] do
+      assert {:ok, ^enabled} = Elara.set_read_only(h["id"], enabled)
+      assert Elara.snapshot(source).snapshot["inbox"]["execution"]["read_only"] == enabled
+      assert Elara.child_config(source).read_only == enabled
+      assert {:ok, copy, _, _} = Elara.clone_session(source)
+      assert Elara.snapshot(copy).snapshot["inbox"]["execution"]["read_only"] == enabled
+      {:ok, copy_pid} = Elara.session_pid(copy)
+      :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, copy_pid)
+
+      assert {:ok, fork, _, _} = Elara.fork(source, hd(Elara.user_entries(source)).id)
+      assert Elara.snapshot(fork).snapshot["inbox"]["execution"]["read_only"] == enabled
+      {:ok, fork_pid} = Elara.session_pid(fork)
+      :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, fork_pid)
+    end
+
     {:ok, pid} = Elara.session_pid(h["id"])
     :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
     assert Elara.materialized_view(source)["runtime_limits"] == nil
+
+    assert {:ok, copy, _, _} = Elara.clone_session(source)
+    execution = Elara.snapshot(copy).snapshot["inbox"]["execution"]
+    assert execution["read_only"]
+    assert execution["read_only_notice"] =~ "owner unavailable"
+    assert execution["read_only_notice"] =~ "/read-only off"
+    assert {:ok, false} = Elara.set_read_only(copy, false)
+    assert Elara.snapshot(copy).snapshot["inbox"]["execution"]["read_only_notice"] == nil
+    {:ok, copy_pid} = Elara.session_pid(copy)
+    :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, copy_pid)
 
     {:ok, restarted} =
       Elara.start_session(

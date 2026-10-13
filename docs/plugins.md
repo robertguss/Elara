@@ -102,7 +102,15 @@ before discovery-policy tracking retain their saved fixed path selection.
 Each session stays on its loaded plugin revision until that session reloads. On
 success, new calls use the new code while the plugin's process and state
 survive. Reload is refused during a turn and while an interrupted plugin call
-still holds its state lease. Read-only tools may explicitly set
+still holds its state lease. ToolSpec accepts `capabilities: ["filesystem:read"]`
+(or an explicit empty list) and `mutating: false` for read-only operations.
+Undeclared tools default to mutating; a non-mutating declaration without explicit
+capabilities is rejected. Both plugin and built-in calls enforce session
+capability grants. `/read-only` refuses mutating plugin calls before checkout,
+without running callbacks or changing plugin state. The shipped Mix invocations
+remain mutating because project code can execute arbitrary effects; retained
+evidence/last-run inspection and diagnosis are declared non-mutating.
+Read-only tools may explicitly set
 `cancel_on_interrupt: true`; interruption kills their worker and releases the
 lease without committing returned plugin state. Ordinary tools keep draining.
 This declaration does not roll back any external side effect.

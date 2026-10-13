@@ -350,6 +350,9 @@ defmodule Elara.Session do
   def handle_call({:read_only, enabled}, _from, shell),
     do: change_read_only(shell, enabled)
 
+  def handle_call(:read_only_view, _from, shell),
+    do: {:reply, Handoff.read_only_status(shell), shell}
+
   def handle_call(:runtime_limits_view, _from, shell),
     do: {:reply, runtime_limits_view(shell), shell}
 
@@ -559,7 +562,7 @@ defmodule Elara.Session do
       router: shell.router,
       workspace_id: shell.workspace_id,
       allowed_capabilities: shell.allowed_capabilities,
-      read_only: shell.core.read_only,
+      read_only: Handoff.read_only(shell),
       context_limit: shell.context_limit
     }
 
@@ -1479,9 +1482,29 @@ defmodule Elara.Session do
     end
   end
 
+  defp copy_store(shell) do
+    context =
+      case Handoff.read_only_status(shell) do
+        {:known, enabled} ->
+          if enabled or shell.store.context != %{},
+            do: Map.put(shell.store.context, "read_only", enabled),
+            else: shell.store.context
+
+        :owner_unavailable ->
+          shell.store.context
+          |> Map.put("read_only", true)
+          |> Map.put(
+            "read_only_notice",
+            "Delivery owner unavailable; this copy is read-only. /read-only off lifts it."
+          )
+      end
+
+    %{shell.store | context: context}
+  end
+
   defp idle_store_change(shell, change) do
     if Core.idle?(shell.core) do
-      case change.(shell.store) do
+      case change.(copy_store(shell)) do
         {:ok, store, prompt} when shell.store.context != %{} and store.path != shell.store.path ->
           case Elara.start_session(
                  Handoff.options(shell) ++ [provider: shell.provider, resume: store.path]
@@ -1696,6 +1719,7 @@ defmodule Elara.Session do
     context =
       shell.store.context
       |> Map.put("read_only", shell.core.read_only)
+      |> Map.delete("read_only_notice")
       |> Map.update("read_only_changes", [transition], &(&1 ++ [transition]))
 
     case Store.save(%{shell.store | context: context}) do
@@ -2572,7 +2596,7 @@ defmodule Elara.Session do
         {:reply, {:error, :busy}, shell}
 
       true ->
-        case copy.(shell.store) do
+        case copy.(copy_store(shell)) do
           {:ok, store} ->
             Store.release(store)
             {:reply, {:ok, store.id, nil}, shell}
@@ -3032,11 +3056,8 @@ defmodule Elara.Session do
       "wake_budget_exhausted" => shell.store.agent_wake_count >= 8,
       "execution" => %{
         "mode" => "trusted_local",
-        "read_only" =>
-          case forward_handoff(shell, :child_config) do
-            %{read_only: enabled} -> enabled
-            _ -> shell.core.read_only
-          end,
+        "read_only" => Handoff.read_only(shell),
+        "read_only_notice" => shell.store.context["read_only_notice"],
         "allowed_capabilities" => shell.allowed_capabilities
       }
     }

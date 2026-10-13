@@ -259,6 +259,10 @@ pub(crate) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
     Some(InputAction::None)
 }
 
+pub(crate) fn read_only(model: &Model) -> bool {
+    model.projection.view["inbox"]["execution"]["read_only"] == true
+}
+
 pub(crate) fn summary(model: &Model) -> String {
     let view = &model.projection.view["inbox"];
     let context = if let Some(owner) = view["handoff"]["delivery_owner"].as_str() {
@@ -294,7 +298,12 @@ pub(crate) fn summary(model: &Model) -> String {
             .count()
     });
     format!(
-        "{context}{count} queued{} · Ctrl-Q queue · Ctrl-S steer · Esc stop",
+        "{}{context}{count} queued{} · Ctrl-Q queue · Ctrl-S steer · Esc stop",
+        if read_only(model) {
+            "READ-ONLY · "
+        } else {
+            ""
+        },
         if view["paused"] == true {
             " (paused)"
         } else if view["wake_budget_exhausted"] == true {

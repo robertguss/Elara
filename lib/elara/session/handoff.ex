@@ -61,6 +61,30 @@ defmodule Elara.Session.Handoff do
 
   def owner(id, _), do: id
 
+  def read_only(shell) do
+    case read_only_status(shell) do
+      {:known, enabled} -> enabled
+      :owner_unavailable -> true
+    end
+  end
+
+  def read_only_status(shell) do
+    case outgoing(shell.store) do
+      %{"delivery_owner" => id} ->
+        with {:ok, pid} <- Elara.session_pid(id),
+             {:known, enabled} when is_boolean(enabled) <- GenServer.call(pid, :read_only_view) do
+          {:known, enabled}
+        else
+          _ -> :owner_unavailable
+        end
+
+      _ ->
+        {:known, shell.core.read_only}
+    end
+  catch
+    :exit, _ -> :owner_unavailable
+  end
+
   def options(shell) do
     limits = Core.runtime_limits(shell.core)
 
@@ -74,7 +98,7 @@ defmodule Elara.Session.Handoff do
         router: shell.router,
         workspace_id: shell.workspace_id,
         allowed_capabilities: shell.allowed_capabilities,
-        read_only: shell.core.read_only,
+        read_only: read_only(shell),
         max_iterations: limits.max_iterations,
         max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
         context_keep_results: shell.core.config.context_keep_results,

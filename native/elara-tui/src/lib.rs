@@ -188,6 +188,9 @@ impl Model {
     pub fn new(session_id: String, mode: String, projection: Projection) -> Self {
         let mut editor = Editor::default();
         editor.set_history(user_prompts(&projection.view));
+        let notice = projection.view["inbox"]["execution"]["read_only_notice"]
+            .as_str()
+            .map(str::to_owned);
         Self {
             session_id,
             mode,
@@ -217,7 +220,7 @@ impl Model {
             pending_replies: VecDeque::new(),
             pending_ask: None,
             last_outcome: None,
-            notice: None,
+            notice,
             notification: None,
             lifetime: "embedded".into(),
             cwd: None,
@@ -1558,7 +1561,12 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
         frame.render_widget(
             Paragraph::new(Span::styled(
                 format!(
-                    " {connection}{pending} · {} · {} · {}",
+                    " {}{connection}{pending} · {} · {} · {}",
+                    if inbox::read_only(model) {
+                        "READ-ONLY · "
+                    } else {
+                        ""
+                    },
                     model.mode,
                     model.turn_state(),
                     model
@@ -1914,7 +1922,12 @@ fn draw_footer(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
         presentation::muted(),
     )];
     let center = format!(
-        "{} / {} · Thinking {} · ? help",
+        "{}{} / {} · Thinking {} · ? help",
+        if inbox::read_only(model) {
+            "READ-ONLY · "
+        } else {
+            ""
+        },
         model.appearance.layout.name(),
         model.appearance.theme.name(),
         if model.thinking_visible {

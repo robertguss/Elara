@@ -78,9 +78,9 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
     try:
         resize(120, 40)
         wait_for(lambda: b"APPEARANCE" in output, "pre-session appearance picker")
-        send(b"\x1b[C" * 2 + b"\x1b[B" * 3 + b"s")
+        send(b"\x1b[C" * 2 + b"\x1b[B" * 3 + b"ns")
         wait_for(lambda: preferences.exists(), "explicitly saved preferences")
-        assert json.loads(preferences.read_text()) == {"layout": "workbench", "theme": "forest", "diagnostics": False}
+        assert json.loads(preferences.read_text()) == {"layout": "workbench", "theme": "forest", "diagnostics": False, "notifications": False}
         wait_for(lambda: b"Ctrl-J" in output, "attached session")
         send("left é 👩‍💻 right".encode())
         send(b"\x1b[1;2D" * 5)  # Keep a selected word through every presentation change.
@@ -106,7 +106,7 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
                 send(b"\x1b[15~")
                 wait_for(lambda: b"Hidden by you" in fresh(start), "visibility survives appearance changes")
                 send(b"\x1b")
-                assert json.loads(preferences.read_text()) == {"layout": "workbench", "theme": "forest", "diagnostics": False}, "apply does not save"
+                assert json.loads(preferences.read_text()) == {"layout": "workbench", "theme": "forest", "diagnostics": False, "notifications": False}, "apply does not save"
         resize(80, 24)
         start = len(output)
         send(b"\x1b[15~")  # F5

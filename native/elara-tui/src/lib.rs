@@ -169,6 +169,7 @@ pub struct Model {
     pending_ask: Option<(u64, Instant)>,
     pub last_outcome: Option<String>,
     pub notice: Option<String>,
+    pub notification: Option<&'static str>,
     pub lifetime: String,
     session_picker: Option<sessions::Picker>,
     seen_thread_reports: HashSet<String>,
@@ -209,6 +210,7 @@ impl Model {
             pending_ask: None,
             last_outcome: None,
             notice: None,
+            notification: None,
             lifetime: "embedded".into(),
             cwd: None,
             session_picker: None,
@@ -238,6 +240,7 @@ impl Model {
         }
         self.pending_replies.clear();
         self.pending_ask = None;
+        self.notification = None;
         self.ask_sent_at = None;
         self.provider_picker = None;
         self.session_picker = None;
@@ -507,6 +510,11 @@ impl Model {
             .unwrap_or("invalid")
     }
 
+    /// Queue a fixed local message for the interactive driver's focus-aware notifier.
+    pub fn notify(&mut self, message: &'static str) {
+        self.notification = Some(message);
+    }
+
     fn observe_ops(&mut self, ops: &Value) {
         let Some(ops) = ops.as_array() else {
             return;
@@ -526,6 +534,13 @@ impl Model {
                     if let Some(kind) = turn["outcome"]["kind"].as_str() {
                         self.last_outcome = Some(kind.to_string());
                         self.ask_sent_at = None;
+                        match kind {
+                            "completed" => self.notify("Turn complete"),
+                            "provider_error" | "turn_limit" => {
+                                self.notify("Turn ended with an error")
+                            }
+                            _ => {}
+                        }
                     }
                 }
                 Some("append_content_delta") => {

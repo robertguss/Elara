@@ -225,7 +225,7 @@ try:
         assert canary not in json.dumps(view), "private provider state is excluded from display DTO"
         assert canary.encode() not in output, "private provider state is excluded from terminal output"
     send(b"\x1b")
-    send(b"\x03")
+    send(b"\x03\x03")
     wait_for(lambda: b"\x1b[?1006l" in output, "terminal reporting restored")
     _, status = os.waitpid(pid, 0)
     pid = None

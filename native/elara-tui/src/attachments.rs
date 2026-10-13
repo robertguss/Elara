@@ -34,7 +34,7 @@ impl Selection {
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Mode {
+pub(super) enum Mode {
     Files,
     Image,
     Selected,
@@ -267,6 +267,36 @@ impl Draft {
     }
 }
 
+pub(super) fn open(model: &mut Model, mode: Mode, inline: bool) -> Option<InputAction> {
+    if !model.attachments.supported
+        || model.connection != ConnectionState::Connected
+        || model.mode != "control"
+    {
+        if inline {
+            return None;
+        }
+        model.notice = Some(
+            "Attachments require a connected control session with input_attachments_v1.".into(),
+        );
+        return Some(InputAction::None);
+    }
+    if inline {
+        model.editor.insert("@");
+    }
+    model.attachments.picker = Some(Picker {
+        mode,
+        query: String::new(),
+        selected: 0,
+        inline,
+    });
+    model.attachments.status = String::new();
+    Some(if mode == Mode::Files {
+        model.attachments.discover()
+    } else {
+        InputAction::None
+    })
+}
+
 pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
     if model.provider_picker.is_some() {
         return None;
@@ -281,16 +311,14 @@ pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
         }
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {
-                KeyCode::Char('c') if model.attachments.picker.is_some() => {
-                    return Some(InputAction::Detach);
-                }
                 KeyCode::Char('x') if model.attachments.picker.is_some() => {
                     return Some(InputAction::Interrupt);
                 }
                 _ => {}
             }
         }
-        if key.code == KeyCode::F(2) {
+        let action = super::actions::lookup(*key, false);
+        if action == Some(super::actions::Action::SafePaste) {
             model.attachments.picker = None;
             return None;
         }
@@ -304,42 +332,15 @@ pub(super) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
                 .chars()
                 .next_back()
                 .is_none_or(char::is_whitespace);
-        let mode = match key.code {
-            KeyCode::F(8) => Some(Mode::Files),
-            KeyCode::F(9) => Some(Mode::Image),
-            KeyCode::F(10) => Some(Mode::Selected),
+        let mode = match action {
+            Some(super::actions::Action::Files) => Some(Mode::Files),
+            Some(super::actions::Action::Image) => Some(Mode::Image),
+            Some(super::actions::Action::Attachments) => Some(Mode::Selected),
             _ if inline => Some(Mode::Files),
             _ => None,
         };
         if let Some(mode) = mode {
-            if !model.attachments.supported
-                || model.connection != ConnectionState::Connected
-                || model.mode != "control"
-            {
-                if inline {
-                    return None;
-                }
-                model.notice = Some(
-                    "Attachments require a connected control session with input_attachments_v1."
-                        .into(),
-                );
-                return Some(InputAction::None);
-            }
-            if inline {
-                model.editor.insert("@");
-            }
-            model.attachments.picker = Some(Picker {
-                mode,
-                query: String::new(),
-                selected: 0,
-                inline,
-            });
-            model.attachments.status = String::new();
-            return Some(if mode == Mode::Files {
-                model.attachments.discover()
-            } else {
-                InputAction::None
-            });
+            return open(model, mode, inline);
         }
     }
     let draft = &mut model.attachments;

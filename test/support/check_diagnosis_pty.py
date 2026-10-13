@@ -103,7 +103,7 @@ with tempfile.TemporaryDirectory(prefix="elara-diagnosis-pty-") as tmp:
         send(b"\x1b")
         send(b"\t\r")
         wait_for(lambda: prompts()[-1] == "draft remains", "retained composer draft submitted")
-        send(b"\x03")
+        send(b"\x03\x03")
         wait_for(lambda: b"\x1b[?1006l" in output, "mouse reporting disabled")
         _, status = os.waitpid(pid, 0)
         pid = None

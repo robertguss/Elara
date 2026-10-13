@@ -22,7 +22,8 @@ reader = observer.makefile("rb")
 observer.sendall((json.dumps({"version": 2, "command": "attach", "token": os.environ["ELARA_SERVER_TOKEN"], "session_id": session,
                               "mode": "observe", "cursor": 0,
                               "extensions": ["input_queue_v1"]}) + "\n").encode())
-assert json.loads(reader.readline())["type"] == "attached"
+attached = json.loads(reader.readline())
+assert attached["type"] == "attached"
 
 
 def snapshot():
@@ -83,10 +84,25 @@ def resize(columns, rows):
     drain()
 
 
+def capture(name):
+    directory = os.environ.get("ELARA_TUI_PTY_CAPTURE")
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, name + ".ansi"), "wb") as file:
+            file.write(output)
+        with open(os.path.join(directory, name + ".json"), "w") as file:
+            json.dump(snapshot(), file)
+
+
 try:
     resize(80, 24)
     wait_for(lambda: b"Ctrl-J" in output, "initial interactive frame")
     assert b"\x1b[?2004h" in output, "bracketed paste enabled"
+    capture("idle")
+    send(b"\x1b")
+    assert os.waitpid(pid, os.WNOHANG)[0] == 0, "idle Esc never exits"
+    send(b"discard this draft\x03")
+    assert os.waitpid(pid, os.WNOHANG)[0] == 0, "first Ctrl-C never exits"
     paste = "first\r\ncombining e\u0301 👩‍💻\t\x1b[31m".encode()
     send(b"\x1b[200~" + paste + b"\x1b[201~")
     assert prompts() == [], "paste must not submit"
@@ -102,14 +118,17 @@ try:
     resize(180, 45)
     resize(80, 24)
     send(b"X")
-    # Busy Enter durably queues the edited draft; stop preserves and pauses it.
-    send(b"\r\x18")
+    # Closing help leaves the turn running; the next Esc interrupts and pauses.
+    send(b"\x1bOP\x1b")
+    assert snapshot()["turn"]["state"] != "idle", "panel Esc does not interrupt"
+    send(b"\r\x1b")
     wait_for(lambda: snapshot()["turn"]["state"] == "idle", "interrupt reaches idle")
     assert prompts() == [expected], "paused queue has not been consumed"
     inbox = snapshot()["inbox"]
     assert inbox["paused"]
     assert inbox["entries"][-1]["text"] == "draft while streaminX"
     assert inbox["entries"][-1]["state"] == "queued"
+    capture("interrupted")
     send(b"\x1b[1;3A\x1b[1;3B")  # history older/newest restores draft
     send(b"/resume-inputs\r")
     wait_for(lambda: prompts() == [expected, "draft while streaminX"], "selected draft survives resize/history/interrupt")
@@ -124,12 +143,21 @@ try:
     send(b"\x1bOP")  # F1 opens help
     assert b"Composer" in output
     send(b"\x1b")  # close help
-    send(b"\x03" if detach else b"\x1b")  # Ctrl-C through launcher, Esc through native
+    send(b"\x03\x03")  # Request quit through either launcher or native client.
+    if attached["lifetime"] == "embedded":
+        wait_for(lambda: b"Quit Elara?" in output, "embedded quit asks for confirmation")
+        assert os.waitpid(pid, os.WNOHANG)[0] == 0
+        capture("quit-confirmation")
+        send(b"\x1b")
+        assert os.waitpid(pid, os.WNOHANG)[0] == 0, "Esc cancels quit"
+        assert snapshot()["turn"]["state"] == "idle"
+        capture("quit-cancelled")
+        send(b"\x03\x03\r")
     wait_for(lambda: b"\x1b[?2004l" in output, "bracketed paste disabled on exit")
     _, status = os.waitpid(pid, 0)
     pid = None
     assert os.waitstatus_to_exitcode(status) == 0
-    print("PTY passed: exact Unicode multiline text, selection, history, streaming, durable queue/stop/resume, safe paste, 80x24/120x40/180x45, cleanup")
+    print("PTY passed: Esc interrupt/panel/idle, Ctrl-C clear/twice quit, embedded confirmation, exact Unicode multiline text, selection, history, streaming, durable queue/stop/resume, safe paste, 80x24/120x40/180x45, cleanup")
 finally:
     if pid is not None:
         os.kill(pid, signal.SIGKILL)

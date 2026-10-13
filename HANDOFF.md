@@ -45,6 +45,11 @@ unchanged. Current lab fixtures use a 16K-token handoff window, trace
 `docs/lab/README.md` describes recovery registration version 2 and reproduction
 of historical versions. Delivery is tracked in
 [Dev Hub](https://app.notion.com/p/3f8700320c4581a59c2cdf3a839a5ae0).
+The [lead thread](https://ampcode.com/threads/T-01a1358b-4a9e-71b9-bed8-90de5e5b14ee)
+coordinates stream dependencies and questions for Robert. Resume the assigned
+stream from its Notion task status and merged code on `origin/main`; do not
+repeat the planning or start replacement threads. Current progress and pending
+decisions stay in Notion, not this file.
 
 ## Where Elara stands
 

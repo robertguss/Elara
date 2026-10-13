@@ -235,3 +235,52 @@ fn limits_use_authoritative_projection_and_parse_human_forms_without_sending_pro
     assert_eq!(key(&mut model, KeyCode::Enter), InputAction::None);
     assert!(model.notice.as_ref().unwrap().contains("read-only"));
 }
+
+#[test]
+fn escape_never_quits_and_double_control_c_confirms_embedded_shutdown() {
+    let mut model = fixture_model("streaming");
+    model.editor.insert("keep while interrupting");
+    model.show_help = true;
+    assert_eq!(key(&mut model, KeyCode::Esc), InputAction::None);
+    assert!(!model.show_help);
+    assert_eq!(key(&mut model, KeyCode::Esc), InputAction::Interrupt);
+    assert_eq!(model.editor.text(), "keep while interrupting");
+
+    let clear = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+    assert_eq!(
+        handle_input(&mut model, clear.clone(), 80),
+        InputAction::None
+    );
+    assert!(model.editor.text().is_empty());
+    assert_eq!(
+        handle_input(&mut model, clear.clone(), 80),
+        InputAction::None
+    );
+    let frame = elara_tui::render_frame(&model, 80, 24).unwrap();
+    assert!(frame.contains("Quit Elara?"));
+    assert!(frame.contains("Enter confirms; Esc cancels."));
+    assert_eq!(
+        handle_input(&mut model, Event::Paste("do not submit".into()), 80),
+        InputAction::None
+    );
+    assert!(model.editor.text().is_empty());
+    assert_eq!(key(&mut model, KeyCode::Esc), InputAction::None);
+    assert!(
+        !elara_tui::render_frame(&model, 80, 24)
+            .unwrap()
+            .contains("Quit Elara?")
+    );
+
+    model.lifetime = "long_lived".into();
+    assert_eq!(
+        handle_input(&mut model, clear.clone(), 80),
+        InputAction::None
+    );
+    // Any intervening typed input disarms quitting, even if the draft was empty.
+    key(&mut model, KeyCode::Char('x'));
+    assert_eq!(
+        handle_input(&mut model, clear.clone(), 80),
+        InputAction::None
+    );
+    assert_eq!(handle_input(&mut model, clear, 80), InputAction::Detach);
+}

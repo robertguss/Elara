@@ -27,7 +27,7 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 use serde_json::{Value, json};
 use tui_markdown::{ImageFallback, Options as MarkdownOptions, StyleSheet};
 use unicode_width::UnicodeWidthStr;
@@ -156,6 +156,8 @@ pub struct Model {
     safe_paste_cr: bool,
     pub enhanced_keyboard: bool,
     pub show_help: bool,
+    quit_armed: bool,
+    quit_confirmation: bool,
     pub appearance: Appearance,
     pub appearance_picker: Option<Appearance>,
     provider_picker: Option<(usize, usize)>,
@@ -198,6 +200,8 @@ impl Model {
             safe_paste_cr: false,
             enhanced_keyboard: false,
             show_help: false,
+            quit_armed: false,
+            quit_confirmation: false,
             appearance: Appearance::default(),
             appearance_picker: None,
             provider_picker: None,
@@ -222,6 +226,18 @@ impl Model {
             metrics: Metrics::default(),
             ask_sent_at: None,
         }
+    }
+
+    pub(crate) fn request_quit(&mut self) -> InputAction {
+        if self.lifetime == "long_lived" {
+            return InputAction::Detach;
+        }
+        self.quit_confirmation = true;
+        self.notice = Some(
+            "Quit? Live sessions on the embedded server will end. Enter confirms; Esc cancels."
+                .into(),
+        );
+        InputAction::None
     }
 
     /// Install authoritative connection state while retaining this session's Rust-owned UI state.
@@ -583,6 +599,33 @@ pub enum InputAction {
     Reconnect(String),
 }
 
+pub(crate) fn open_provider(model: &mut Model) -> InputAction {
+    let catalog = model.projection.view["provider_view"]["catalog"].as_array();
+    if model.connection != ConnectionState::Connected
+        || model.mode != "control"
+        || catalog.is_none_or(Vec::is_empty)
+    {
+        model.notice = Some("Provider controls unavailable for this connection/provider.".into());
+        return InputAction::None;
+    }
+    let catalog = catalog.unwrap();
+    let current = &model.projection.view["provider_view"]["next_request"];
+    let m = catalog
+        .iter()
+        .position(|item| item["model"] == current["model"])
+        .unwrap_or(0);
+    let e = catalog[m]["efforts"]
+        .as_array()
+        .and_then(|efforts| {
+            efforts
+                .iter()
+                .position(|effort| effort == &current["effort"])
+        })
+        .unwrap_or(0);
+    model.provider_picker = Some((m, e));
+    InputAction::None
+}
+
 fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<InputAction> {
     use crossterm::event::{Event, KeyCode, KeyEventKind};
     let Event::Key(key) = event else {
@@ -591,8 +634,9 @@ fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<
     if key.kind == KeyEventKind::Release || model.safe_paste {
         return None;
     }
-    if model.provider_picker.is_none() && key.code != KeyCode::F(7) {
-        return None;
+    if model.provider_picker.is_none() {
+        return (actions::lookup(*key, false) == Some(actions::Action::ProviderSettings))
+            .then(|| open_provider(model));
     }
     let catalog = model.projection.view["provider_view"]["catalog"].as_array();
     if model.connection != ConnectionState::Connected
@@ -604,23 +648,7 @@ fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<
         return Some(InputAction::None);
     }
     let catalog = catalog.unwrap();
-    let Some((mut m, mut e)) = model.provider_picker else {
-        let current = &model.projection.view["provider_view"]["next_request"];
-        let m = catalog
-            .iter()
-            .position(|item| item["model"] == current["model"])
-            .unwrap_or(0);
-        let e = catalog[m]["efforts"]
-            .as_array()
-            .and_then(|efforts| {
-                efforts
-                    .iter()
-                    .position(|effort| effort == &current["effort"])
-            })
-            .unwrap_or(0);
-        model.provider_picker = Some((m, e));
-        return Some(InputAction::None);
-    };
+    let (mut m, mut e) = model.provider_picker.unwrap();
     m = m.min(catalog.len() - 1);
     let count = catalog[m]["efforts"].as_array().map_or(0, Vec::len);
     if count == 0 {
@@ -629,7 +657,9 @@ fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<
     }
     e = e.min(count - 1);
     match key.code {
-        KeyCode::Esc | KeyCode::F(7) => {
+        _ if key.code == KeyCode::Esc
+            || actions::lookup(*key, false) == Some(actions::Action::ProviderSettings) =>
+        {
             model.provider_picker = None;
             return Some(InputAction::None);
         }
@@ -661,6 +691,41 @@ pub fn handle_input(
     width: usize,
 ) -> InputAction {
     use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+    if model.quit_confirmation {
+        if let Event::Key(key) = &event
+            && key.kind == KeyEventKind::Press
+        {
+            match key.code {
+                KeyCode::Enter => return InputAction::Detach,
+                KeyCode::Esc => {
+                    model.quit_confirmation = false;
+                    model.quit_armed = false;
+                    model.notice = Some("Quit cancelled; live sessions retained.".into());
+                }
+                _ => {}
+            }
+        }
+        return InputAction::None;
+    }
+    if !model.safe_paste {
+        if let Event::Key(key) = &event
+            && key.kind == KeyEventKind::Press
+        {
+            if actions::lookup(*key, false) == Some(actions::Action::ClearOrQuit) {
+                if model.quit_armed {
+                    model.quit_armed = false;
+                    return model.request_quit();
+                }
+                model.editor.clear();
+                model.quit_armed = true;
+                model.notice = Some("Prompt cleared. Press Ctrl-C again to quit.".into());
+                return InputAction::None;
+            }
+            model.quit_armed = false;
+        } else if matches!(event, Event::Paste(_)) {
+            model.quit_armed = false;
+        }
+    }
     if !model.safe_paste
         && let Some(action) = inbox::input(model, &event)
     {
@@ -716,14 +781,9 @@ pub fn handle_input(
         && model.provider_picker.is_some()
         && let Event::Key(key) = &event
         && key.kind == KeyEventKind::Press
+        && actions::lookup(*key, false) == Some(actions::Action::Interrupt)
     {
-        match actions::lookup(*key, false) {
-            Some(actions::Action::Interrupt) => return InputAction::Interrupt,
-            Some(actions::Action::Escape) if key.code != KeyCode::Esc => {
-                return InputAction::Detach;
-            }
-            _ => {}
-        }
+        return InputAction::Interrupt;
     }
     if let Some(action) = attachments::input(model, &event) {
         return action;
@@ -897,9 +957,6 @@ pub fn handle_input(
                 }
                 return InputAction::None;
             }
-            if action == Some(Action::Escape) && key.code != KeyCode::Esc {
-                return InputAction::Detach;
-            }
             if action == Some(Action::Interrupt) && key.kind == KeyEventKind::Press {
                 return InputAction::Interrupt;
             }
@@ -942,10 +999,10 @@ pub fn handle_input(
                 Some(Action::Escape) => {
                     if model.viewer.is_some() && key.code == KeyCode::Esc {
                         model.close_tool();
+                    } else if model.turn_state() != "idle" {
+                        return InputAction::Interrupt;
                     } else if focused && key.code == KeyCode::Esc {
                         model.transcript.borrow_mut().focused = false;
-                    } else {
-                        return InputAction::Detach;
                     }
                 }
                 Some(Action::Copy | Action::CopyEntry) => {
@@ -1315,6 +1372,23 @@ pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
     sessions::draw(frame, model);
     inbox::draw(frame, model);
     draw_session_detail(frame, model);
+    if model.quit_confirmation {
+        let area = frame.area();
+        let rect = Rect::new(area.x + 1, area.y + 1, area.width.saturating_sub(2), 5);
+        frame.render_widget(Clear, rect);
+        frame.render_widget(
+            Paragraph::new(
+                "Live sessions on the embedded server will end.\nEnter confirms; Esc cancels.",
+            )
+            .wrap(Wrap { trim: false })
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Quit Elara? "),
+            ),
+            rect,
+        );
+    }
     presentation::paint(frame, model);
 }
 
@@ -3281,18 +3355,22 @@ mod transcript_input_tests {
         assert_eq!(model.transcript.borrow().query, "INSPECT  ");
     }
     #[test]
-    fn control_c_detaches_from_search_unless_safe_paste() {
+    fn control_c_clears_from_search_unless_safe_paste() {
         let mut model = fixture_model("idle");
+        model.editor.insert("draft");
         render_frame(&model, 80, 24).unwrap();
         key(&mut model, KeyCode::Tab);
         key(&mut model, KeyCode::Char('/'));
         let control_c = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
         assert_eq!(
             handle_input(&mut model, control_c.clone(), 78),
-            InputAction::Detach
+            InputAction::None
         );
+        assert!(model.editor.text().is_empty());
+        model.editor.insert("safe draft");
         key(&mut model, KeyCode::F(2));
         assert_eq!(handle_input(&mut model, control_c, 78), InputAction::None);
+        assert_eq!(model.editor.text(), "safe draft");
     }
     #[test]
     fn composer_navigation_and_height_changes_reuse_transcript_cache() {

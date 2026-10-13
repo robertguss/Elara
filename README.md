@@ -551,11 +551,20 @@ terminal exists. A live callback timeout does not remove this barrier. This does
 not make external commands exactly-once. Legacy servers without `input_queue_v1`
 retain the earlier non-queued ask behavior.
 
-Ctrl-C detaches. Esc closes search/help or returns transcript focus to the
-prompt before detaching. Unsubmitted drafts live in this client window; only
-submissions awaiting acceptance are saved after exit. Local history recalls up
-to 200 canonical prompts that fit the editor limit; it does not change persisted
-history.
+**Esc** closes the current panel or search; with no panel open, it interrupts a
+running turn. Idle Esc returns to the prompt and never detaches. **Ctrl-C**
+clears the prompt; press it twice consecutively to quit. If quitting can end
+live sessions on an embedded server, a confirmation asks for Enter to quit or
+Esc to cancel. On a long-lived server, quitting leaves sessions running.
+`/clear` clears the prompt; `/quit` and `/detach` use the same quit confirmation.
+Unsubmitted drafts live in this client window; only submissions awaiting
+acceptance are saved after exit. Local history recalls up to 200 canonical
+prompts that fit the editor limit; it does not change persisted history.
+
+The picker and presentation actions also have slash commands: `/files`,
+`/image`, `/attachments`, `/model`, `/effort`, `/thinking`, `/thinking-view`,
+`/turns`, `/appearance`, `/help`, `/sessions` and `/queue`. `/paste` enters safe
+paste mode; the safe-paste key finishes it without sending.
 
 Press **Tab** to move between the prompt and transcript. With transcript focus,
 Up/Down scroll by line, PageUp/PageDown by page, Home goes to the beginning, and

@@ -42,26 +42,21 @@ pub(super) fn input(model: &mut Model, event: &Event) -> bool {
         model.show_help = false;
         return false;
     }
-    if modal && action == Some(actions::Action::Escape) && key.code != KeyCode::Esc {
-        model.appearance_picker = None;
-        model.presentation_overlay = None;
-        return false;
-    }
     if modal && action == Some(actions::Action::Interrupt) {
         return false;
     }
     if let Some(mut choice) = model.appearance_picker {
         match key.code {
+            _ if key.code == KeyCode::Esc || action == Some(actions::Action::Appearance) => {
+                model.appearance_picker = None;
+                return true;
+            }
             KeyCode::Left => choice.layout = choice.layout.previous(),
             KeyCode::Right | KeyCode::Char('l') => choice.layout = choice.layout.next(),
             KeyCode::Up => choice.theme = choice.theme.previous(),
             KeyCode::Down | KeyCode::Char('t') => choice.theme = choice.theme.next(),
             KeyCode::Char('d') => choice.diagnostics = !choice.diagnostics,
             KeyCode::Char('n') => choice.notifications = !choice.notifications,
-            KeyCode::Esc | KeyCode::F(3) => {
-                model.appearance_picker = None;
-                return true;
-            }
             KeyCode::Enter | KeyCode::Char('s') => {
                 if key.code == KeyCode::Char('s') {
                     if let Err(error) = choice.save() {
@@ -86,7 +81,14 @@ pub(super) fn input(model: &mut Model, event: &Event) -> bool {
             return true;
         }
         match key.code {
-            KeyCode::Esc | KeyCode::F(5) | KeyCode::F(6) => model.presentation_overlay = None,
+            _ if key.code == KeyCode::Esc
+                || matches!(
+                    action,
+                    Some(actions::Action::ThinkingView | actions::Action::Turns)
+                ) =>
+            {
+                model.presentation_overlay = None;
+            }
             KeyCode::Up if overlay == Overlay::Turns => model.transcript.borrow_mut().user_turn(-1),
             KeyCode::Down if overlay == Overlay::Turns => {
                 model.transcript.borrow_mut().user_turn(1)
@@ -103,17 +105,21 @@ pub(super) fn input(model: &mut Model, event: &Event) -> bool {
     if model.show_help || model.viewer.is_some() {
         return false;
     }
+    action.is_some_and(|action| activate(model, action))
+}
+
+pub(super) fn activate(model: &mut Model, action: actions::Action) -> bool {
     match action {
-        Some(actions::Action::Appearance) => model.appearance_picker = Some(model.appearance),
-        Some(actions::Action::Thinking) => {
+        actions::Action::Appearance => model.appearance_picker = Some(model.appearance),
+        actions::Action::Thinking => {
             model.thinking_visible = !model.thinking_visible;
             model.transcript.borrow_mut().source_key = None;
         }
-        Some(actions::Action::ThinkingView) => {
+        actions::Action::ThinkingView => {
             model.presentation_overlay = Some(Overlay::Thinking);
             model.overlay_scroll = 0;
         }
-        Some(actions::Action::Turns) => {
+        actions::Action::Turns => {
             model.presentation_overlay = Some(Overlay::Turns);
             model.overlay_scroll = 0;
         }
@@ -1119,12 +1125,12 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn provider_picker_keeps_interrupt_and_detach_available_except_during_safe_paste() {
+    fn provider_picker_keeps_interrupt_and_clear_available_except_during_safe_paste() {
         let mut model = preview();
         model.projection.view["provider_view"] =
             json!({"catalog":[{"model":"gpt-5.5","efforts":["low"]}]});
         model.provider_picker = Some((0, 0));
-        for (key, expected) in [('x', InputAction::Interrupt), ('c', InputAction::Detach)] {
+        for (key, expected) in [('x', InputAction::Interrupt), ('c', InputAction::None)] {
             let event = Event::Key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::CONTROL));
             assert_eq!(handle_input(&mut model, event.clone(), 78), expected);
             model.safe_paste = true;
@@ -1496,12 +1502,13 @@ pub(crate) mod tests {
                 78,
             );
             assert_eq!(interrupt, InputAction::Interrupt);
-            let detach = handle_input(
+            let clear = handle_input(
                 &mut model,
                 Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
                 78,
             );
-            assert_eq!(detach, InputAction::Detach);
+            assert_eq!(clear, InputAction::None);
+            assert!(model.editor.text().is_empty());
         }
     }
 

@@ -143,7 +143,7 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
         inspect_turn("turn 2 · live follow · complete")
         send(b"\tkept\r")
         wait_for(lambda: prompts()[-1] == "left é 👩‍💻 kept", "switches preserve Unicode draft selection")
-        send(b"\x03")
+        send(b"\x03\x03")
         wait_for(lambda: b"\x1b[?1006l" in output, "clean terminal exit")
         _, status = os.waitpid(pid, 0)
         pid = None
@@ -209,7 +209,7 @@ with tempfile.TemporaryDirectory(prefix="elara-appearance-pty-") as tmp:
         wait_for(lambda: b"ember / ember" in fresh(start), "Enter applies unsaved local choice")
         assert b"Ctrl-J" in fresh(start), "Enter proceeds to the session after save failure"
         assert preferences.read_bytes() == saved, "local choice does not overwrite defaults"
-        send(b"\x03")
+        send(b"\x03\x03")
         wait_for(lambda: b"\x1b[?1006l" in output, "save-failure session exits cleanly")
         _, status = os.waitpid(pid, 0)
         pid = None

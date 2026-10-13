@@ -234,9 +234,6 @@ pub(crate) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
     match super::actions::lookup(*key, false) {
         Some(super::actions::Action::Interrupt) => return Some(InputAction::Interrupt),
         Some(super::actions::Action::Steer) => return Some(InputAction::Steer),
-        Some(super::actions::Action::Escape) if key.code != KeyCode::Esc => {
-            return Some(InputAction::Detach);
-        }
         _ => {}
     }
     let entries = model.projection.view["inbox"]["entries"].as_array();

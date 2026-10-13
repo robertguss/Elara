@@ -187,7 +187,7 @@ try:
     assert "AT_SUBMISSION" in text and "BEFORE_SELECTION" not in text
     assert "Analyze é 👩‍💻 sent" in text, "modal choices preserve selected composer text"
     assert encoded.encode() not in output, "image data is never rendered as base64"
-    send(b"\x03")
+    send(b"\x03\x03")
     _, status = os.waitpid(pid, 0)
     pid = None
     assert os.waitstatus_to_exitcode(status) == 0

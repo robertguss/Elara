@@ -56,6 +56,8 @@ Colored Elixir and edit frames for all four themes live in
 The confirmed TUI controls and clipboard fallback are documented in README.md's
 TUI section. `native/elara-tui/src/actions.rs` owns action bindings and help;
 Esc closes panels or interrupts, and consecutive Ctrl-C requests a safe quit.
+`test/support/tui_notifications_pty.py` gates counts on the rendered final
+outcome, not reply text or early Idle. Full redraws preserve diagnostic words.
 README.md's "Custom keys" documents local `keymap.json`, action names,
 collision fallback and fixed panel/editor controls. The per-Model keymap drives
 both lookup and effective hints. New actions need an exhaustive `Action::name`

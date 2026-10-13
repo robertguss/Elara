@@ -14,5 +14,5 @@
  ✓ Idle
 ┌ PROMPT ─────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │                                                                                      │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────┘
  elara · elara             │ ember / ember · Thinking expanded · ? help │

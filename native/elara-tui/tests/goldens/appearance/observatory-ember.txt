@@ -21,7 +21,7 @@
  ✓ Idle
 ┌ PROMPT  ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? he… ┐
 │                                                                              │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────┘
  elara · elara      │ observatory / ember · Thinking expanded · ? help │
 
 === idle 120x40 ===
@@ -63,7 +63,7 @@
  ✓ Idle
 ┌ PROMPT ─────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │                                                                                                                      │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────┘
  elara · elara                          │ observatory / ember · Thinking expanded · ? help │
 
 === idle 180x45 ===
@@ -110,7 +110,7 @@
  ✓ Idle
 ┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │                                                                                                                                                                                  │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
  elara · elara                                                        │ observatory / ember · Thinking expanded · ? help │
 
 === composing 80x24 ===
@@ -136,7 +136,7 @@
 ┌ PROMPT  ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? he… ┐
 │Unicode draft 👩‍💻  中                                                            │
 │Keep this visible                                                             │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────┘
  elara · elara      │ observatory / ember · Thinking expanded · ? help │
 
 === composing 120x40 ===
@@ -178,7 +178,7 @@
 ┌ PROMPT ─────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │Unicode draft 👩‍💻  中                                                                                                    │
 │Keep this visible                                                                                                     │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────┘
  elara · elara                          │ observatory / ember · Thinking expanded · ? help │
 
 === composing 180x45 ===
@@ -225,7 +225,7 @@
 ┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │Unicode draft 👩‍💻  中                                                                                                                                                                │
 │Keep this visible                                                                                                                                                                 │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
  elara · elara                                                        │ observatory / ember · Thinking expanded · ? help │
 
 === streaming 80x24 ===
@@ -251,7 +251,7 @@
  ● Calling provider …
 ┌ PROMPT  ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? he… ┐
 │                                                                              │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────┘
  elara · elara      │ observatory / ember · Thinking expanded · ? help │
 
 === streaming 120x40 ===
@@ -293,7 +293,7 @@
  ● Calling provider …
 ┌ PROMPT ─────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │                                                                                                                      │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────┘
  elara · elara                          │ observatory / ember · Thinking expanded · ? help │
 
 === streaming 180x45 ===
@@ -340,7 +340,7 @@
  ● Calling provider …
 ┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │                                                                                                                                                                                  │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
  elara · elara                                                        │ observatory / ember · Thinking expanded · ? help │
 
 === reasoning-open 80x24 ===
@@ -366,7 +366,7 @@
  ✓ Idle
 ┌ PROMPT  ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? he… ┐
 │                                                                              │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────┘
  elara · elara      │ observatory / ember · Thinking expanded · ? help │
 
 === reasoning-open 120x40 ===
@@ -408,7 +408,7 @@
  ✓ Idle
 ┌ PROMPT ─────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │                                                                                                                      │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────┘
  elara · elara                          │ observatory / ember · Thinking expanded · ? help │
 
 === reasoning-open 180x45 ===
@@ -455,7 +455,7 @@
  ✓ Idle
 ┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │                                                                                                                                                                                  │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
  elara · elara                                                        │ observatory / ember · Thinking expanded · ? help │
 
 === reasoning-hidden 80x24 ===
@@ -481,7 +481,7 @@
  ✓ Idle
 ┌ PROMPT  ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? he… ┐
 │                                                                              │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────┘
  elara · elara       │ observatory / ember · Thinking hidden · ? help │
 
 === reasoning-hidden 120x40 ===
@@ -523,7 +523,7 @@
  ✓ Idle
 ┌ PROMPT ─────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │                                                                                                                      │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────┘
  elara · elara                           │ observatory / ember · Thinking hidden · ? help │
 
 === reasoning-hidden 180x45 ===
@@ -570,7 +570,7 @@
  ✓ Idle
 ┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │                                                                                                                                                                                  │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
  elara · elara                                                         │ observatory / ember · Thinking hidden · ? help │
 
 === tool-failed 80x24 ===
@@ -596,7 +596,7 @@
  ● Running bash …
 ┌ PROMPT  ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? he… ┐
 │                                                                              │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────┘
  elara · elara      │ observatory / ember · Thinking expanded · ? help │
 
 === tool-failed 120x40 ===
@@ -638,7 +638,7 @@
  ● Running bash …
 ┌ PROMPT ─────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │                                                                                                                      │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────┘
  elara · elara                          │ observatory / ember · Thinking expanded · ? help │
 
 === tool-failed 180x45 ===
@@ -685,6 +685,6 @@
  ● Running bash …
 ┌ PROMPT ─────────────────────────────────────────────────────────────────────────────────────────────────── ask · Enter send · Ctrl-V paste text/image · Ctrl-O sessions · ? help ┐
 │                                                                                                                                                                                  │
-└ Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└ Ctrl-J newline · Alt-↑/↓ history (fixed) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
  elara · elara                                                        │ observatory / ember · Thinking expanded · ? help │
 

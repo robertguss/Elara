@@ -233,6 +233,10 @@ impl Editor {
         self.move_to(target, selecting);
         self.draft.desired_column = Some(desired);
     }
+    pub(crate) fn select_all(&mut self) {
+        self.draft.anchor = Some(0);
+        self.draft.cursor = self.text().len();
+    }
     pub fn handle_key(&mut self, key: KeyEvent, width: usize) -> bool {
         let selecting = key.modifiers.contains(KeyModifiers::SHIFT);
         let word = key
@@ -283,10 +287,6 @@ impl Editor {
                 self.previous()
             }),
             KeyCode::Delete => self.delete_to(if word { self.word(false) } else { self.next() }),
-            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.draft.anchor = Some(0);
-                self.draft.cursor = self.text().len();
-            }
             KeyCode::Char(c) if !word => {
                 self.insert(&c.to_string());
             }

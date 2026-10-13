@@ -125,7 +125,10 @@ pub(crate) fn submit(model: &mut Model, steer: bool) -> Option<Value> {
     request["sender_id"] = json!(format!("tui-{id}"));
     model.inbox.pending = Some(pending);
     model.mark_ask_sent();
-    model.notice = Some("Awaiting durable acceptance; draft retained. Enter checks status.".into());
+    model.notice = Some(format!(
+        "Awaiting durable acceptance; draft retained. {} checks status.",
+        model.keymap.keys(super::actions::Action::Submit)
+    ));
     Some(request)
 }
 
@@ -174,7 +177,10 @@ pub(crate) fn receipt(model: &mut Model, frame: &Value) -> bool {
             model.attachments.clear_accepted();
         }
         model.notice = (!accepted).then(|| {
-            "Original ID was not accepted; draft retained. Enter submits explicitly.".into()
+            format!(
+                "Original ID was not accepted; draft retained. {} submits explicitly.",
+                model.keymap.keys(super::actions::Action::Submit)
+            )
         });
     } else {
         model.notice = Some(format!(
@@ -231,7 +237,7 @@ pub(crate) fn input(model: &mut Model, event: &Event) -> Option<InputAction> {
     if key.kind != KeyEventKind::Press {
         return Some(InputAction::None);
     }
-    match super::actions::lookup(*key, false) {
+    match model.keymap.lookup(*key, false) {
         Some(super::actions::Action::Interrupt) => return Some(InputAction::Interrupt),
         Some(super::actions::Action::Steer) => return Some(InputAction::Steer),
         _ => {}
@@ -298,7 +304,7 @@ pub(crate) fn summary(model: &Model) -> String {
             .count()
     });
     format!(
-        "{}{context}{count} queued{} · Ctrl-Q queue · Ctrl-S steer · Esc stop",
+        "{}{context}{count} queued{} · {} queue · {} steer · {} stop",
         if read_only(model) {
             "READ-ONLY · "
         } else {
@@ -310,7 +316,10 @@ pub(crate) fn summary(model: &Model) -> String {
             " (agent wake limit)"
         } else {
             ""
-        }
+        },
+        model.keymap.keys(super::actions::Action::Queue),
+        model.keymap.keys(super::actions::Action::Steer),
+        model.keymap.keys(super::actions::Action::Escape),
     )
 }
 

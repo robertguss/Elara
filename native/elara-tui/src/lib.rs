@@ -151,6 +151,7 @@ pub struct Model {
     pub projection: Projection,
     pub connection: ConnectionState,
     pub editor: Editor,
+    keymap: actions::Keymap,
     attachments: attachments::Draft,
     inbox: inbox::Inbox,
     plugin_reload_supported: bool,
@@ -195,12 +196,23 @@ impl Model {
         let notice = projection.view["inbox"]["execution"]["read_only_notice"]
             .as_str()
             .map(str::to_owned);
+        let keymap = actions::Keymap::load(&state_root().join("keymap.json"));
+        let notice = if keymap.errors.is_empty() {
+            notice
+        } else {
+            Some(format!(
+                "{}Keymap: {} (details in /help)",
+                notice.map_or_else(String::new, |notice| format!("{notice} · ")),
+                keymap.errors.join(" · ")
+            ))
+        };
         Self {
             session_id,
             mode,
             projection,
             connection: ConnectionState::Connected,
             editor,
+            keymap,
             attachments: attachments::Draft::default(),
             inbox: inbox::Inbox::default(),
             plugin_reload_supported: false,
@@ -653,7 +665,7 @@ fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<
         return None;
     }
     if model.provider_picker.is_none() {
-        return (actions::lookup(*key, false) == Some(actions::Action::ProviderSettings))
+        return (model.keymap.lookup(*key, false) == Some(actions::Action::ProviderSettings))
             .then(|| open_provider(model));
     }
     let catalog = model.projection.view["provider_view"]["catalog"].as_array();
@@ -676,7 +688,7 @@ fn provider_input(model: &mut Model, event: &crossterm::event::Event) -> Option<
     e = e.min(count - 1);
     match key.code {
         _ if key.code == KeyCode::Esc
-            || actions::lookup(*key, false) == Some(actions::Action::ProviderSettings) =>
+            || model.keymap.lookup(*key, false) == Some(actions::Action::ProviderSettings) =>
         {
             model.provider_picker = None;
             return Some(InputAction::None);
@@ -731,7 +743,10 @@ pub fn paste_clipboard(model: &mut Model) -> InputAction {
         Err(error) => {
             model.safe_paste = true;
             model.safe_paste_cr = false;
-            model.notice = Some(error);
+            model.notice = Some(format!(
+                "{error} {} finishes without sending.",
+                model.keymap.keys(actions::Action::Paste)
+            ));
             InputAction::None
         }
     }
@@ -743,6 +758,13 @@ pub fn handle_input(
     width: usize,
 ) -> InputAction {
     use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+    if !model.safe_paste
+        && let Event::Key(key) = &event
+        && key.kind == KeyEventKind::Press
+        && model.keymap.lookup(*key, false) == Some(actions::Action::Interrupt)
+    {
+        return InputAction::Interrupt;
+    }
     if model.quit_confirmation {
         if let Event::Key(key) = &event
             && key.kind == KeyEventKind::Press
@@ -766,14 +788,17 @@ pub fn handle_input(
         if let Event::Key(key) = &event
             && key.kind == KeyEventKind::Press
         {
-            if actions::lookup(*key, false) == Some(actions::Action::ClearOrQuit) {
+            if model.keymap.lookup(*key, false) == Some(actions::Action::ClearOrQuit) {
                 if model.quit_armed {
                     model.quit_armed = false;
                     return model.request_quit();
                 }
                 model.editor.clear();
                 model.quit_armed = true;
-                model.notice = Some("Prompt cleared. Press Ctrl-C again to quit.".into());
+                model.notice = Some(format!(
+                    "Prompt cleared. Press {} again to quit.",
+                    model.keymap.keys(actions::Action::ClearOrQuit)
+                ));
                 return InputAction::None;
             }
             model.quit_armed = false;
@@ -783,7 +808,7 @@ pub fn handle_input(
     }
     if let Event::Key(key) = &event
         && key.kind == KeyEventKind::Press
-        && actions::lookup(*key, false) == Some(actions::Action::Paste)
+        && model.keymap.lookup(*key, false) == Some(actions::Action::Paste)
     {
         if model.safe_paste {
             model.safe_paste = false;
@@ -814,7 +839,7 @@ pub fn handle_input(
         && let Event::Key(key) = &event
         && key.kind == KeyEventKind::Press
     {
-        match actions::lookup(*key, false) {
+        match model.keymap.lookup(*key, false) {
             Some(actions::Action::Queue) => return inbox::open(model),
             Some(actions::Action::Steer) => return InputAction::Steer,
             _ => {}
@@ -846,7 +871,7 @@ pub fn handle_input(
     if let Event::Key(key) = &event
         && !model.safe_paste
         && key.kind == KeyEventKind::Press
-        && actions::lookup(*key, false) == Some(actions::Action::Sessions)
+        && model.keymap.lookup(*key, false) == Some(actions::Action::Sessions)
     {
         return sessions::open(model);
     }
@@ -855,14 +880,6 @@ pub fn handle_input(
     }
     if model.safe_paste && model.viewer.is_some() {
         model.close_tool();
-    }
-    if !model.safe_paste
-        && model.provider_picker.is_some()
-        && let Event::Key(key) = &event
-        && key.kind == KeyEventKind::Press
-        && actions::lookup(*key, false) == Some(actions::Action::Interrupt)
-    {
-        return InputAction::Interrupt;
     }
     if let Some(action) = attachments::input(model, &event) {
         return action;
@@ -991,7 +1008,21 @@ pub fn handle_input(
         Event::Key(key) if key.kind != KeyEventKind::Release => {
             use actions::Action;
             let focused = model.transcript.borrow().focused;
-            let action = actions::lookup(key, focused);
+            let action = if model.viewer.is_some() && key.modifiers.is_empty() {
+                match key.code {
+                    KeyCode::Esc => Some(Action::Escape),
+                    KeyCode::Enter => Some(Action::Submit),
+                    KeyCode::Up => Some(Action::Up),
+                    KeyCode::Down => Some(Action::Down),
+                    KeyCode::PageUp => Some(Action::PageUp),
+                    KeyCode::PageDown => Some(Action::PageDown),
+                    KeyCode::Home => Some(Action::Home),
+                    KeyCode::End => Some(Action::Tail),
+                    _ => model.keymap.lookup(key, focused),
+                }
+            } else {
+                model.keymap.lookup(key, focused)
+            };
             // Unframed pasted controls must never invoke application commands.
             if model.safe_paste {
                 let lf = key.code == KeyCode::Char('j') && key.modifiers == KeyModifiers::CONTROL;
@@ -1035,9 +1066,6 @@ pub fn handle_input(
                 }
                 return InputAction::None;
             }
-            if action == Some(Action::Interrupt) && key.kind == KeyEventKind::Press {
-                return InputAction::Interrupt;
-            }
             if model.transcript.borrow().searching {
                 let mut state = model.transcript.borrow_mut();
                 match key.code {
@@ -1075,11 +1103,11 @@ pub fn handle_input(
                     }
                 }
                 Some(Action::Escape) => {
-                    if model.viewer.is_some() && key.code == KeyCode::Esc {
+                    if model.viewer.is_some() {
                         model.close_tool();
                     } else if model.turn_state() != "idle" {
                         return InputAction::Interrupt;
-                    } else if focused && key.code == KeyCode::Esc {
+                    } else if focused {
                         model.transcript.borrow_mut().focused = false;
                     }
                 }
@@ -1096,6 +1124,14 @@ pub fn handle_input(
                         },
                         _ => "Nothing selected to copy".into(),
                     });
+                }
+                Some(Action::ReadOnly | Action::Undo) if key.kind == KeyEventKind::Press => {
+                    let command = if action == Some(Action::ReadOnly) {
+                        "read-only"
+                    } else {
+                        "undo"
+                    };
+                    return sessions::command_action(model, command).unwrap_or(InputAction::None);
                 }
                 Some(action) if focused => {
                     let mut state = model.transcript.borrow_mut();
@@ -1118,6 +1154,7 @@ pub fn handle_input(
                         _ => {}
                     }
                 }
+                Some(Action::SelectAll) => model.editor.select_all(),
                 Some(Action::Newline) => insert(model, "\n"),
                 Some(Action::Submit) if key.kind == KeyEventKind::Press => {
                     if let Some(action) = sessions::palette_command(model) {
@@ -1660,10 +1697,13 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
         Some(format!(
             "{} · {}",
             if state.follow { "FOLLOW" } else { "PAUSED" },
-            actions::hints(true)
+            model.keymap.hints(true)
         ))
     } else if !state.follow {
-        Some("PAUSED · End follow".into())
+        Some(format!(
+            "PAUSED · {} follow",
+            model.keymap.keys(actions::Action::Tail)
+        ))
     } else {
         None
     };
@@ -1699,14 +1739,21 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
         })
         .collect();
     let prompt_hint = if model.inbox.supported {
-        format!(" Enter send/queue · {} ", inbox::summary(model))
+        format!(
+            " {} send/queue · {} ",
+            model.keymap.keys(actions::Action::Submit),
+            inbox::summary(model)
+        )
     } else {
-        actions::prompt_title()
+        model.keymap.prompt_title()
     };
     let (title, hint) = if model.safe_paste {
         (
             " SAFE PASTE ",
-            " Enter newline · Ctrl-V finish (does not send) ".to_owned(),
+            format!(
+                " Enter newline · {} finish (does not send) ",
+                model.keymap.keys(actions::Action::Paste)
+            ),
         )
     } else {
         (" PROMPT ", prompt_hint)
@@ -1724,11 +1771,18 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
             || continuity["handoff"].is_object()
             || continuity["source"].is_string())
     {
-        " Esc stop · Ctrl-Q queue · Ctrl-J newline · ? all bindings "
-    } else if model.enhanced_keyboard {
-        " Alt/Shift-Enter or Ctrl-J newline · Alt-↑/↓ history "
+        format!(
+            " {} stop · {} queue · {} newline · {} all bindings ",
+            model.keymap.keys(actions::Action::Escape),
+            model.keymap.keys(actions::Action::Queue),
+            model.keymap.first_key(actions::Action::Newline),
+            model.keymap.keys(actions::Action::Help)
+        )
     } else {
-        " Ctrl-J newline · Alt-Enter if mapped · Alt-↑/↓ history "
+        format!(
+            " {} newline · Alt-↑/↓ history (fixed) ",
+            model.keymap.first_key(actions::Action::Newline)
+        )
     };
     let border = if transcript_focused {
         presentation::line_style()
@@ -1943,7 +1997,7 @@ fn draw_footer(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
         presentation::muted(),
     )];
     let center = format!(
-        "{}{} / {} · Thinking {} · ? help",
+        "{}{} / {} · Thinking {} · {} help",
         if inbox::read_only(model) {
             "READ-ONLY · "
         } else {
@@ -1955,7 +2009,8 @@ fn draw_footer(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
             "expanded"
         } else {
             "hidden"
-        }
+        },
+        model.keymap.keys(actions::Action::Help),
     );
     let right = model.cwd.as_deref().map(tilde).unwrap_or_default();
     let width = inner.width as usize;
@@ -2017,20 +2072,31 @@ fn draw_diagnostics(frame: &mut ratatui::Frame<'_>, model: &Model, area: Rect) {
 }
 
 fn composer_help(model: &Model) -> Vec<Line<'static>> {
-    let mut lines = actions::help();
+    let mut lines = model.keymap.help();
     lines.extend([
-        Line::from("Enter sends when idle; rejected/uncertain sends retain the draft."),
-        Line::from("Prompt: arrows move; Shift selects; Ctrl-A selects all."),
-        Line::from("Ctrl/Alt arrows/delete: words. Home/End: line; Ctrl: whole draft."),
-        Line::from("Alt-Up/Down prompt history restores the original draft at newest."),
-        Line::from("Ctrl-V pastes clipboard text or PNG without sending."),
+        Line::from(format!(
+            "{} sends when idle; rejected/uncertain sends retain the draft.",
+            model.keymap.keys(actions::Action::Submit)
+        )),
+        Line::from(format!(
+            "{} selects all; {} help opens on an empty prompt.",
+            model.keymap.keys(actions::Action::SelectAll),
+            model.keymap.keys(actions::Action::Help)
+        )),
+        Line::from(format!(
+            "{} pastes clipboard text or PNG without sending.",
+            model.keymap.keys(actions::Action::Paste)
+        )),
         Line::from("/paste safe BEFORE unframed paste: Enter inserts newline; commands disabled."),
-        Line::from("Ctrl-V finishes safe paste without sending. Draft limit 64 KiB."),
+        Line::from(format!(
+            "{} finishes safe paste without sending. Draft limit 64 KiB.",
+            model.keymap.keys(actions::Action::Paste)
+        )),
         Line::from("Tabs/line breaks retained; other control bytes removed."),
         Line::from(if model.enhanced_keyboard {
             "Enhanced keys: modified Enter available."
         } else {
-            "Legacy keys: Ctrl-J fallback; Alt-Enter depends on terminal mapping."
+            "Legacy terminals may not report modified Enter or Ctrl/Shift distinctly."
         }),
     ]);
     lines.push(Line::from(

@@ -141,8 +141,8 @@ impl Appearance {
             )),
             Line::from(""),
             Line::from("Enter apply · s save defaults + apply · Esc cancel"),
-            Line::from("/appearance · Ctrl-T hide/show thinking · /thinking-view"),
-            Line::from("Ctrl-R turns · Tab transcript · End follow live work · /diagnostics"),
+            Line::from("/appearance · /thinking hide/show thinking · /thinking-view"),
+            Line::from("/turns · /help effective keys · /diagnostics"),
         ]
     }
 }

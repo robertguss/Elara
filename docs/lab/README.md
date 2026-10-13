@@ -74,10 +74,22 @@ repository root. Run them from `lab/`, where `--results lab/results/...` becomes
 registration (`Elara.Lab.MatrixRunner.registration/3`) takes the repository
 root, `..` from `lab/`, so the product's source is frozen with the lab's.
 
-Repetition `r` uses seed `S + r` in its own temporary sessions root and skills
-home, so runs never touch `~/.elara`. Each repetition appends one JSON line to
-`lab/results/SCENARIO/` (gitignored), and a summary prints the spread across
-repetitions. For example:
+New recovery matrix manifests use `registration_version: 2`. Handoff cells
+record `context_limit=16000`, so the unchanged 60,000-byte scripted answer
+reaches the usage-anchored meter's handoff threshold. Recovery checks, fault
+stages, seeds and timing bounds are unchanged. Old manifests and result files
+remain historical evidence. Run their frozen source to reproduce them; do not
+edit them to fit this version or compare timings as unchanged conditions.
+The current concurrency count trace observes `Context.budget/3`; historical
+`budget/2` counts stay in their original result files.
+
+Repetition `r` uses seed `S + r` in its own temporary sessions root, skills
+home and coding worktree root, so runs never touch `~/.elara` or
+`~/.elara-worktrees`. Worktrees sit beside protected session state, not inside
+it. Confirmed cleanup restores the previous roots; unconfirmed cleanup keeps
+all roots bound to the retained run directory. Each repetition appends one
+JSON line to `lab/results/SCENARIO/` (gitignored), and a summary prints the
+spread across repetitions. For example:
 
     mix elara.lab run smoke --n 3 --seed 42 --set sessions=8
 

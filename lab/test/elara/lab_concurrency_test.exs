@@ -115,7 +115,7 @@ defmodule Elara.Lab.ConcurrencyTest do
 
   defp failed(result), do: Elara.Lab.failed_checks(result)
 
-  @counted ~w(:file.sync/1 Elara.Session.Store.save/1 Elara.Session.Context.budget/2
+  @counted ~w(:file.sync/1 Elara.Session.Store.save/1 Elara.Session.Context.budget/3
               Elara.Session.Handoff.lineage/1 Elara.FlightRecorder.complete_transition/4
               Elara.Exec.run/2)
 
@@ -276,7 +276,7 @@ defmodule Elara.Lab.ConcurrencyTest do
 
     for name <- [
           "Elara.Session.Store.save/1",
-          "Elara.Session.Context.budget/2",
+          "Elara.Session.Context.budget/3",
           "Elara.Session.Handoff.lineage/1",
           "Elara.FlightRecorder.complete_transition/4",
           "Elara.Exec.run/2"

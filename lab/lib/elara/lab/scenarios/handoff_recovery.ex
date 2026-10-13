@@ -21,7 +21,11 @@ defmodule Elara.Lab.Scenarios.HandoffRecovery do
   def run(context) do
     stage = get_in(context, [:params, "stage"]) || "prepared"
     unless stage in @stages, do: raise(ArgumentError, "unknown handoff stage #{inspect(stage)}")
-    schedule = schedule(context.seed, stage)
+
+    schedule =
+      schedule(context.seed, stage)
+      |> Map.put(:context_limit, String.to_integer(context.params["context_limit"] || "16000"))
+
     cwd = Path.join(context.dir, "workspace")
     File.mkdir_p!(cwd)
     {:ok, coordinator} = Coordinator.start_link([])
@@ -119,7 +123,7 @@ defmodule Elara.Lab.Scenarios.HandoffRecovery do
           plugins: [],
           provider: provider,
           tools: [%{Tools.marker() | run: {__MODULE__, :run_marker}}],
-          context_limit: 100_000,
+          context_limit: schedule.context_limit,
           max_tool_output_bytes: 1_024,
           max_iterations: 3,
           handoff_fault_hook: fn stage ->

@@ -7,6 +7,7 @@ defmodule Elara.Lab.MatrixRunner do
 
     %{
       schema: 1,
+      registration_version: 2,
       commit: artifacts.source.commit,
       repo: Path.expand(repo),
       artifacts: artifacts,
@@ -31,6 +32,7 @@ defmodule Elara.Lab.MatrixRunner do
       if mode == "measurement", do: Matrix.plan(50, 1_085_000), else: Matrix.plan(1, 1_084_900)
 
     true = manifest["schema"] == 1 and manifest["timeout_ms"] == 60_000
+    true = manifest["registration_version"] == 2
     true = manifest[mode]["cells"] == json(expected)
     true = manifest["artifacts"]["source"] == %{"commit" => manifest["commit"], "dirty" => false}
     true = Artifacts.verify(manifest["artifacts"]).verified

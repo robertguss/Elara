@@ -16,6 +16,7 @@ defmodule Elara.Lab.HandoffRecoveryTest do
       assert result.cleanup.confirmed, inspect(result.cleanup)
       assert result.complete, inspect({result.error, result.checks})
       assert Elara.Lab.failed_checks(result) == [], inspect(result)
+      assert result.schedule.context_limit == 16_000
       assert result.marker_labels == ["A" | result.schedule.order]
       assert length(result.observation.stores) == 2
       assert result.observation.inputs["H"].state == :completed

@@ -14,9 +14,14 @@ defmodule Elara.LabTest do
   # A run with unconfirmed cleanup (or a raise) leaves its sessions root bound.
   setup do
     previous = Map.new([:sessions_root, :skills_home], &{&1, Application.get_env(:elara, &1)})
+    worktrees = System.get_env("ELARA_WORKTREES_ROOT")
 
     on_exit(fn ->
       Enum.each(previous, fn {key, value} -> Application.put_env(:elara, key, value) end)
+
+      if worktrees,
+        do: System.put_env("ELARA_WORKTREES_ROOT", worktrees),
+        else: System.delete_env("ELARA_WORKTREES_ROOT")
     end)
   end
 
@@ -36,10 +41,12 @@ defmodule Elara.LabTest do
 
   test "repetitions use consecutive seeds and isolated state roots" do
     home = Application.fetch_env!(:elara, :sessions_root)
+    worktrees = System.get_env("ELARA_WORKTREES_ROOT")
     {:ok, results} = Elara.Lab.run("smoke", seed: 3, n: 2, params: @params)
 
     assert Enum.map(results, & &1.seed) == [3, 4]
     assert Application.fetch_env!(:elara, :sessions_root) == home
+    assert System.get_env("ELARA_WORKTREES_ROOT") == worktrees
 
     summary = Elara.Lab.summarize(results)
     assert summary.repetitions == 2
@@ -115,6 +122,7 @@ defmodule Elara.LabTest do
     assert Enum.at(results, 1).evidence_dir == failed
     assert List.last(results).retained_dir == unsettled
     assert Application.fetch_env!(:elara, :sessions_root) == Path.join(unsettled, "sessions")
+    assert System.get_env("ELARA_WORKTREES_ROOT") == Path.join(unsettled, "worktrees")
     refute root == Path.join(unsettled, "sessions")
 
     summary = Elara.Lab.summarize(results)

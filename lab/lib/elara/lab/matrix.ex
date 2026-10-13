@@ -14,7 +14,12 @@ defmodule Elara.Lab.Matrix do
 
   def cases do
     for {scenario, key, values} <- @families, value <- values do
-      %{case_id: scenario <> ":" <> value, scenario: scenario, params: %{key => value}}
+      params =
+        if scenario == "handoff_recovery",
+          do: %{key => value, "context_limit" => "16000"},
+          else: %{key => value}
+
+      %{case_id: scenario <> ":" <> value, scenario: scenario, params: params}
     end
   end
 

@@ -28,7 +28,7 @@ defmodule Elara.Tools.Search do
          {:ok, limit} <- limit_arg(args, @default_glob_limit),
          {:ok, scope} <- scope_arg(args, ctx.cwd),
          {:ok, rg} <- ripgrep(),
-         {:ok, files} <- files(rg, scope, pattern, ctx, deadline) do
+         {:ok, files} <- files(rg, scope, pattern, ctx, deadline, limit + 1) do
       render(Enum.join(files, "\n"), ctx, limit, "files", false)
     end
   end
@@ -94,22 +94,25 @@ defmodule Elara.Tools.Search do
 
   # Enumerate names only, then authorize every resolved target before rg can
   # read contents. NUL framing keeps unusual filenames from bypassing the fence.
-  defp files(rg, scope, include, ctx, deadline) do
+  defp files(rg, scope, include, ctx, deadline, max_files \\ nil) do
     argv =
       [rg, "--files", "--null"] ++ include_flag(include) ++ shared_flags() ++ operand([scope])
 
-    with {:ok, output, false} <- execute(argv, ctx, @max_file_list_bytes, deadline) do
-      files =
+    with {:ok, fence} <- FileFence.prepare(ctx.cwd),
+         {:ok, output, false} <- execute(argv, ctx, @max_file_list_bytes, deadline) do
+      candidates =
         output
         |> String.split(<<0>>, trim: true)
-        |> Enum.flat_map(fn path ->
-          case FileFence.resolve(path, ctx.cwd) do
+        |> Stream.flat_map(fn path ->
+          case FileFence.resolve(path, fence) do
             {:ok, {_root, resolved}} -> [Path.relative_to(resolved, Path.expand(ctx.cwd))]
             {:error, _} -> []
           end
         end)
-        |> Enum.uniq()
-        |> Enum.sort()
+        |> Stream.uniq()
+
+      files = if max_files, do: Enum.take(candidates, max_files), else: Enum.to_list(candidates)
+      files = Enum.sort(files)
 
       if System.monotonic_time(:millisecond) < deadline,
         do: {:ok, files},

@@ -142,9 +142,16 @@ defmodule Elara.Worker.Server do
 
         # A killed mutating job may already have changed the workspace.
         if tool.mutating do
+          message =
+            if tool.run == {Elara.Tools, :bash},
+              do:
+                "timed out while running; #{@partial}. Inspect the workspace before rerunning " <>
+                  "the bash call with a longer timeout_ms, up to the configured ceiling.",
+              else: "deadline exceeded while running; #{@partial}"
+
           :gen_tcp.send(
             socket,
-            encode_result({:indeterminate, "deadline exceeded while running; #{@partial}"})
+            encode_result({:indeterminate, message})
           )
         else
           :gen_tcp.send(socket, encode_error(:deadline_exceeded))

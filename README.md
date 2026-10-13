@@ -779,9 +779,22 @@ records an indeterminate terminal and never invokes the job again. Losing the
 writer still leaves an attempted receipt unresolved; restarting or observing
 workspace bytes does not manufacture a terminal result.
 
-Each turn allows 12 model iterations by default. Each tool has a 30-second
-timeout. Shell output is capped at 16 KiB in the execution stub, and the session
-keeps the same 16 KiB cap as a second line before output enters model history.
+Each turn allows 100 model calls by default. Tools have a 10-minute default
+timeout; the model may give `bash` a per-call `timeout_ms` up to a 60-minute
+ceiling. A timed-out command is reported as unknown, with guidance to inspect
+partial changes before rerunning with a longer timeout. Interrupt still cancels
+a running command; raising the timeout does not prevent interruption.
+
+Set `ELARA_MAX_ITERATIONS`, `ELARA_TOOL_TIMEOUT_MS`, and
+`ELARA_MAX_TOOL_TIMEOUT_MS` to positive integers to override these limits.
+Application config uses `:elara` keys `:max_iterations`, `:tool_timeout_ms`,
+and `:max_tool_timeout_ms`; explicit session options win over environment, then
+application config, then defaults. The default timeout must not exceed its
+ceiling. Invalid settings fail session creation rather than silently falling
+back. Children and handoff successors inherit the session's limits.
+
+Shell output is capped at 16 KiB in the execution stub, and the session keeps
+the same 16 KiB cap as a second line before output enters model history.
 
 Consecutive calls with identical tool names and arguments in one model response
 are rejected as duplicates. An intervening call or a later model response can

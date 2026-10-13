@@ -60,6 +60,7 @@ defmodule Elara.Session.Handoff do
         max_iterations: shell.core.config.max_iterations,
         max_tool_output_bytes: shell.core.config.max_tool_output_bytes,
         tool_timeout_ms: shell.tool_timeout_ms,
+        max_tool_timeout_ms: shell.max_tool_timeout_ms,
         context_limit: shell.context_limit
       ]
   end

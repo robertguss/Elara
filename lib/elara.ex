@@ -32,9 +32,10 @@ defmodule Elara do
   defp do_start_session_under(supervisor, opts) do
     cwd = Keyword.get_lazy(opts, :cwd, &File.cwd!/0)
 
-    with {:ok, provider} <- fetch_provider(opts),
+    with {:ok, limits} <- Elara.Config.runtime_limits(opts),
+         {:ok, provider} <- fetch_provider(opts),
          {:ok, store} <- prepare_store(opts, cwd) do
-      start_prepared_session(supervisor, opts, provider, store)
+      start_prepared_session(supervisor, Keyword.merge(opts, limits), provider, store)
     end
   end
 
@@ -46,9 +47,9 @@ defmodule Elara do
     skills = Elara.Skills.discover(cwd, Keyword.take(opts, [:skill_paths, :home]))
     instructions = Prompt.instructions(cwd)
     system = Prompt.render(base_system, instructions, Elara.Skills.summary(skills))
-    max_iterations = Keyword.get(opts, :max_iterations, 12)
+    max_iterations = Keyword.fetch!(opts, :max_iterations)
     max_tool_output_bytes = Keyword.get(opts, :max_tool_output_bytes, 16_384)
-    tool_timeout_ms = Keyword.get(opts, :tool_timeout_ms, 30_000)
+    tool_timeout_ms = Keyword.fetch!(opts, :tool_timeout_ms)
     plugin_paths = Keyword.get_lazy(opts, :plugins, fn -> Plugin.discover(cwd) end)
     router = Keyword.get(opts, :router, Elara.Executor.Router)
     workspace_id = Keyword.get_lazy(opts, :workspace_id, fn -> workspace_id(cwd) end)
@@ -79,6 +80,7 @@ defmodule Elara do
         context_limit: Keyword.get(opts, :context_limit),
         handoff_fault_hook: Keyword.get(opts, :handoff_fault_hook, fn _ -> :ok end),
         tool_timeout_ms: tool_timeout_ms,
+        max_tool_timeout_ms: Keyword.fetch!(opts, :max_tool_timeout_ms),
         plugin_paths: plugin_paths,
         discover_plugins?:
           Keyword.get(opts, :discover_plugins?, not Keyword.has_key?(opts, :plugins)),

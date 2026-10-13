@@ -186,7 +186,13 @@ defmodule Elara.Tool do
       parameters: %{
         "type" => "object",
         "properties" => %{
-          "command" => %{"type" => "string", "description" => "Shell command to run"}
+          "command" => %{"type" => "string", "description" => "Shell command to run"},
+          "timeout_ms" => %{
+            "type" => "integer",
+            "minimum" => 1,
+            "description" =>
+              "Per-call timeout in milliseconds. Session default and ceiling apply; unless overridden, 600000 (10 minutes) and 3600000 (60 minutes)."
+          }
         },
         "required" => ["command"]
       },

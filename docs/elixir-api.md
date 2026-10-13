@@ -70,8 +70,9 @@ including when selected through `plugins:`. See [plugin trust](plugins.md).
 | `system:`                | built-in coding-agent prompt       | Base prompt override; scoped project instructions and skill metadata are appended. |
 | `skill_paths:`           | `ELARA_SKILL_PATHS`                | Ordered explicit skill directories/containers, ahead of project and user skills.   |
 | `home:`                  | `System.user_home!()`              | User skill discovery home; useful for isolated embedded sessions/tests.            |
-| `max_iterations:`        | `12`                               | Maximum provider calls in a turn.                                                  |
-| `tool_timeout_ms:`       | `30_000`                           | Timeout for each tool call.                                                        |
+| `max_iterations:`        | `100`                              | Maximum provider calls in a turn; environment/app config may override.              |
+| `tool_timeout_ms:`       | `600_000`                          | Default tool timeout; bash may choose a per-call `timeout_ms`.                       |
+| `max_tool_timeout_ms:`   | `3_600_000`                        | Ceiling for a per-call bash timeout, in milliseconds.                               |
 | `max_tool_output_bytes:` | `16_384`                           | Tool-result bytes retained in history.                                             |
 | `persist:`               | `true`                             | Write session JSONL and flight recording; `false` keeps both in memory.            |
 | `resume:`                | `nil`                              | `:latest` for the newest cwd-scoped session, or an explicit session path.          |

@@ -269,6 +269,58 @@ defmodule Elara.SessionTest do
     assert {:ok, "after timeout"} = Elara.ask(session, "go")
   end
 
+  test "default turn budget reaches 100 provider calls and an explicit limit reaches 50" do
+    for opts <- [[], [max_iterations: 50]] do
+      limit = Keyword.get(opts, :max_iterations, 100)
+
+      replies =
+        for n <- 1..(limit - 1) do
+          {:ok, asst(nil, [%ToolCall{id: "call-#{n}", name: "absent", args: {:ok, %{}}}])}
+        end
+
+      provider = script(replies ++ [{:ok, asst("finished #{limit}")}])
+
+      {:ok, session} =
+        Elara.start_session([provider: provider, tools: [], persist: false] ++ opts)
+
+      assert {:ok, "finished #{limit}"} == Elara.ask(session, "continue until finished")
+      assert Enum.count(Elara.transcript(session), &match?(%Message.Assistant{}, &1)) == limit
+    end
+  end
+
+  @tag :tmp_dir
+  test "bash per-call deadline replaces the default but respects the ceiling", %{tmp_dir: cwd} do
+    calls = [
+      %{"command" => "sleep 0.15; printf completed", "timeout_ms" => 1_000},
+      %{"command" => "touch rejected", "timeout_ms" => 1_001},
+      %{"command" => "sleep 2", "timeout_ms" => 20}
+    ]
+
+    replies =
+      for {args, n} <- Enum.with_index(calls) do
+        {:ok, asst(nil, [%ToolCall{id: "bash-#{n}", name: "bash", args: {:ok, args}}])}
+      end
+
+    {:ok, session} =
+      Elara.start_session(
+        provider: script(replies ++ [{:ok, asst("finished")}]),
+        tools: [Enum.find(Tool.builtins(), &(&1.name == "bash"))],
+        cwd: cwd,
+        persist: false,
+        tool_timeout_ms: 50,
+        max_tool_timeout_ms: 1_000
+      )
+
+    assert {:ok, "finished"} = Elara.ask(session, "run commands")
+    results = for %Message.ToolResult{outcome: outcome} <- Elara.transcript(session), do: outcome
+    assert [{:ok, "completed"}, {:error, rejected}, {:indeterminate, timed_out}] = results
+    assert rejected =~ "1 to 1000"
+    refute File.exists?(Path.join(cwd, "rejected"))
+    assert timed_out =~ "timed out"
+    assert timed_out =~ "longer timeout_ms"
+    assert timed_out =~ "partially changed"
+  end
+
   test "provider error surfaces" do
     err = %Error{kind: :http, message: "nope"}
     provider = script([{:error, err}])

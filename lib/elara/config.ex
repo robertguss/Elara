@@ -1,11 +1,43 @@
 defmodule Elara.Config do
-  @moduledoc "Env and auth resolution for providers."
+  @moduledoc "Runtime limits and env/auth resolution for providers."
 
   alias Elara.Auth
   alias Elara.Auth.OpenAICodex, as: OpenAICodexAuth
   alias Elara.Provider.Grok
   alias Elara.Provider.OpenAI
   alias Elara.Provider.OpenAICodex
+
+  @limits [max_iterations: 100, tool_timeout_ms: 600_000, max_tool_timeout_ms: 3_600_000]
+
+  @doc "Resolve positive runtime limits: session options, environment, app config, defaults."
+  def runtime_limits(opts \\ [], env \\ System.get_env()) do
+    Enum.reduce_while(@limits, {:ok, []}, fn {key, default}, {:ok, limits} ->
+      value =
+        Keyword.get_lazy(opts, key, fn ->
+          present(env, "ELARA_" <> String.upcase(Atom.to_string(key))) ||
+            Application.get_env(:elara, key, default)
+        end)
+
+      parsed = if is_binary(value), do: Integer.parse(value), else: {value, ""}
+
+      case parsed do
+        {number, ""} when is_integer(number) and number > 0 ->
+          {:cont, {:ok, Keyword.put(limits, key, number)}}
+
+        _ ->
+          {:halt, {:error, {:invalid_runtime_limit, key}}}
+      end
+    end)
+    |> case do
+      {:ok, limits} ->
+        if limits[:tool_timeout_ms] <= limits[:max_tool_timeout_ms],
+          do: {:ok, limits},
+          else: {:error, {:invalid_runtime_limit, :tool_timeout_ms}}
+
+      error ->
+        error
+    end
+  end
 
   @doc """
   Resolve provider config.

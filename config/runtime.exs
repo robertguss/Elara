@@ -31,10 +31,14 @@ if config_env() == :test do
   # Crash-recovery tests kill Elara.TestJobs and Elara.Exec on purpose; under
   # OTP's default of 3 restarts in 5 seconds some test orders stop the whole
   # application (reproduced with seed 734866).
+  # The checkout's own agent skills serve whoever develops Elara. Sessions whose
+  # workspace sits inside the checkout (the default cwd, ExUnit's tmp_dir) must
+  # not load them, or their prompt size depends on what the repo happens to hold.
   config :elara,
     max_restarts: 100,
     test_run_dir: run_dir,
     sessions_root: Path.join(run_dir, "sessions"),
     skills_home: Path.join(run_dir, "home"),
+    ignored_skill_dirs: [Path.expand(".agents/skills")],
     plugin_trust_root: Path.join(run_dir, "plugin-trust")
 end

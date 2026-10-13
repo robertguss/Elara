@@ -54,8 +54,16 @@ defmodule Elara.Lab.Artifacts do
     %{commit: String.trim(commit), dirty: status != ""}
   end
 
+  # Git tracks a symlink as its target text, so hash that rather than following
+  # it: a link to a directory has no file bytes to read.
   defp hash(path) do
-    case File.read(path) do
+    content =
+      case File.read_link(path) do
+        {:ok, target} -> {:ok, "symlink:" <> target}
+        {:error, _} -> File.read(path)
+      end
+
+    case content do
       {:ok, bytes} -> :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)
       {:error, _} -> nil
     end

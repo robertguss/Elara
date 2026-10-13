@@ -22,12 +22,10 @@ pub(crate) struct Inbox {
 }
 
 fn path(session: &str) -> PathBuf {
-    let root = std::env::var_os("ELARA_TUI_STATE_DIR")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".elara/tui")))
-        .unwrap_or_else(|| PathBuf::from(".elara/tui"));
     let encoded: String = session.bytes().map(|b| format!("{b:02x}")).collect();
-    root.join("pending").join(format!("{encoded}.json"))
+    super::state_root()
+        .join("pending")
+        .join(format!("{encoded}.json"))
 }
 
 fn persist(session: &str, pending: &Value) -> Result<(), String> {

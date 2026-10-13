@@ -11,7 +11,7 @@ mod clipboard;
 mod editor;
 mod tools;
 mod transcript;
-pub use editor::Editor;
+pub use editor::{Editor, MAX_INPUT_BYTES};
 use std::cell::RefCell;
 use std::fs;
 use std::io::{Read, Write};
@@ -559,6 +559,7 @@ pub enum InputAction {
     Steer,
     Interrupt,
     Detach,
+    ExternalEditor,
     ProviderSettings(Value),
     Attachment(Value),
     Session(Value),
@@ -909,6 +910,9 @@ pub fn handle_input(
                 return InputAction::None;
             }
             match action {
+                Some(Action::ExternalEditor) if key.kind == KeyEventKind::Press => {
+                    return InputAction::ExternalEditor;
+                }
                 Some(Action::ToggleTool) if focused => model.toggle_tool(),
                 Some(Action::ToolViewer) if focused => model.open_tool(),
                 Some(Action::Focus) => {

@@ -388,6 +388,14 @@ as plain Enter. Press F1 for all bindings, including word movement/deletion,
 Home/End, Shift-selection, and Alt-Up/Down history. Returning past the newest
 history prompt restores your original draft, cursor, and selection.
 
+**Ctrl-G** (or `/editor` on an empty draft) opens `$VISUAL`, falling back to
+`$EDITOR`, with a private temporary Markdown file containing the draft. Editor
+commands may include arguments, for example `EDITOR='code --wait'`. Elara
+suspends its terminal modes while the editor runs, then restores the composer.
+A successful save replaces the draft, never sends it; a failed editor, invalid
+UTF-8, or text above the 64 KiB limit leaves the original draft intact. Temporary
+draft files are removed when the editor returns.
+
 Bracketed clipboard paste preserves newlines without sending. If paste framing
 is unavailable, press **F2 before pasting**: safe paste mode inserts Enter as a
 newline and disables application commands; F2 exits that mode without sending.

@@ -516,6 +516,10 @@ pub(super) fn palette_command(model: &mut Model) -> Option<InputAction> {
         "why" => InputAction::Session(json!({"version":2,"command":"inspect"})),
         "interrupt" if control => InputAction::Interrupt,
         "detach" => InputAction::Detach,
+        "editor" => {
+            model.editor.clear();
+            InputAction::ExternalEditor
+        }
         "help" => {
             model.editor.clear();
             model.show_help = true;

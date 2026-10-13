@@ -478,7 +478,8 @@ Panel confirmation/navigation and letter controls, and low-level editing
 (cursor movement, selection, word deletion and prompt history) stay fixed.
 For example, rebinding `submit` does not rebind a confirmation panel's Enter.
 Arrows, Home/End, PageUp/PageDown, deletion keys, Enter/Esc/Tab, panel letters
-`l/t/d/n/s/r`, and legacy Ctrl-H/I/M/[ aliases are reserved. Help labels the
+`l/t/d/n/s/r`, inline `@` file discovery (also Shift-@), and legacy Ctrl-H/I/M/[
+aliases are reserved. Help labels the
 fixed controls. A collision with another action (including its default key)
 rejects the entry, retaining its default. Duplicate custom keys reject both
 entries; key swaps through reserved defaults are not supported. An action can

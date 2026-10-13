@@ -417,7 +417,7 @@ impl Keymap {
             "[T] = transcript only; other actions keep their existing scope.",
         ));
         lines.push(ratatui::text::Line::from(
-            "Fixed: panel Enter/Esc/Tab/arrows, PgUp/PgDn, Home/End and panel letters.",
+            "Fixed: panel Enter/Esc/Tab/arrows, PgUp/PgDn, Home/End, panel letters; inline @files.",
         ));
         lines.push(ratatui::text::Line::from("Fixed editing: arrows/Shift selection, Ctrl/Alt words/delete, Home/End, Alt-Up/Down history."));
         lines.extend(
@@ -532,6 +532,7 @@ fn fixed(key: KeyEvent) -> bool {
         | KeyCode::Delete
         | KeyCode::BackTab => true,
         KeyCode::Enter | KeyCode::Esc | KeyCode::Tab => true,
+        KeyCode::Char('@') => !key.modifiers.intersects(M::CONTROL | M::ALT),
         KeyCode::Char('l' | 't' | 'd' | 'n' | 's' | 'r') => key.modifiers.is_empty(),
         _ => false,
     }

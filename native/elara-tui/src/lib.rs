@@ -1012,6 +1012,7 @@ pub fn handle_input(
                 match key.code {
                     KeyCode::Esc => Some(Action::Escape),
                     KeyCode::Enter => Some(Action::Submit),
+                    KeyCode::Tab => Some(Action::Focus),
                     KeyCode::Up => Some(Action::Up),
                     KeyCode::Down => Some(Action::Down),
                     KeyCode::PageUp => Some(Action::PageUp),

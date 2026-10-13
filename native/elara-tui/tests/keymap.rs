@@ -1,5 +1,5 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers as M};
-use elara_tui::{InputAction, Model, fixture_model, handle_input, render_frame};
+use elara_tui::{InputAction, Model, attached_model, fixture_model, handle_input, render_frame};
 use serde_json::json;
 use std::{fs, process::Command};
 
@@ -11,6 +11,52 @@ fn key(model: &mut Model, code: KeyCode, modifiers: M) -> InputAction {
 fn configurable_actions_follow_file_and_keep_fixed_controls() {
     if let Ok(case) = std::env::var("ELARA_KEYMAP_CASE") {
         let mut model = fixture_model("idle");
+        if case == "viewer" {
+            assert!(model.notice.is_none());
+            model = fixture_model("tool-running");
+            key(&mut model, KeyCode::F(12), M::NONE);
+            render_frame(&model, 110, 34).unwrap();
+            key(&mut model, KeyCode::Home, M::NONE);
+            for _ in 0..12 {
+                key(&mut model, KeyCode::Down, M::NONE);
+            }
+            key(&mut model, KeyCode::Char('f'), M::NONE);
+            assert!(
+                render_frame(&model, 110, 34)
+                    .unwrap()
+                    .contains("Tool viewer")
+            );
+            key(&mut model, KeyCode::Tab, M::NONE);
+            assert!(
+                !render_frame(&model, 110, 34)
+                    .unwrap()
+                    .contains("Tool viewer"),
+                "fixed Tab closes the tool viewer"
+            );
+            return;
+        }
+        if case == "inline" || case == "inline_shift" {
+            let notice = model.notice.as_deref().unwrap_or("");
+            assert!(notice.contains("fixed control"), "{notice}");
+            model = attached_model(&json!({"version":2,"type":"attached","session_id":model.session_id,"incarnation":model.projection.incarnation,"head":model.projection.head,"snapshot":model.projection.view,"extensions":["input_attachments_v1"]}), "control").unwrap();
+            model.editor.insert("hello ");
+            let modifiers = if case == "inline_shift" {
+                M::SHIFT
+            } else {
+                M::NONE
+            };
+            let InputAction::Attachment(request) = key(&mut model, KeyCode::Char('@'), modifiers)
+            else {
+                panic!("inline @ must keep file discovery");
+            };
+            assert_eq!(request["command"], "discover_files");
+            key(&mut model, KeyCode::Esc, M::NONE);
+            assert_eq!(
+                key(&mut model, KeyCode::Enter, M::NONE),
+                InputAction::Submit
+            );
+            return;
+        }
         if case == "defaults" {
             assert!(model.notice.is_none());
             model.editor.insert("draft");
@@ -158,6 +204,9 @@ fn configurable_actions_follow_file_and_keep_fixed_controls() {
             r#"{"provider_settings":"Ctrl+K","newline":"f2","submit":"f3","interrupt":"f4","steer":"f5","select_all":"f6","read_only":"f7","undo":"f8","escape":"f9","help":"f10","paste":"f11","appearance":"alt+a"}"#,
         ),
         ("broken", "not JSON"),
+        ("viewer", r#"{"focus":"f12"}"#),
+        ("inline", r#"{"submit":"@"}"#),
+        ("inline_shift", r#"{"submit":"shift+@"}"#),
         (
             "entries",
             r#"{"submit":"ctrl+p","help":"ctrl+enter","turns":"up","new_action":"f8","paste":42,"queue":"f9","steer":"f9","thinking":"f12","appearance":"r"}"#,

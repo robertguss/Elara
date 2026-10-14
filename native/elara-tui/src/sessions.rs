@@ -493,6 +493,7 @@ pub(super) fn command_action(model: &mut Model, command: &str) -> Option<InputAc
     let argument = words.next().unwrap_or("").trim();
     let control = model.mode == "control";
     let result = match name {
+        "suspend" if argument.is_empty() => InputAction::Suspend,
         "read-only" if control => {
             let mut request = json!({"version":2,"command":"read_only"});
             match argument {

@@ -731,7 +731,7 @@ Action names are `appearance`, `files`, `image`, `attachments`,
 `provider_settings`, `thinking`, `thinking_view`, `turns`, `focus`, `toggle_tool`,
 `tool_viewer`, `up`, `down`, `page_up`, `page_down`, `home`, `tail`, `previous_turn`,
 `next_turn`, `search`, `next_match`, `previous_match`, `copy`, `copy_entry`, `help`,
-`paste`, `external_editor`, `submit`, `newline`, `interrupt`, `escape`,
+`paste`, `external_editor`, `suspend`, `submit`, `newline`, `interrupt`, `escape`,
 `clear_or_quit`, `sessions`, `queue`, `steer`, `read_only`, `undo` and `select_all`.
 Their scope stays the same: transcript-only actions remain transcript-only;
 help opens on an empty prompt; observer restrictions still apply.
@@ -893,6 +893,15 @@ suspends its terminal modes while the editor runs, then restores the composer.
 A successful save replaces the draft, never sends it; a failed editor, invalid
 UTF-8, or text above the 64 KiB limit leaves the original draft intact. Temporary
 draft files are removed when the editor returns.
+
+The socket reader continues while the editor runs. **Ctrl-Z** (or `/suspend`)
+restores normal terminal modes and suspends the TUI; use your shell's `fg` to
+resume. A suspended process cannot read its socket. If the server drops a
+blocked connection, the TUI automatically reattaches to the same session in
+the same control or observe mode with a fresh snapshot and a one-line notice.
+Local drafts remain; commands are never automatically resent. Another client's
+control lease is never taken over. If reattachment fails, the notice explains
+the error and `/sessions` can retry.
 
 When a turn completes or ends with a provider error or turn limit, the TUI sends
 a terminal bell and an OSC 777 desktop notification (supported by WezTerm).

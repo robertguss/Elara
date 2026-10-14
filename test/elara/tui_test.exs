@@ -235,6 +235,56 @@ defmodule Elara.TuiTest do
     assert output =~ "Editor PTY passed"
   end
 
+  @tag timeout: 120_000
+  test "editor and job-control pauses retain control and the complete turn", context do
+    payload = String.duplicate("stream filler line\n", 3_000)
+    text = String.duplicate(payload, 64) <> "LONG TURN DONE"
+
+    steps =
+      [{:sleep, 2_000}] ++
+        Enum.flat_map(1..64, fn _ -> [payload, {:sleep, 15}] end) ++ ["LONG TURN DONE"]
+
+    for mode <- ["editor", "suspend"] do
+      {:ok, session} =
+        Elara.start_session(
+          provider: script([{:stream, steps, {:ok, asst(text)}}]),
+          tools: [],
+          persist: false
+        )
+
+      {:ok, server} = Elara.Server.start_link(port: 0, provider: script([]))
+
+      {output, status} =
+        System.cmd(
+          System.find_executable("python3") || flunk("python3 is required for PTY coverage"),
+          [
+            Path.expand("../support/tui_pause_pty.py", __DIR__),
+            context.binary,
+            Integer.to_string(Elara.Server.port(server)),
+            session,
+            mode,
+            Path.join(context.state_dir, "pause-#{mode}"),
+            "10"
+          ],
+          env: [{"ELARA_TUI_STATE_DIR", context.state_dir}],
+          stderr_to_stdout: true
+        )
+
+      assert status == 0, output
+      assert output =~ "Pause PTY passed: #{mode}"
+      messages = Elara.materialized_view(session)["messages"]
+
+      assert Enum.map(messages, &{&1["role"], &1["text"]}) == [
+               {"user", "long-turn"},
+               {"assistant", text}
+             ]
+
+      GenServer.stop(server)
+      {:ok, pid} = Elara.session_pid(session)
+      :ok = DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+    end
+  end
+
   @tag timeout: 60_000
   test "turn notifications respect focus and saved preference", context do
     replies =

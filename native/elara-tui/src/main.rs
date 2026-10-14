@@ -551,7 +551,18 @@ fn run_interactive(
                 Ok(None) => break,
                 Err(error) => {
                     model.mark_disconnected(&error);
+                    connection.close();
+                    let target = model.session_id.clone();
+                    match reconnect(args.port, &target, model, cursors, &mut session_models) {
+                        Ok(new_connection) => *connection = new_connection,
+                        Err(error) => {
+                            model.notice = Some(format!(
+                                "Reattach failed: {error}. Draft retained; use /sessions to retry."
+                            ))
+                        }
+                    }
                     dirty = true;
+                    break;
                 }
             }
         }
@@ -619,6 +630,16 @@ fn run_interactive(
                             model.notice = Some(format!("{error}; original draft retained."))
                         }
                     }
+                    None
+                }
+                InputAction::Suspend => {
+                    drop(guard.take());
+                    unsafe { libc::raise(libc::SIGTSTP) };
+                    let resumed = TerminalGuard::enter()?;
+                    model.enhanced_keyboard = resumed.enhanced_keyboard;
+                    guard = Some(resumed);
+                    focused = None;
+                    terminal.clear().map_err(|error| error.to_string())?;
                     None
                 }
                 InputAction::Submit => model.prepare_submit(),
@@ -722,7 +743,18 @@ fn reconnect(
     if let Some(cwd) = &model.cwd {
         request["cwd"] = json!(cwd);
     }
-    let (mut connection, attached) = ClientConnection::connect(port, request)?;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let (mut connection, attached) = loop {
+        let (connection, attached) = ClientConnection::connect(port, request.clone())?;
+        if attached["type"] != "error"
+            || attached["error"] != "control_taken"
+            || Instant::now() >= deadline
+        {
+            break (connection, attached);
+        }
+        drop(connection);
+        std::thread::sleep(Duration::from_millis(50));
+    };
     let fresh = attached_model(&attached, &model.mode)?;
     if fresh.session_id != target {
         return Err("attachment identity does not match selected session".into());

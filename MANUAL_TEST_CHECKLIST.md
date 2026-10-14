@@ -76,7 +76,8 @@ These checks are deterministic and credential-free. The first Mix compile builds
 missing Cargo executable must fail with actionable setup guidance rather than
 silently omitting either Rust program. Both Cargo manifests declare the minimum
 supported Rust version so an older compiler fails with a direct version error.
-`bin/check` runs the steps below in order and stops at the first failure.
+`bin/check` runs the compile, format, Rust and test steps below in order and
+stops at the first failure.
 
 - [ ] `mix deps.get` and `(cd lab && mix deps.get)` succeed.
 - [ ] `bin/check` prints a file-descriptor soft limit of at least 4096 (it
@@ -730,11 +731,13 @@ checks in a disposable workspace.
       `/approve` runs exactly that call. `MIX_ENV=prod` commands are denied
       with a tool error. `mix elara.ask` refuses an ask match and points to
       the TUI.
-- [ ] MCP: with a server in `.elara/mcp.json`, `mcp_call` errors and points to
-      `mix elara.mcp trust NAME` until you approve the config bytes, then the
-      catalog (with `--read-only` marks). Then `mcp_search` finds its tools,
-      `mcp_call` runs one, and a config edit requires approval again.
-      `mix elara.mcp info NAME` shows the protocol and server identity.
+- [ ] MCP: with a server in the workspace's `.elara/mcp.json`, `mcp_call`
+      errors and points to `mix elara.mcp` until you run
+      `mix elara.mcp trust NAME --cwd WORKSPACE` and approve the config bytes,
+      then the catalog (with `--read-only` marks). Then `mcp_search` finds its
+      tools, `mcp_call` runs one, and a config edit requires approval again.
+      `mix elara.mcp info NAME --cwd WORKSPACE` shows the protocol and server
+      identity.
 - [ ] `/read-only` (or `/read-only on|off`): the footer labels the session;
       `read`, `grep` and `glob` work while `write`, `edit` and `bash` return
       permission refusals from the next tool call; `off` restores them.
@@ -742,8 +745,9 @@ checks in a disposable workspace.
       return sorted results; a `path` outside the workspace or under
       `~/.elara` is refused; a missing `rg` is a tool error naming the install.
 - [ ] `/limits` shows next-turn limits and their source. `/limits calls 150`
-      and `/limits timeout 20m` apply from the next turn and survive
-      detach/reattach; the config ceiling cannot be raised from the TUI.
+      and `/limits timeout 20m` apply from the next turn and, against a
+      long-lived server (section 5), survive detach/reattach; the config
+      ceiling cannot be raised from the TUI.
 
 ### Tools
 
@@ -770,16 +774,20 @@ checks in a disposable workspace.
       after a TUI restart and `/help` shows it; a malformed file keeps the
       defaults with a startup notice.
 - [ ] After a turn, the footer shows input, `cached(in)` and output tokens.
-      A priced API model adds `~$…`; Codex and Grok OAuth show tokens with no
+      A priced API model (`gpt-4.1`, `grok-4.6`, `grok-4.7`) adds `~$…`; an
+      unpriced one such as `grok-4`, Codex and Grok OAuth show tokens with no
       dollar value. The `Ctx ~used/window` meter is visible.
-- [ ] `/model` (or Ctrl-P) lists models with windows, labelled live, cached or
-      bundled; Up/Down picks a model, Left/Right Codex effort, and Enter
+- [ ] `/model` (or Ctrl-P) lists models with windows, labelled live, cached,
+      builtin or documented; Up/Down picks a model, Left/Right Codex effort, and Enter
       applies to the next request. `/model ID [EFFORT]` selects directly.
 - [ ] `mix elara.recordings` shows recording and retained-output sizes;
       `prune --older-than 30` only previews, and `--apply` deletes eligible
       recordings, never transcripts, retained outputs, or locked sessions.
 - [ ] Ctrl-Z (or `/suspend`) returns to the shell; `fg` restores the TUI from a
-      fresh snapshot ("Reattaching…") without resending anything.
+      fresh snapshot ("Reattaching…") without resending anything. Known issue,
+      reported 14 Oct: under `mix elara.tui` or `bin/elara` the TUI is a port
+      child in its own session, so the stop signal is discarded and it
+      reattaches at once. Record which launch path you used and what you saw.
 - [ ] With the terminal unfocused, a finished turn rings the bell and sends an
       OSC 777 notification (WezTerm); `/notifications off` silences both.
 - [ ] Ctrl-G (or `/editor` on an empty draft) opens `$VISUAL` or `$EDITOR` on

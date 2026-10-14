@@ -1,199 +1,18 @@
-# Handoff — Phase 1, 2026-10-13
+# Handoff — Phase 1, 2026-10-14
 
 [Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1)
 is the sole planning and status source. Read its page first: "You are here",
-"This week" and "Decisions waiting for Robert" are kept current. Tasks live in
-Dev Hub's Tasks database with Project set to Elara.
+"Waiting on Robert" and "This week" are kept current. Tasks live in Dev Hub's
+Tasks database with Project set to Elara.
 
-Phase 1 runs in three streams under the lead (D20). Read the
-[Phase 1 plan](https://app.notion.com/p/3f8700320c45817e807fc65b894b9013)
-and [Working Agreement](https://app.notion.com/p/3f8700320c4581818358c50f271e494f)
-before continuing. Stream task order and current delivery status live there,
-not in this handoff. The runtime stream starts with the stable daily build;
-its launch and update commands are documented in README.md.
-The development gate's file-descriptor requirement is documented under
-"Develop": `bin/check` raises its soft limit to at least 4096, prints it and
-refuses an insufficient hard limit. The daily launcher is unchanged.
-That gate includes the separate lab's compile, formatting and full test suite;
-orb setup fetches both projects' dependencies. Root `mix test` remains product-only.
-The product test gate uses `mix test --warnings-as-errors`, including test helper
-warnings. README.md's "Develop" section lists the exact checks.
-That section also documents `rust-toolchain.toml` pinning Rust 1.98.1 with
-rustfmt and Clippy. Rustup downloads the missing pin on a developer's first
-Cargo command, including on macOS.
-README.md's TUI section documents the server's 16 KiB authentication frame,
-16 MiB authenticated line limit, and five-second blocked-send timeout.
-Dropping a stalled client releases its control lease without stopping its session.
-The TUI keeps reading during external editing; Ctrl-Z and `/suspend` restore
-terminal modes for job control. Editor return, resume and socket loss reattach
-in the original mode with a fresh snapshot, retained drafts and a notice,
-never resending commands. A local "Reattaching…" notice does not claim control.
-`native/elara-tui/src/reconstruction.rs` owns one background layout worker and
-one replaceable pending snapshot. Old transcript rows remain visible until a
-matching replacement is ready; prompt and navigation state stay on the UI thread.
-Rows retain source ranges rather than per-grapheme cells, which are materialized
-only for the viewport. Session snapshots reuse the inbox token estimate while
-keeping provider window and image-cost semantics separate.
-The lazy TUI builder always uses the optimized Rust release profile, including
-the dev-environment daily build. Its cache digest includes the build recipe.
-The usage-anchored context meter, handoff recovery, delivery routing, and
-independent copies are documented in README.md's "Automatic context handoff"
-section. The runtime catalog supplies model windows through
-`Elara.Provider.Visibility.context_window/1`; the TUI meter uses
-`snapshot.inbox.context`.
-That section also documents oldest-first tool-result clearing, configurable
-recent-output protection, retained originals and independent copies of cleared
-sessions. Clearing entries and freed bytes are Core facts in flight recordings.
-Provider token counters, actual response models and immutable billing receipts
-are documented in README.md's "Provider usage and estimated cost" section.
-The authoritative cost summary is `snapshot.provider_view.usage.cost`.
-Subscription usage has no API estimate; unknown prices remain unknown, and
-partial sums are marked incomplete. Original C3 history remains billing evidence.
-The TUI footer renders those totals and `inbox.context` through
-`presentation::usage_footer`, without repricing or recounting history.
-Wide and narrow priced, partial, subscription and unknown footer goldens live
-in `native/elara-tui/tests/goldens/usage-*.txt`.
-README.md's model-controls section documents the account-scoped live catalog,
-offline cache, documented Grok windows and typed unverified model IDs.
-`snapshot.provider_view.catalog` and its source/error fields are authoritative;
-Core records catalog changes so window decisions replay without network IO.
-Saved settings from another provider use startup defaults with a visible notice.
-Append-only transcript batches, turn-boundary sync, torn-tail recovery and
-version 1 compatibility are documented in `docs/sessions.md`. Store owns its
-writer under the session lock; message and metadata changes commit together.
-Flight format 3 caches immutable history/config fingerprints and syncs after
-the terminal event link, while format 2 keeps its original replay hash domain.
-README.md and `docs/sessions.md` document `mix elara.recordings` diagnostics
-and explicit age pruning. Preview is the default; live session locks prevent
-pruning across VMs. Session deletion removes its incarnation recordings.
-Command environment forwarding and `mix elara.env` diagnostics are documented
-in README.md's "Command environment" section. Extra project names belong in
-operator startup config, never an agent-editable project file.
-That section also documents fnox default-profile secrets for model commands,
-effective-config digest approval, pre/post resolution checks, and literal
-redaction before output retention. These are defaults, not a sandbox.
-`native/exec-stub/src/main.rs` buffers each guardian's incomplete event before
-forwarding complete frames. `test/elara/exec_integration_test.exs` checks exact
-per-command heads and tails across concurrent large outputs.
-The worker-death proof in `test/elara/executor_test.exs` waits for the actual
-side effect before killing the worker; `tool_started` alone does not prove it.
-Focused job proofs in `test/elara/test_jobs_test.exs` likewise wait for execution
-before expecting cancellation, and for successor activation before reading its inbox.
-Lab job-recovery setup and socket-owner handoff barriers are documented in
-`docs/lab/README.md`. Recovery deadlines and settlement assertions stay unchanged.
-That page also documents the test-only persisted mutation writer, which replaces
-disposable fixtures without changing registered history or observer expectations.
-Crash-safe reopening and legacy receipt escape paths are documented in
-`docs/sessions.md` under "Recover an interrupted write". A different live VM
-that owns the ledger must stop before takeover; callbacks are never replayed.
-Revalidation refusals before any callback attempt now durably fail the receipt
-with zero attempts, leaving the next turn usable. Ledger schemas 1–3 migrate
-to schema 4 without losing receipt or ownership evidence.
-The TUI's shared code colors live in `native/elara-tui/src/syntax.rs`.
-Colored Elixir and edit frames for all four themes live in
-`native/elara-tui/tests/goldens/syntax-*.txt`.
-The confirmed TUI controls and clipboard fallback are documented in README.md's
-TUI section. `native/elara-tui/src/actions.rs` owns action bindings and help;
-Esc closes panels or interrupts, and consecutive Ctrl-C requests a safe quit.
-`test/support/tui_notifications_pty.py` gates counts on the rendered final
-outcome, not reply text or early Idle. Full redraws preserve diagnostic words.
-TUI test teardown stops its new session actors before restoring global roots
-and deleting state; client detach alone does not settle the closing turn.
-Line-chat and input-queue fixtures own small Git workspaces and stop their new
-session actors. The chat partial-stream marker includes its line boundary so
-it cannot match `/help`.
-Thread-communication fixtures stop the shared transport before changing or
-restoring the sessions root, and teardown restarts it even after an assertion
-interrupts a transport-recovery test.
-README.md's "Custom keys" documents local `keymap.json`, action names,
-collision fallback and fixed panel/editor controls. The per-Model keymap drives
-both lookup and effective hints. New actions need an exhaustive `Action::name`
-case and registration; slash-only registration does not assign a default key.
-Turn and session workspace diffs are documented in that section. The shell's
-private checkpoints live in `Elara.WorkspaceDiff`; the Rust diff panel lives in
-`native/elara-tui/src/workspace_diff.rs`. Snapshots include bash changes but
-never alter the workspace index or HEAD. Missing baselines report unavailable.
-Session reports read predecessor banks across handoffs, with imported objects
-rooted under separate `refs/elara/chain/` refs. Missing evidence and unsealed
-handoff attribution boundaries are labelled; predecessor undo remains excluded.
-Confirmed turn undo is documented beside `/diff` in README.md. The shell owns
-preflight, restore, and interrupted-attempt records in the same snapshot bank;
-Rust owns only the confirmation panel in `workspace_undo.rs`. System notices
-persist in history and provider context, and handoff indexes retain their
-original entry references. Reopening records uncertainty without replaying
-filesystem writes. Changed touched paths or gitlinks refuse the whole undo.
-README.md also documents bounded checkpoint contents and labelled metadata-only
-files. The supervised exec-stub supplies bounded reads and nanosecond metadata;
-no NIF is used. Version 2 banks separate contents from metadata, and version 1
-remains readable. Old unchanged metadata does not block undo; recent, changed,
-or unsupported-filesystem evidence refuses the whole operation.
-New coding worktrees are kept outside protected Elara state; the location and
-operator override are documented under "Persistent delegated children".
-Existing children keep their recorded paths, without relocation or deletion.
-The child-lifecycle PTY proof in `test/support/threads_pty.py` waits for the
-uniquely filtered child's row before inspecting or opening it; random IDs can
-fuzzy-match short names, so selection is not inferred from stale terminal bytes.
-File-tool roots, protected paths, and resolved symlinks are documented in
-README.md's "File-tool fence" section. Internal skill/session/plugin reads are
-separate; the fence is not an OS sandbox. Grep and glob share that policy:
-explicit scopes are resolved and recursive filenames authorized before any
-content search. README.md's "Workspace search" section describes their limits,
-invocation-local verified directory reuse, and bounded glob inventory prefixes.
-The prefix widens past protected candidates; partial filenames never become
-search operands, and a result cap remains visibly incomplete.
-The TUI's `/read-only` changes model-tool mutation permission from the next call,
-including mid-turn. Its authoritative footer mode, transcript transition positions,
-copy/child/handoff inheritance and trusted plugin declarations are documented in
-README.md and `docs/plugins.md`. It has no default shortcut under D22.
-Command-text rules, exact-call `/approve`, exact-byte approval of repository
-rule loosening, and the one-shot CLI refusal path are documented in README.md's
-"Command rules and approval" section. They are not an OS sandbox.
-The TUI's `/limits` and session-local overrides are documented in README.md's
-execution section. They follow delivery ownership and reset to startup config
-when a session restarts, including children and handoff successors.
-Retained local command output and `output_read` are documented in that section.
-`Elara.Output.capture/2` also accepts content chunks for fetch and MCP tools.
-Transcript-owned vaults copy only referenced handles; source history authorizes
-handoff inheritance. Remote retained-output transport remains Phase 5 work.
-README.md's "Fetch public pages" section documents vetted public GETs, bounded
-HTML-to-Markdown conversion, and labeled pages behind retained-output handles.
-`inbox.web_content_entered` drives the informational TUI footer marker. Core
-records trusted entry, and copies, history children, and handoff preserve it.
-The fetch interrupt proof in `test/elara/web_fetch_test.exs` waits for its actual
-linked network worker with a separate startup budget before testing cancellation.
-README.md's "Search the web through Exa" documents hidden operator login,
-private credentials, bounded excerpts, key-free transcript receipts, and no
-automatic retries. Searches share the trusted web-context marker with fetches.
-Personal and project MCP configs, exact-config and catalog approval, explicit
-read-only marks, and the supervised client API are documented in README.md's
-"Approve an MCP server" section. The fixed `mcp_search` and `mcp_call` tools
-select schemas without changing the provider tool table. Core captures each
-call's operator-approved config/catalog digests and mutation classification;
-dispatch rechecks them. MCP results use retained-output handles, and offline
-replay consumes recorded facts without contacting a server.
-The lab's current async-site inventory is pinned in
-`lab/test/elara/lab_profile_test.exs`; its classifier distinguishes server
-connections from session handoff relay tasks. Historical registrations stay
-unchanged. Current lab fixtures use a 16K-token handoff window, trace
-`Context.budget/3` and isolate coding worktrees beside their session state.
-The X2 anecdote is recorded in `docs/lab/x2-unknown-results.md`, with retained
-raw requests, messages, workspace bytes and usage under
-`lab/results/x2-unknown-results/`. Its three scripted-then-real cases are not a
-reliability claim. The rerunnable driver defaults to zero-cost controls;
-paid repeats require separate authorization.
-`docs/lab/README.md` describes recovery registration version 2 and reproduction
-of historical versions. Delivery is tracked in
-[Dev Hub](https://app.notion.com/p/3f8700320c4581a59c2cdf3a839a5ae0).
-The [lead thread](https://ampcode.com/threads/T-01a1358b-4a9e-71b9-bed8-90de5e5b14ee)
-coordinates stream dependencies and questions for Robert. Resume the assigned
-stream from its Notion task status and merged code on `origin/main`; do not
-repeat the planning or start replacement threads. Current progress and pending
-decisions stay in Notion, not this file.
+The PM thread keeps this file, `ROADMAP.md` and the Notion status pages
+current, and refreshes them daily (decisions D27 and D28). Lead and stream
+threads keep their own Tasks rows current instead; they don't edit this file.
 
 ## Where Elara stands
 
-On 12–13 Oct 2026 Robert reoriented the project in an interview recorded as
-decisions D1 to D20 in the Notion Decision Log:
+Robert reoriented the project on 12–13 Oct 2026. The decisions are D1 to D14
+in the Notion Decision Log:
 
 - Elara is Robert's own daily-driver coding agent, and nothing else is
   promised (D2). It is a coding agent, not a language (D1).
@@ -203,41 +22,114 @@ decisions D1 to D20 in the Notion Decision Log:
   window (D13, Phase 3). The first uniform is Elixir (D5).
 - Three ways of working: one session, a lead with helpers, and many sessions
   (D6). Pace is all-in (D9).
-- Today's code is being simplified toward the daily driver: the lab moved out,
-  honest "unknown" results stay, and recording is to get cheap (D7).
 - Robert decides direction and anything he would notice as a user; agents
   decide the rest, including merges (D8). Paid model APIs are capped at
   US$100 a month (D14).
 
-## Phase 0, Reset: done
+## Phase 0, Reset: done on 13 Oct
 
-- main is green, and `bin/check` runs every product check (not the lab) in
-  about 3 minutes (pull requests #69 and #70).
-- Linear is retired; its history is in `docs/archive/linear/` (#71, D11).
-- The lab is its own Mix project in `lab/`; the product app no longer ships it
-  (#72, D7). Root `mix test`: 684 tests and 11 properties. Lab:
-  `cd lab && mix deps.get && mix test`, 390 tests and properties.
-- A known flake: `test/elara/context_test.exs:213` can fail with
-  `{:error, :locked}` under load (a Phase 1 task in Notion).
+main is green and `bin/check` gates every push (#69, #70). Linear is retired
+and archived in `docs/archive/linear/` (#71). The lab is its own Mix project in
+`lab/` (#72).
 
 ## Now: Phase 1, Usable every day
 
-Robert does his real Elixir work in Elara with the generic kit. The spec is
-the Phase 1 page of the Notion Roadmap. Its five design questions are decided:
-near the context limit, an honest meter and clearing old tool results before
-any handoff (D15); fence and scrub plus deny and ask lists, sandbox later
-(D16); MCP behind two fixed tools (D17); a safeguarded fetch tool plus Exa
-search (D18); Claude Code and pi style keys with a keymap file (D19). Phase 1
-runs from a lead thread with three streams: the TUI and interaction; the
-runtime and providers; context and safety (D20). Follow-ups found in Phase 0
-are tasks in Notion.
+The spec, plan and status are on the
+[Phase 1 page](https://app.notion.com/p/3f8700320c45817e807fc65b894b9013).
+Its five design questions were decided on 13 Oct (D15 to D19). It runs from a
+lead thread with three streams: TUI and interaction; runtime and providers;
+context and safety (D20).
 
-## Rules that matter
+The build is done: 59 pull requests (#74 to #132) merged on 13 and 14 Oct.
+What remains:
 
-Follow `AGENTS.md` and the Notion Working Agreement. Ask Robert one question
-at a time, with options and a recommendation, and send nothing else while a
-question waits. Robert starts new threads himself: give him copy-paste prompts
-rather than creating threads, unless he says otherwise. One task, one branch,
-one pull request; run `bin/check` before pushing; a reviewer agent checks every
-pull request before an agent merges it. Never force-push, delete evidence,
-deploy or release without Robert.
+- Robert's acceptance week: five working days of real Elixir work in Elara,
+  logged in the Notion Daily-use log.
+- X1, context calibration, measured on that week's recorded sessions.
+- Two test-stability fixes, then three consecutive full loaded `bin/check` runs
+  passing on one main commit.
+
+The [lead thread](https://ampcode.com/threads/T-01a1358b-4a9e-71b9-bed8-90de5e5b14ee)
+coordinates stream dependencies and asks Robert's questions. Resume an
+assigned stream from its Notion task and the merged code on `origin/main`; do
+not repeat the planning or start replacement threads. When Phase 1 closes, the
+lead gives Robert the prompt for the Phase 2 lead thread.
+
+## Before you push
+
+Follow `AGENTS.md`: one task, one `work/<slug>` branch, one pull request,
+`bin/check`, then a reviewer agent. README.md's "Develop" section lists the
+exact checks. `bin/check` raises the soft file-descriptor limit to at least
+4096 and refuses an insufficient hard limit. It includes the lab's compile,
+formatting and full test suite, and fails product tests on compilation
+warnings. `rust-toolchain.toml` pins Rust 1.98.1 with rustfmt and Clippy;
+rustup downloads it on the first Cargo command.
+
+## Where Phase 1 behavior is documented
+
+- Stable daily build (`bin/elara-update`, `elara-stable`): README.md,
+  "Stable daily build".
+- Provider retries, usage and estimated cost: README.md, "Transient provider
+  failures" and "Provider usage and estimated cost". The authoritative cost
+  summary is `snapshot.provider_view.usage.cost`.
+- Model catalog and windows: README.md, "Rust TUI";
+  `snapshot.provider_view.catalog` and
+  `Elara.Provider.Visibility.context_window/1`.
+- Context meter, handoff and clearing old tool results: README.md, "Automatic
+  context handoff". The TUI meter reads `snapshot.inbox.context`.
+- TUI server limits, external editor, suspend and reattach: README.md, "Rust
+  TUI".
+- Keys, the keymap file and help: README.md, "Custom keys";
+  `native/elara-tui/src/actions.rs`.
+- `/diff`, `/undo` and bounded checkpoints: README.md, "Rust TUI";
+  `Elara.WorkspaceDiff`, `native/elara-tui/src/workspace_diff.rs` and
+  `workspace_undo.rs`.
+- `/read-only`, `/limits` and `output_read`: README.md, "Rust TUI";
+  `docs/plugins.md` for plugin declarations.
+- Syntax colors: `native/elara-tui/src/syntax.rs`, with goldens in
+  `native/elara-tui/tests/goldens/syntax-*.txt`.
+- Footer usage and meter: `presentation::usage_footer`, with goldens in
+  `native/elara-tui/tests/goldens/usage-*.txt`.
+- Command environment and fnox secrets: README.md, "Command environment" and
+  "Project secrets through fnox".
+- File-tool fence, grep and glob: README.md, "File-tool fence" and "Workspace
+  search".
+- Command rules and `/approve`: README.md, "Command rules and approval".
+- MCP servers, `mcp_search` and `mcp_call`: README.md, "Approve an MCP
+  server".
+- `web_fetch` and Exa search: README.md, "Fetch public pages" and "Search the
+  web through Exa".
+- Coding worktrees outside protected state: README.md, "Persistent delegated
+  children".
+- Append-only transcripts, recordings and recovering an interrupted write:
+  `docs/sessions.md`.
+- Lab registration, job recovery and X2: `docs/lab/README.md` and
+  `docs/lab/x2-unknown-results.md`.
+
+None of these guardrails is an OS sandbox.
+
+## Test lifecycle lessons from Phase 1
+
+Each of these fixed an intermittent failure. Keep the pattern when you add
+similar tests:
+
+- Wait for the actual side effect, not an intent event: the worker-death proof
+  in `test/elara/executor_test.exs` waits for the side effect before killing the
+  worker, and `test/elara/test_jobs_test.exs` waits for execution before
+  expecting cancellation and for successor activation before reading its inbox.
+- `test/support/tui_notifications_pty.py` gates counts on the rendered final
+  outcome, not reply text or an early Idle. `test/support/threads_pty.py` waits
+  for the uniquely filtered child row before selecting it.
+- Teardown stops the session actors a test started before restoring global
+  roots and deleting state; client detach alone does not settle a closing turn.
+  Thread-communication fixtures stop the shared transport before changing the
+  sessions root.
+- Line-chat and input-queue fixtures own small Git workspaces instead of
+  capturing the developer checkout.
+- `test/elara/web_fetch_test.exs` gives the linked network worker its own
+  startup budget before testing cancellation.
+- `native/exec-stub/src/main.rs` buffers each guardian's incomplete event
+  before forwarding complete frames; `test/elara/exec_integration_test.exs`
+  checks per-command heads and tails across concurrent large outputs.
+- The lab's async-site inventory is pinned in
+  `lab/test/elara/lab_profile_test.exs`.

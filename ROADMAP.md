@@ -4,9 +4,14 @@
 is the sole current planning and status source: the Product Brief, the
 Roadmap and its phases, the Working Agreement, the Decision Log, the Weekly
 Updates and the tasks. This file is a durable pointer, not a second tracker.
+The PM thread keeps this file, `HANDOFF.md` and the Notion status pages
+current (decision D27).
 
 - [Roadmap](https://app.notion.com/p/3f8700320c4581c29be5f5f9a4fef5bc): nine
   phases, from 0 (Reset) to 8 (every language Robert uses).
+- [Phase 1, Usable every day](https://app.notion.com/p/3f8700320c45817e807fc65b894b9013):
+  the current phase. Its build is merged; Robert's acceptance week and X1
+  remain.
 - [Product Brief](https://app.notion.com/p/3f8700320c4581c1b555e8b655313cc5):
   Elara is Robert's daily-driver coding agent, built on two bets, uniforms and
   surgical context.

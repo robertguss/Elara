@@ -44,7 +44,12 @@ defmodule Elara.Lab.Scenarios.GroupRecovery do
 
   defp flow(context, config) do
     setup = Jobs.now() + 10_000
-    %{available: true, jobs: 0} = call!(config, :baseline, setup, &Elara.Exec.status/0)
+
+    %{available: true, jobs: 0} =
+      poll!(config, :baseline, setup, fn ->
+        status = Elara.Exec.status()
+        if status.available, do: status
+      end)
 
     task =
       Task.Supervisor.async_nolink(Elara.TaskSup, fn ->

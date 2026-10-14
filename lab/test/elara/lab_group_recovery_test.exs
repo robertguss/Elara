@@ -2,8 +2,19 @@ defmodule Elara.Lab.GroupRecoveryTest do
   use ExUnit.Case, async: false
   @moduletag timeout: 60_000
 
-  for stage <- ~w(owner_running executor_running stub_running) do
-    test "#{stage} stops the witnessed ordinary command group" do
+  for {label, stage, replace_before} <- [
+        {"owner_running", "owner_running", false},
+        {"executor_running", "executor_running", false},
+        {"stub_running", "stub_running", false},
+        {"stub_running after initial stub loss", "stub_running", true}
+      ] do
+    test "#{label} stops the witnessed ordinary command group" do
+      if unquote(replace_before) do
+        before = wait_for_exec(&(&1.available and &1.jobs == 0))
+        :ok = Elara.Lab.Faults.inject(:exec_stub)
+        wait_for_exec(&(&1.generation > before.generation))
+      end
+
       assert {:ok, [result]} =
                Elara.Lab.run("group_recovery",
                  seed: 42,
@@ -135,5 +146,23 @@ defmodule Elara.Lab.GroupRecoveryTest do
       assert {:ok, members} = Elara.Lab.ProcessProbe.group(native.root.pgid)
       assert Enum.all?(members, &String.starts_with?(&1.stat, "Z"))
     end
+  end
+
+  defp wait_for_exec(predicate) do
+    deadline = System.monotonic_time(:millisecond) + 5_000
+
+    wait = fn wait ->
+      status = Elara.Exec.status()
+
+      if predicate.(status) do
+        status
+      else
+        assert System.monotonic_time(:millisecond) < deadline, inspect(status)
+        Process.sleep(1)
+        wait.(wait)
+      end
+    end
+
+    wait.(wait)
   end
 end

@@ -86,6 +86,9 @@ TUI test teardown stops its new session actors before restoring global roots
 and deleting state; client detach alone does not settle the closing turn.
 Line-chat fixtures own small Git workspaces and stop their new session actors;
 the partial-stream marker includes its line boundary so it cannot match `/help`.
+Thread-communication fixtures stop the shared transport before changing or
+restoring the sessions root, and teardown restarts it even after an assertion
+interrupts a transport-recovery test.
 README.md's "Custom keys" documents local `keymap.json`, action names,
 collision fallback and fixed panel/editor controls. The per-Model keymap drives
 both lookup and effective hints. New actions need an exhaustive `Action::name`

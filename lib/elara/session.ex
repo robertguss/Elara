@@ -2550,7 +2550,8 @@ defmodule Elara.Session do
 
         web? =
           case tool do
-            %Tool{plugin: nil, run: {Elara.WebFetch, :run}} ->
+            %Tool{plugin: nil, run: {module, :run}}
+            when module in [Elara.WebFetch, Elara.WebSearch] ->
               true
 
             %Tool{plugin: nil, run: {Elara.Tools, :output_read}} ->

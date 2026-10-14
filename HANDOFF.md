@@ -134,6 +134,9 @@ HTML-to-Markdown conversion, and labeled pages behind retained-output handles.
 records trusted entry, and copies, history children, and handoff preserve it.
 The fetch interrupt proof in `test/elara/web_fetch_test.exs` waits for its actual
 linked network worker with a separate startup budget before testing cancellation.
+README.md's "Search the web through Exa" documents hidden operator login,
+private credentials, bounded excerpts, key-free transcript receipts, and no
+automatic retries. Searches share the trusted web-context marker with fetches.
 Personal and project MCP configs, exact-config and catalog approval, explicit
 read-only marks, and the supervised client API are documented in README.md's
 "Approve an MCP server" section. The fixed `mcp_search` and `mcp_call` tools

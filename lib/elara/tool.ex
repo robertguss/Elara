@@ -81,6 +81,7 @@ defmodule Elara.Tool do
       bash_tool(),
       output_read_tool(),
       web_fetch_tool(),
+      web_search_tool(),
       mcp_search_tool(),
       mcp_call_tool(),
       grep_tool(),
@@ -302,6 +303,24 @@ defmodule Elara.Tool do
       placement: :local,
       cancel_on_interrupt: true,
       run: {Elara.WebFetch, :run}
+    }
+  end
+
+  defp web_search_tool do
+    %__MODULE__{
+      name: "web_search",
+      description:
+        "Search Exa for five public web results: titles, URLs and short untrusted excerpts. Fetch chosen URLs with web_fetch. Requires mix elara.login exa; searches may be billed, and are never automatically retried.",
+      parameters: %{
+        "type" => "object",
+        "properties" => %{"query" => %{"type" => "string", "maxLength" => 4096}},
+        "required" => ["query"],
+        "additionalProperties" => false
+      },
+      capabilities: ["network:web"],
+      placement: :local,
+      cancel_on_interrupt: true,
+      run: {Elara.WebSearch, :run}
     }
   end
 

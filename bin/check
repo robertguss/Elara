@@ -39,8 +39,8 @@ for crate in native/exec-stub native/elara-tui; do
   (cd "$crate" && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked) || exit
 done
 
-step "mix test"
-mix test
+step "mix test --warnings-as-errors"
+mix test --warnings-as-errors
 
 step "lab: mix test"
 (cd lab && mix test)

@@ -1529,9 +1529,12 @@ mix format --check-formatted
 (cd lab && mix format --check-formatted)
 (cd native/exec-stub && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked)
 (cd native/elara-tui && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked)
-mix test
+mix test --warnings-as-errors
 (cd lab && mix test)
 ```
+
+Product test compilation warnings fail the gate, including warnings in test
+helpers. The lab's test warning policy remains separate.
 
 The interactive TUI tests also require Python 3 and a Unix PTY. Tests use
 `Elara.Provider.Scripted` and do not call external networks. One

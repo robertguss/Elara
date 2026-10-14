@@ -540,8 +540,14 @@ defmodule Elara.SessionTest do
   end
 
   test "sync ask returns final text and fans events" do
+    cwd = unique_cwd()
+    File.mkdir_p!(cwd)
+    {_, 0} = System.cmd("git", ["init", "--quiet", cwd])
+    File.write!(Path.join(cwd, "note.txt"), "session workspace\n")
     provider = script([{:ok, asst("hello")}])
-    {:ok, session} = Elara.start_session(provider: provider, tools: [])
+    {:ok, session} = Elara.start_session(provider: provider, cwd: cwd, tools: [])
+    pid = session_pid(session)
+    on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
     :ok = Elara.subscribe(session)
 
     task = Task.async(fn -> Elara.ask(session, "hi") end)

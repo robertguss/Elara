@@ -286,6 +286,79 @@ defmodule Elara.ServerTest do
     assert Elara.transcript(pid) == Elara.transcript(session)
   end
 
+  @tag timeout: 30_000
+  test "a stalled reader loses control without stopping the session" do
+    text = String.duplicate("large stream ", 650_000)
+    provider = script([{:stream, [text], {:ok, asst(text)}}, {:ok, asst("still usable")}])
+
+    {:ok, session} =
+      Elara.start_session(
+        provider: provider,
+        tools: [],
+        plugins: [],
+        persist: false,
+        context_limit: 10_000_000
+      )
+
+    {:ok, pid} = Elara.session_pid(session)
+    on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+    server = start_supervised!({Elara.Server, port: 0, provider: script([])})
+
+    {:ok, stalled} =
+      :gen_tcp.connect({127, 0, 0, 1}, Elara.Server.port(server), [
+        :binary,
+        packet: :line,
+        active: false,
+        recbuf: 1_024
+      ])
+
+    on_exit(fn -> :gen_tcp.close(stalled) end)
+    assert %{"type" => "attached"} = attach(stalled, session, "control")
+    assert Elara.status(session).subscriber_count == 1
+
+    # Leave the socket unread while the provider produces more than TCP can buffer.
+    assert {:ok, ^text} = Elara.ask(session, "flood", 10_000)
+    assert Elara.status(session).phase == :idle
+    deadline = System.monotonic_time(:millisecond) + 12_000
+    assert reader_dropped?(session, deadline)
+    assert Process.alive?(pid)
+
+    healthy = connect(Elara.Server.port(server))
+    on_exit(fn -> :gen_tcp.close(healthy) end)
+    attached = attach(healthy, session, "control")
+    assert %{"type" => "attached", "snapshot" => snapshot} = attached
+    assert Enum.any?(snapshot["messages"], &(&1["text"] == text))
+    prompt = String.duplicate("again", 5_000)
+    :ok = send_json(healthy, %{"version" => 2, "command" => "ask", "prompt" => prompt})
+
+    view =
+      ingest_until(
+        healthy,
+        projector(attached),
+        fn view ->
+          view["turn"]["state"] == "idle" and
+            Enum.any?(view["messages"], &(&1["text"] == "still usable"))
+        end
+      )
+
+    assert Enum.any?(view.view["messages"], &(&1["text"] == prompt))
+    assert Enum.any?(view.view["messages"], &(&1["text"] == "still usable"))
+  end
+
+  defp reader_dropped?(session, deadline) do
+    cond do
+      Elara.status(session).subscriber_count == 0 ->
+        true
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        false
+
+      true ->
+        Process.sleep(25)
+        reader_dropped?(session, deadline)
+    end
+  end
+
   test "client detaches during a tool; reattachers get the current state and observers cannot control" do
     call = %ToolCall{
       id: "slow-1",

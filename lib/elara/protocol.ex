@@ -23,11 +23,13 @@ defmodule Elara.Protocol do
 
   @spec push_line({iodata(), non_neg_integer()}, binary()) ::
           {:ok, binary()} | {:more, {iodata(), non_neg_integer()}} | {:error, :message_too_large}
-  def push_line({parts, size}, chunk) when is_binary(chunk) do
+  @spec push_line({iodata(), non_neg_integer()}, binary(), pos_integer()) ::
+          {:ok, binary()} | {:more, {iodata(), non_neg_integer()}} | {:error, :message_too_large}
+  def push_line({parts, size}, chunk, max_bytes \\ @max_line_bytes) when is_binary(chunk) do
     size = size + byte_size(chunk)
 
     cond do
-      size > @max_line_bytes ->
+      size > max_bytes ->
         {:error, :message_too_large}
 
       chunk != "" and :binary.last(chunk) == ?\n ->
@@ -41,29 +43,35 @@ defmodule Elara.Protocol do
   @doc """
   Receive one complete line from a passive `packet: :line` socket. Line mode
   delivers lines longer than the receive buffer in pieces; this reassembles
-  them up to `max_line_bytes/0`, within one overall timeout in milliseconds.
+  them within one overall timeout in milliseconds. The byte limit includes
+  the newline and defaults to `max_line_bytes/0`.
   """
   @spec recv_line(:gen_tcp.socket(), non_neg_integer()) ::
           {:ok, binary()} | {:error, :message_too_large | :timeout | term()}
-  def recv_line(socket, timeout) do
+  @spec recv_line(:gen_tcp.socket(), non_neg_integer(), pos_integer()) ::
+          {:ok, binary()} | {:error, :message_too_large | :timeout | term()}
+  def recv_line(socket, timeout, max_bytes \\ @max_line_bytes) do
     deadline = System.monotonic_time(:millisecond) + timeout
-    recv_line(socket, deadline, line_buffer())
+    recv_line(socket, deadline, line_buffer(), max_bytes)
   end
 
-  defp recv_line(socket, deadline, buffer) do
+  defp recv_line(socket, deadline, buffer, max_bytes) do
     remaining = max(deadline - System.monotonic_time(:millisecond), 0)
 
     with {:ok, chunk} <- :gen_tcp.recv(socket, 0, remaining) do
-      case push_line(buffer, chunk) do
+      case push_line(buffer, chunk, max_bytes) do
         {:more, buffer} ->
           # Stop at the deadline even if more fragments are already buffered.
           if System.monotonic_time(:millisecond) >= deadline,
             do: {:error, :timeout},
-            else: recv_line(socket, deadline, buffer)
+            else: recv_line(socket, deadline, buffer, max_bytes)
 
         result ->
           result
       end
+    else
+      {:error, :emsgsize} -> {:error, :message_too_large}
+      error -> error
     end
   end
 

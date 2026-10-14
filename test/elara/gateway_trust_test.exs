@@ -108,6 +108,70 @@ defmodule Elara.GatewayTrustTest do
     on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
   end
 
+  test "large unauthenticated frames are refused while a small authenticated client works", %{
+    cwd: cwd
+  } do
+    server = server(@token)
+
+    {:ok, socket} =
+      :gen_tcp.connect({127, 0, 0, 1}, Elara.Server.port(server), [
+        :binary,
+        packet: :line,
+        active: false
+      ])
+
+    on_exit(fn -> :gen_tcp.close(socket) end)
+    empty = %{"padding" => ""}
+    padding = Protocol.max_line_bytes() - IO.iodata_length(Protocol.encode(empty))
+    line = Protocol.encode(Map.put(empty, "padding", String.duplicate("x", padding)))
+    assert IO.iodata_length(line) == 16 * 1_024 * 1_024
+    sender = Task.async(fn -> :gen_tcp.send(socket, line) end)
+
+    case Protocol.recv_line(socket, 5_000) do
+      {:ok, response} ->
+        assert {:ok, %{"type" => "error", "error" => "message_too_large"}} =
+                 Protocol.decode(response)
+
+      {:error, :closed} ->
+        :ok
+    end
+
+    assert {:error, :closed} = :gen_tcp.recv(socket, 0, 1_000)
+    Task.await(sender, 5_000)
+
+    assert %{"type" => "sessions"} =
+             request(server, %{
+               "version" => 2,
+               "command" => "list",
+               "cwd" => cwd,
+               "token" => @token
+             })
+  end
+
+  test "the authentication frame includes its newline in the limit", %{cwd: cwd} do
+    server = server(@token)
+
+    base = %{
+      "version" => 2,
+      "command" => "list",
+      "cwd" => cwd,
+      "token" => @token,
+      "padding" => ""
+    }
+
+    padding = 16 * 1_024 - IO.iodata_length(Protocol.encode(base))
+
+    for {extra, expected} <- [
+          {0, %{"type" => "sessions"}},
+          {1, %{"error" => "message_too_large"}}
+        ] do
+      assert Map.take(
+               request(server, Map.put(base, "padding", String.duplicate("x", padding + extra))),
+               Map.keys(expected)
+             ) == expected
+    end
+  end
+
   test "invalid configured credentials prevent the listener from starting" do
     for token <- [
           nil,

@@ -670,6 +670,14 @@ when none is configured. Before loading repository plugins, review their
 source and run `mix elara.trust WORKSPACE` from the Elara checkout. Approval
 covers exact file bytes; changed or new plugins need approval again.
 
+The first protocol frame authenticates a create, attach, or list request and
+is limited to 16 KiB, including its newline. Larger frames close the connection
+before JSON decoding. Authenticated commands retain the 16 MiB line limit.
+A send blocked for five seconds drops that client and releases its control
+lease, without stopping the session or cancelling its work. Reattach to see the
+current snapshot. The timeout measures a blocked send, not time since the last
+client read.
+
 Press **Ctrl-O** or enter `/sessions` to find live and saved sessions in the
 current workspace. Type a fuzzy name/ID filter, use arrows to select, and Enter
 to switch. `/new` creates and opens another session; `/name TEXT` names the

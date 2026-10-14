@@ -18,6 +18,9 @@ That gate includes the separate lab's compile, formatting and full test suite;
 orb setup fetches both projects' dependencies. Root `mix test` remains product-only.
 The product test gate uses `mix test --warnings-as-errors`, including test helper
 warnings. README.md's "Develop" section lists the exact checks.
+That section also documents `rust-toolchain.toml` pinning Rust 1.98.1 with
+rustfmt and Clippy. Rustup downloads the missing pin on a developer's first
+Cargo command, including on macOS.
 The usage-anchored context meter, handoff recovery, delivery routing, and
 independent copies are documented in README.md's "Automatic context handoff"
 section. The runtime catalog supplies model windows through

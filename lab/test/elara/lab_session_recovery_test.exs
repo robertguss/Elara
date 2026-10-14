@@ -2,6 +2,7 @@ defmodule Elara.Lab.SessionRecoveryTest do
   # Not async: the scenario swaps the sessions root and starts real sessions.
   use ExUnit.Case, async: false
 
+  alias Elara.Lab.StoreFixture
   alias Elara.Lab.Scenarios.SessionRecovery
   alias Elara.Lab.Scenarios.SessionRecovery.{Coordinator, Deadline, Observer, StoreView}
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
@@ -563,7 +564,7 @@ defmodule Elara.Lab.SessionRecoveryTest do
 
     for mutate <- mutations do
       store = dir |> persisted_store() |> mutate.()
-      {:ok, store} = Store.save(store)
+      {:ok, store} = StoreFixture.write(store)
       assert {:error, _reason} = Store.open(store.path, dir)
     end
   end
@@ -934,7 +935,7 @@ defmodule Elara.Lab.SessionRecoveryTest do
   defp confirmed_cleanup, do: %{confirmed: true, choices: %{}}
 
   defp save_and_reopen(store, dir) do
-    {:ok, store} = Store.save(store)
+    {:ok, store} = StoreFixture.write(store)
     {:ok, store} = Store.open(store.path, dir)
     store
   end

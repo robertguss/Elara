@@ -3,6 +3,23 @@
 # file only removes it.
 ExUnit.start()
 
+defmodule Elara.Lab.StoreFixture do
+  @moduledoc "Test-only replacement of disposable persisted mutation fixtures."
+
+  def write(store) do
+    File.mkdir_p!(Path.dirname(store.path))
+    File.write!(store.path, "")
+
+    Elara.Session.Store.save(%{
+      store
+      | persisted_count: 0,
+        persisted_bytes: 0,
+        disk_bytes: 0,
+        append_separator: false
+    })
+  end
+end
+
 ExUnit.after_suite(fn _result ->
   File.rm_rf!(Application.fetch_env!(:elara, :test_run_dir))
 end)

@@ -59,6 +59,8 @@ Focused job proofs in `test/elara/test_jobs_test.exs` likewise wait for executio
 before expecting cancellation, and for successor activation before reading its inbox.
 Lab job-recovery setup and socket-owner handoff barriers are documented in
 `docs/lab/README.md`. Recovery deadlines and settlement assertions stay unchanged.
+That page also documents the test-only persisted mutation writer, which replaces
+disposable fixtures without changing registered history or observer expectations.
 Crash-safe reopening and legacy receipt escape paths are documented in
 `docs/sessions.md` under "Recover an interrupted write". A different live VM
 that owns the ledger must stop before takeover; callbacks are never replayed.

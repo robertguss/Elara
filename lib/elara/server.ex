@@ -6,7 +6,9 @@ defmodule Elara.Server do
   alias Elara.Protocol
 
   @default_port 4_048
+  @auth_packet_bytes 16 * 1_024
   @max_packet_bytes Protocol.max_line_bytes()
+  @send_timeout_ms 5_000
   @protocol_versions Protocol.versions()
 
   @doc false
@@ -39,8 +41,10 @@ defmodule Elara.Server do
     listen_opts = [
       :binary,
       packet: :line,
-      packet_size: @max_packet_bytes,
+      packet_size: @auth_packet_bytes,
       active: false,
+      send_timeout: @send_timeout_ms,
+      send_timeout_close: true,
       reuseaddr: true,
       ip: {127, 0, 0, 1}
     ]
@@ -92,15 +96,18 @@ defmodule Elara.Server do
   end
 
   defp connection(socket, provider, lifetime, token) do
-    with {:ok, line} <- recv_line(socket, 30_000),
-         {:ok, request} <- Protocol.decode(line),
-         :ok <- authenticate(request, token) do
-      establish_connection(socket, provider, lifetime, request)
-    else
-      {:error, reason} -> send_error(socket, reason, Protocol.version())
+    try do
+      with {:ok, line} <- Protocol.recv_line(socket, 30_000, @auth_packet_bytes),
+           {:ok, request} <- Protocol.decode(line),
+           :ok <- authenticate(request, token),
+           :ok <- :inet.setopts(socket, packet_size: @max_packet_bytes) do
+        establish_connection(socket, provider, lifetime, request)
+      else
+        {:error, reason} -> send_error(socket, reason, Protocol.version())
+      end
+    after
+      :gen_tcp.close(socket)
     end
-
-    :gen_tcp.close(socket)
   end
 
   defp authenticate(%{"token" => provided}, token)
@@ -165,8 +172,7 @@ defmodule Elara.Server do
              {:ok, attachment} <- Elara.attach(session_pid, mode) do
           Process.monitor(session_pid)
 
-          send_json(
-            socket,
+          message =
             Map.put(
               attached_message(version, mode, attachment, lifetime)
               |> Map.put("cwd", Elara.cwd(session)),
@@ -192,10 +198,11 @@ defmodule Elara.Server do
                 end
               )
             )
-          )
 
-          :ok = :inet.setopts(socket, active: :once)
-          connection_loop(socket, session, version, Protocol.line_buffer(), provider, lifetime)
+          with :ok <- send_json(socket, message),
+               :ok <- :inet.setopts(socket, active: :once) do
+            connection_loop(socket, session, version, Protocol.line_buffer(), provider, lifetime)
+          end
         else
           {:error, reason} -> send_error(socket, reason, version)
         end
@@ -310,9 +317,17 @@ defmodule Elara.Server do
                 lifetime
               )
 
-            send_json(socket, response)
-            :ok = :inet.setopts(socket, active: :once)
-            connection_loop(socket, session, version, Protocol.line_buffer(), provider, lifetime)
+            with :ok <- send_json(socket, response),
+                 :ok <- :inet.setopts(socket, active: :once) do
+              connection_loop(
+                socket,
+                session,
+                version,
+                Protocol.line_buffer(),
+                provider,
+                lifetime
+              )
+            end
 
           {:more, line_buffer} ->
             :ok = :inet.setopts(socket, active: :once)
@@ -1256,16 +1271,6 @@ defmodule Elara.Server do
   defp format_reason(reason), do: inspect(reason)
 
   defp send_json(socket, message), do: :gen_tcp.send(socket, Protocol.encode(message))
-
-  defp recv_line(socket, timeout, line_buffer \\ {[], 0}) do
-    with {:ok, chunk} <- :gen_tcp.recv(socket, 0, timeout) do
-      case Protocol.push_line(line_buffer, chunk) do
-        {:ok, line} -> {:ok, line}
-        {:more, line_buffer} -> recv_line(socket, timeout, line_buffer)
-        {:error, reason} -> {:error, reason}
-      end
-    end
-  end
 
   defp json_status(status) do
     %{

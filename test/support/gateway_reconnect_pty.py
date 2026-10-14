@@ -1,4 +1,4 @@
-"""Drop a real gateway connection, then explicitly reopen the same session."""
+"""Drop a real gateway connection and observe automatic authenticated reattachment."""
 import fcntl
 import json
 import os
@@ -92,14 +92,10 @@ try:
     fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
     os.kill(pid, signal.SIGWINCH)
     deadline = time.monotonic() + 8
-    while (not sessions or b"Disconnected:" not in terminal_bytes) and not errors and time.monotonic() < deadline:
+    while (not connected.is_set() or b"Reattached;" not in terminal_bytes) and not errors and time.monotonic() < deadline:
         drain()
-    assert sessions and b"Disconnected:" in terminal_bytes and not errors, "transport loss was not observed"
-    os.write(master, ("/open " + sessions[0] + "\r").encode())
-    deadline = time.monotonic() + 8
-    while not connected.is_set() and not errors and time.monotonic() < deadline:
-        drain()
-    assert connected.is_set() and not errors, "native reconnect did not attach with authentication"
+    assert sessions and connected.is_set() and not errors, "native reconnect did not attach with authentication"
+    assert b"Reattached;" in terminal_bytes, "automatic reattachment notice was not shown"
     assert authenticated[0] == "create" and "attach" in authenticated[1:]
     if len(sys.argv) > 3:
         raise AssertionError("forced failure after authenticated reconnect")

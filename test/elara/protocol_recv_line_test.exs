@@ -32,6 +32,26 @@ defmodule Elara.ProtocolRecvLineTest do
     assert {:ok, ^line} = Protocol.recv_line(server, 5_000)
   end
 
+  test "a smaller cumulative limit accepts the boundary and refuses a fragmented excess" do
+    limit = 16 * 1_024
+
+    for {extra, expected} <- [{0, :ok}, {1, :message_too_large}] do
+      {server, client} = pair()
+      line = String.duplicate("a", limit - 1 + extra) <> "\n"
+      :ok = :gen_tcp.send(client, line)
+      result = Protocol.recv_line(server, 2_000, limit)
+
+      case expected do
+        :ok -> assert result == {:ok, line}
+        :message_too_large -> assert result == {:error, :message_too_large}
+      end
+    end
+
+    {server, client} = pair()
+    :ok = :gen_tcp.send(client, String.duplicate("b", limit + 256))
+    assert {:error, :message_too_large} = Protocol.recv_line(server, 2_000, limit)
+  end
+
   test "an incomplete line times out at the deadline" do
     {server, client} = pair()
     :ok = :gen_tcp.send(client, String.duplicate("y", 2_000))

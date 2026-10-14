@@ -21,6 +21,12 @@ warnings. README.md's "Develop" section lists the exact checks.
 That section also documents `rust-toolchain.toml` pinning Rust 1.98.1 with
 rustfmt and Clippy. Rustup downloads the missing pin on a developer's first
 Cargo command, including on macOS.
+README.md's TUI section documents the server's 16 KiB authentication frame,
+16 MiB authenticated line limit, and five-second blocked-send timeout.
+Dropping a stalled client releases its control lease without stopping its session.
+The TUI keeps reading during external editing; Ctrl-Z and `/suspend` restore
+terminal modes for job control. A lost socket reattaches in the original mode
+with a fresh snapshot, retained drafts and a notice, never resending commands.
 The usage-anchored context meter, handoff recovery, delivery routing, and
 independent copies are documented in README.md's "Automatic context handoff"
 section. The runtime catalog supplies model windows through

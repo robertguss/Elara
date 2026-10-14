@@ -18,7 +18,7 @@ mod workspace_undo;
 pub use editor::{Editor, MAX_INPUT_BYTES};
 use std::cell::RefCell;
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
@@ -670,6 +670,7 @@ pub enum InputAction {
     Interrupt,
     Detach,
     ExternalEditor,
+    Suspend,
     Paste,
     ProviderSettings(Value),
     Attachment(Value),
@@ -812,6 +813,13 @@ pub fn handle_input(
     width: usize,
 ) -> InputAction {
     use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+    if !model.safe_paste
+        && let Event::Key(key) = &event
+        && key.kind == KeyEventKind::Press
+        && model.keymap.lookup(*key, false) == Some(actions::Action::Suspend)
+    {
+        return InputAction::Suspend;
+    }
     if !model.safe_paste
         && let Event::Key(key) = &event
         && key.kind == KeyEventKind::Press
@@ -1240,11 +1248,15 @@ impl Drop for ClientConnection {
     fn drop(&mut self) {
         // The reader owns a cloned descriptor: dropping only the writer would
         // leave the old attachment (and its controller lease) alive forever.
-        let _ = self.writer.shutdown(std::net::Shutdown::Both);
+        self.close();
     }
 }
 
 impl ClientConnection {
+    pub fn close(&self) {
+        let _ = self.writer.shutdown(std::net::Shutdown::Both);
+    }
+
     pub fn connect(port: u16, mut request: Value) -> Result<(Self, Value), String> {
         if let Ok(token) = std::env::var("ELARA_SERVER_TOKEN") {
             request
@@ -1297,39 +1309,33 @@ impl ClientConnection {
     }
 }
 
-fn read_frames(mut stream: TcpStream, sender: mpsc::Sender<Result<Value, String>>) {
-    let mut pending = Vec::new();
-    let mut bytes = [0_u8; 8_192];
-
+fn read_frames(stream: TcpStream, sender: mpsc::Sender<Result<Value, String>>) {
+    let mut reader = BufReader::new(stream);
     loop {
-        match stream.read(&mut bytes) {
-            Ok(0) => {
-                let _ = sender.send(Err("server disconnected".to_string()));
-                return;
-            }
-            Ok(count) => {
-                pending.extend_from_slice(&bytes[..count]);
-                while let Some(newline) = pending.iter().position(|byte| *byte == b'\n') {
-                    if newline + 1 > MAX_LINE_BYTES {
-                        let _ = sender.send(Err("server message exceeds 16 MiB".to_string()));
-                        return;
-                    }
-                    let line: Vec<_> = pending.drain(..=newline).collect();
-                    let decoded = serde_json::from_slice::<Value>(&line)
-                        .map_err(|error| format!("invalid server JSON: {error}"))
-                        .and_then(|value| {
-                            if value.is_object() {
-                                Ok(value)
-                            } else {
-                                Err("server frame is not an object".to_string())
-                            }
-                        });
-                    if decoded.is_err() || sender.send(decoded).is_err() {
-                        return;
-                    }
-                }
-                if pending.len() > MAX_LINE_BYTES {
+        let mut line = Vec::new();
+        match Read::by_ref(&mut reader)
+            .take((MAX_LINE_BYTES + 1) as u64)
+            .read_until(b'\n', &mut line)
+        {
+            Ok(_) => {
+                if line.len() > MAX_LINE_BYTES {
                     let _ = sender.send(Err("server message exceeds 16 MiB".to_string()));
+                    return;
+                }
+                if line.last() != Some(&b'\n') {
+                    let _ = sender.send(Err("server disconnected".to_string()));
+                    return;
+                }
+                let decoded = serde_json::from_slice::<Value>(&line)
+                    .map_err(|error| format!("invalid server JSON: {error}"))
+                    .and_then(|value| {
+                        if value.is_object() {
+                            Ok(value)
+                        } else {
+                            Err("server frame is not an object".to_string())
+                        }
+                    });
+                if decoded.is_err() || sender.send(decoded).is_err() {
                     return;
                 }
             }
@@ -2977,6 +2983,47 @@ pub fn fixture_model(name: &str) -> Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connection_accepts_a_fragmented_limit_frame_then_rejects_one_extra_byte() {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let prefix = b"{\"padding\":\"";
+        let suffix = b"\"}\n";
+        let padding_len = MAX_LINE_BYTES - prefix.len() - suffix.len();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = String::new();
+            BufReader::new(stream.try_clone().unwrap())
+                .read_line(&mut request)
+                .unwrap();
+            assert_eq!(
+                serde_json::from_str::<Value>(&request).unwrap()["command"],
+                "test"
+            );
+            stream.write_all(prefix).unwrap();
+            for chunk in vec![b'x'; padding_len].chunks(8_192) {
+                stream.write_all(chunk).unwrap();
+            }
+            stream.write_all(suffix).unwrap();
+            stream.write_all(b"{\"after\":true}\n").unwrap();
+            let _ = stream.write_all(&vec![b'x'; MAX_LINE_BYTES + 1]);
+        });
+        let (connection, first) =
+            ClientConnection::connect(port, json!({"command":"test"})).unwrap();
+        assert_eq!(first["padding"].as_str().unwrap().len(), padding_len);
+        assert_eq!(
+            connection.recv_timeout(Duration::from_secs(30)).unwrap(),
+            json!({"after":true})
+        );
+        assert_eq!(
+            connection
+                .recv_timeout(Duration::from_secs(30))
+                .unwrap_err(),
+            "server message exceeds 16 MiB"
+        );
+        server.join().unwrap();
+    }
 
     /// The activity row sits above the composer: `● notice`, `○ connection`,
     /// or `✓ Idle`.

@@ -783,11 +783,11 @@ checks in a disposable workspace.
 - [ ] `mix elara.recordings` shows recording and retained-output sizes;
       `prune --older-than 30` only previews, and `--apply` deletes eligible
       recordings, never transcripts, retained outputs, or locked sessions.
-- [ ] Ctrl-Z (or `/suspend`) returns to the shell; `fg` restores the TUI from a
-      fresh snapshot ("Reattaching…") without resending anything. Known issue,
-      reported 14 Oct: under `mix elara.tui` or `bin/elara` the TUI is a port
-      child in its own session, so the stop signal is discarded and it
-      reattaches at once. Record which launch path you used and what you saw.
+- [ ] Through `bin/elara`, `bin/elara-stable` and `mix elara.tui`, Ctrl-Z (or
+      `/suspend`) stops the shell's job; `bg` leaves it stopped, and `fg`
+      restores the TUI from a fresh snapshot ("Reattaching…") without
+      resending anything. An embedded server pauses with it; a separately
+      running server keeps working (#146).
 - [ ] With the terminal unfocused, a finished turn rings the bell and sends an
       OSC 777 notification (WezTerm); `/notifications off` silences both.
 - [ ] Ctrl-G (or `/editor` on an empty draft) opens `$VISUAL` or `$EDITOR` on

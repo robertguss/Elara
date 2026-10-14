@@ -124,10 +124,22 @@ defmodule Elara.Lab.ProfileTest do
   end
 
   defp connect(server) do
+    before = server_connections(server) || []
+
     {:ok, socket} =
       :gen_tcp.connect({127, 0, 0, 1}, Elara.Server.port(server), [:binary, active: false])
 
     on_exit(fn -> :gen_tcp.close(socket) end)
+
+    # Socket discovery sees the acceptor until it transfers ownership to its task.
+    assert wait_until(fn ->
+             connections = server_connections(server) || []
+             children = Task.Supervisor.children(Elara.TaskSup)
+
+             length(connections) == length(before) + 1 and
+               Enum.all?(connections, &(&1 in children))
+           end)
+
     socket
   end
 
@@ -192,17 +204,12 @@ defmodule Elara.Lab.ProfileTest do
       existing_session = start_session()
       connect(server)
 
-      existing_connection =
-        Enum.find_value(1..100, fn _ ->
-          Process.sleep(10)
-          List.first(server_connections(server) || [])
-        end)
+      [existing_connection] = server_connections(server)
 
       handle = activate(connections: fn -> server_connections(server) || [] end)
       new_session = start_session()
       before = server_connections(server)
       connect(server)
-      assert wait_until(fn -> length(server_connections(server)) == length(before) + 1 end)
       [new_connection] = server_connections(server) -- before
       result = handle |> Profile.freeze() |> Profile.collect()
 

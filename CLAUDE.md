@@ -9,8 +9,10 @@ Elara is a BEAM-native coding agent (Mix app `:elara`) that runs from source —
 there is no installed `elara` executable; `bin/elara` is a source-backed
 launcher that starts the TUI in the caller's directory. User-facing surfaces are
 `mix elara.ask`, `mix elara.chat`, `mix elara.tui`, `mix elara.server`,
-`mix elara.worker`, `mix elara.login`, and the public `Elara` Elixir API. There
-is no web UI.
+`mix elara.worker`, `mix elara.login`, the operator tasks `mix elara.trust`
+(plugins), `mix elara.mcp`, `mix elara.env` and `mix elara.recordings`, the
+daily build (`bin/elara-update`, then `elara-stable`), and the public `Elara`
+Elixir API. There is no web UI.
 
 Elara is **Robert's own daily-driver coding agent** (decision D2, 2026-10-13).
 It is being built around two bets, neither implemented yet. **Uniforms**
@@ -25,8 +27,9 @@ Research serves daily use; it is not a goal of its own.
 [Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1)
 is the sole current planning and status source: the Product Brief, the Roadmap
 and its phases, the Working Agreement, the Decision Log, and tasks in Dev Hub's
-Tasks database. `ROADMAP.md` and `HANDOFF.md` are durable pointers, not
-duplicate tracking documents. Follow the delivery rules in `AGENTS.md`. The
+Tasks database. `ROADMAP.md` is a durable pointer and `HANDOFF.md` a short
+session handoff, not duplicate tracking documents; a PM thread keeps both and
+the Notion status pages current (D27). Follow the delivery rules in `AGENTS.md`. The
 active agent performs the work of the current phase in the current session;
 `test/elara/roadmap_test.exs` checks repository pointers only, without network
 access. Linear is retired; its history is archived in `docs/archive/linear/`.
@@ -37,15 +40,17 @@ is a manual verification worksheet, not a status source.
 
 ## Toolchain
 
-Elixir 1.20, Erlang/OTP 29, Rust 1.88+ with `cargo`, `rustfmt`, and Clippy, plus
-the `flock` command (session locking) and `python3` (PTY-driven TUI tests).
-Distro Rust 1.85 is too old for the TUI dependencies. `.agents/setup` provisions
-this in cloud environments.
+Elixir 1.20, Erlang/OTP 29, and Rust 1.98.1 with `cargo`, `rustfmt`, and
+Clippy, pinned by `rust-toolchain.toml` (rustup fetches it; the crates declare a
+1.88 minimum), plus the `flock` command (session locking), `rg` (the `grep` and
+`glob` tools) and `python3` (PTY-driven TUI tests). Distro Rust 1.85 is too old
+for the TUI dependencies. `.agents/setup` provisions Elixir, OTP and Rust in
+cloud environments; `rg` and `python3` come from the base image.
 
 ## Commands
 
 ```bash
-bin/check                       # compile, format, both Rust crates, then mix test; run before pushing
+bin/check                       # product+lab compile and format, both Rust crates, mix test --warnings-as-errors, lab tests; run before pushing
 mix deps.get
 mix compile --warnings-as-errors
 mix format                      # mix format --check-formatted to lint only
@@ -61,8 +66,11 @@ mix test test/elara/session_test.exs:120      # one test by line
   `:exec_stub` compiler in `mix.exs`. It fails if `cargo` is missing, and
   refuses to replace a stub binary that a running Elara process still holds
   (`:etxtbsy`) — stop long-lived sessions or use a separate `MIX_BUILD_PATH`.
-- `native/elara-tui` is built lazily on the first `mix elara.tui`, cached
-  against a source digest in `priv/native/elara-tui.sha256`.
+- `native/elara-tui` is built lazily (always in release mode) on the first
+  `mix elara.tui`, cached against a source digest (which includes the build
+  recipe) in the app build's `priv/native/elara-tui.sha256`.
+- `bin/check` raises the file-descriptor soft limit to at least 4096 and
+  refuses an insufficient hard limit.
 - Rust TUI frame goldens live in `native/elara-tui/tests/goldens/`; regenerate
   with `ELARA_UPDATE_GOLDENS=1 cargo test`.
 - Tests never hit the network — they drive `Elara.Provider.Scripted`. `mix test`
@@ -111,12 +119,22 @@ else saved Grok OAuth. Other env vars: `ELARA_MODEL`, `ELARA_BASE_URL`,
 `ELARA_REASONING_EFFORT`, `ELARA_CODEX_AUTH_SOURCE`, `ELARA_SERVER_PORT`
 (default 4048), `ELARA_WORKER_TOKEN`, `ELARA_SKILL_PATHS`,
 `ELARA_TUI_STATE_DIR`, `ELARA_TUI_APPEARANCE_FILE`,
-`ELARA_PROVIDER_RETRY_ATTEMPTS`, `ELARA_PROVIDER_RETRY_MAX_WAIT_MS`.
+`ELARA_PROVIDER_RETRY_ATTEMPTS`, `ELARA_PROVIDER_RETRY_MAX_WAIT_MS`,
+`ELARA_SERVER_TOKEN` (required by a long-lived server and its clients),
+`ELARA_MAX_ITERATIONS`, `ELARA_TOOL_TIMEOUT_MS`, `ELARA_MAX_TOOL_TIMEOUT_MS`,
+`ELARA_CONTEXT_KEEP_RESULTS`, `ELARA_CONTEXT_KEEP_TOKENS`,
+`ELARA_COMMAND_RULES`, `ELARA_COMMAND_ENV`, `ELARA_FILE_ROOTS`,
+`ELARA_WORKTREES_ROOT` (default `~/.elara-worktrees`), `ELARA_STABLE_DIR`
+(daily build, default `~/.elara/daily`) and `XAI_MODEL`. README.md and
+`docs/detached-and-remote.md` document each.
 
 State lives under `~/.elara/`: `sessions/<cwd-key>/` (JSONL transcripts),
 `sessions/_threads/` (delegated children), `sessions/_thread_messages/`
-(transport receipts), `sessions/_effect_executors/` (durable ledgers),
-`auth.json` / `openai-codex-auth.json`. Tests redirect this via the
+(transport receipts), `sessions/_effect_executors/` (durable ledgers), other
+`sessions/_*` stores (test jobs, fnox, workspace snapshots, model catalogs),
+`auth.json` / `openai-codex-auth.json` / `exa-auth.json`, `plugin-trust/` and
+`mcp-trust/`, `tui/` and `tui-appearance.json`, and `daily/` (the stable build).
+New coding worktrees live outside it, under `~/.elara-worktrees`. Tests redirect this via the
 `:elara, :sessions_root` app env (see `config/runtime.exs`).
 
 ## Architecture
@@ -213,7 +231,8 @@ Coordinator batch patterns, candidate judging and map/reduce were retired under
 ROB-1095/LAB-6. Threads has no automatic judging or reduction contract.
 
 **Handoff (`lib/elara/session/handoff.ex`, `session/context.ex`).**
-`Context.budget/3` anchors on main-provider usage plus newer bytes ÷ 4 and
+`Context.budget/4` anchors on main-provider usage plus newer bytes ÷ 4 (each
+image without reported usage adds 32,768 tokens) and
 resolves the selected window through `Provider.Visibility.context_window/1`
 before each request (independent of protocol/attachment limits). At 90%, the
 session transfers delivery to a linked successor. Chains are bounded to eight.
@@ -228,6 +247,17 @@ generation/lease-based atomic reload. Project check evidence/diagnosis tools
 belong to the project plugin, not the built-in roster. Session binds evidence
 and provider updates to the current tool caller/incarnation; plugins may opt
 read-only tools into immediate interruption with `cancel_on_interrupt: true`.
+
+**Guardrails and integrations (Phase 1).** `Elara.Tools.FileFence` is the path
+policy for `read`, `write`, `edit`, `grep` and `glob`: the workspace plus
+operator `ELARA_FILE_ROOTS`, with protected paths refused. `Elara.CommandRules`
+denies a bash call or holds it for exact-call `/approve`. `Elara.Fnox` resolves
+approved fnox secrets per command and redacts them before output is retained.
+`lib/elara/mcp/` supervises approved MCP servers behind `mcp_search` and
+`mcp_call`. `Elara.WebFetch` and `Elara.WebSearch` keep pages behind output
+handles with untrusted provenance. `Elara.WorkspaceDiff` keeps private
+checkpoints for `/diff` and `/undo` without touching the index or HEAD. None of
+these is an OS sandbox.
 
 ## Conventions that matter here
 
@@ -254,7 +284,8 @@ read-only tools into immediate interruption with `cancel_on_interrupt: true`.
   this, and `write`/`edit`/`bash` are explicitly not sandboxed.
 - One task, one branch, one pull request. Run `bin/check` before pushing; a
   reviewer agent approves before an agent merges; then update the Notion task
-  and phase page. Done means merged; a pushed branch is not Done.
+  row. The PM thread rolls task status into the Elara page and phase pages
+  (D27). Done means merged; a pushed branch is not Done.
 
 ## Tracking
 

@@ -3,7 +3,8 @@
 # file only removes it. Tests tagged :requires_app are excluded under
 # `mix test --no-start`.
 exclude = if Process.whereis(Elara.Supervisor), do: [], else: [:requires_app]
-ExUnit.start(exclude: exclude)
+# Positive handshakes can include OS startup; absence checks keep their default.
+ExUnit.start(exclude: exclude, assert_receive_timeout: 2_000)
 
 # Historical operation drivers exercise production primitives only in tests.
 Code.require_file("support/fixtures/literal_patch.exs", __DIR__)

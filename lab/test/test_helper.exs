@@ -1,7 +1,8 @@
 # config/runtime.exs clears ELARA_* and XAI_API_KEY and puts TMPDIR and the
 # state roots under one per-run directory before the application starts; this
 # file only removes it.
-ExUnit.start()
+# Positive handshakes can include OS startup; absence checks keep their default.
+ExUnit.start(assert_receive_timeout: 2_000)
 
 defmodule Elara.Lab.StoreFixture do
   @moduledoc "Test-only replacement of disposable persisted mutation fixtures."

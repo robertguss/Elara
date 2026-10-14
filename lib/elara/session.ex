@@ -1043,6 +1043,9 @@ defmodule Elara.Session do
           shell = %{shell | provider: {elem(shell.provider, 0), new_cfg}}
           feed({:provider_result, core_ref, {:error, error}}, shell)
 
+        {:mcp_check, decision} ->
+          feed({:tool_checked, core_ref, decision}, shell)
+
         {:tool, %Sidecar.Result{status: :terminal} = result} ->
           shell = %{shell | pending_effects: Map.delete(shell.pending_effects, core_ref)}
           shell = feed({:tool_result, core_ref, result.outcome}, shell)
@@ -1093,6 +1096,12 @@ defmodule Elara.Session do
       case kind do
         :tool ->
           feed({:tool_crashed, core_ref, Exception.format_exit(reason)}, shell)
+
+        :mcp_check ->
+          feed(
+            {:tool_checked, core_ref, {:deny, "MCP preparation failed before dispatch"}},
+            shell
+          )
 
         :provider ->
           err = %Provider.Error{
@@ -2023,19 +2032,41 @@ defmodule Elara.Session do
   end
 
   defp run_effect({:check_tool, ref, call}, _effect_id, shell, _patch_context) do
-    {shell, decision} = command_decision(shell, ref, call)
+    tool = Map.fetch!(shell.core.config.tools, call.name)
 
-    decision =
-      case decision do
-        {:ask, pending} when not shell.approval_wait ->
-          {:deny,
-           "approval required: #{pending["reason"]}; call refused without executing. Run this task in the TUI and use /approve"}
+    if match?(%Tool{plugin: nil, run: {Elara.MCP.Tools, :call}}, tool) do
+      if capabilities_allowed?(tool.capabilities, shell.allowed_capabilities) do
+        {:ok, args} = call.args
 
-        other ->
-          other
+        task =
+          Task.Supervisor.async_nolink(Elara.TaskSup, Elara.MCP.Tools, :prepare, [
+            args,
+            shell.cwd,
+            min(shell.core.config.tool_timeout_ms, 30_000)
+          ])
+
+        track_task(shell, task, :mcp_check, ref)
+      else
+        feed(
+          {:tool_checked, ref, {:deny, "permission denied: required capability not granted"}},
+          shell
+        )
       end
+    else
+      {shell, decision} = command_decision(shell, ref, call)
 
-    feed({:tool_checked, ref, decision}, shell)
+      decision =
+        case decision do
+          {:ask, pending} when not shell.approval_wait ->
+            {:deny,
+             "approval required: #{pending["reason"]}; call refused without executing. Run this task in the TUI and use /approve"}
+
+          other ->
+            other
+        end
+
+      feed({:tool_checked, ref, decision}, shell)
+    end
   end
 
   defp run_effect({:run_tool, core_ref, call, tool}, effect_id, shell, patch_context) do
@@ -3750,6 +3781,7 @@ defmodule Elara.Session do
       session_id: shell.id,
       output_owner: shell.store.id,
       fnox_config: shell.store.context["fnox_config"],
+      mcp_guard: shell.core.mcp_guard,
       tool_name: call.name,
       tool_version: tool.version,
       arguments: args,

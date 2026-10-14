@@ -6,15 +6,19 @@ defmodule Elara.MCP.Config do
   @max_bytes 1_048_576
 
   def read(cwd, name) when is_binary(cwd) and is_binary(name) do
-    home = Application.get_env(:elara, :mcp_home, System.user_home!())
-    paths = Enum.uniq([Path.join(home, ".elara/mcp.json"), Path.join(cwd, ".elara/mcp.json")])
-
-    with {:ok, servers} <- load(paths) do
+    with {:ok, servers} <- list(cwd) do
       case Map.fetch(servers, name) do
         {:ok, config} -> {:ok, config}
         :error -> {:error, "MCP server #{inspect(name)} is not configured"}
       end
     end
+  end
+
+  def list(cwd) when is_binary(cwd) do
+    home = Application.get_env(:elara, :mcp_home, System.user_home!())
+    paths = Enum.uniq([Path.join(home, ".elara/mcp.json"), Path.join(cwd, ".elara/mcp.json")])
+
+    load(paths)
   end
 
   defp load(paths) do

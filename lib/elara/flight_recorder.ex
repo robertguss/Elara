@@ -692,6 +692,11 @@ defmodule Elara.FlightRecorder do
         else: normalized
 
     normalized =
+      if state.mcp_guard,
+        do: Map.put(normalized, :mcp_guard, state.mcp_guard),
+        else: normalized
+
+    normalized =
       if state.retry,
         do:
           Map.put(normalized, :retry, %{
@@ -733,6 +738,7 @@ defmodule Elara.FlightRecorder do
       phase: denormalize_phase(state.phase),
       streaming: Map.get(state, :streaming),
       tool_usage: Map.get(state, :tool_usage),
+      mcp_guard: Map.get(state, :mcp_guard),
       retry: Map.get(state, :retry),
       pending_runtime_limits: Map.get(state, :pending_runtime_limits),
       runtime_limit_sources: Map.get(state, :runtime_limit_sources, %{}),

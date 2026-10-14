@@ -2,6 +2,7 @@ defmodule Elara.MCPTest do
   use ExUnit.Case, async: false
   alias Elara.MCP
   alias Elara.MCP.{Config, Trust}
+  alias Elara.Message.{Assistant, ToolCall, ToolResult}
 
   @fixture Path.expand("../support/mcp_server.py", __DIR__)
 
@@ -32,6 +33,132 @@ defmodule Elara.MCPTest do
     end)
 
     %{root: root, home: home, cwd: cwd}
+  end
+
+  test "fixed model tools search selected schemas, retain the middle, and never resend a lost write",
+       ctx do
+    fixture = fixture(ctx.root, :stdio, "modern")
+    tools = JSON.decode!(File.read!(Path.join(fixture.root, "catalog.json")))
+
+    tools =
+      Enum.map(tools, fn
+        %{"name" => "flood"} = tool ->
+          Map.put(tool, "description", "Read export\nHidden instructions never match")
+
+        tool ->
+          Map.put(tool, "description", nil)
+      end)
+
+    File.write!(Path.join(fixture.root, "catalog.json"), JSON.encode!(tools))
+    put_config(ctx.cwd, %{"docs" => fixture.spec})
+    approve(ctx.cwd, "docs")
+
+    id =
+      session(ctx.cwd, [
+        model_call("search", "mcp_search", %{"query" => "READ export"}),
+        model_call("large", "mcp_call", %{
+          "server" => "docs",
+          "name" => "flood",
+          "arguments" => %{"bytes" => 1_048_576, "middle" => "MCP_MIDDLE_PROOF"}
+        }),
+        model_call("lost", "mcp_call", %{
+          "server" => "docs",
+          "name" => "lost",
+          "arguments" => %{}
+        }),
+        {:ok, %Assistant{text: "done"}}
+      ])
+
+    assert {:ok, "done"} = Elara.ask(id, "Search, read a large result, and make one write")
+    results = tool_results(id)
+    [search, large, lost] = results
+    assert {:ok, selected} = search.outcome
+    assert selected =~ "\"name\": \"flood\""
+    assert selected =~ "inputSchema"
+    refute selected =~ "\"name\": \"echo\""
+    assert {:ok, preview} = large.outcome
+    assert byte_size(preview) <= 16_384
+    refute preview =~ "MCP_MIDDLE_PROOF"
+    [_, handle] = Regex.run(~r/\A\[output (out_[A-Za-z0-9_-]+);/, preview)
+
+    assert {:ok, retained} =
+             Elara.Output.read(
+               %Elara.Tool.Ctx{cwd: ctx.cwd, session_id: id},
+               handle,
+               {:literal, "MCP_MIDDLE_PROOF", 1, 1}
+             )
+
+    assert retained =~ "MCP_MIDDLE_PROOF"
+    assert {:indeterminate, unknown} = lost.outcome
+    assert unknown =~ "MCP failed"
+    assert File.read!(Path.join(fixture.root, "calls")) == "flood\nlost\n"
+    assert {:ok, %{status: :match}} = Elara.replay(Elara.recording(id))
+    assert File.read!(Path.join(fixture.root, "calls")) == "flood\nlost\n"
+  end
+
+  test "only operator marks permit MCP calls in read-only sessions, never annotations", ctx do
+    fixture = fixture(ctx.root, :stdio, "modern")
+    tools = JSON.decode!(File.read!(Path.join(fixture.root, "catalog.json")))
+
+    annotated =
+      Enum.map(tools, &Map.put(&1, "annotations", %{"readOnlyHint" => true}))
+
+    File.write!(Path.join(fixture.root, "catalog.json"), JSON.encode!(annotated))
+    put_config(ctx.cwd, %{"docs" => fixture.spec})
+    approve(ctx.cwd, "docs")
+    args = %{"server" => "docs", "name" => "echo", "arguments" => %{}}
+    turns = [model_call("echo", "mcp_call", args), {:ok, %Assistant{text: "done"}}]
+    id = session(ctx.cwd, turns, read_only: true)
+    assert {:ok, "done"} = Elara.ask(id, "read")
+    assert [%ToolResult{outcome: {:error, denied}}] = tool_results(id)
+    assert denied =~ "session is read-only"
+    refute File.exists?(Path.join(fixture.root, "calls"))
+    {:ok, config} = Config.read(ctx.cwd, "docs")
+    :ok = Trust.approve_catalog(config, annotated, ["echo", "lost"])
+
+    id =
+      session(
+        ctx.cwd,
+        [
+          model_call("echo", "mcp_call", args),
+          model_call("lost", "mcp_call", Map.put(args, "name", "lost")),
+          {:ok, %Assistant{text: "done"}}
+        ],
+        read_only: true
+      )
+
+    assert {:ok, "done"} = Elara.ask(id, "read")
+
+    assert [%ToolResult{outcome: {:ok, echo}}, %ToolResult{outcome: {:error, _}}] =
+             tool_results(id)
+
+    assert echo =~ "echo ✓"
+    assert File.read!(Path.join(fixture.root, "calls")) == "echo\nlost\n"
+    assert {:ok, %{status: :match}} = Elara.replay(Elara.recording(id))
+  end
+
+  test "a prepared target cannot use replacement config or newly approved read-only marks", ctx do
+    fixture = fixture(ctx.root, :stdio, "modern")
+    put_config(ctx.cwd, %{"docs" => fixture.spec})
+    approve(ctx.cwd, "docs")
+    {:ok, guard} = MCP.prepare_call(ctx.cwd, "docs", "echo")
+    {:ok, config} = Config.read(ctx.cwd, "docs")
+    {:ok, %{tools: tools}} = MCP.discover(ctx.cwd, "docs")
+    :ok = Trust.approve_catalog(config, tools, ["echo"])
+
+    assert {:error, :mcp_call_approval_changed} =
+             MCP.call(ctx.cwd, "docs", "echo", %{}, guard: guard)
+
+    {:ok, guard} = MCP.prepare_call(ctx.cwd, "docs", "echo")
+    File.write!(config.path, File.read!(config.path) <> "\n")
+    {:ok, changed} = Config.read(ctx.cwd, "docs")
+    :ok = Trust.approve_config(changed)
+    :ok = Trust.approve_catalog(changed, tools, ["echo"])
+
+    assert {:error, :mcp_call_approval_changed} =
+             MCP.call(ctx.cwd, "docs", "echo", %{}, guard: guard)
+
+    refute File.exists?(Path.join(fixture.root, "calls"))
   end
 
   for transport <- [:stdio, :http], era <- ["modern", "legacy"] do
@@ -340,6 +467,29 @@ defmodule Elara.MCPTest do
     {:ok, %{tools: tools}} = MCP.discover(cwd, name)
     :ok = Trust.approve_catalog(config, tools, [])
   end
+
+  defp model_call(id, name, args),
+    do: {:ok, %Assistant{tool_calls: [%ToolCall{id: id, name: name, args: {:ok, args}}]}}
+
+  defp session(cwd, turns, opts \\ []) do
+    {:ok, provider} = Agent.start_link(fn -> turns end)
+
+    {:ok, id} =
+      Elara.start_session(
+        Keyword.merge([cwd: cwd, provider: {Elara.Provider.Scripted, provider}], opts)
+      )
+
+    on_exit(fn ->
+      case Registry.lookup(Elara.Sessions, id) do
+        [{pid, _}] -> DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+        [] -> :ok
+      end
+    end)
+
+    id
+  end
+
+  defp tool_results(id), do: Enum.filter(Elara.transcript(id), &match?(%ToolResult{}, &1))
 
   defp put_config(base, servers),
     do:

@@ -7,8 +7,11 @@ defmodule Elara.MCP do
   def diagnostics(cwd, name, opts \\ []), do: request(cwd, name, :diagnostics, opts)
   def catalog(cwd, name, opts \\ []), do: request(cwd, name, :catalog, opts)
 
+  def prepare_call(cwd, server, name, opts \\ []) when is_binary(name),
+    do: request(cwd, server, {:prepare_call, name}, opts)
+
   def call(cwd, server, name, args, opts \\ []) when is_binary(name) and is_map(args),
-    do: request(cwd, server, {:call, name, args}, opts)
+    do: request(cwd, server, {:call, name, args, Keyword.get(opts, :guard)}, opts)
 
   defp request(cwd, name, operation, opts) do
     timeout = Keyword.get(opts, :timeout_ms, 30_000)

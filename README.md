@@ -467,7 +467,25 @@ require approval again.
 The client API is `Elara.MCP.catalog(cwd, server)` and
 `Elara.MCP.call(cwd, server, tool, arguments, timeout_ms: 30_000)`.
 It returns decoded MCP results, preserving `isError` and structured content.
-Model-facing search and call tools are a separate integration.
+The model sees only two fixed tools, regardless of catalog size:
+
+- `mcp_search` takes a non-empty `query`, optional `server`, and `limit` (default
+  5, maximum 10). It matches all whitespace-separated terms against names and
+  first description lines, case-insensitively, preferring name matches. Only
+  selected tools' full input schemas and operator read-only marks are returned.
+- `mcp_call` takes `server`, `name`, and an `arguments` object. It captures
+  approved config/catalog digests and read-only classification before dispatch,
+  then rechecks them before sending. A changed approval refuses the call.
+
+Search does not grant permission or call a target. Without operator approval,
+the model gets an error pointing to `mix elara.mcp trust`; it cannot approve
+servers itself. Read-only sessions allow only operator-marked read calls.
+Server annotations grant nothing. A lost marked read is an ordinary error;
+a lost write is indeterminate and is never automatically resent. MCP tool
+errors preserve their structured evidence and remain errors.
+Both tools label remote content as untrusted evidence and retain it behind
+an `output_read` handle with a bounded preview. Large schemas and results can
+be read by line range or literal search without expanding the fixed tool table.
 Each configured server starts on first use under supervision and serializes
 its calls. A crash, lost response, or in-flight timeout returns `indeterminate`,
 never a replay or a claim that a remote write did not happen. The next explicit

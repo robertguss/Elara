@@ -27,7 +27,8 @@ and the execution stub across process boundaries, with no NIFs. Since the
   so v1 line clients no longer work. There is no 1,000-event ring: every
   attach answers with a fresh snapshot, not a replay.
 - §6's drop list is done. `System.shell/2` is gone from `lib/`,
-  `lib/elara/effect/opaque_shell.ex` was deleted in #51, and `mix elara.attach`
+  `lib/elara/effect/opaque_shell.ex` was moved out of `lib/` into a test
+  fixture in #51, and `mix elara.attach`
   with its Elixir line renderer was removed when SPLIT-4 completed, so §8's
   mention of it is historical. `mix elara.chat` remains a line client over a
   local session.

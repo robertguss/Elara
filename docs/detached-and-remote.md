@@ -97,8 +97,9 @@ mix elara.tui SESSION_ID --observe
 ```
 
 The TUI has its own session commands, including `/sessions` (Ctrl-O), `/new`,
-`/name`, `/tree`, `/fork`, `/clone` and `/reload`; each sends a protocol
-command that the Elixir session carries out. `/resume` belongs to
+`/name`, `/tree`, `/fork`, `/clone` and `/reload` (which refreshes the
+snapshot; plugins reload with `/plugins reload`); each sends a protocol command
+that the Elixir session carries out. `/resume` belongs to
 `mix elara.chat`.
 
 Port configuration:

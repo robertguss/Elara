@@ -1,6 +1,7 @@
 # Harness experiments and resulting functionality
 
-> **Historical note (2026-10-14):** a dated pre-pivot note, kept as history.
+> **Historical note (2026-10-14):** the pre-pivot experiment log, kept as
+> history; new experiments go in [`docs/lab/`](lab/README.md).
 > Current planning and status live in [Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1);
 > `ROADMAP.md` is now only a pointer, so references to it here describe its
 > former role.

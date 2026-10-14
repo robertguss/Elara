@@ -47,8 +47,11 @@ end
 ```
 
 Events include `{:turn_started, prompt}`, message appends, tool starts, and
-`{:turn_ended, outcome}`. A turn whose final answer streamed text ends with
-`{:turn_ended, outcome, :streamed}` instead (`Elara.Event`). Call
+`{:turn_ended, outcome}`. A completed streamed answer arrives as
+`{:message_appended, assistant, :streamed}` and still ends with
+`{:turn_ended, {:completed, text}}`; a turn that is interrupted or fails after
+partial text streamed ends with `{:turn_ended, outcome, :streamed}`
+(`Elara.Event`). Call
 `Elara.interrupt(session)` to cancel the active turn. `Elara.transcript/1`
 returns the current message path.
 
@@ -89,8 +92,9 @@ including when selected through `plugins:`. See [plugin trust](plugins.md).
 `persist: false`; direct API sessions and interactive chat persist by default.
 
 `bash` and other `shell`-capability calls pass a command preflight first. A
-call that matches an `ask` command rule, or that needs approval of changed
-project command rules or fnox configuration, is guarded. With the default
+call that matches an `ask` command rule, or that needs approval of project
+command rules that loosen the approved ones or of changed fnox configuration,
+is guarded. With the default
 `approval_wait: true`, the turn waits in `approval_waiting` until a controlling
 attachment approves that exact call (the TUI's `/approve`), so `Elara.ask/3`
 can block on it. Subscribers receive `{:approval_required, pending}`, and

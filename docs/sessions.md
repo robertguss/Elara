@@ -57,8 +57,8 @@ change history are refused until the active turn finishes or you run
 `/interrupt`. Provider failures return to the `> ` prompt without ending chat.
 
 Line chat cannot approve commands. A `bash` or other shell-capability call
-that needs approval (it matches an `ask` command rule, or changed project rules
-or fnox configuration need review) is refused without executing, and the tool
+that needs approval (it matches an `ask` command rule, or project rules that
+loosen the approved ones or changed fnox configuration need review) is refused without executing, and the tool
 result tells the model to run the task in the TUI and use `/approve`.
 
 Run `/model` to list the provider's model catalog with context windows and

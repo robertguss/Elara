@@ -1,0 +1,5 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+{"kind":"dry fixture control; not a model finding","fault":"timeout","final_result":"{:ok, \"dry fixture inspected\"}","row_count":1}
+{"kind":"dry fixture control; not a model finding","fault":"interrupt","final_result":"{:ok, \"dry fixture inspected\"}","row_count":1}
+{"kind":"dry fixture control; not a model finding","fault":"stub_loss","final_result":"{:ok, \"dry fixture inspected\"}","row_count":1}
+{"kind":"dry fixture control","model":"gpt-5.4-mini-2026-03-17","standard_estimate_usd_micros":990,"output_cap_tokens":4096,"request_cap_bytes":16384,"budget_usd_micros":2000000,"accounted_upper_bound_usd_micros":2178,"cost_complete":true,"price_source":"https://developers.openai.com/api/docs/models/gpt-5.4-mini","ceiling_source":"https://developers.openai.com/api/docs/pricing","checked_on":"2026-10-14"}

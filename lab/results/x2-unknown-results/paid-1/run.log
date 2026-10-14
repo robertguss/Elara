@@ -1,0 +1,5 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+{"kind":"real-model anecdote after scripted action","fault":"timeout","final_result":"{:ok, \"Appended exactly one row, `row-001`, to `orders.log`.\"}","row_count":2}
+{"kind":"real-model anecdote after scripted action","fault":"interrupt","final_result":"{:ok, \"Appended exactly one row to `orders.log`: `row-001`\"}","row_count":1}
+{"kind":"real-model anecdote after scripted action","fault":"stub_loss","final_result":"{:ok, \"Appended exactly one row to `orders.log`: `row-001`\"}","row_count":1}
+{"kind":"anecdote, not a benchmark or claim","model":"gpt-5.4-mini-2026-03-17","standard_estimate_usd_micros":4356,"output_cap_tokens":4096,"request_cap_bytes":16384,"budget_usd_micros":2000000,"accounted_upper_bound_usd_micros":9585,"cost_complete":true,"price_source":"https://developers.openai.com/api/docs/models/gpt-5.4-mini","ceiling_source":"https://developers.openai.com/api/docs/pricing","checked_on":"2026-10-14"}

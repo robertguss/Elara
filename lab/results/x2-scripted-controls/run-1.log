@@ -1,0 +1,4 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+{"result":"passed","fault":"timeout","real_model_calls":0}
+{"result":"passed","fault":"interrupt","real_model_calls":0}
+{"result":"passed","fault":"stub_loss","real_model_calls":0}

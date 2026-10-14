@@ -20,11 +20,11 @@ screenshot. It is approved as a direction but is not in the original HTML study.
 Thinking is visible and expanded by default and remains open until hidden by
 the user. The mockups do not establish provider capabilities or terminal behavior.
 
-## Archived reference branch
+## Deleted reference branch
 
-- Branch: `codex/elara-tui-design-studies`, commit
-  `fcf163ced9b3af2e1b1fb8a3b2745ca7cb0cc3f6` (4 Sep 2026).
-- Directory: `docs/design/prototype-reference/`, holding
+- Branch: `codex/elara-tui-design-studies` (4 Sep 2026), deleted from GitHub on
+  14 Oct 2026 (D30).
+- Directory: `docs/design/prototype-reference/`, including a README,
   `elara-tui-prototypes.html` (copied byte-for-byte from the approved
   conversation artifact) and the original reference screenshots
   `grok-home.png`, `grok-streaming.png`, `grok-completed.png`,
@@ -32,12 +32,12 @@ the user. The mockups do not establish provider capabilities or terminal behavio
 
 The branch was pushed to the public repository even though its screenshots
 include personal workspace details and must not be published as public project
-assets. Robert decided on 14 Oct 2026 (D30) to delete it from GitHub; a
-private git bundle was kept outside the repository. A saved, standalone
-version of the interactive study is tracked on main as
-`docs/design/elara-tui-prototypes.html`. Share
-sanitized design references separately if implementation moves to another
-machine; don't push the screenshots again.
+assets. Deleting the branch does not remove the commit: GitHub keeps serving it
+by its ID until GitHub Support purges it. A private git bundle was kept outside
+the repository. A saved, standalone version of the interactive study is tracked
+on main as `docs/design/elara-tui-prototypes.html`. Share sanitized design
+references separately if implementation moves to another machine; don't push
+the screenshots again.
 
 ## Implementation comparison
 

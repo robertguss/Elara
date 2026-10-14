@@ -191,9 +191,10 @@ Persistent sessions write a versioned `.flight` file beside their session JSONL.
 The [Elixir API](elixir-api.md#recordings-status-and-replay) can load and replay
 it without calling the model or executing tools.
 
-Format 3 retains a state fingerprint and effects for every transition, reusing
-history and config fingerprints until those immutable values change. Format 2
-keeps its original replay hash domain. Recording writes sync after the terminal
+Format 4 also retains the last settled turn outcome in state and segment seeds,
+so reattaching and replaying report the same terminal error. History and config
+fingerprints are reused until those immutable values change. Formats 2 and 3
+keep their original replay hash domains. Recording writes sync after the terminal
 event link and before subscribers or the waiting caller receive completion.
 Closing a session also syncs. A process or machine crash can leave an incomplete
 current turn, which replay reports without treating external effects as undone.

@@ -619,6 +619,71 @@ defmodule Elara.TuiTest do
     assert latency =~ "append_content_delta"
   end
 
+  test "reconnecting after a provider failure reports the settled error", context do
+    error = %Elara.Provider.Error{kind: :transport, message: "provider stream expired while away"}
+
+    {:ok, session} =
+      Elara.start_session(
+        provider: script([{:stream, ["partial", {:sleep, 500}], {:error, error}}]),
+        tools: [],
+        persist: false
+      )
+
+    {:ok, server} = Elara.Server.start_link(port: 0)
+    port_number = Elara.Server.port(server)
+
+    client =
+      Port.open({:spawn_executable, String.to_charlist(context.binary)}, [
+        :binary,
+        :exit_status,
+        :stderr_to_stdout,
+        args:
+          Enum.map(
+            [
+              "--headless",
+              "--event-dump",
+              "--ask",
+              "fail while away",
+              "--port",
+              Integer.to_string(port_number),
+              "--",
+              session
+            ],
+            &String.to_charlist/1
+          ),
+        env: [{~c"ELARA_TUI_STATE_DIR", String.to_charlist(context.state_dir)}]
+      ])
+
+    assert await_output(client, "partial") =~ "append_content_delta"
+    {:os_pid, pid} = Port.info(client, :os_pid)
+    assert {_, 0} = System.cmd("kill", ["-KILL", Integer.to_string(pid)])
+    assert_receive {^client, {:exit_status, status}}, 2_000
+    assert status != 0
+    eventually(fn -> Elara.status(session).phase == :idle end)
+
+    assert {output, 0} =
+             run_tui(context.binary, context.state_dir, port_number, [
+               session,
+               "--headless",
+               "--diagnostics"
+             ])
+
+    assert output =~ "Provider error (transport): provider stream expired while away"
+    assert output =~ "outcome provider_error"
+
+    assert %{
+             "kind" => "provider_error",
+             "ref" => ref,
+             "error" => %{"kind" => "transport", "message" => message}
+           } = Elara.materialized_view(session)["turn"]["outcome"]
+
+    assert is_integer(ref) and ref > 0
+    assert message == error.message
+
+    assert {:ok, %Elara.FlightRecorder.Report{status: :match}} =
+             Elara.FlightRecorder.replay(Elara.recording(session))
+  end
+
   test "the headless client can explicitly interrupt a running tool", context do
     call = %ToolCall{
       id: "tui-interrupt",

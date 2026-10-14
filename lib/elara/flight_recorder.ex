@@ -9,7 +9,7 @@ defmodule Elara.FlightRecorder do
   alias Elara.Tool.PluginRef
 
   @magic "ELARA-FLIGHT\0"
-  @version 3
+  @version 4
   @last_v1_commit "daa06f281368d0a532721695c6a656ec12ec14a5"
   @max_frame_bytes 64 * 1024 * 1024
 
@@ -466,11 +466,11 @@ defmodule Elara.FlightRecorder do
   end
 
   defp validate_recording(%Recording{header: %{format_version: version}, incomplete: []})
-       when version in [2, @version],
+       when version in [2, 3, @version],
        do: :ok
 
   defp validate_recording(%Recording{header: %{format_version: version}, incomplete: entries})
-       when version in [2, @version] do
+       when version in [2, 3, @version] do
     {:error, {:incomplete_recording, Enum.map(entries, & &1.id)}}
   end
 
@@ -536,7 +536,7 @@ defmodule Elara.FlightRecorder do
   defp cause(_recorder, _fact), do: :external
 
   defp projection(core, descriptors, 2) do
-    normalized = normalize_state(core, descriptors)
+    normalized = core |> normalize_state(descriptors) |> Map.delete(:last_outcome)
 
     %{
       fingerprint: fingerprint(normalized, 2),
@@ -548,12 +548,16 @@ defmodule Elara.FlightRecorder do
     }
   end
 
-  defp projection(core, descriptors, @version) do
+  defp projection(core, descriptors, version) when version in [3, @version] do
+    runtime = normalize_runtime(core)
+    runtime = if version == 3, do: Map.delete(runtime, :last_outcome), else: runtime
+
     component_projection(
-      normalize_runtime(core),
+      runtime,
       length(core.history),
-      fingerprint(Enum.map(core.history, &normalize_message/1)),
-      fingerprint(normalize_config(core, descriptors))
+      fingerprint(Enum.map(core.history, &normalize_message/1), version),
+      fingerprint(normalize_config(core, descriptors), version),
+      version
     )
   end
 
@@ -588,9 +592,15 @@ defmodule Elara.FlightRecorder do
      ), cache}
   end
 
-  defp component_projection(runtime, history_length, history_fingerprint, config_fingerprint) do
+  defp component_projection(
+         runtime,
+         history_length,
+         history_fingerprint,
+         config_fingerprint,
+         version \\ @version
+       ) do
     %{
-      fingerprint: fingerprint({runtime, history_fingerprint, config_fingerprint}),
+      fingerprint: fingerprint({runtime, history_fingerprint, config_fingerprint}, version),
       phase: runtime.phase,
       next_ref: runtime.next_ref,
       history_length: history_length,
@@ -654,6 +664,11 @@ defmodule Elara.FlightRecorder do
       phase: normalize_phase(state.phase),
       next_ref: state.next_ref
     }
+
+    normalized =
+      if state.last_outcome,
+        do: Map.put(normalized, :last_outcome, normalize_turn_outcome(state.last_outcome)),
+        else: normalized
 
     normalized = if state.read_only, do: Map.put(normalized, :read_only, true), else: normalized
 
@@ -736,6 +751,7 @@ defmodule Elara.FlightRecorder do
       },
       history: Enum.map(state.history, &denormalize_message/1),
       phase: denormalize_phase(state.phase),
+      last_outcome: denormalize_turn_outcome(Map.get(state, :last_outcome)),
       streaming: Map.get(state, :streaming),
       tool_usage: Map.get(state, :tool_usage),
       mcp_guard: Map.get(state, :mcp_guard),
@@ -1150,6 +1166,15 @@ defmodule Elara.FlightRecorder do
   defp normalize_turn_outcome(outcome) when outcome in [:turn_limit, :interrupted],
     do: %{status: outcome}
 
+  defp denormalize_turn_outcome(nil), do: nil
+  defp denormalize_turn_outcome(%{status: :completed, text: text}), do: {:completed, text}
+
+  defp denormalize_turn_outcome(%{status: :provider_error, error: error}),
+    do: {:provider_error, denormalize_error(error)}
+
+  defp denormalize_turn_outcome(%{status: outcome}) when outcome in [:turn_limit, :interrupted],
+    do: outcome
+
   defp normalize_tool(%Tool{} = tool) do
     %{
       name: tool.name,
@@ -1225,7 +1250,7 @@ defmodule Elara.FlightRecorder do
   end
 
   defp decode_file(<<@magic, version::unsigned-big-32, rest::binary>>)
-       when version in [2, @version],
+       when version in [2, 3, @version],
        do: decode_frames(rest, [])
 
   defp decode_file(<<@magic, version::unsigned-big-32, _::binary>>),

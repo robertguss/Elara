@@ -75,6 +75,7 @@ defmodule Elara.Session.Core do
             config: Config.t(),
             history: [Message.t()],
             phase: Elara.Session.Core.phase(),
+            last_outcome: Elara.Event.turn_outcome() | nil,
             streaming: Elara.Session.Core.streaming() | nil,
             tool_usage: Elara.Provider.Visibility.usage() | nil,
             mcp_guard: map() | nil,
@@ -91,6 +92,7 @@ defmodule Elara.Session.Core do
       :config,
       history: [],
       phase: :idle,
+      last_outcome: nil,
       streaming: nil,
       tool_usage: nil,
       mcp_guard: nil,
@@ -239,6 +241,7 @@ defmodule Elara.Session.Core do
     state = %{
       state
       | config: struct!(state.config, runtime_limits(state)),
+        last_outcome: nil,
         pending_runtime_limits: nil
     }
 
@@ -361,8 +364,13 @@ defmodule Elara.Session.Core do
         message: "final assistant did not match streamed content"
       }
 
-      {%{state | phase: :idle, streaming: nil, retry: nil},
-       [{:emit, streamed_turn_ended({:provider_error, error}, streaming)}]}
+      {%{
+         state
+         | phase: :idle,
+           streaming: nil,
+           retry: nil,
+           last_outcome: {:provider_error, error}
+       }, [{:emit, streamed_turn_ended({:provider_error, error}, streaming)}]}
     else
       finish_provider(state, asst, streaming)
     end
@@ -391,7 +399,8 @@ defmodule Elara.Session.Core do
 
   def step(%State{phase: {:awaiting_retry, _, _, _, _}} = state, fact)
       when fact in [:interrupt, :steer] do
-    {%{state | phase: :idle, streaming: nil, retry: nil}, [{:emit, {:turn_ended, :interrupted}}]}
+    {%{state | phase: :idle, streaming: nil, retry: nil, last_outcome: :interrupted},
+     [{:emit, {:turn_ended, :interrupted}}]}
   end
 
   def step(
@@ -534,8 +543,15 @@ defmodule Elara.Session.Core do
 
     effects = emits ++ [{:emit, {:turn_ended, :interrupted}}]
 
-    {%{state | history: history, phase: :idle, steering?: false, tool_usage: nil, mcp_guard: nil},
-     effects}
+    {%{
+       state
+       | history: history,
+         phase: :idle,
+         steering?: false,
+         tool_usage: nil,
+         mcp_guard: nil,
+         last_outcome: :interrupted
+     }, effects}
   end
 
   def step(%State{} = state, _fact), do: {state, []}
@@ -576,13 +592,18 @@ defmodule Elara.Session.Core do
       interrupted: true
     }
 
-    {%{state | history: state.history ++ [message], phase: :idle, streaming: nil},
-     [{:emit, {:message_appended, message}}, {:emit, streamed_turn_ended(outcome, streaming)}]}
+    {%{
+       state
+       | history: state.history ++ [message],
+         phase: :idle,
+         streaming: nil,
+         last_outcome: outcome
+     }, [{:emit, {:message_appended, message}}, {:emit, streamed_turn_ended(outcome, streaming)}]}
   end
 
   defp stop_stream(state, streaming, outcome),
     do:
-      {%{state | phase: :idle, streaming: nil},
+      {%{state | phase: :idle, streaming: nil, last_outcome: outcome},
        [{:emit, streamed_turn_ended(outcome, streaming)}]}
 
   # A failed attempt is replayable only while it has published nothing: no
@@ -658,7 +679,7 @@ defmodule Elara.Session.Core do
       [] ->
         text = asst.text || ""
         effects = base ++ [{:emit, {:turn_ended, {:completed, text}}}]
-        {%{state | phase: :idle}, effects}
+        {%{state | phase: :idle, last_outcome: {:completed, text}}, effects}
 
       calls ->
         {state, more} = dispatch_next(%{state | phase: :idle}, calls, elem(state.phase, 2))
@@ -681,7 +702,7 @@ defmodule Elara.Session.Core do
             {history ++ [result], emits ++ [{:emit, {:message_appended, result}}]}
           end)
 
-        {%{state | history: history, steering?: false},
+        {%{state | history: history, steering?: false, last_outcome: :interrupted},
          emits ++ [{:emit, {:turn_ended, :interrupted}}]}
       else
         dispatch_next(state, rest, it)
@@ -736,7 +757,7 @@ defmodule Elara.Session.Core do
         {history ++ [result], effects ++ [{:emit, {:message_appended, result}}]}
       end)
 
-    {%{state | history: history, phase: :idle, steering?: false},
+    {%{state | history: history, phase: :idle, steering?: false, last_outcome: :interrupted},
      effects ++ [{:emit, {:turn_ended, :interrupted}}]}
   end
 
@@ -751,7 +772,7 @@ defmodule Elara.Session.Core do
     state = %{state | retry: nil}
 
     if iteration > state.config.max_iterations do
-      {%{state | phase: :idle}, [{:emit, {:turn_ended, :turn_limit}}]}
+      {%{state | phase: :idle, last_outcome: :turn_limit}, [{:emit, {:turn_ended, :turn_limit}}]}
     else
       {ref, state} = take_ref(state)
       effect = call_provider_effect(state, ref)

@@ -507,10 +507,11 @@ fn run_interactive(
                     *connection = new_connection;
                     notifications.extend(fresh.notification);
                     model.reconnect_from(fresh);
-                    if let Some(notice) = &pending.resume_notice {
-                        model.notice = Some(format!(
-                            "Reattached; local draft and view restored. {notice}"
-                        ));
+                    if let Some(notice) = &pending.resume_notice
+                        && let Some(reattached) = &mut model.notice
+                    {
+                        reattached.push(' ');
+                        reattached.push_str(notice);
                     }
                     save_cursor(cursors, model);
                     reattaching = None;
@@ -823,35 +824,20 @@ impl Reattach {
         let mode = model.mode.clone();
         let cwd = model.cwd.clone();
         let incarnation = model.projection.incarnation.clone();
-        let head = model.projection.head;
+        let outcome_ref = model.projection.view["turn"]["outcome"]["ref"].as_u64();
         let cursor = cursors.load(&target);
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            // Keep actual completion evidence, not buffered content projections.
-            // The reader exits after shutdown; draining and dropping large frames
-            // happens here, never on the keyboard thread.
-            let mut completion = None;
-            for frame in buffered.into_iter().map_while(Result::ok) {
-                let seq = frame["seq"].as_u64().unwrap_or(0);
-                if frame["version"] == 2
-                    && frame["type"] == "patch"
-                    && frame["incarnation"] == incarnation
-                    && seq > head
-                {
-                    for op in frame["ops"].as_array().into_iter().flatten() {
-                        if op["op"] == "set_turn_state"
-                            && let Some(kind) = op["turn"]["outcome"]["kind"].as_str()
-                        {
-                            completion = Some((seq, kind.to_string()));
-                        }
-                    }
-                }
-            }
+            // The snapshot owns terminal outcomes too. Drop buffered projections
+            // off the keyboard thread instead of depending on raced final events.
+            drop(buffered);
             let result = connect_target(port, &target, &mode, cwd.as_deref(), &cursor).map(
                 |(connection, mut fresh)| {
                     if fresh.projection.incarnation == incarnation
-                        && let Some((seq, kind)) = completion
-                        && seq <= fresh.projection.head
+                        && let Some(fresh_ref) =
+                            fresh.projection.view["turn"]["outcome"]["ref"].as_u64()
+                        && Some(fresh_ref) != outcome_ref
+                        && let Some(kind) = fresh.last_outcome.clone()
                     {
                         fresh.observe_turn_outcome(&kind);
                     }

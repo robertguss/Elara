@@ -94,6 +94,7 @@ if ! find "$HOME/.mix" -type f -name rebar3 -perm /111 -print -quit 2>/dev/null 
   mix local.rebar --force
 fi
 mix deps.get
+(cd "$repo_root/lab" && mix deps.get)
 
 echo "==> Verifying toolchain"
 [[ "$(elixir --short-version)" == "$ELIXIR_VERSION" ]]

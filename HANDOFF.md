@@ -14,6 +14,8 @@ its launch and update commands are documented in README.md.
 The development gate's file-descriptor requirement is documented under
 "Develop": `bin/check` raises its soft limit to at least 4096, prints it and
 refuses an insufficient hard limit. The daily launcher is unchanged.
+That gate includes the separate lab's compile, formatting and full test suite;
+orb setup fetches both projects' dependencies. Root `mix test` remains product-only.
 The usage-anchored context meter, handoff recovery, delivery routing, and
 independent copies are documented in README.md's "Automatic context handoff"
 section. The runtime catalog supplies model windows through

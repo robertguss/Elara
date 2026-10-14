@@ -50,16 +50,17 @@ things that are non-obvious in the Cloud environment.
 
 ### Lint / test / build / run
 
-- Every check before a push: `bin/check` (compile with warnings as errors, format,
-  both Rust crates with strict Clippy, then `mix test`).
+- Every check before a push: `bin/check` (product and lab compile with warnings
+  as errors, both format checks, both Rust crates with strict Clippy, then both
+  Mix test suites).
 - Lint (check only): `mix format --check-formatted`. Auto-format: `mix format`.
 - Test: `mix test`. Tests never touch the network — they use
   `Elara.Provider.Scripted`.
 - Build: `mix compile`.
 - Run the CLI: `mix elara.ask "..."`, `mix elara.chat`, `mix elara.login`.
-- The research lab is a separate Mix project in `lab/` that neither `mix test`
-  nor `bin/check` runs: `cd lab && mix deps.get && mix test` (see
-  `docs/lab/README.md`).
+- The research lab is a separate Mix project in `lab/`. `bin/check` includes
+  its full suite, but root `mix test` does not. To run it alone, use
+  `cd lab && mix deps.get && mix test` (see `docs/lab/README.md`).
 
 ### Gotchas
 

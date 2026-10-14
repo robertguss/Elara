@@ -1524,10 +1524,13 @@ first use `ulimit -S -n 4096` in that shell.
 
 ```bash
 mix compile --warnings-as-errors
+(cd lab && mix compile --warnings-as-errors)
 mix format --check-formatted
+(cd lab && mix format --check-formatted)
 (cd native/exec-stub && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked)
 (cd native/elara-tui && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked)
 mix test
+(cd lab && mix test)
 ```
 
 The interactive TUI tests also require Python 3 and a Unix PTY. Tests use
@@ -1550,6 +1553,9 @@ Queued input consumption is not completion: await the assistant result when
 asserting that the provider has finished.
 
 The research lab is a separate Mix project in `lab/` that depends on this app
-by path; the app does not ship it, and neither `mix test` nor `bin/check` runs
-it. Run its checks with `cd lab && mix deps.get && mix test`;
+by path; the app does not ship it. `bin/check` compiles the lab with warnings as
+errors, checks its formatting, and runs its full suite. Root `mix test` does not
+run lab tests. Orb setup fetches both projects' dependencies. On another
+machine, run `mix deps.get` in both the root and `lab/` before `bin/check`.
+Run the lab suite alone with `cd lab && mix deps.get && mix test`.
 [docs/lab](docs/lab/README.md) explains its experiments and `mix elara.lab`.

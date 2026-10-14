@@ -865,8 +865,8 @@ support; older builds reject the expanded session header.
 Codex fetches the authenticated subscription catalog in a supervised task, with
 a 5.5-second overall deadline and a five-minute refresh interval. Its private
 cache is scoped to account and provider URL; API-key Grok caches are scoped to
-key and URL. `/model` labels live, cached or bundled data. Offline Codex uses
-the last valid cache, then the [observed built-in list](docs/subscription-capability-preflight.md).
+key and URL. `/model` labels live, cached, builtin or documented data. Offline
+Codex uses the last valid cache, then the [observed built-in list](docs/subscription-capability-preflight.md).
 The default advertised context window wins over a larger optional maximum.
 Only public IDs, efforts, windows and provenance enter the cache and recorder;
 provider instructions and prices do not. Immutable Core snapshots were chosen

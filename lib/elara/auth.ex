@@ -33,6 +33,9 @@ defmodule Elara.Auth do
     Path.join([System.user_home!(), @auth_dir_name, @auth_file_name])
   end
 
+  @spec grok_auth_path() :: String.t()
+  def grok_auth_path, do: Path.join(System.user_home!(), @grok_auth_rel)
+
   @spec load_tokens() :: {:ok, t()} | {:error, term()}
   def load_tokens do
     path = auth_path()
@@ -264,9 +267,7 @@ defmodule Elara.Auth do
   end
 
   defp import_grok_if_present do
-    grok_path = Path.join(System.user_home!(), @grok_auth_rel)
-
-    case read_auth_file(grok_path) do
+    case read_auth_file(grok_auth_path()) do
       {:ok, tokens} ->
         case save_tokens(tokens) do
           :ok -> {:ok, tokens}

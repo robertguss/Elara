@@ -533,6 +533,16 @@ trust storage, `.git/config`, `.git/hooks/**`, shell startup files (including
 `.profile`, `.bashrc`, `.bash_profile`, `.zshrc`, `.zshenv`, and
 `fish/config.fish`), `.envrc`, and `.iex.exs`. Protected names apply at any
 depth, and aliases to protected destinations are refused too.
+
+Credential protection follows the auth loaders' locations: this includes
+`$CODEX_HOME/auth.json` when configured, Grok's `~/.grok/auth.json`, saved
+Codex and Exa auth paths (including application overrides), and the personal
+MCP config. Project `.elara/mcp.json` stays editable and needs exact-byte
+reapproval before use. Server and worker tokens arrive through environment
+variables or options; Elara does not locate token files. Fnox locates its own
+provider key files, not Elara; fnox's materialized secret files remain inside
+protected session storage.
+
 Older coding children whose saved worktrees are inside `~/.elara` can still
 reopen with retained evidence, but their model file tools refuse those paths.
 Start a new coding child to work in the unprotected worktree root; existing

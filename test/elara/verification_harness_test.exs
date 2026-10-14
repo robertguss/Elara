@@ -109,4 +109,55 @@ defmodule Elara.VerificationHarnessTest do
     assert output =~ "OK    cargo 1.98.1"
     assert output =~ "instance is safe to drive"
   end
+
+  test "scripted chat waits for completed replies before the next command", ctx do
+    cwd = Path.join(System.tmp_dir!(), "verify-chat-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(cwd)
+    on_exit(fn -> File.rm_rf!(cwd) end)
+    script = Path.join(@root, ".cursor/skills/verify-elara/scripts/scripted_chat.exs")
+    paths = :code.get_path() |> Enum.reject(&(&1 == ~c"."))
+
+    for {lines, reply, replies, status, texts} <- [
+          {"/help,hello,/why,/quit", "single 日本 reply", "", 0, ["single 日本 reply"]},
+          {"first,/why,second,/quit", "", "first reply||second reply", 0,
+           ["first reply", "second reply"]},
+          {"hello", "implicit quit reply", "", 0, ["implicit quit reply"]},
+          {"/help,/quit", "unused reply", "", 1, []}
+        ] do
+      out = Path.join(cwd, "transcript.txt")
+
+      {output, code} =
+        System.cmd(
+          "elixir",
+          Enum.flat_map(paths, &["-pa", List.to_string(&1)]) ++
+            [
+              "-e",
+              "Application.put_env(:elara, :model_catalog_online, false); " <>
+                "{:ok, _} = Application.ensure_all_started(:elara); " <>
+                "Code.require_file(hd(System.argv()))",
+              "--",
+              script
+            ],
+          env: [
+            {"HOME", ctx.home},
+            {"ELARA_VERIFY_SESSION_CWD", cwd},
+            {"ELARA_VERIFY_OUT", out},
+            {"ELARA_VERIFY_LINES", lines},
+            {"ELARA_VERIFY_REPLY", reply},
+            {"ELARA_VERIFY_REPLIES", replies},
+            {"ELARA_VERIFY_PERSIST", "0"},
+            {"ELARA_VERIFY_CONTINUE", "0"},
+            {"ELARA_VERIFY_NAME", ""}
+          ],
+          stderr_to_stdout: true
+        )
+
+      assert code == status, output
+      body = File.read!(out)
+      for text <- texts, do: assert(body =~ text)
+      refute body =~ "in a turn. /interrupt to cancel."
+      refute body =~ "    interrupted\n"
+      if status == 1, do: assert(output =~ "expected scripted replies were not completed")
+    end
+  end
 end

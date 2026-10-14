@@ -10,7 +10,11 @@ records the versioned registration and what one experiment found. Notes 001 to
 ## Conventions
 
 - Name notes `NNN-slug.md` with a zero-padded sequence number, for example
-  `001-core-properties.md`. Numbers are never reused.
+  `001-core-properties.md`. Numbers are never reused, with one exception: 006
+  names both `006-real-pty-investigation.md` (2026-10-02) and
+  `006-selective-retirement.md` (2026-10-06). Both keep their names because
+  archived records link them. Notes for Notion experiments use the experiment
+  ID instead, for example `x2-unknown-results.md`.
 - State the hypothesis before running anything. A result against it is a
   finding; do not tune the experiment until it passes.
 - Prefer many seeded runs against simulated or scripted providers. Real-model
@@ -150,6 +154,12 @@ their difference where both are numbers; otherwise it names why not.
 | `provider_fault`  | One scripted `bad_response` before or during interpretation; a second session keeps progressing (JOB-3/4) |
 | `concurrency`     | RQ-2 reference workload: closed-loop users cycling sessions, each observed by a protocol-v2 client; `topology=children` makes them delegated children of one paused parent ([003](003-concurrency-baseline.md)) |
 | `session_recovery` | LAB-5 bounded pilot: one faulted input and two queued inputs, provider-task or direct-marker death ([005](005-shell-chaos.md)) |
+| `handoff_recovery` | LAB-5: the source killed at one of five public handoff lifecycle hooks, with queued inputs witnessed ([005](005-shell-chaos.md)) |
+| `child_recovery` | LAB-5: same-VM delegated-child recovery through the public delegation, resume, review and integration APIs ([005](005-shell-chaos.md)) |
+| `job_recovery` | LAB-5: test-job recovery with a real focused Mix fixture, a held source callback and queued inputs ([005](005-shell-chaos.md)) |
+| `group_recovery` | LAB-5: caller, executor or native-stub death around an ordinary process group started through `Elara.Exec.run` ([005](005-shell-chaos.md)) |
+| `transport_recovery` | LAB-5: remote-command client, TCP handler or worker death over authenticated loopback execution ([005](005-shell-chaos.md)) |
+| `vm_recovery` | LAB-5: an external VM killed during a provider request or native mutation, then public disk recovery ([005](005-shell-chaos.md)) |
 
 The job scenarios use `Elara.Lab.Jobs`, a fixture whose test blocks until the
 scenario releases it, so a fault lands while a job provably runs. They run on
@@ -246,9 +256,10 @@ traced and land in class `other` (or unclassified), so probe-on profile runs
 are not comparable on class shares either. SessionSup waiting in `sync_start`
 does not say whether the child's init was itself running or unscheduled.
 `session_starts` includes the caller-side preparation (skills discovery, prompt
-rendering, store and executor preparation, `lib/elara.ex:42-58`) and the
-`:session_id` call after `start_child` (`lib/elara.ex:95`); starts that never
-returned are not counted. These are diagnostics only and change no check,
+rendering, store and executor preparation in `do_start_session_under/2` and
+`start_prepared_session/4` in `lib/elara.ex`) and the `:session_id` call after
+`DynamicSupervisor.start_child` in `start_prepared_session/4`; starts that
+never returned are not counted. These are diagnostics only and change no check,
 bound or window rule.
 
 With `--set topology=children`, each user's session is a coding child of one
@@ -323,8 +334,12 @@ they report a `choices_digest` too.
 one draw from the choice stream and answer text has its own per-request seed,
 so a matched rule does not shift later choices or text. `Elara.Lab.Faults` kills a target at a named
 point (`:provider_started`, `:provider_streaming`, `:tool_running`), or a named
-session from outside with `inject({:session, id})`. Client-connection and
-VM-restart faults arrive with LAB-4 and LAB-5.
+session from outside with `inject({:session, id})`. LAB-5 shipped transport and
+whole-VM faults as scenarios rather than as `Faults` points:
+`transport_recovery` kills the remote-command client, its TCP handler or the
+worker, and `vm_recovery` kills an external VM owned by `Elara.Lab.VM`. LAB-4
+(isolation under misbehaving sessions, including a stalled attached client) was
+canceled on 2026-10-13; its question is experiment X10 in Notion.
 
 **Real mode.** `--provider real --max-requests R` runs a scenario against the
 configured provider (`ELARA_PROVIDER`, else the saved login) and spends real

@@ -48,20 +48,24 @@ The public Elixir API also accepts an absolute `cwd:` when embedding Elara elsew
 git worktree add /tmp/elara-manual-test HEAD
 cd /tmp/elara-manual-test
 mix deps.get
+(cd lab && mix deps.get)
 export PATH="$HOME/.cargo/bin:$PATH"
 ```
 
 - [ ] I am testing in a disposable clean checkout (`git status --short` is empty
       before testing).
-- [ ] Elixir 1.20, Erlang/OTP 29, Rust 1.88 or newer, Cargo, rustfmt, Clippy,
-      and `flock` are available. Distribution Rust 1.85 is insufficient for the
-      TUI; with rustup, run `rustup component add rustfmt clippy`.
+- [ ] Elixir 1.20, Erlang/OTP 29, Cargo, rustfmt, Clippy, `flock`, `python3`
+      (PTY-driven TUI tests) and `rg` (ripgrep, used by `grep` and `glob`) are
+      available. `rust-toolchain.toml` pins Rust 1.98.1 with rustfmt and
+      Clippy; with rustup, the first Cargo command in the checkout installs it.
+      Both crates declare 1.88 as their minimum; distribution Rust 1.85 is
+      insufficient for the TUI.
 - [ ] I will not paste tokens into this file, logs, prompts, or issue reports.
 
 Cleanup after testing:
 
 ```bash
-cd /path/to/the/original/elixir-harness
+cd /path/to/your/Elara/checkout
 git worktree remove --force /tmp/elara-manual-test
 ```
 
@@ -72,23 +76,25 @@ These checks are deterministic and credential-free. The first Mix compile builds
 missing Cargo executable must fail with actionable setup guidance rather than
 silently omitting either Rust program. Both Cargo manifests declare the minimum
 supported Rust version so an older compiler fails with a direct version error.
+`bin/check` runs the steps below in order and stops at the first failure.
 
-- [ ] `mix deps.get` succeeds.
-- [ ] `mix format --check-formatted` exits 0.
+- [ ] `mix deps.get` and `(cd lab && mix deps.get)` succeed.
+- [ ] `bin/check` prints a file-descriptor soft limit of at least 4096 (it
+      raises the soft limit itself and fails before any check if the hard
+      limit is lower), then ends with `All checks passed.`
 - [ ] `mix compile --warnings-as-errors` exits 0 and produces the Rust exec stub
-      under the Mix application build.
-- [ ] `cargo fmt --check --manifest-path native/exec-stub/Cargo.toml` exits 0.
-- [ ] `cargo clippy --all-targets --manifest-path native/exec-stub/Cargo.toml -- -D warnings`
-      exits 0.
-- [ ] `cargo test --manifest-path native/exec-stub/Cargo.toml` passes 3 tests.
-- [ ] `cargo fmt --check --manifest-path native/elara-tui/Cargo.toml` exits 0.
-- [ ] `cargo clippy --all-targets --manifest-path native/elara-tui/Cargo.toml -- -D warnings`
-      exits 0.
-- [ ] `cargo test --manifest-path native/elara-tui/Cargo.toml` passes 7 tests
-      plus the empty binary/doc targets.
-- [ ] `mix test` passes. The intentional `Elara.SessionTest.CrashTool`
-      `RuntimeError: boom` log is expected; the final ExUnit result is
-      authoritative.
+      under the Mix application build. The same command in `lab/` exits 0.
+- [ ] `mix format --check-formatted` exits 0 in the root and in `lab/`.
+- [ ] From `native/exec-stub` and again from `native/elara-tui`, run
+      `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`
+      and `cargo test --locked`; all pass. Run them from the crate directory:
+      the TUI's Cargo runner isolates TUI state only there, not via
+      `--manifest-path`.
+- [ ] `mix test --warnings-as-errors` passes (outside `bin/check`, first run
+      `ulimit -S -n 4096` in that shell). The intentional
+      `Elara.SessionTest.CrashTool` `RuntimeError: boom` log is expected; the
+      final ExUnit result is authoritative.
+- [ ] `(cd lab && mix test)` passes.
 - [ ] `rg 'System\.shell' lib/` prints no matches.
 
 Baseline notes (commit, OS/terminal, command output, duration):
@@ -102,8 +108,9 @@ Baseline notes (commit, OS/terminal, command output, duration):
 ```bash
 mix elara.login openai
 export ELARA_PROVIDER=openai-codex
-# Optional override; current default is gpt-5.3-codex.
-export ELARA_MODEL=gpt-5.3-codex
+# Optional overrides; the defaults are gpt-5.5 at low effort.
+export ELARA_MODEL=gpt-5.5
+export ELARA_REASONING_EFFORT=low
 mix elara.ask "Reply with exactly: codex provider works"
 ```
 
@@ -120,10 +127,17 @@ mix elara.ask "Reply with exactly: codex provider works"
       native provider metadata.
 - [ ] `ELARA_MODEL` successfully selects another entitled Codex model, if an
       override is needed.
+- [ ] With an existing Codex CLI login, `ELARA_CODEX_AUTH_SOURCE=codex`
+      completes a turn from `$CODEX_HOME/auth.json` (default
+      `~/.codex/auth.json`) without Elara copying, refreshing, or rewriting
+      it; an expired borrowed login asks you to refresh it in Codex. An
+      unknown value fails with a configuration error.
 
-This uses ChatGPT plan limits, not OpenAI Platform API-key billing. Elara stores
-and refreshes its own OAuth tokens; it does not import credentials from Codex,
-Pi, or another harness.
+This uses ChatGPT plan limits, not OpenAI Platform API-key billing. By default
+Elara stores and refreshes its own OAuth tokens. `ELARA_CODEX_AUTH_SOURCE=codex`
+explicitly borrows the Codex CLI login read-only; unset or `elara` uses Elara's
+own login. Set it in the process that owns the session (`mix elara.server` for
+detached use).
 
 ### Grok device login (**credentials**)
 
@@ -190,7 +204,10 @@ mix elara.tui new
 - [ ] Ask Elara to run `printf stdout; printf stderr >&2; exit 3`; merged output
       is visible and the tool reports nonzero exit 3 as an error.
 - [ ] A second ordinary prompt works in the same session.
-- [ ] Pressing Escape or Ctrl-C exits the TUI cleanly.
+- [ ] Esc closes an open panel or search and, with none open, interrupts a
+      running turn; it never exits or detaches. Ctrl-C clears the prompt;
+      pressed twice it asks to confirm ending the embedded server's live
+      sessions, and Enter then exits the TUI cleanly (Esc cancels).
 - [ ] `git status --short` shows only changes intentionally requested during the
       test.
 
@@ -204,10 +221,11 @@ Daily smoke notes (date, task, terminal, latency, friction):
 
 - [ ] `mix elara.ask "summarize this repository"` prints tool activity and a
       final answer, then exits 0.
-- [ ] A provider error, explicit interruption, CLI wait timeout, or 12-iteration
-      turn limit exits nonzero rather than reporting success. A tool's default
-      30-second timeout is instead a tool error; if the model handles it and
-      completes the turn, the ask exits 0.
+- [ ] A provider error, explicit interruption, CLI wait timeout, or the
+      100-model-call turn limit exits nonzero rather than reporting success. A
+      tool timeout (10-minute default) is instead reported to the model as the
+      tool's outcome; if the model handles it and completes the turn, the ask
+      exits 0.
 - [ ] The one-shot conversation is not offered by a later `--continue`.
 
 ### `mix elara.chat`
@@ -268,22 +286,28 @@ mix elara.chat --continue "continue with one concise observation"
 
 - [ ] `mix elara.tui new` starts an embedded server only for `new` when the
       selected port is free.
-- [ ] Leaving this TUI ends its embedded server and live sessions; reattachment
-      is not promised in this mode.
+- [ ] Quitting this TUI (after its confirmation) ends its embedded server and
+      live sessions; reattachment is not promised in this mode. With no
+      `ELARA_SERVER_TOKEN` set, the embedded server generates its own.
 - [ ] If a non-Elara process occupies the port, the client fails closed with a
       protocol/connection error and does not replace that process.
 
 ### Long-lived server mode (**multi-terminal**)
 
+A long-lived server and every client need the same `ELARA_SERVER_TOKEN`
+(32–512 bytes). Generate one once and export that value in each terminal.
+
 Terminal A:
 
 ```bash
+export ELARA_SERVER_TOKEN="$(openssl rand -hex 32)"   # copy this value
 ELARA_PROVIDER=openai-codex elixir --erl "+Bc" -S mix elara.server
 ```
 
 Terminal B:
 
 ```bash
+export ELARA_SERVER_TOKEN='the value from Terminal A'
 mix elara.tui new
 # Save SESSION_ID from the status bar.
 mix elara.tui list
@@ -297,17 +321,24 @@ worker uses the same build, stop it before recompiling or assign a separate
 `MIX_BUILD_PATH` to each process. `--no-compile` is an option to `mix run` and
 `mix eval`, not a global option such as `mix --no-compile elara.worker`.
 
+- [ ] Without `ELARA_SERVER_TOKEN`, `mix elara.server` refuses to start and
+      says to set the same token in the server and client terminals; a client
+      with a different token is refused before any session operation.
 - [ ] A running server is reused; `new` does not start a competing server.
 - [ ] `list` shows each live session's ID, state, head, and working directory.
-- [ ] Escape/Ctrl-C detaches without interrupting an active turn.
+- [ ] `/detach`, `/quit`, or Ctrl-C pressed twice leaves without interrupting
+      an active turn or asking for confirmation. Esc with no panel open
+      interrupts the turn instead; it never detaches.
 - [ ] Work continues with no TUI attached, and attaching by `SESSION_ID` shows
       the exact settled history once, with no missing or duplicated text.
 - [ ] Reattaching does not change the session working directory.
 - [ ] Only one controlling attachment can ask or interrupt.
 - [ ] A second `--observe` attachment receives the same live projection but an
       attempt to mutate is rejected as `not_controller`.
-- [ ] Ctrl-X explicitly interrupts an active provider or tool turn; every
-      attached client converges on the interrupted state.
+- [ ] `/interrupt`, or Esc with no panel open, interrupts an active provider
+      or tool turn; every attached client converges on the interrupted state.
+      Ctrl-X is unbound; the `interrupt` action has no default key but can be
+      bound in `keymap.json`.
 - [ ] Cursor/incarnation data is persisted in `~/.elara/tui/cursors.json` and a
       later attachment converges from an atomic snapshot.
 - [ ] Stopping the server VM ends live sessions. This is detachability, not
@@ -318,6 +349,8 @@ variables on Terminal A; changing them only for a TUI process does not
 reconfigure an existing server.
 
 ### Port and diagnostic modes
+
+Export the same `ELARA_SERVER_TOKEN` as above in each terminal first.
 
 ```bash
 mix elara.server --port 14048
@@ -353,23 +386,33 @@ evaluator's status instead of the nested TUI status.
 
 - [ ] `read` returns file contents or an actionable read error.
 - [ ] Default local `write` creates parent directories and atomically writes a
-      workspace-relative regular file.
-- [ ] Default local `write` rejects absolute paths, `..`, symlink path
-      components, and non-file targets.
+      regular file inside the workspace or an `ELARA_FILE_ROOTS` folder.
+- [ ] The file-tool fence: `read`, `write`, `edit`, `grep` and `glob` refuse
+      paths that resolve outside the workspace and extra roots (including `..`
+      and escaping symlinks) and protected paths such as `~/.elara/**`,
+      `~/.ssh/**`, `.git/config` and `.envrc` at any depth. A symlink that
+      stays inside an allowed root works, and `write` changes its resolved
+      destination. `write` still rejects non-file targets.
 - [ ] `edit` changes exactly one occurrence.
 - [ ] `edit` rejects zero matches without changing the file.
-- [ ] `edit` rejects multiple matches without changing the file.
+- [ ] `edit` rejects multiple matches without changing the file, unless
+      `replace_all: true` replaces every literal occurrence.
 - [ ] `bash` runs through `/bin/sh -c` in the session cwd with stdout/stderr
       merged, preserving successful output, nonzero exit codes, and signals.
-- [ ] Tool output retained in model history is capped at 16 KiB by default.
-- [ ] Every tool call times out after 30 seconds by default.
-- [ ] A turn stops after 12 provider iterations by default.
+- [ ] Tool output sent to the model is capped at 16 KiB by default; larger
+      local `bash` output is retained behind an `out_…` handle (see section
+      15).
+- [ ] Tools time out after 10 minutes by default; `bash` accepts a per-call
+      `timeout_ms` up to the 60-minute ceiling and rejects a larger value.
+- [ ] A turn stops after 100 model calls by default. `ELARA_MAX_ITERATIONS`,
+      `ELARA_TOOL_TIMEOUT_MS` and `ELARA_MAX_TOOL_TIMEOUT_MS` override these
+      limits; an invalid value fails session creation.
 
-`read` and `edit` expand paths and `bash` is unrestricted; unlike default local
-`write`, they are not workspace confinement boundaries. There is no shell
-approval layer or OS sandbox. The `write` checks above exercise the default
-session/declarative-write path; a direct call to the low-level
-`Elara.Tools.write/2` helper is not confined.
+The file-tool fence is a model-tool policy, not an OS sandbox: `bash`, other
+tools, and trusted plugins are not confined by it, and Elara's internal skill,
+session and plugin reads bypass it. Every model `bash` call also passes command
+rules before it runs, and may wait for `/approve` (see section 15). Remote
+workers keep their stricter relative-path, no-symlink policy.
 
 ### Rust execution-stub guarantees (**destructive**)
 
@@ -383,8 +426,9 @@ mix test test/elara/exec_integration_test.exs
 - [ ] Explicit `Elara.interrupt/1` kills the command and ordinary background
       descendants in its process group.
 - [ ] Timeout kills the process group and reports `timed out`.
-- [ ] A byte flood is killed at source, retains only the configured cap, and
-      reports truthful `bytes_total`/`bytes_sent` accounting.
+- [ ] A byte flood is stopped and reaped at the 128 MiB retained-output cap,
+      not the preview budget, and reports a partial, `indeterminate` result
+      with truthful byte accounting.
 - [ ] Exec-stub death reports every in-flight job as `indeterminate`, guardian
       cleanup removes descendants, and a replacement stub accepts later jobs.
 - [ ] Abrupt BEAM death closes the Port; stub EOF cleanup leaves no ordinary
@@ -398,9 +442,14 @@ indeterminate if it dies.
 
 ## 7. Durable local writes and recovery (**destructive/advanced**)
 
-The production receipt path currently applies only to the exact default local
-built-in `write`. It does not cover `edit`, `bash`, plugins, custom tools, or
-remote mutations.
+In a default session the production receipt path applies only to the exact
+local built-in `write`. It does not cover `edit`, `bash`, `mcp_call`, plugins,
+custom tools, or remote mutations; an MCP write lost in flight is
+`indeterminate` and never resent. An explicit API `effect_executor:` also
+routes mutating non-plugin tools through receipts. There, an accepted but
+never-started `mcp_call` is sent on recovery only if its MCP approval is
+unchanged; otherwise it is refused (coverage:
+`mix test test/elara/mcp_test.exs`).
 
 - [ ] A normal built-in write records durable controller intent, executor
       acceptance/callback evidence, and a terminal result.
@@ -447,15 +496,24 @@ running that test: **yes / no**, details:
 ## 9. Live plugins (**credentials**, trusted code)
 
 Use the documented `CounterPlugin` from [`docs/plugins.md`](docs/plugins.md) in
-`.elara/plugins/counter.exs`, then start a new chat.
+`.elara/plugins/counter.exs`. Review it, approve it from the Elara checkout with
+`mix elara.trust WORKSPACE`, then start a new chat.
 
 - [ ] `.ex` and `.exs` files under `cwd/.elara/plugins/` are discovered in
       sorted order when a session starts.
+- [ ] `mix elara.trust` lists each plugin path with its SHA-256 and saves
+      nothing unless you answer `y`. An unapproved, changed, or new file is
+      refused (`plugin_trust_required`) until its exact bytes are approved.
 - [ ] Exactly one module implementing `Elara.Plugin` is accepted per file.
-- [ ] The plugin tool is advertised beside `read`, `write`, `edit`, and `bash`.
+- [ ] The plugin tool is advertised beside the built-in roster: `read`,
+      `write`, `edit`, `bash`, `output_read`, `web_fetch`, `web_search`,
+      `mcp_search`, `mcp_call`, `grep`, `glob`, `skill`, `start_child`,
+      `test_job`, `job`, `completion_wait`, and the `thread_send`,
+      `thread_read`, `thread_status` and `thread_wait` tools.
 - [ ] Calling `counter` repeatedly proves state is session-local and retained.
-- [ ] After changing implementation/version, `/reload` installs a new immutable
-      generation without restarting chat and preserves the plugin process/state.
+- [ ] After changing implementation/version and approving the new bytes,
+      `/reload` in chat (`/plugins reload` in the TUI) installs a new immutable
+      generation without restarting and preserves the plugin process/state.
 - [ ] A `migrate/2` callback converts old state to a new representation.
 - [ ] Without `migrate/2`, plain-data state is preserved as-is.
 - [ ] Parse, compile, contract, duplicate-tool, initialization, or migration
@@ -550,16 +608,19 @@ Use `iex -S mix` for these checks. See
 - [ ] `Elara.status/1` exposes phase/effect, mailbox/task counts, subscribers,
       event range, worker health, and recording metadata.
 - [ ] `Elara.materialized_view/1` exposes Elixir's current messages, tool
-      statuses/outcomes, turn state, usage (`nil` today), and content deltas.
+      statuses/outcomes, turn state, content deltas, and recorded usage:
+      `provider_view.usage` holds the last request's counters, session totals
+      and a cost estimate, and top-level `usage` repeats the totals.
 - [ ] `Elara.session_pid/1` resolves a live stable ID and rejects a missing one.
 - [ ] `persist: false` keeps session/history recording in memory and cannot be
       combined with `resume:`.
 - [ ] `provider:`, `tools:`, `plugins:`, `system:`, `max_iterations:`,
-      `tool_timeout_ms:`, `max_tool_output_bytes:`, `persist:`, `resume:`,
-      `name:`, `allowed_capabilities:`, `workspace_id:`, and `router:` alter
-      only their documented session behavior.
-- [ ] With no `system:` override, the built-in prompt includes `cwd/AGENTS.md`
-      when that exact file exists.
+      `tool_timeout_ms:`, `max_tool_timeout_ms:`, `max_tool_output_bytes:`,
+      `provider_retry:`, `persist:`, `resume:`, `name:`,
+      `allowed_capabilities:`, `workspace_id:`, and `router:` alter only their
+      documented session behavior.
+- [ ] With no `system:` override, the built-in prompt includes each
+      `AGENTS.md` in the cwd and its ancestors, outermost first.
 
 ### Persistence API
 
@@ -624,16 +685,109 @@ map/reduce and aggregate budgets are not available.
       sandboxed execution.
 - [ ] I understand remote worker authentication/capabilities/path checks are
       enforcement layers, not an OS sandbox.
+- [ ] I understand the file-tool fence, command rules, read-only mode, fnox
+      redaction and command-environment scrubbing are policy checks, not an
+      OS sandbox.
 - [ ] I verified that new session cwd controls relative tools, shell cwd, plugin
-      discovery, session scope, and the optional exact `cwd/AGENTS.md`.
-- [ ] I observed or accepted the defaults: 12 model iterations, 30-second tool
-      timeout, 16 KiB retained tool output, and 16 MiB
-      maximum socket protocol message.
-- [ ] I understand `usage` is currently `nil`, snapshots over 16 MiB fail
-      closed, and the Rust binaries are built from source rather than
-      distributed as prebuilt cross-platform releases.
+      discovery, session scope, and the `AGENTS.md` ancestry.
+- [ ] I observed or accepted the defaults: 100 model calls per turn, 10-minute
+      tool timeout with a 60-minute `bash` ceiling, 16 KiB tool output to the
+      model, 128 MiB retained `bash` output per object, and 16 MiB maximum
+      socket protocol message.
+- [ ] I understand cost estimates sum only priced API responses (subscription
+      usage shows tokens, never dollars), snapshots over 16 MiB fail closed,
+      and the Rust binaries are built from source rather than distributed as
+      prebuilt cross-platform releases.
 - [ ] I understand exec-stub process-group behavior currently depends on Unix
       primitives and is not a promise of Windows portability.
+
+## 15. Phase 1 features (**credentials** for model-driven checks)
+
+[`README.md`](README.md) is the reference for each behavior below. Run the TUI
+checks in a disposable workspace.
+
+### Daily build and command environment
+
+- [ ] `bin/elara-update` builds the latest `origin/main` under `~/.elara/daily`
+      (an absolute `ELARA_STABLE_DIR` keeps a test separate); `elara-stable`
+      (or `bin/elara-stable`) from a project launches it. A failed update
+      leaves the previous build selected, and `mix compile` in the dev
+      checkout does not disturb a running stable session.
+- [ ] `ELARA_COMMAND_ENV='NAME' mix elara.env` lists forwarded and withheld
+      names, never values. A named project variable reaches `bash`; names in
+      the `ELARA_`, `XAI_`, `OPENAI_` and other credential namespaces stay
+      withheld even when named.
+- [ ] fnox (1.39+ on `PATH`): in a repo with fnox config, the first `bash`
+      call waits for `/approve`, which lists each config path with a digest.
+      The command then sees default-profile secrets, and output shows
+      `[fnox:NAME]` instead of a value. A config edit asks again;
+      `mix elara.ask` refuses unapproved config and points to the TUI.
+
+### Approval and policy
+
+- [ ] Command rules: with `{"ask": ["printf inspect-first"]}` in
+      `.elara/command-rules.json`, that command waits; Esc closes the view and
+      `/approve` runs exactly that call. `MIX_ENV=prod` commands are denied
+      with a tool error. `mix elara.ask` refuses an ask match and points to
+      the TUI.
+- [ ] MCP: with a server in `.elara/mcp.json`, `mcp_call` errors and points to
+      `mix elara.mcp trust NAME` until you approve the config bytes, then the
+      catalog (with `--read-only` marks). Then `mcp_search` finds its tools,
+      `mcp_call` runs one, and a config edit requires approval again.
+      `mix elara.mcp info NAME` shows the protocol and server identity.
+- [ ] `/read-only` (or `/read-only on|off`): the footer labels the session;
+      `read`, `grep` and `glob` work while `write`, `edit` and `bash` return
+      permission refusals from the next tool call; `off` restores them.
+- [ ] `grep` and `glob` honour `.gitignore`, skip `deps`/`_build`/`.git`, and
+      return sorted results; a `path` outside the workspace or under
+      `~/.elara` is refused; a missing `rg` is a tool error naming the install.
+- [ ] `/limits` shows next-turn limits and their source. `/limits calls 150`
+      and `/limits timeout 20m` apply from the next turn and survive
+      detach/reattach; the config ceiling cannot be raised from the TUI.
+
+### Tools
+
+- [ ] `web_fetch` on a public page returns an untrusted-content label,
+      heading outline, about 6 KiB of text and an `output_read` handle; the
+      footer then shows "web content in context". `http://127.0.0.1/` is
+      refused.
+- [ ] `web_search` (may be billed): after `mix elara.login exa` (hidden input,
+      `~/.elara/exa-auth.json` mode `600`), a search returns five titles, URLs
+      and excerpts; the transcript records the query, request ID and cost.
+- [ ] `output_read`: ask Elara to run `seq 1 200000`. The result shows head,
+      tail, total bytes/lines and an `out_…` handle; `output_read` with an
+      `offset` or a literal `pattern` returns those lines without rerunning.
+
+### TUI
+
+- [ ] `/diff` shows the latest turn's workspace diff, including `bash`
+      changes; `/diff session` shows the net diff since the first turn. **r**
+      refreshes and Esc closes; a non-Git workspace reports unavailable.
+- [ ] `/undo` previews the latest closed turn's files; Enter restores them and
+      adds a **SYSTEM** notice, Esc cancels. A touched file edited since then
+      makes undo refuse, naming it.
+- [ ] `~/.elara/tui/keymap.json` with `{"read_only": "alt+a"}` binds that key
+      after a TUI restart and `/help` shows it; a malformed file keeps the
+      defaults with a startup notice.
+- [ ] After a turn, the footer shows input, `cached(in)` and output tokens.
+      A priced API model adds `~$…`; Codex and Grok OAuth show tokens with no
+      dollar value. The `Ctx ~used/window` meter is visible.
+- [ ] `/model` (or Ctrl-P) lists models with windows, labelled live, cached or
+      bundled; Up/Down picks a model, Left/Right Codex effort, and Enter
+      applies to the next request. `/model ID [EFFORT]` selects directly.
+- [ ] `mix elara.recordings` shows recording and retained-output sizes;
+      `prune --older-than 30` only previews, and `--apply` deletes eligible
+      recordings, never transcripts, retained outputs, or locked sessions.
+- [ ] Ctrl-Z (or `/suspend`) returns to the shell; `fg` restores the TUI from a
+      fresh snapshot ("Reattaching…") without resending anything.
+- [ ] With the terminal unfocused, a finished turn rings the bell and sends an
+      OSC 777 notification (WezTerm); `/notifications off` silences both.
+- [ ] Ctrl-G (or `/editor` on an empty draft) opens `$VISUAL` or `$EDITOR` on
+      the draft; saving replaces the draft without sending it, and a failed
+      editor leaves the draft intact.
+- [ ] Elixir, HEEx, Rust, shell, JSON and Markdown code in assistant fences,
+      successful `read` results and `edit` snippets render in theme colors in
+      all four themes; copying returns the original source bytes.
 
 ## Issue and usability log
 

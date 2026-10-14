@@ -320,15 +320,38 @@ defmodule Elara.Lab.ProfileTest do
   end
 
   describe "the timed first census" do
-    test "it returns the plain census with seven ordered marks and both supervisors' readings" do
+    test "it reads current members with seven ordered marks and both supervisors' readings" do
       client = spawn(fn -> Work.park() end)
       on_exit(fn -> Process.exit(client, :kill) end)
+      {:ok, task} = Task.Supervisor.start_child(Elara.TaskSup, Work, :park, [])
+      on_exit(fn -> Task.Supervisor.terminate_child(Elara.TaskSup, task) end)
       opts = [clients: fn -> [client] end, connections: fn -> [] end]
 
       {census, setup} = Profile.timed_census(opts)
 
-      assert census == Profile.census(opts)
-      assert {client, :client} in census
+      assert {task, :task} in census
+      :ok = Task.Supervisor.terminate_child(Elara.TaskSup, task)
+      next = Profile.census(opts)
+      refute Enum.any?(next, fn {pid, _class} -> pid == task end)
+
+      for snapshot <- [census, next],
+          member <- [
+            {client, :client},
+            {Process.whereis(Elara.Exec), :exec},
+            {Process.whereis(Elara.Threads), :threads},
+            {Process.whereis(Elara.Threads.Communication), :transport}
+          ] do
+        assert member in snapshot
+      end
+
+      assert setup.supervisors.task_sup.children ==
+               Enum.count(census, fn {_pid, class} ->
+                 class in [:task, :connection, :unclassified]
+               end)
+
+      assert setup.supervisors.session_sup.children ==
+               Enum.count(census, fn {_pid, class} -> class == :session end)
+
       assert Map.keys(setup.marks) |> Enum.sort() == Enum.sort(Profile.census_marks())
       marks = Enum.map(Profile.census_marks(), &setup.marks[&1])
       assert marks == Enum.sort(marks)

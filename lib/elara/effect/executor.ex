@@ -79,14 +79,35 @@ defmodule Elara.Effect.Executor.Server do
 
   @impl true
   def init(opts) do
+    case Keyword.get(opts, :name) do
+      {:via, Registry, {Elara.EffectExecutors, id, :initializing}} ->
+        result =
+          initialize(opts, fn -> Elara.Effect.LocalExecutor.lock_status(id, :waiting_for_lock) end)
+
+        case result do
+          {:ok, _state} -> Elara.Effect.LocalExecutor.lock_status(id, nil)
+          {:stop, reason} -> Elara.Effect.LocalExecutor.lock_status(id, {:failed, reason})
+        end
+
+        result
+
+      _ ->
+        initialize(opts, fn -> :ok end)
+    end
+  end
+
+  defp initialize(opts, on_wait) do
     id = Keyword.fetch!(opts, :id)
     fault_hook = Keyword.get(opts, :fault_hook, fn _point -> :ok end)
     incarnation = Ownership.writer()
+    now = System.monotonic_time(:millisecond)
+    lock_opts = [deadline: now + 5_000, wait_deadline: now + 2_000, on_wait: on_wait]
 
     with {:ok, path} <- Ownership.canonical_path(Keyword.fetch!(opts, :path)),
-         {:ok, writer_lock} <- Ownership.acquire(path <> ".writer.lock", :exclusive) do
+         {:ok, writer_lock} <- Ownership.acquire(path <> ".writer.lock", :exclusive, lock_opts) do
       result =
-        with {:ok, callbacks} <- Ownership.acquire(path <> ".callbacks.lock", :exclusive) do
+        with {:ok, callbacks} <-
+               Ownership.acquire(path <> ".callbacks.lock", :exclusive, lock_opts) do
           try do
             case ExecutorLedger.open(path) do
               {:ok, ledger} ->

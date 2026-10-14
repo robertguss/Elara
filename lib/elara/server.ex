@@ -121,6 +121,14 @@ defmodule Elara.Server do
     version = response_version(request)
     extensions = Map.get(request, "extensions", [])
 
+    Process.put(:execution_status, fn notice ->
+      if version == 2 and is_list(extensions) and "startup_status_v1" in extensions do
+        send_json(socket, %{"type" => "startup_status", "version" => 2, "notice" => notice})
+      end
+
+      :ok
+    end)
+
     Process.put(
       :input_attachments,
       version == 2 and is_list(extensions) and "input_attachments_v1" in extensions
@@ -185,7 +193,8 @@ defmodule Elara.Server do
                   "plugin_reload_v1",
                   "input_attachments_v1",
                   "input_queue_v1",
-                  "thread_communication_v1"
+                  "thread_communication_v1",
+                  "startup_status_v1"
                 ],
                 fn
                   "command_approvals_v1" -> Process.get(:command_approvals)
@@ -195,6 +204,7 @@ defmodule Elara.Server do
                   "provider_visibility_v1" -> Process.get(:provider_visibility)
                   "input_attachments_v1" -> Process.get(:input_attachments)
                   "input_queue_v1" -> Process.get(:input_queue)
+                  "startup_status_v1" -> is_list(extensions) and "startup_status_v1" in extensions
                 end
               )
             )
@@ -219,7 +229,7 @@ defmodule Elara.Server do
     with {:ok, mode} <- mode,
          {:ok, cwd} <- decode_cwd(Map.get(request, "cwd", File.cwd!())),
          {:ok, provider} <- resolve_provider(provider),
-         {:ok, session} <- Elara.start_session(provider: provider, cwd: cwd) do
+         {:ok, session} <- start_session(provider: provider, cwd: cwd) do
       {:ok, version, session, mode}
     end
   end
@@ -925,7 +935,7 @@ defmodule Elara.Server do
 
   defp run_lifecycle_command(_session, "session_create", _request, provider, cwd, _lifetime) do
     with {:ok, provider} <- resolve_provider(provider),
-         {:ok, id} <- Elara.start_session(provider: provider, cwd: cwd) do
+         {:ok, id} <- start_session(provider: provider, cwd: cwd) do
       {:ok, %{"type" => "session_created", "version" => 2, "session_id" => id}}
     end
   end
@@ -1226,11 +1236,15 @@ defmodule Elara.Server do
 
         if Elara.Threads.managed?(id) do
           with {:ok, provider} <- resolve_provider(provider),
-               do: Elara.Threads.resume(id, provider: provider)
+               do:
+                 Elara.Threads.resume(id,
+                   provider: provider,
+                   on_status: Process.get(:execution_status)
+                 )
         else
           with {:ok, info} <- Elara.Session.Store.find(cwd, id),
                {:ok, provider} <- resolve_provider(provider),
-               {:ok, ^id} <- Elara.start_session(provider: provider, cwd: cwd, resume: info.path) do
+               {:ok, ^id} <- start_session(provider: provider, cwd: cwd, resume: info.path) do
             {:ok, id}
           end
         end
@@ -1239,6 +1253,9 @@ defmodule Elara.Server do
 
   defp resolve_provider(nil), do: Elara.Config.resolve()
   defp resolve_provider(provider), do: {:ok, provider}
+
+  defp start_session(opts),
+    do: Elara.start_session(Keyword.put(opts, :on_status, Process.get(:execution_status)))
 
   defp response_version(%{"version" => version}) when version in @protocol_versions, do: version
   defp response_version(_request), do: Protocol.version()
@@ -1278,6 +1295,7 @@ defmodule Elara.Server do
       "incarnation" => status.incarnation,
       "phase" => inspect(status.phase),
       "current_effect" => inspect(status.current_effect),
+      "lock_wait_notice" => status.lock_wait_notice,
       "mailbox_length" => status.mailbox_length,
       "task_count" => status.task_count,
       "subscriber_count" => status.subscriber_count,

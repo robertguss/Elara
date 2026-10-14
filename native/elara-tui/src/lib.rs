@@ -181,6 +181,7 @@ pub struct Model {
     pub last_outcome: Option<String>,
     last_outcome_ref: Option<u64>,
     pub notice: Option<String>,
+    pub startup_notice: Option<String>,
     pub notification: Option<&'static str>,
     pub lifetime: String,
     session_picker: Option<sessions::Picker>,
@@ -250,6 +251,7 @@ impl Model {
             last_outcome,
             last_outcome_ref,
             notice,
+            startup_notice: None,
             notification: None,
             lifetime: "embedded".into(),
             cwd: None,
@@ -307,6 +309,7 @@ impl Model {
         }
         self.pending_replies.clear();
         self.pending_ask = None;
+        self.startup_notice = None;
         self.notification = None;
         self.ask_sent_at = None;
         self.provider_picker = None;
@@ -1309,7 +1312,15 @@ impl ClientConnection {
         std::mem::replace(&mut self.receiver, empty)
     }
 
-    pub fn connect(port: u16, mut request: Value) -> Result<(Self, Value), String> {
+    pub fn connect(port: u16, request: Value) -> Result<(Self, Value), String> {
+        Self::connect_with_status(port, request, |_| {})
+    }
+
+    pub fn connect_with_status(
+        port: u16,
+        mut request: Value,
+        mut on_status: impl FnMut(Option<&str>),
+    ) -> Result<(Self, Value), String> {
         if let Ok(token) = std::env::var("ELARA_SERVER_TOKEN") {
             request
                 .as_object_mut()
@@ -1333,7 +1344,15 @@ impl ClientConnection {
             receiver,
         };
         connection.send(&request)?;
-        let first = connection.recv_timeout(Duration::from_secs(30))?;
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let first = loop {
+            let frame =
+                connection.recv_timeout(deadline.saturating_duration_since(Instant::now()))?;
+            if frame["type"] != "startup_status" || frame["version"] != 2 {
+                break frame;
+            }
+            on_status(frame["notice"].as_str());
+        };
         Ok((connection, first))
     }
 
@@ -1531,7 +1550,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "create",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, limits::EXTENSION, "thread_communication_v1", "plugin_reload_v1", "command_approvals_v1"],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, limits::EXTENSION, "thread_communication_v1", "plugin_reload_v1", "command_approvals_v1", "startup_status_v1"],
             "mode": mode,
             "cwd": std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).to_string_lossy()
         })
@@ -1539,7 +1558,7 @@ pub fn attach_request(target: &str, mode: &str, cursor: &Cursor) -> Value {
         json!({
             "version": 2,
             "command": "attach",
-            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, limits::EXTENSION, "thread_communication_v1", "plugin_reload_v1", "command_approvals_v1"],
+            "extensions": ["provider_visibility_v1", attachments::EXTENSION, inbox::EXTENSION, limits::EXTENSION, "thread_communication_v1", "plugin_reload_v1", "command_approvals_v1", "startup_status_v1"],
             "session_id": target,
             "mode": mode,
             "cursor": cursor.cursor,
@@ -2069,7 +2088,19 @@ fn draw_activity(
         return;
     }
     let inner = area.inner(ratatui::layout::Margin::new(1, 0));
-    let left = if let Some(notice) = &model.notice {
+    let transient_notice = model
+        .startup_notice
+        .as_deref()
+        .or_else(|| model.projection.view["inbox"]["execution"]["lock_wait_notice"].as_str());
+    let left = if let Some(notice) = transient_notice {
+        vec![
+            Span::styled("● ", presentation::accent()),
+            Span::styled(
+                notice.to_owned(),
+                Style::default().fg(appearance::slot::TEXT),
+            ),
+        ]
+    } else if let Some(notice) = &model.notice {
         vec![
             Span::styled("● ", presentation::accent()),
             Span::styled(notice.clone(), Style::default().fg(appearance::slot::TEXT)),
@@ -3021,6 +3052,47 @@ mod tests {
     use super::*;
 
     #[test]
+    fn startup_status_does_not_replace_the_attachment_or_consume_its_first_patch() {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = String::new();
+            BufReader::new(stream.try_clone().unwrap())
+                .read_line(&mut request)
+                .unwrap();
+            for frame in [
+                json!({"type":"startup_status","version":2,"notice":"waiting for the previous session's lock to clear"}),
+                json!({"type":"startup_status","version":2,"notice":null}),
+                json!({"type":"attached","version":2,"session_id":"fresh-session"}),
+                json!({"type":"patch","version":2,"seq":1}),
+            ] {
+                writeln!(stream, "{frame}").unwrap();
+            }
+        });
+        let mut notices = Vec::new();
+        let (connection, attached) = ClientConnection::connect_with_status(
+            port,
+            attach_request("new", "control", &Cursor::default()),
+            |notice| notices.push(notice.map(str::to_owned)),
+        )
+        .unwrap();
+        assert_eq!(
+            notices,
+            vec![
+                Some("waiting for the previous session's lock to clear".into()),
+                None
+            ]
+        );
+        assert_eq!(attached["session_id"], "fresh-session");
+        assert_eq!(
+            connection.recv_timeout(Duration::from_secs(5)).unwrap()["seq"],
+            1
+        );
+        server.join().unwrap();
+    }
+
+    #[test]
     fn connection_accepts_a_fragmented_limit_frame_then_rejects_one_extra_byte() {
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -3070,6 +3142,33 @@ mod tests {
                 line.starts_with(" ● ") || line.starts_with(" ○ ") || line.starts_with(" ✓ ")
             })
             .unwrap_or_else(|| panic!("no activity row in\n{frame}"))
+    }
+
+    #[test]
+    fn transient_lock_wait_does_not_erase_the_existing_notice() {
+        let mut model = fixture_model("idle");
+        model.notice = Some("Provider error: expired login".into());
+        model.projection.view["inbox"]["execution"]["lock_wait_notice"] =
+            json!("waiting for the previous session's lock to clear");
+        assert!(
+            activity_row(&render_frame(&model, 100, 24).unwrap())
+                .contains("previous session's lock")
+        );
+        model.projection.view["inbox"]["execution"]["lock_wait_notice"] = Value::Null;
+        assert!(
+            activity_row(&render_frame(&model, 100, 24).unwrap())
+                .contains("Provider error: expired login")
+        );
+        model.startup_notice = Some("waiting for the previous session's lock to clear".into());
+        assert!(
+            activity_row(&render_frame(&model, 100, 24).unwrap())
+                .contains("previous session's lock")
+        );
+        model.startup_notice = None;
+        assert!(
+            activity_row(&render_frame(&model, 100, 24).unwrap())
+                .contains("Provider error: expired login")
+        );
     }
 
     #[test]

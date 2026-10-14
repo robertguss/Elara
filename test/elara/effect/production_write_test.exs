@@ -149,6 +149,7 @@ defmodule Elara.Effect.ProductionWriteTest do
     assert :ok = Executor.continue(executor, "job-attempted")
     assert_receive {:callback_started, worker}, @lifecycle_wait_ms
     track(context, {:pid, worker})
+    assert {:ok, ^executor} = LocalExecutor.open(context.cwd, @workspace_id)
     writer = GenServer.whereis(executor)
     assert {:links, links} = Process.info(worker, :links)
     assert writer in links

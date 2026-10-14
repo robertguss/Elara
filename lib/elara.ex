@@ -393,7 +393,7 @@ defmodule Elara do
     case Keyword.get(opts, :effect_executor) do
       nil ->
         if Enum.any?(tools, &Tool.builtin_write?/1) do
-          case LocalExecutor.open(cwd, workspace_id) do
+          case LocalExecutor.open(cwd, workspace_id, Keyword.take(opts, [:on_status])) do
             {:ok, executor} -> {:ok, executor, false}
             {:error, reason} -> {:error, {:effect_executor_start_failed, reason}}
           end

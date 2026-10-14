@@ -266,7 +266,12 @@ fn run(args: Args) -> Result<(), String> {
     let mut request = attach_request(&args.target, mode, &saved);
     request["cwd"] = json!(args.cwd.to_string_lossy());
     let started = Instant::now();
-    let (mut connection, attached) = ClientConnection::connect(args.port, request)?;
+    let (mut connection, attached) =
+        ClientConnection::connect_with_status(args.port, request, |notice| {
+            if let Some(notice) = notice {
+                eprintln!("{notice}");
+            }
+        })?;
     dump_frame(args.event_dump, started, &attached);
     let mut model = attached_model(&attached, mode)?;
     model.set_appearance(appearance);
@@ -801,6 +806,9 @@ fn handle_frame(
         Some("ok") => model.command_reply(None),
         Some("error") => model.command_reply(Some(frame["error"].as_str().unwrap_or("unknown"))),
         Some("status") => model.notice = Some(format!("Status: {}", frame["status"])),
+        Some("startup_status") if frame["version"] == 2 => {
+            model.startup_notice = frame["notice"].as_str().map(str::to_owned);
+        }
         _ => return Err("server returned an invalid protocol v2 frame".to_string()),
     }
     Ok(())

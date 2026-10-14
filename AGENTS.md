@@ -25,9 +25,12 @@ Run `bin/check` before every push. A reviewer agent checks every pull request;
 an agent merges once the checks pass and the review approves. Done means
 merged. Never force-push, deploy, release, or delete evidence without a
 specific decision from Robert. New ideas go to the Notion Idea Parking Lot
-with the phase where they belong, not into the current phase. At each chunk
-end, the active agent updates the Notion Elara page and rewrites `HANDOFF.md`
-for the next session. Repository tests only check the durable pointers.
+with the phase where they belong, not into the current phase. Each agent
+keeps its own Tasks rows current: Status, pull request and a short result note.
+A PM thread owns the Notion Elara page, the Roadmap, phase-page status, the
+Weekly Updates, `HANDOFF.md` and `ROADMAP.md`, and refreshes them daily
+(decisions D27 and D28); other agents don't edit them or send it status
+updates. Repository tests only check the durable pointers.
 
 ## Cursor Cloud specific instructions
 
@@ -44,9 +47,9 @@ things that are non-obvious in the Cloud environment.
   refreshes project deps with `mix deps.get`.
 - Hex/Rebar are already installed in `~/.mix`, so `mix deps.get` runs
   non-interactively.
-- Rust 1.88 or newer is required for both native crates. `rustfmt` and Clippy
-  are required for development checks; `.agents/setup` installs a pinned Rust
-  toolchain with both components in cloud environments.
+- `rust-toolchain.toml` pins Rust 1.98.1 with `rustfmt` and Clippy (the crates
+  declare a 1.88 minimum); `.agents/setup` installs that toolchain in cloud
+  environments.
 
 ### Lint / test / build / run
 
@@ -57,7 +60,8 @@ things that are non-obvious in the Cloud environment.
 - Test: `mix test`. Tests never touch the network — they use
   `Elara.Provider.Scripted`.
 - Build: `mix compile`.
-- Run the CLI: `mix elara.ask "..."`, `mix elara.chat`, `mix elara.login`.
+- Run the CLI: `mix elara.ask "..."`, `mix elara.chat`, `mix elara.tui` (or
+  `bin/elara`), `mix elara.login`.
 - The research lab is a separate Mix project in `lab/`. `bin/check` includes
   its full suite, but root `mix test` does not. To run it alone, use
   `cd lab && mix deps.get && mix test` (see `docs/lab/README.md`).
@@ -74,7 +78,8 @@ things that are non-obvious in the Cloud environment.
   provider credentials. `ELARA_PROVIDER=openai-codex` after
   `mix elara.login openai` uses a ChatGPT/Codex subscription; otherwise
   `ELARA_API_KEY` or `XAI_API_KEY`, or `mix elara.login` for Grok (tokens land
-  in `~/.elara/`). Without credentials these commands fail at the network call.
+  in `~/.elara/`). Without credentials these commands stop at startup: ask and
+  chat print "Not logged in", and the TUI reports `not_logged_in`.
 - To exercise the full agent loop (session + read/write/edit/bash tools) without
   credentials, drive it with the scripted provider via the public API:
   `Elara.start_session(provider: {Elara.Provider.Scripted, agent_pid}, cwd: dir, persist: false)`,
@@ -88,8 +93,8 @@ things that are non-obvious in the Cloud environment.
 ### Roadmap and status
 
 - Track scope, decisions and status in Notion. Work follows the Roadmap's
-  current phase; each phase's spec lists what is in and out of scope. Update the
-  phase page and the task when a change merges.
+  current phase; each phase's spec lists what is in and out of scope. Update
+  your task row when a change merges; the PM thread updates the phase page.
 - Experiments come in two tiers. Probes are quick, unregistered and labelled as
   anecdotes. Claims ("Elara does X better", "a uniform helps") are registered
   with a refutable hypothesis before they run, checked by someone other than

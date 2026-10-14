@@ -46,6 +46,7 @@ defmodule Elara.Effect.Job do
         }
 
   @type authority_scope :: %{
+          optional(:mcp_guard) => map(),
           allowed_capabilities: :all | [String.t()],
           placement: :local | :remote | :any
         }
@@ -94,6 +95,12 @@ defmodule Elara.Effect.Job do
       allowed_capabilities: allowed_capabilities,
       placement: placement
     }
+
+    authority_scope =
+      case Keyword.get(attrs, :mcp_guard) do
+        nil -> authority_scope
+        guard -> Map.put(authority_scope, :mcp_guard, guard)
+      end
 
     job_id =
       digest({:elara_er1_job, @job_id_version, recording_id, sequence, effect_index})

@@ -1493,7 +1493,7 @@ defmodule Elara.Session do
       job.arguments == args and
       job.workspace_id == recovery.workspace_id and
       job.required_capabilities == canonical_capabilities(tool.capabilities) and
-      job.authority_scope == authority_scope
+      Map.delete(job.authority_scope, :mcp_guard) == authority_scope
   end
 
   defp canonical_capabilities(:all), do: :all
@@ -1508,6 +1508,7 @@ defmodule Elara.Session do
       operation_digest: job.operation_digest,
       tool_call_id: job.tool_call_id,
       session_id: session_id,
+      mcp_guard: Map.get(job.authority_scope, :mcp_guard),
       tool_name: job.tool_name,
       tool_version: job.tool_version,
       arguments: job.arguments,
@@ -3834,6 +3835,7 @@ defmodule Elara.Session do
         workspace_id: request.workspace_id,
         required_capabilities: request.required_capabilities,
         allowed_capabilities: shell.allowed_capabilities,
+        mcp_guard: request.mcp_guard,
         placement: tool.placement
       )
 

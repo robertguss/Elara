@@ -161,6 +161,80 @@ defmodule Elara.MCPTest do
     refute File.exists?(Path.join(fixture.root, "calls"))
   end
 
+  for changed? <- [false, true] do
+    @changed changed?
+    test "accepted never-started MCP write recovery, changed approval: #{changed?}", ctx do
+      fixture = fixture(ctx.root, :stdio, "modern")
+      put_config(ctx.cwd, %{"docs" => fixture.spec})
+      approve(ctx.cwd, "docs")
+      parent = self()
+      path = Path.join(ctx.root, "executor.sqlite")
+
+      {:ok, executor} =
+        Elara.Effect.Executor.start_link(
+          id: "mcp-recovery",
+          path: path,
+          fault_hook: fn
+            :after_accept_reply_before_callback ->
+              send(parent, {:accepted, self()})
+
+              receive do
+                :continue -> :ok
+              end
+
+            _ ->
+              :ok
+          end
+        )
+
+      Process.unlink(executor)
+      on_exit(fn -> if Process.alive?(executor), do: Process.exit(executor, :kill) end)
+
+      id =
+        session(
+          ctx.cwd,
+          [
+            model_call("echo", "mcp_call", %{
+              "server" => "docs",
+              "name" => "echo",
+              "arguments" => %{}
+            }),
+            {:ok, %Assistant{text: "done"}}
+          ],
+          effect_executor: executor
+        )
+
+      spawn(fn -> send(parent, {:ask_finished, Elara.ask(id, "recover write")}) end)
+      assert_receive {:accepted, ^executor}, 5000
+      refute File.exists?(Path.join(fixture.root, "calls"))
+      monitor = Process.monitor(executor)
+      Process.exit(executor, :kill)
+      assert_receive {:DOWN, ^monitor, :process, ^executor, :killed}, 5000
+
+      if @changed do
+        {:ok, config} = Config.read(ctx.cwd, "docs")
+        {:ok, %{tools: tools}} = MCP.discover(ctx.cwd, "docs")
+        :ok = Trust.approve_catalog(config, tools, ["echo"])
+      end
+
+      {:ok, reopened} = Elara.Effect.Executor.start_link(id: "mcp-recovery", path: path)
+      Process.unlink(reopened)
+      on_exit(fn -> if Process.alive?(reopened), do: Elara.Effect.Executor.close(reopened) end)
+      assert :ok = Elara.replace_effect_executor(id, reopened)
+      assert_receive {:ask_finished, {:ok, "done"}}, 5000
+
+      if @changed do
+        assert [%ToolResult{outcome: {:error, refusal}}] = tool_results(id)
+        assert refusal =~ "approval changed before dispatch"
+        refute File.exists?(Path.join(fixture.root, "calls"))
+      else
+        assert [%ToolResult{outcome: {:ok, result}}] = tool_results(id)
+        assert result =~ "echo ✓"
+        assert File.read!(Path.join(fixture.root, "calls")) == "echo\n"
+      end
+    end
+  end
+
   for transport <- [:stdio, :http], era <- ["modern", "legacy"] do
     @transport transport
     @era era

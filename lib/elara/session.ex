@@ -875,6 +875,7 @@ defmodule Elara.Session do
       true ->
         case Store.delete(shell.store) do
           :ok -> {:stop, :normal, :ok, shell}
+          {:error, {:recordings_cleanup, _} = reason} -> {:stop, :normal, {:error, reason}, shell}
           {:error, reason} -> {:reply, {:error, reason}, shell}
         end
     end
@@ -2315,11 +2316,19 @@ defmodule Elara.Session do
       end
 
     seq = shell.next_event_seq
+    recorder = FlightRecorder.link_event(shell.recorder, seq, effect_id)
+
+    recorder =
+      case event do
+        {:turn_ended, _} -> FlightRecorder.sync(recorder)
+        {:turn_ended, _, _} -> FlightRecorder.sync(recorder)
+        _ -> recorder
+      end
 
     shell = %{
       shell
       | next_event_seq: seq + 1,
-        recorder: FlightRecorder.link_event(shell.recorder, seq, effect_id)
+        recorder: recorder
     }
 
     Enum.each(shell.subscribers, fn {pid, _} ->

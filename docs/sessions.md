@@ -176,6 +176,19 @@ Persistent sessions write a versioned `.flight` file beside their session JSONL.
 The [Elixir API](elixir-api.md#recordings-status-and-replay) can load and replay
 it without calling the model or executing tools.
 
+Format 3 retains a state fingerprint and effects for every transition, reusing
+history and config fingerprints until those immutable values change. Format 2
+keeps its original replay hash domain. Recording writes sync after the terminal
+event link and before subscribers or the waiting caller receive completion.
+Closing a session also syncs. A process or machine crash can leave an incomplete
+current turn, which replay reports without treating external effects as undone.
+
+Deleting a session removes all its incarnation recordings. To inspect recording
+and retained-output size, run `mix elara.recordings`. Age pruning is explicit:
+`mix elara.recordings prune --older-than 30` previews eligible files, and
+`--apply` deletes them. The session lock protects live recordings in this VM or
+another VM. Pruning does not remove transcripts or retained outputs.
+
 ## Command reference
 
 | Input                          | Idle                             | During a turn         |

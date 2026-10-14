@@ -60,7 +60,7 @@ defmodule Elara.FlightRecorderTest do
 
       Elara.ask(session, "go")
       recording = Elara.recording(session)
-      assert recording.header.format_version == 2
+      assert recording.header.format_version == 3
       assert {:ok, %FlightRecorder.Report{status: :match}} = Elara.replay(recording)
 
       legacy = %{recording | header: %{recording.header | format_version: 1}}
@@ -74,6 +74,18 @@ defmodule Elara.FlightRecorderTest do
     assert {:error, {:unsupported_format, 1, message}} = FlightRecorder.load(path)
     assert message =~ "format 1 is unsupported"
     assert File.read!(path) == bytes
+  end
+
+  test "format 2 recordings replay with their original hash domain" do
+    path = Path.expand("../fixtures/flight-v2.flight", __DIR__)
+    original = File.read!(path)
+    assert {:ok, recording} = FlightRecorder.load(path)
+    assert recording.header.format_version == 2
+
+    assert {:ok, %FlightRecorder.Report{status: :match, transitions: 5}} =
+             FlightRecorder.replay(recording)
+
+    assert File.read!(path) == original
   end
 
   test "records causal transitions and replays without provider or tool effects" do
@@ -207,6 +219,21 @@ defmodule Elara.FlightRecorderTest do
 
     assert divergence.id.sequence == 1
     assert divergence.field == :effects
+
+    # Silent state changes must still diverge, not just a changed effect list.
+    for change <- [
+          fn next -> %{next | config: %{next.config | system: "different system"}} end,
+          fn next -> %{next | history: [%Message.User{text: "different history"}]} end,
+          fn next -> %{next | read_only: not next.read_only} end
+        ] do
+      changed_state = fn state, fact ->
+        {next, effects} = Core.step(state, fact)
+        {change.(next), effects}
+      end
+
+      assert {:ok, %FlightRecorder.Report{status: :diverged, divergence: %{field: :post}}} =
+               Elara.replay(recording, step: changed_state)
+    end
 
     injection = %{2 => {:replace, :interrupt}}
 

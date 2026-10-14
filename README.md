@@ -240,11 +240,28 @@ The Elixir API takes `provider_retry:` with a policy or policy options
 (`Elara.start_session(provider_retry: [max_attempts: 2])`), which children and
 handoff successors inherit.
 
-Flight recordings now use format 2 to include retry state. Format 1 recordings
-are preserved but report `unsupported_format` in this build rather than false
-replay divergence; replay them with the
+Flight recordings use format 3 with cached history and config fingerprints.
+Every transition still checks state and effects during offline replay. Completed
+turns sync the recording before delivering completion, rather than syncing each
+streamed delta. Format 2 recordings replay without modification. Format 1
+recordings report `unsupported_format`; replay them with the
 [last format 1 build](https://github.com/robertguss/Elara/commit/daa06f281368d0a532721695c6a656ec12ec14a5).
 Session JSONL history is unchanged and remains reopenable.
+
+To inspect retained storage or prune old recordings:
+
+```bash
+mix elara.recordings
+mix elara.recordings prune --older-than 30         # preview only
+mix elara.recordings prune --older-than 30 --apply # delete the eligible recordings
+```
+
+Diagnostics show recordings and retained-output logical bytes, including each
+hard-linked copy. Pruning uses the last write time and skips locked sessions,
+including sessions in another VM. It never removes session transcripts or
+retained outputs. Deleting a session also removes its recordings. There is no
+automatic or background pruning. A crash can leave the current turn's recording
+incomplete; it does not undo an external tool effect.
 
 ### Provider usage and estimated cost
 

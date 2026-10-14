@@ -9,7 +9,7 @@ defmodule Elara.FlightRecorder do
   alias Elara.Tool.PluginRef
 
   @magic "ELARA-FLIGHT\0"
-  @version 2
+  @version 3
   @last_v1_commit "daa06f281368d0a532721695c6a656ec12ec14a5"
   @max_frame_bytes 64 * 1024 * 1024
 
@@ -44,7 +44,8 @@ defmodule Elara.FlightRecorder do
       transitions: [],
       causes: %{},
       event_causes: %{},
-      context_decisions: []
+      context_decisions: [],
+      projection_cache: %{}
     ]
   end
 
@@ -78,7 +79,11 @@ defmodule Elara.FlightRecorder do
 
   @spec close(State.t()) :: :ok
   def close(%State{file: nil}), do: :ok
-  def close(%State{file: file}), do: File.close(file)
+
+  def close(%State{file: file} = state) do
+    sync(state)
+    File.close(file)
+  end
 
   @spec segment(State.t(), Core.State.t(), atom()) :: State.t()
   def segment(%State{} = recorder, core, reason) do
@@ -96,6 +101,7 @@ defmodule Elara.FlightRecorder do
     recorder
     |> write_frame(entry)
     |> Map.put(:segment, number)
+    |> Map.put(:projection_cache, %{})
     |> Map.update!(:segments, &(&1 ++ [entry]))
   end
 
@@ -104,6 +110,7 @@ defmodule Elara.FlightRecorder do
     sequence = recorder.sequence + 1
     id = %{recording_id: recorder.header.recording_id, sequence: sequence}
     normalized_fact = normalize_fact(fact)
+    {pre, cache} = cached_projection(core, recorder.projection_cache)
 
     entry = %{
       type: :transition_begin,
@@ -112,17 +119,23 @@ defmodule Elara.FlightRecorder do
       caused_by: cause(recorder, fact),
       fact: normalized_fact,
       fact_fingerprint: fingerprint(normalized_fact),
-      pre: projection(core)
+      pre: pre
     }
 
-    recorder = recorder |> write_frame(entry) |> Map.put(:sequence, sequence)
+    recorder =
+      recorder
+      |> write_frame(entry)
+      |> Map.put(:sequence, sequence)
+      |> Map.put(:projection_cache, cache)
+
     {recorder, entry}
   end
 
   @spec complete_transition(State.t(), map(), Core.State.t(), [Core.effect()]) ::
           {State.t(), map()}
   def complete_transition(%State{} = recorder, begin, core, effects) do
-    descriptors = tool_descriptors(core)
+    {post, cache} = cached_projection(core, recorder.projection_cache)
+    descriptors = cache.descriptors
 
     normalized_effects =
       effects
@@ -134,7 +147,7 @@ defmodule Elara.FlightRecorder do
     ending = %{
       type: :transition_end,
       id: begin.id,
-      post: projection(core),
+      post: post,
       effects: normalized_effects,
       effects_fingerprint: fingerprint(normalized_effects)
     }
@@ -147,9 +160,9 @@ defmodule Elara.FlightRecorder do
     recorder =
       recorder
       |> write_frame(ending)
-      |> sync()
       |> remember_causes(effects, begin.id)
-      |> Map.update!(:transitions, &(&1 ++ [transition]))
+      |> Map.put(:projection_cache, cache)
+      |> Map.update!(:transitions, &[transition | &1])
 
     {recorder, transition}
   end
@@ -168,7 +181,7 @@ defmodule Elara.FlightRecorder do
     %Recording{
       header: recorder.header,
       segments: recorder.segments,
-      transitions: recorder.transitions,
+      transitions: Enum.reverse(recorder.transitions),
       event_causes: recorder.event_causes,
       context_decisions: recorder.context_decisions
     }
@@ -196,7 +209,6 @@ defmodule Elara.FlightRecorder do
 
     recorder
     |> write_frame(entry)
-    |> sync()
     |> Map.update!(:context_decisions, &(&1 ++ [entry]))
   end
 
@@ -328,6 +340,7 @@ defmodule Elara.FlightRecorder do
              state,
              transitions,
              descriptors,
+             recording.header.format_version,
              step,
              injection,
              observations,
@@ -347,6 +360,7 @@ defmodule Elara.FlightRecorder do
          state,
          [],
          _descriptors,
+         _version,
          _step,
          _injection,
          observations,
@@ -359,6 +373,7 @@ defmodule Elara.FlightRecorder do
          state,
          [transition | rest],
          descriptors,
+         version,
          step,
          injection,
          observations,
@@ -375,7 +390,7 @@ defmodule Elara.FlightRecorder do
 
     observation = %{
       id: transition.id,
-      post: projection(next, descriptors),
+      post: projection(next, descriptors, version),
       effects:
         effects
         |> Enum.with_index()
@@ -386,7 +401,7 @@ defmodule Elara.FlightRecorder do
 
     divergence =
       if is_nil(injection) and is_nil(divergence) do
-        compare_transition(transition, state, observation, descriptors)
+        compare_transition(transition, state, observation, descriptors, version)
       else
         divergence
       end
@@ -395,6 +410,7 @@ defmodule Elara.FlightRecorder do
       next,
       rest,
       descriptors,
+      version,
       step,
       injection,
       observations ++ injected_observations ++ [observation],
@@ -421,14 +437,16 @@ defmodule Elara.FlightRecorder do
   defp injection_for({sequence, operation}, sequence), do: operation
   defp injection_for(_injection, _sequence), do: nil
 
-  defp compare_transition(transition, pre_state, observation, descriptors) do
+  defp compare_transition(transition, pre_state, observation, descriptors, version) do
+    pre = projection(pre_state, descriptors, version)
+
     cond do
-      projection(pre_state, descriptors) != transition.pre ->
+      pre != transition.pre ->
         %{
           id: transition.id,
           field: :pre,
           expected: transition.pre,
-          actual: projection(pre_state, descriptors)
+          actual: pre
         }
 
       observation.post != transition.post ->
@@ -447,10 +465,12 @@ defmodule Elara.FlightRecorder do
     end
   end
 
-  defp validate_recording(%Recording{header: %{format_version: @version}, incomplete: []}),
-    do: :ok
+  defp validate_recording(%Recording{header: %{format_version: version}, incomplete: []})
+       when version in [2, @version],
+       do: :ok
 
-  defp validate_recording(%Recording{header: %{format_version: @version}, incomplete: entries}) do
+  defp validate_recording(%Recording{header: %{format_version: version}, incomplete: entries})
+       when version in [2, @version] do
     {:error, {:incomplete_recording, Enum.map(entries, & &1.id)}}
   end
 
@@ -515,20 +535,78 @@ defmodule Elara.FlightRecorder do
 
   defp cause(_recorder, _fact), do: :external
 
-  defp projection(core, descriptors \\ nil) do
+  defp projection(core, descriptors, 2) do
     normalized = normalize_state(core, descriptors)
 
     %{
-      fingerprint: fingerprint(normalized),
+      fingerprint: fingerprint(normalized, 2),
       phase: normalized.phase,
       next_ref: normalized.next_ref,
       history_length: length(normalized.history),
-      history_fingerprint: fingerprint(normalized.history),
-      config_fingerprint: fingerprint(normalized.config)
+      history_fingerprint: fingerprint(normalized.history, 2),
+      config_fingerprint: fingerprint(normalized.config, 2)
+    }
+  end
+
+  defp projection(core, descriptors, @version) do
+    component_projection(
+      normalize_runtime(core),
+      length(core.history),
+      fingerprint(Enum.map(core.history, &normalize_message/1)),
+      fingerprint(normalize_config(core, descriptors))
+    )
+  end
+
+  defp cached_projection(core, cache) do
+    cache =
+      if Map.get(cache, :history) === core.history do
+        cache
+      else
+        Map.merge(cache, %{
+          history: core.history,
+          history_length: length(core.history),
+          history_fingerprint: fingerprint(Enum.map(core.history, &normalize_message/1))
+        })
+      end
+
+    cache =
+      if Map.get(cache, :config) === core.config do
+        cache
+      else
+        Map.merge(cache, %{
+          config: core.config,
+          config_fingerprint: fingerprint(normalize_config(core)),
+          descriptors: tool_descriptors(core)
+        })
+      end
+
+    {component_projection(
+       normalize_runtime(core),
+       cache.history_length,
+       cache.history_fingerprint,
+       cache.config_fingerprint
+     ), cache}
+  end
+
+  defp component_projection(runtime, history_length, history_fingerprint, config_fingerprint) do
+    %{
+      fingerprint: fingerprint({runtime, history_fingerprint, config_fingerprint}),
+      phase: runtime.phase,
+      next_ref: runtime.next_ref,
+      history_length: history_length,
+      history_fingerprint: history_fingerprint,
+      config_fingerprint: config_fingerprint
     }
   end
 
   defp normalize_state(%Core.State{} = state, descriptors \\ nil) do
+    Map.merge(normalize_runtime(state), %{
+      config: normalize_config(state, descriptors),
+      history: Enum.map(state.history, &normalize_message/1)
+    })
+  end
+
+  defp normalize_config(state, descriptors \\ nil) do
     tools =
       state.config.tools
       |> Map.values()
@@ -568,9 +646,11 @@ defmodule Elara.FlightRecorder do
         end
       )
 
+    config
+  end
+
+  defp normalize_runtime(state) do
     normalized = %{
-      config: config,
-      history: Enum.map(state.history, &normalize_message/1),
       phase: normalize_phase(state.phase),
       next_ref: state.next_ref
     }
@@ -1102,9 +1182,9 @@ defmodule Elara.FlightRecorder do
     Map.new(core.config.tools, fn {name, tool} -> {name, normalize_tool(tool)} end)
   end
 
-  defp fingerprint(term) do
+  defp fingerprint(term, version \\ @version) do
     :sha256
-    |> :crypto.hash(:erlang.term_to_binary({:elara_flight, @version, term}, [:deterministic]))
+    |> :crypto.hash(:erlang.term_to_binary({:elara_flight, version, term}, [:deterministic]))
     |> Base.encode16(case: :lower)
   end
 
@@ -1129,15 +1209,18 @@ defmodule Elara.FlightRecorder do
     state
   end
 
-  defp sync(%State{file: nil} = state), do: state
+  @doc "Flushes the complete turn before its terminal event is delivered."
+  @spec sync(State.t()) :: State.t()
+  def sync(%State{file: nil} = state), do: state
 
-  defp sync(%State{file: file} = state) do
+  def sync(%State{file: file} = state) do
     :ok = :file.sync(file)
     state
   end
 
-  defp decode_file(<<@magic, @version::unsigned-big-32, rest::binary>>),
-    do: decode_frames(rest, [])
+  defp decode_file(<<@magic, version::unsigned-big-32, rest::binary>>)
+       when version in [2, @version],
+       do: decode_frames(rest, [])
 
   defp decode_file(<<@magic, version::unsigned-big-32, _::binary>>),
     do: unsupported_format(version)

@@ -307,6 +307,14 @@ defmodule Elara.LauncherTest do
   end
 
   test "launcher retains interactive terminal input and clean detach", ctx do
+    # The PTY budget measures interaction, not a cold dependency/native build.
+    assert {_, 0} =
+             System.cmd("mix", ["run", "--no-start", "-e", "Mix.Tasks.Elara.Tui.binary!()"],
+               cd: @root,
+               env: ctx.env,
+               stderr_to_stdout: true
+             )
+
     replies =
       List.duplicate({:stream, ["working", {:sleep, 5_000}], {:ok, assistant("complete")}}, 3)
 

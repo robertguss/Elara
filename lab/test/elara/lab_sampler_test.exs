@@ -7,7 +7,7 @@ defmodule Elara.Lab.SamplerTest do
     {:ok, server} = Elara.Server.start(port: 0)
     on_exit(fn -> if Process.alive?(server), do: GenServer.stop(server) end)
     port = Elara.Server.port(server)
-    listen = :sys.get_state(server).listen
+    %{listen: listen, acceptor: acceptor} = :sys.get_state(server)
     assert is_port(listen)
 
     # An unrelated listening socket and two raw clients of the server.
@@ -15,7 +15,10 @@ defmodule Elara.Lab.SamplerTest do
     clients = for _ <- 1..2, do: elem(:gen_tcp.connect({127, 0, 0, 1}, port, [:binary]), 1)
     on_exit(fn -> Enum.each([other | clients], &:gen_tcp.close/1) end)
 
-    owners = wait_for(fn -> Sampler.connections(listen, port) end, &(length(&1) == 2))
+    owners =
+      wait_for(fn -> Sampler.connections(listen, port) end, fn owners ->
+        length(owners) == 2 and acceptor not in owners
+      end)
 
     peers =
       for pid <- owners,

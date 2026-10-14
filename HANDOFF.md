@@ -57,6 +57,8 @@ The worker-death proof in `test/elara/executor_test.exs` waits for the actual
 side effect before killing the worker; `tool_started` alone does not prove it.
 Focused job proofs in `test/elara/test_jobs_test.exs` likewise wait for execution
 before expecting cancellation, and for successor activation before reading its inbox.
+Lab job-recovery setup and socket-owner handoff barriers are documented in
+`docs/lab/README.md`. Recovery deadlines and settlement assertions stay unchanged.
 Crash-safe reopening and legacy receipt escape paths are documented in
 `docs/sessions.md` under "Recover an interrupted write". A different live VM
 that owns the ledger must stop before takeover; callbacks are never replayed.

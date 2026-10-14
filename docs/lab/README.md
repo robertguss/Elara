@@ -83,6 +83,11 @@ edit them to fit this version or compare timings as unchanged conditions.
 The current concurrency count trace observes `Context.budget/3`; historical
 `budget/2` counts stay in their original result files.
 
+The job-recovery fixture waits for the execution stub's ready handshake before
+it starts a job, within its existing setup deadline. Recovery timing still
+starts at the nominated fault. Socket-owner tests wait for accepted sockets to
+leave the acceptor before inspecting their connection tasks.
+
 Repetition `r` uses seed `S + r` in its own temporary sessions root, skills
 home and coding worktree root, so runs never touch `~/.elara` or
 `~/.elara-worktrees`. Worktrees sit beside protected session state, not inside

@@ -95,7 +95,13 @@ defmodule Elara.Lab.Scenarios.JobRecovery do
   defp flow(context, config) do
     %{co: co, gate: gate, cwd: cwd, schedule: schedule} = config
     deadline = Jobs.now() + @setup_ms
-    baseline = call!(config, :exec_baseline, deadline, &Elara.Exec.status/0)
+
+    baseline =
+      poll!(config, :exec_baseline, deadline, fn ->
+        status = Elara.Exec.status()
+        if status.available, do: status
+      end)
+
     if baseline.jobs != 0, do: throw(:foreign_exec_jobs)
     provider = {Elara.Lab.JobProvider, config}
     module = if config.api == "job", do: Elara.Jobs, else: TestJobs

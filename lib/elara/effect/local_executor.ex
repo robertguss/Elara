@@ -18,8 +18,8 @@ defmodule Elara.Effect.LocalExecutor do
 
   defp open_registered(path, id, name) do
     case Registry.lookup(Elara.EffectExecutors, id) do
-      [{_pid, nil}] ->
-        {:ok, name}
+      [{pid, nil}] ->
+        if Process.alive?(pid), do: {:ok, name}, else: start(id, path, name)
 
       [{_pid, {:failed, reason}}] ->
         {:error, reason}

@@ -94,15 +94,27 @@ defmodule Elara.Tools.Search do
     argv =
       [rg, "--files", "--null"] ++ include_flag(include) ++ shared_flags() ++ operand([scope])
 
-    with {:ok, fence} <- FileFence.prepare(ctx.cwd),
-         {:ok, output, false} <- execute(argv, ctx, @max_file_list_bytes, deadline) do
+    with {:ok, fence} <- FileFence.prepare(ctx.cwd) do
+      bytes = if max_files, do: 65_536, else: @max_file_list_bytes
+      list_files(argv, fence, ctx, deadline, max_files, bytes)
+    end
+  end
+
+  defp list_files(argv, fence, ctx, deadline, max_files, bytes) do
+    with {:ok, output, capped} <- execute(argv, ctx, bytes, deadline) do
+      # A killed listing may end inside a filename, even at a UTF-8 boundary.
+      paths = String.split(output, <<0>>)
+      paths = if capped, do: Enum.drop(paths, -1), else: Enum.reject(paths, &(&1 == ""))
+
       candidates =
-        output
-        |> String.split(<<0>>, trim: true)
-        |> Stream.flat_map(fn path ->
-          case FileFence.resolve(path, fence) do
-            {:ok, {_root, resolved}} -> [Path.relative_to(resolved, Path.expand(ctx.cwd))]
-            {:error, _} -> []
+        paths
+        |> Stream.transform(MapSet.new(), fn path, directories ->
+          case FileFence.resolve(path, fence, directories) do
+            {{:ok, {_root, resolved}}, directories} ->
+              {[Path.relative_to(resolved, Path.expand(ctx.cwd))], directories}
+
+            {{:error, _}, directories} ->
+              {[], directories}
           end
         end)
         |> Stream.uniq()
@@ -111,16 +123,28 @@ defmodule Elara.Tools.Search do
       files = Enum.sort(files)
 
       cond do
-        not Enum.all?(files, &String.valid?/1) -> {:error, @unsupported_paths}
-        System.monotonic_time(:millisecond) < deadline -> {:ok, files}
-        true -> {:error, "search timed_out before returning results"}
-      end
-    else
-      {:ok, _output, true} ->
-        {:error, "search file listing exceeded the 8 MiB cap; narrow the path"}
+        capped and (is_nil(max_files) or length(files) < max_files) ->
+          if bytes < @max_file_list_bytes,
+            do:
+              list_files(
+                argv,
+                fence,
+                ctx,
+                deadline,
+                max_files,
+                min(bytes * 2, @max_file_list_bytes)
+              ),
+            else: {:error, "search file listing exceeded the 8 MiB cap; narrow the path"}
 
-      {:error, _} = error ->
-        error
+        not Enum.all?(files, &String.valid?/1) ->
+          {:error, @unsupported_paths}
+
+        System.monotonic_time(:millisecond) < deadline ->
+          {:ok, files}
+
+        true ->
+          {:error, "search timed_out before returning results"}
+      end
     end
   end
 

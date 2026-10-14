@@ -99,6 +99,55 @@ defmodule Elara.WorkspaceSearchProductTest do
     end
   end
 
+  test "capped glob continues past a protected inventory prefix without inventing a partial filename",
+       %{
+         target: target
+       } do
+    private = Path.join(target, "00-private")
+    Application.put_env(:elara, :sessions_root, private)
+    File.mkdir_p!(private)
+
+    for i <- 1..800 do
+      File.write!(Path.join(private, "#{i}-" <> String.duplicate("private", 16)), "marker secret")
+    end
+
+    ctx = %Ctx{cwd: target}
+    assert Search.glob(%{"pattern" => "**/*", "limit" => 1}, ctx) == {:ok, "lib/only.ex"}
+    File.write!(Path.join(target, "zz-last.ex"), "marker last")
+
+    assert Search.glob(%{"pattern" => "**/*", "limit" => 1}, ctx) ==
+             {:ok, "lib/only.ex\n[truncated at the 1-files cap; narrow the pattern or path]"}
+  end
+
+  test "search rechecks leaf and ancestor aliases after visiting ordinary siblings and on later calls",
+       %{
+         target: target
+       } do
+    outside = Path.join(Path.dirname(target), "other source")
+    File.mkdir_p!(outside)
+    File.write!(Path.join(outside, "secret.ex"), "marker secret")
+    File.ln_s!(Path.join(outside, "secret.ex"), Path.join(target, "lib/zz-escape.ex"))
+    File.ln_s!("only.ex", Path.join(target, "lib/zz-local.ex"))
+    File.ln_s!("lib", Path.join(target, "selected"))
+    ctx = %Ctx{cwd: target}
+
+    assert Search.grep(%{"pattern" => "marker"}, ctx) ==
+             {:ok, "lib/only.ex:2:  @marker :selected"}
+
+    assert Search.glob(%{"pattern" => "**/*.ex"}, ctx) == {:ok, "lib/only.ex"}
+
+    assert Search.glob(%{"pattern" => "**/*.ex", "path" => "selected"}, ctx) ==
+             {:ok, "lib/only.ex"}
+
+    File.rm!(Path.join(target, "selected"))
+    File.ln_s!(outside, Path.join(target, "selected"))
+
+    for tool <- [:grep, :glob] do
+      assert {:error, "file access refused: path_outside_workspace"} =
+               apply(Search, tool, [%{"pattern" => "marker", "path" => "selected"}, ctx])
+    end
+  end
+
   test "search resolves scopes and permits only operator-approved extra roots", %{target: target} do
     outside = Path.join(Path.dirname(target), "other source")
     File.mkdir_p!(outside)

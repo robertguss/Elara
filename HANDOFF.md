@@ -113,7 +113,10 @@ File-tool roots, protected paths, and resolved symlinks are documented in
 README.md's "File-tool fence" section. Internal skill/session/plugin reads are
 separate; the fence is not an OS sandbox. Grep and glob share that policy:
 explicit scopes are resolved and recursive filenames authorized before any
-content search. README.md's "Workspace search" section describes their limits.
+content search. README.md's "Workspace search" section describes their limits,
+invocation-local verified directory reuse, and bounded glob inventory prefixes.
+The prefix widens past protected candidates; partial filenames never become
+search operands, and a result cap remains visibly incomplete.
 The TUI's `/read-only` changes model-tool mutation permission from the next call,
 including mid-turn. Its authoritative footer mode, transcript transition positions,
 copy/child/handoff inheritance and trusted plugin declarations are documented in

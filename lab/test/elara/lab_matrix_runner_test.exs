@@ -48,7 +48,10 @@ defmodule Elara.Lab.MatrixRunnerTest do
         peer: ctx.peer,
         timeout: 1_000,
         repo: File.cwd!(),
-        after_launch: ctx.track
+        after_launch: fn owner ->
+          ctx.track.(owner)
+          assert VM.wait(fn -> VM.read(row, "boot") end, 5_000)
+        end
       )
 
     assert result.error == "deadline"

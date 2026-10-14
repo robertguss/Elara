@@ -213,18 +213,30 @@ defmodule Elara.Provider.SimulatedTest do
       {_m, config} = Simulated.new(seed: 1, id: "l", profile: profile, ledger: table)
 
       sink = fn _part ->
-        send(parent, {:row_at_delta, :ets.lookup(table, {"l", 1})})
+        send(
+          parent,
+          {:row_at_delta, :ets.lookup(table, {"l", 1}), System.monotonic_time(:millisecond)}
+        )
+
         :ok
       end
 
       started = System.monotonic_time(:millisecond)
       assert {:ok, _, _} = Simulated.stream(config, request([Message.user("a")]), sink)
 
-      rows = for _ <- 1..3, do: receive(do: ({:row_at_delta, [row]} -> row))
+      observations =
+        for _ <- 1..3, do: receive(do: ({:row_at_delta, [row], observed} -> {row, observed}))
+
+      rows = Enum.map(observations, &elem(&1, 0))
       assert Enum.map(rows, &elem(&1, 3)) == [1, 2, 3]
       assert Enum.all?(rows, &(elem(&1, 4) == :started))
       assert [{{"l", 1}, at, :answer, 3, :completed}] = :ets.lookup(table, {"l", 1})
-      assert (at - started) in 0..5
+
+      assert at >= started
+
+      assert Enum.all?(observations, fn {row, observed} ->
+               elem(row, 1) == at and at <= observed
+             end)
     end
 
     test "the ledger row is written before the start fault hook and stays started when killed" do

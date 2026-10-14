@@ -370,9 +370,10 @@ defmodule Elara.Session.Store do
          true <- persisted.id == store.id do
       case File.rm(path) do
         :ok ->
-          case Elara.Recordings.delete(path) do
-            :ok -> :ok
-            {:error, reason} -> {:error, {:recordings_cleanup, reason}}
+          case {Elara.Output.delete(store.id), Elara.Recordings.delete(path)} do
+            {:ok, :ok} -> :ok
+            {{:error, reason}, _} -> {:error, {:outputs_cleanup, reason}}
+            {_, {:error, reason}} -> {:error, {:recordings_cleanup, reason}}
           end
 
         {:error, :enoent} ->

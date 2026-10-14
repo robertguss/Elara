@@ -134,6 +134,17 @@ defmodule Elara.Output do
     end
   end
 
+  @doc "Remove only this owner's namespace while the caller holds the session deletion lock."
+  @spec delete(String.t()) :: :ok | {:error, term()}
+  def delete(session) do
+    with {:ok, path} <- vault(session) do
+      case File.rm_rf(path) do
+        {:ok, _removed} -> :ok
+        {:error, reason, failed_path} -> {:error, {reason, failed_path}}
+      end
+    end
+  end
+
   defp capture_source({:command, argv, opts}, ctx, path) do
     opts =
       Keyword.merge(opts,

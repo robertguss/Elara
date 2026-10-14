@@ -81,6 +81,55 @@ defmodule Elara.Session.StoreTest do
     assert {:error, _} = Store.open(original.path, other)
   end
 
+  test "deleting a source removes its output without deleting cloned or unrelated evidence", %{
+    cwd: cwd,
+    root: root
+  } do
+    alias Elara.{Output, Recordings, Tool}
+
+    source = Store.new(cwd)
+    ctx = %Tool.Ctx{cwd: cwd, session_id: source.id}
+    {:ok, preview} = Output.capture(ctx, {:content, :ok, ["first\nretained middle\nlast\n"]})
+    [_, handle] = Regex.run(~r/\A\[output (out_[A-Za-z0-9_-]+);/, preview)
+    call = %ToolCall{id: "capture", name: "bash", args: {:ok, %{}}}
+    {:ok, source} = Store.append(source, Message.tool_result(call, {:ok, preview}))
+    {:ok, clone} = Store.clone(source)
+    other = Store.new(cwd)
+    other_ctx = %Tool.Ctx{cwd: cwd, session_id: other.id}
+    {:ok, other_preview} = Output.capture(other_ctx, {:content, :ok, ["unrelated output\n"]})
+    [_, other_handle] = Regex.run(~r/\A\[output (out_[A-Za-z0-9_-]+);/, other_preview)
+    evidence = Path.join(root, "unrelated-evidence")
+    File.write!(evidence, "keep this")
+    source_vault = Path.join([root, "outputs", source.id])
+
+    source_bytes =
+      source_vault
+      |> Path.join("*")
+      |> Path.wildcard()
+      |> Enum.map(&File.stat!(&1).size)
+      |> Enum.sum()
+
+    {:ok, %{retained_output_bytes: before_bytes}} = Recordings.diagnostics()
+    {:ok, claimed} = Store.claim(source)
+
+    try do
+      assert :ok = Store.delete(claimed)
+    after
+      Store.release(claimed)
+    end
+
+    refute File.exists?(source.path)
+    refute File.exists?(source_vault)
+    assert {:error, _} = Output.read(ctx, handle, {:range, 2, 1})
+    assert {:ok, middle} = Output.read(%{ctx | session_id: clone.id}, handle, {:range, 2, 1})
+    assert middle =~ "2: retained middle"
+    assert {:ok, unrelated} = Output.read(other_ctx, other_handle, {:range, 1, 1})
+    assert unrelated =~ "1: unrelated output"
+    assert File.read!(evidence) == "keep this"
+    expected_bytes = before_bytes - source_bytes
+    assert {:ok, %{retained_output_bytes: ^expected_bytes}} = Recordings.diagnostics()
+  end
+
   test "message codecs round-trip domain structs" do
     calls = [
       %ToolCall{id: "call-1", name: "read", args: {:ok, %{"path" => "README.md"}}},

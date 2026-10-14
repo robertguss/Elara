@@ -2334,8 +2334,10 @@ defmodule Elara.Session do
         )
       end
 
-    # Let bash's runner settle its deadline before the shell's backstop fires.
-    grace = if tool.run == {Elara.Tools, :bash}, do: 1_000, else: 0
+    # Let deadline-owning runners persist their outcome before the shell's backstop fires.
+    grace =
+      if tool.run in [{Elara.Tools, :bash}, {Elara.WebSearch, :run}], do: 1_000, else: 0
+
     track_tool_task(shell, task, core_ref, nil, timeout + grace)
   end
 

@@ -230,6 +230,37 @@ defmodule Elara.WebSearchTest do
     GenServer.stop(pid)
   end
 
+  test "a session deadline retains the unknown accounting and billing warning", %{root: root} do
+    Application.put_env(:elara, :exa_http, fn _, _ -> Process.sleep(500) end)
+
+    {:ok, provider} =
+      Agent.start_link(fn -> [call("web_search", %{"query" => "deadline query"}), reply()] end)
+
+    {:ok, id} =
+      Elara.start_session(
+        cwd: root,
+        plugins: [],
+        provider: {Elara.Provider.Scripted, provider},
+        tool_timeout_ms: 30
+      )
+
+    assert {:ok, "done"} = Elara.ask(id, "search")
+
+    [%ToolResult{outcome: {:error, preview}}] =
+      Enum.filter(Elara.transcript(id), &is_struct(&1, ToolResult))
+
+    [_, handle] = Regex.run(~r/\A\[output (out_[A-Za-z0-9_-]+);/, preview)
+
+    assert {:ok, receipt} =
+             Output.read(%Tool.Ctx{cwd: root, session_id: id}, handle, {:range, 1, 10})
+
+    assert receipt =~ ~s("query":"deadline query")
+    assert receipt =~ ~s("request_id":null)
+    assert receipt =~ ~s("reported_cost_usd":null)
+    assert receipt =~ "deadline exceeded; search may have been billed"
+    refute Elara.snapshot(id).snapshot["inbox"]["web_content_entered"]
+  end
+
   test "errors never echo credentials or retry, oversized responses refuse", %{ctx: ctx} do
     parent = self()
 

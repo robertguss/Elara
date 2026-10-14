@@ -299,7 +299,7 @@ defmodule Elara.WebFetchTest do
       )
 
     task = Task.async(fn -> Elara.ask(id, "fetch") end)
-    assert_receive {:fetch_worker, worker}
+    assert_receive {:fetch_worker, worker}, 5_000
     monitor = Process.monitor(worker)
     assert :ok = Elara.interrupt(id)
     assert_receive {:DOWN, ^monitor, :process, ^worker, _}

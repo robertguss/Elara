@@ -82,7 +82,7 @@ defmodule Elara.Tools do
   end
 
   def bash(%{"command" => command}, %Ctx{} = ctx) when is_binary(command) do
-    Output.capture(ctx, {:command, ["/bin/sh", "-c", command], []})
+    Elara.Fnox.run(ctx, ["/bin/sh", "-c", command])
   end
 
   def bash(_args, _ctx), do: {:error, "bash requires command"}

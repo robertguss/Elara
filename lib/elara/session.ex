@@ -2076,6 +2076,7 @@ defmodule Elara.Session do
           cwd: shell.cwd,
           session_id: shell.id,
           output_owner: request.output_owner,
+          fnox_config: request.fnox_config,
           tool_name: tool.name,
           plugin: plugin,
           job_id: request.job_id,
@@ -2884,17 +2885,48 @@ defmodule Elara.Session do
                   "Command matches ask rule #{JSON.encode!(rule)}; approve this exact call"
                 )
 
-              {shell, {:ask, pending}}
+              fnox_decision(shell, ref, call, {:ask, pending})
 
             {:allow, false} ->
-              {shell, :allow}
+              fnox_decision(shell, ref, call, :allow)
           end
         else
-          {shell, :allow}
+          if call.name in ["job", "test_job"] and args["action"] != "start",
+            do: {shell, :allow},
+            else: fnox_decision(shell, ref, call, :allow)
         end
 
       {:error, reason} ->
         {shell, {:deny, "permission denied: #{reason}"}}
+    end
+  end
+
+  defp fnox_decision(shell, ref, call, otherwise) do
+    approved = shell.store.context["fnox_config"]
+
+    case Elara.Fnox.review(shell.cwd) do
+      {:ok, ^approved} ->
+        {shell, otherwise}
+
+      {:ok, config} ->
+        pending = command_pending(shell, ref, call, "fnox", config)
+
+        pending =
+          pending
+          |> Map.delete("rule_bytes")
+          |> Map.put("fnox_config", config)
+          |> Map.put(
+            "reason",
+            if(config,
+              do: "Project fnox configuration needs approval; approve these exact file digests",
+              else: "Project fnox configuration removed; approve commands without fnox secrets"
+            )
+          )
+
+        {shell, {:ask, pending}}
+
+      {:error, reason} ->
+        {shell, {:deny, reason}}
     end
   end
 
@@ -2930,6 +2962,7 @@ defmodule Elara.Session do
     if id == pending["id"] do
       {shell, decision} = command_decision(shell, ref, call)
       expected_bytes = pending["rule_bytes"]
+      expected_config = pending["fnox_config"]
 
       case {pending["kind"], decision} do
         {"call", :allow} ->
@@ -2942,6 +2975,15 @@ defmodule Elara.Session do
           bytes = expected_bytes
           {:ok, rules} = CommandRules.parse(bytes)
           {:reply, :ok, feed({:tool_approved, ref}, save_command_rules(shell, rules))}
+
+        {"fnox", {:ask, %{"kind" => "fnox", "fnox_config" => ^expected_config}}} ->
+          {:ok, store} =
+            Store.save(%{
+              shell.store
+              | context: Map.put(shell.store.context, "fnox_config", expected_config)
+            })
+
+          {:reply, :ok, feed({:tool_approved, ref}, %{shell | store: store})}
 
         _ ->
           {:reply, {:error, :approval_changed}, feed({:tool_checked, ref, decision}, shell)}
@@ -3698,6 +3740,7 @@ defmodule Elara.Session do
       tool_call_id: call.id,
       session_id: shell.id,
       output_owner: shell.store.id,
+      fnox_config: shell.store.context["fnox_config"],
       tool_name: call.name,
       tool_version: tool.version,
       arguments: args,

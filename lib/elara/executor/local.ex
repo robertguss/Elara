@@ -12,6 +12,7 @@ defmodule Elara.Executor.Local do
     ctx = %Ctx{
       session_id: request.session_id,
       output_owner: request.output_owner,
+      fnox_config: request.fnox_config,
       cwd: cwd,
       plugin: tool.plugin,
       tool_name: request.tool_name,

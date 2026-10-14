@@ -50,15 +50,32 @@ pub(super) fn open(model: &mut Model) -> InputAction {
 
 pub(super) fn approval_detail(pending: &Value) -> String {
     let mut detail = format!(
-        "Approval required\nEsc closes · /approve confirms\n\n{}\n\nExact tool arguments:\n{}",
-        display(pending["reason"].as_str().unwrap_or("")),
-        pretty(&pending["args"])
+        "Approval required\nEsc closes · /approve confirms\n\n{}",
+        display(pending["reason"].as_str().unwrap_or(""))
     );
+    let arguments = format!("\n\nExact tool arguments:\n{}", pretty(&pending["args"]));
+    if pending["kind"] != "fnox" {
+        detail.push_str(&arguments);
+    }
     if pending["kind"] == "rules" {
         detail.push_str(&format!(
             "\n\nExact rule-file bytes (JSON string; null means deletion):\n{}",
             pretty(&pending["rule_bytes"])
         ));
+    }
+    if pending["kind"] == "fnox" {
+        detail.push_str("\n\nFnox configuration files (SHA-256):");
+        if let Some(files) = pending["fnox_config"]["files"].as_array() {
+            for file in files {
+                let digest = file["digest"].as_str().unwrap_or("");
+                detail.push_str(&format!(
+                    "\n\n{}\n{}",
+                    digest.chars().take(12).collect::<String>(),
+                    display(file["path"].as_str().unwrap_or(""))
+                ));
+            }
+        }
+        detail.push_str(&arguments);
     }
     detail.push_str(&format!(
         "\n\nRequest ID:\n{}",

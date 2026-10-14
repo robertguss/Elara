@@ -344,6 +344,51 @@ variable. It lists forwarded and withheld names without exposing values.
 Environment scrubbing is **not an OS sandbox**: commands and trusted local
 plugins can still read credential files through ordinary filesystem access.
 
+### Project secrets through fnox
+
+Install fnox 1.39 or newer on Elara's `PATH`. When a repository or an ancestor
+contains fnox configuration, model commands use its **default** profile after
+`/approve`. Bash, background jobs, and the shipped Elixir plugin share this
+policy. Job status and cancellation do not require configuration approval.
+Custom trusted plugins can use `Elara.Fnox.exec/3` for the same defaults.
+
+The approval view lists each effective configuration path with a short SHA-256
+digest. Discovery uses stock `fnox config-files`, including ancestor and local
+overlays, imports, the global configuration, and its imports. Elara hashes the
+exact file bytes and asks again when the set or any bytes change, including
+deletion. Approving fnox configuration does not approve a command that still
+matches a command ask rule. One-shot ask and line chat refuse unapproved
+configuration and point to the TUI.
+
+Elara resolves secrets **once per command**, not once per session. Stock fnox
+decrypts them at their original paths with `fnox env --json --for exec`.
+Relative identity, Lua, and plain-file paths keep fnox's normal meaning.
+Resolution uses `--profile default --non-interactive --no-daemon --if-missing error`.
+An inherited `FNOX_PROFILE=production` does not select a production profile.
+Unlock password-manager providers outside Elara. Resolution has a 30-second
+ceiling and fails rather than waiting for interactive authentication.
+
+Elara hashes the effective configuration before and after resolution. A
+mismatch discards the private plan, passes no secrets, and refuses the command
+with `fnox config changed; /approve again`. The resulting environment and
+redaction rules come from that single resolved plan. No plaintext plan enters
+the transcript, approval history, or effect journal. File-backed secrets use
+private temporary files under protected Elara state for the command's lifetime.
+Elara's own credential namespaces remain forbidden, even in fnox's output.
+
+Literal secret values in stdout and stderr become `[fnox:NAME]` **before** the
+runner writes retained output or sends a preview. Matches can span pipe reads.
+Paging with `output_read` therefore returns the redacted bytes too. The prompt
+tells the model that project secrets are already available and not to print them.
+Resolution JSON is limited to 8 MiB, each secret to 64 KiB, and the redaction
+table to 256 values. Oversized or invalid plans refuse execution.
+
+These are **defaults, not a sandbox**. A configuration changed and reverted
+between the hashes can run provider code once. Bash can also run fnox itself.
+Redaction covers literal values, not encoded or transformed values, and does
+not sanitize files a command writes. Do not treat these defaults as protection
+against a malicious repository or an unrestricted command.
+
 ## Approve an MCP server
 
 MCP configuration lives in `~/.elara/mcp.json` for personal servers or

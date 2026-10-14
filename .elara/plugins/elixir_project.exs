@@ -326,7 +326,7 @@ defmodule ElixirProjectPlugin do
   defp run_mix(arguments, ctx) do
     started_at = System.monotonic_time(:millisecond)
 
-    case Elara.Exec.run(["mix" | arguments],
+    case Elara.Fnox.exec(ctx, ["mix" | arguments],
            cwd: ctx.cwd,
            timeout_ms: ctx.timeout_ms || 600_000,
            max_bytes: ctx.max_output_bytes || 16_384,

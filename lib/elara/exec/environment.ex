@@ -1,6 +1,9 @@
 defmodule Elara.Exec.Environment do
   @moduledoc "Command environment policy; operator-named project values never grant Elara credentials."
 
+  @derive {Inspect, except: [:values, :redactions]}
+  defstruct [:values, redactions: []]
+
   @build_names ~w(PATH HOME USER LOGNAME SHELL LANG TERM COLORTERM NO_COLOR SSH_AUTH_SOCK
     TMPDIR TMP TEMP TZ MIX_ENV MIX_TARGET MIX_HOME HEX_HOME MIX_ARCHIVES MIX_PATH
     MIX_BUILD_PATH MIX_DEPS_PATH ERL_LIBS ERL_FLAGS ERL_AFLAGS ELIXIR_ERL_OPTIONS
@@ -58,6 +61,17 @@ defmodule Elara.Exec.Environment do
     end
   end
 
-  defp credential?(name),
+  def fnox_resolver do
+    values =
+      System.get_env()
+      |> Enum.reject(fn {name, _} ->
+        credential?(name) or name in ["FNOX_PROFILE", "FNOX_NO_DEFAULTS"]
+      end)
+      |> Map.new()
+
+    %__MODULE__{values: values}
+  end
+
+  def credential?(name),
     do: name in @credentials or Enum.any?(@credential_prefixes, &String.starts_with?(name, &1))
 end

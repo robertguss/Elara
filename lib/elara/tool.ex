@@ -16,6 +16,7 @@ defmodule Elara.Tool do
     @type t :: %__MODULE__{
             session_id: String.t() | nil,
             output_owner: String.t() | nil,
+            fnox_config: map() | nil,
             cwd: String.t(),
             plugin: PluginRef.t() | nil,
             tool_name: String.t() | nil,
@@ -27,6 +28,7 @@ defmodule Elara.Tool do
     defstruct [
       :session_id,
       :output_owner,
+      :fnox_config,
       :cwd,
       :plugin,
       :tool_name,

@@ -6,8 +6,9 @@ defmodule Elara.Lab.Profile do
   audited spawn paths, not a general classifier; it judges no bottleneck.
 
   The audit: closure-based `Task.Supervisor.start_child` sites are the server
-  connection in `Elara.Server` and the handoff ask relay in `Elara.Session`.
-  The server closure is a connection; the relay is a task. Other `Elara.TaskSup`
+  connection in `Elara.Server`, the handoff ask relay in `Elara.Session`, and
+  secret-file cleanup in `Elara.Fnox`. The server closure is a connection;
+  the relay and cleanup are tasks. Other `Elara.TaskSup`
   users are `async` or `async_nolink`, whose `Task.Supervised` reply path is a
   task. A test pins that inventory.
   """

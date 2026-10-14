@@ -79,7 +79,7 @@ defmodule Elara.FlightRecorder.ContextCensus do
          header: %{format_version: version, capabilities: %{context_gate: 1}},
          incomplete: []
        })
-       when version in [2, 3],
+       when version in [2, 3, 4],
        do: :ok
 
   defp supported(%Recording{incomplete: [_ | _]}), do: {:error, :incomplete_recording}

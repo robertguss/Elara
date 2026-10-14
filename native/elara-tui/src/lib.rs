@@ -179,6 +179,7 @@ pub struct Model {
     // Acceptance can remain uncertain after the turn's metrics have finished.
     pending_ask: Option<(u64, Instant)>,
     pub last_outcome: Option<String>,
+    last_outcome_ref: Option<u64>,
     pub notice: Option<String>,
     pub notification: Option<&'static str>,
     pub lifetime: String,
@@ -196,10 +197,16 @@ impl Model {
     pub fn new(session_id: String, mode: String, projection: Projection) -> Self {
         let mut editor = Editor::default();
         editor.set_history(user_prompts(&projection.view));
-        let notice = projection.view["inbox"]["execution"]["read_only_notice"]
+        let last_outcome = projection.view["turn"]["outcome"]["kind"]
             .as_str()
-            .or_else(|| projection.view["provider_view"]["settings_notice"].as_str())
             .map(str::to_owned);
+        let last_outcome_ref = projection.view["turn"]["outcome"]["ref"].as_u64();
+        let notice = turn_error_notice(&projection.view["turn"]["outcome"]).or_else(|| {
+            projection.view["inbox"]["execution"]["read_only_notice"]
+                .as_str()
+                .or_else(|| projection.view["provider_view"]["settings_notice"].as_str())
+                .map(str::to_owned)
+        });
         let keymap = actions::Keymap::load(&state_root().join("keymap.json"));
         let notice = if keymap.errors.is_empty() {
             notice
@@ -240,7 +247,8 @@ impl Model {
             viewer: None,
             pending_replies: VecDeque::new(),
             pending_ask: None,
-            last_outcome: None,
+            last_outcome,
+            last_outcome_ref,
             notice,
             notification: None,
             lifetime: "embedded".into(),
@@ -275,6 +283,7 @@ impl Model {
         self.projection.snapshot_generation = generation;
         self.editor.set_history(user_prompts(&self.projection.view));
         self.last_outcome = fresh.last_outcome;
+        self.last_outcome_ref = fresh.last_outcome_ref;
         self.connection = ConnectionState::Connected;
         self.mode = fresh.mode;
         self.cwd = fresh.cwd;
@@ -306,7 +315,12 @@ impl Model {
         self.workspace_diff = None;
         self.workspace_undo = None;
         self.transcript.borrow_mut().source_key = None;
-        self.notice = Some("Reattached; local draft and view restored.".into());
+        self.notice = Some(
+            match turn_error_notice(&self.projection.view["turn"]["outcome"]) {
+                Some(error) => format!("Reattached; {error}"),
+                None => "Reattached; local draft and view restored.".into(),
+            },
+        );
     }
 
     pub fn session_reply(&mut self, frame: &Value) -> bool {
@@ -585,6 +599,13 @@ impl Model {
         self.connection = ConnectionState::Connected;
         self.provider_picker = None;
         self.editor.set_history(user_prompts(&self.projection.view));
+        self.last_outcome = self.projection.view["turn"]["outcome"]["kind"]
+            .as_str()
+            .map(str::to_owned);
+        self.last_outcome_ref = self.projection.view["turn"]["outcome"]["ref"].as_u64();
+        if let Some(error) = turn_error_notice(&self.projection.view["turn"]["outcome"]) {
+            self.notice = Some(error);
+        }
         Ok(())
     }
 
@@ -640,8 +661,15 @@ impl Model {
                         self.metrics.ask_to_active_ms =
                             Some(started.elapsed().as_secs_f64() * 1_000.0);
                     }
-                    if let Some(kind) = turn["outcome"]["kind"].as_str() {
+                    if let Some(kind) = turn["outcome"]["kind"].as_str()
+                        && (turn["outcome"]["ref"].as_u64().is_none()
+                            || turn["outcome"]["ref"].as_u64() != self.last_outcome_ref)
+                    {
+                        self.last_outcome_ref = turn["outcome"]["ref"].as_u64();
                         self.observe_turn_outcome(kind);
+                        if let Some(error) = turn_error_notice(&turn["outcome"]) {
+                            self.notice = Some(error);
+                        }
                     }
                 }
                 Some("append_content_delta") => {
@@ -655,6 +683,18 @@ impl Model {
                 _ => {}
             }
         }
+    }
+}
+
+fn turn_error_notice(outcome: &Value) -> Option<String> {
+    match outcome["kind"].as_str() {
+        Some("provider_error") => Some(format!(
+            "Provider error ({}): {}",
+            outcome["error"]["kind"].as_str().unwrap_or("unknown"),
+            outcome["error"]["message"].as_str().unwrap_or("unknown")
+        )),
+        Some("turn_limit") => Some("Turn ended at the model-call limit.".into()),
+        _ => None,
     }
 }
 
@@ -2855,7 +2895,9 @@ fn set_turn_state(view: &mut Value, op: &Value) -> Result<(), String> {
         .ok_or_else(|| "set_turn_state has invalid turn".to_string())?;
     validate_turn(&Value::Object(turn.clone()))?;
     turn.remove("prompt");
-    turn.remove("outcome");
+    if let Some(Value::Object(outcome)) = turn.get_mut("outcome") {
+        outcome.remove("text");
+    }
     turn.remove("streamed");
     view["turn"] = Value::Object(turn);
     clear_superseded(view, op.get("supersedes"))
@@ -3184,6 +3226,46 @@ mod tests {
             render_frame(&model, width, height).unwrap();
             assert_eq!(model.editor.cursor(), cursor);
             assert_eq!(model.editor.selection(), selection);
+        }
+    }
+
+    #[test]
+    fn failed_turn_snapshot_reports_error_on_attach_resume_and_resnapshot() {
+        let mut model = fixture_model("streaming");
+        model.editor.insert("draft kept during pause");
+        let mut snapshot = model.projection.view.clone();
+        snapshot["turn"] = json!({"state":"idle", "outcome": {
+            "kind":"provider_error", "ref":2, "error":{"kind":"transport", "message":"stream expired"}
+        }});
+        let fresh = Model::new(
+            model.session_id.clone(),
+            model.mode.clone(),
+            Projection::new(snapshot.clone(), "inc-demo".into(), 6).unwrap(),
+        );
+        let error = "Provider error (transport): stream expired";
+        assert!(render_frame(&fresh, 120, 32).unwrap().contains(error));
+        model.reconnect_from(fresh);
+        let resumed = render_frame(&model, 120, 32).unwrap();
+        assert!(resumed.contains(error));
+        assert!(resumed.contains("draft kept during pause"));
+        model.install_snapshot_frame(&json!({
+            "session_id":model.session_id, "incarnation":"inc-demo", "head":6, "snapshot":snapshot
+        })).unwrap();
+        assert!(render_frame(&model, 120, 32).unwrap().contains(error));
+        assert_eq!(model.editor.text(), "draft kept during pause");
+
+        for (seq, outcome_ref, expected) in [
+            (7, 3, Some("Turn complete")),
+            (8, 3, None),
+            (9, 4, Some("Turn complete")),
+        ] {
+            model
+                .apply_patch_frame(&json!({"incarnation":"inc-demo", "seq":seq,
+                    "ops":[{"op":"set_turn_state", "turn":{"state":"idle",
+                        "outcome":{"kind":"completed", "ref":outcome_ref}}}]
+                }))
+                .unwrap();
+            assert_eq!(model.notification.take(), expected);
         }
     }
 

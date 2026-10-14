@@ -60,7 +60,7 @@ defmodule Elara.FlightRecorderTest do
 
       Elara.ask(session, "go")
       recording = Elara.recording(session)
-      assert recording.header.format_version == 3
+      assert recording.header.format_version == 4
       assert {:ok, %FlightRecorder.Report{status: :match}} = Elara.replay(recording)
 
       legacy = %{recording | header: %{recording.header | format_version: 1}}
@@ -86,6 +86,38 @@ defmodule Elara.FlightRecorderTest do
              FlightRecorder.replay(recording)
 
     assert File.read!(path) == original
+  end
+
+  test "a new recording segment retains the settled turn's outcome" do
+    error = %Elara.Provider.Error{kind: :transport, message: "stream expired while away"}
+
+    core =
+      Core.new(%Core.Config{
+        system: "offline",
+        tools: %{},
+        retry: Elara.Provider.Retry.disabled()
+      })
+
+    {active, _} = Core.step(core, {:ask, "go"})
+    {:calling_provider, ref, _} = active.phase
+
+    for result <- [{:error, error}, {:ok, asst("finished")}] do
+      {settled, _} = Core.step(active, {:provider_result, ref, result})
+      recorder = FlightRecorder.new(settled, "segment-session", "segment-incarnation", nil)
+      recording = FlightRecorder.snapshot(recorder)
+
+      assert {:ok, %FlightRecorder.Report{status: :match, final_state: restored}} =
+               FlightRecorder.replay(recording)
+
+      assert Elara.Protocol.snapshot("segment-session", "segment-incarnation", restored)["turn"] ==
+               Elara.Protocol.snapshot("segment-session", "segment-incarnation", settled)["turn"]
+
+      assert restored.last_outcome ==
+               if(result == {:error, error},
+                 do: {:provider_error, error},
+                 else: {:completed, "finished"}
+               )
+    end
   end
 
   test "records causal transitions and replays without provider or tool effects" do

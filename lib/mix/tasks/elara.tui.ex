@@ -34,7 +34,8 @@ defmodule Mix.Tasks.Elara.Tui do
         :binary,
         :exit_status,
         :nouse_stdio,
-        args: Enum.map(argv, &String.to_charlist/1)
+        line: 64,
+        args: Enum.map(["--mix-control" | argv], &String.to_charlist/1)
       ])
 
     await_exit(port)
@@ -137,8 +138,37 @@ defmodule Mix.Tasks.Elara.Tui do
       {^port, {:exit_status, status}} ->
         exit({:shutdown, status})
 
+      {^port, {:data, {:eol, "suspend"}}} ->
+        suspend_launcher()
+        Port.command(port, "resume\n")
+        await_exit(port)
+
       {^port, {:data, _data}} ->
         await_exit(port)
+    end
+  end
+
+  defp suspend_launcher do
+    # OTP starts Port children in a new session, where SIGTSTP is discarded.
+    # Stop the shell's job instead. A background continuation must stop again
+    # before the detached client can reclaim terminal input.
+    case System.cmd("kill", ["-STOP", System.pid()], stderr_to_stdout: true) do
+      {_, 0} -> :ok
+      {error, _} -> Mix.raise("could not suspend Elara: #{String.trim(error)}")
+    end
+
+    case System.cmd("ps", ["-o", "pgid=", "-o", "tpgid=", "-p", System.pid()],
+           stderr_to_stdout: true
+         ) do
+      {groups, 0} ->
+        case String.split(groups) do
+          [group, group] when group != "-1" -> :ok
+          [_, _] -> suspend_launcher()
+          _ -> Mix.raise("could not verify Elara's foreground job")
+        end
+
+      {error, _} ->
+        Mix.raise("could not verify Elara's foreground job: #{String.trim(error)}")
     end
   end
 end

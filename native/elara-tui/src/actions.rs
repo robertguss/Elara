@@ -174,7 +174,11 @@ pub(crate) const SLASH_ACTIONS: &[(&str, &str, bool)] = &[
     ("clear", "clear the prompt", false),
     ("help", "show all controls", false),
     ("editor", "edit the prompt in $VISUAL or $EDITOR", false),
-    ("suspend", "pause the TUI; fg resumes it", false),
+    (
+        "suspend",
+        "pause launcher and embedded agent; fg resumes",
+        false,
+    ),
     (
         "notifications",
         "on|off: save terminal notification preference",

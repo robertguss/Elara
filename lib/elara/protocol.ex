@@ -95,7 +95,7 @@ defmodule Elara.Protocol do
       "session" => %{"id" => session_id, "incarnation" => incarnation},
       "messages" => Enum.map(core.history, &encode_message/1),
       "tool_calls" => tool_views(core),
-      "turn" => encode_phase(core.phase),
+      "turn" => turn_view(core),
       "usage" => provider_view["usage"]["session_totals"],
       "provider_view" => provider_view,
       "runtime_limits" => runtime_limits_view(core),
@@ -143,7 +143,7 @@ defmodule Elara.Protocol do
       event_ops(event, message_offset, messages, supersedes) ++
       [
         maybe_supersedes(
-          %{"op" => "set_turn_state", "turn" => event_turn(event, core.phase)},
+          %{"op" => "set_turn_state", "turn" => event_turn(event, core)},
           supersedes
         )
       ]
@@ -282,23 +282,44 @@ defmodule Elara.Protocol do
     ]
   end
 
-  defp event_turn({:turn_started, prompt}, phase),
-    do: Map.put(encode_phase(phase), "prompt", prompt)
+  defp event_turn({:turn_started, prompt}, core),
+    do: Map.put(turn_view(core), "prompt", prompt)
 
-  defp event_turn({kind, pending}, phase) when kind in [:approval_required, :approval_granted],
-    do: Map.merge(encode_phase(phase), %{"event" => Atom.to_string(kind), "approval" => pending})
+  defp event_turn({kind, pending}, core) when kind in [:approval_required, :approval_granted],
+    do: Map.merge(turn_view(core), %{"event" => Atom.to_string(kind), "approval" => pending})
 
-  defp event_turn({:turn_ended, outcome}, phase),
-    do: Map.put(encode_phase(phase), "outcome", encode_turn_outcome(outcome))
+  defp event_turn({:turn_ended, outcome}, core),
+    do:
+      Map.put(
+        turn_view(core),
+        "outcome",
+        Map.put(encode_turn_outcome(outcome), "ref", core.next_ref)
+      )
 
-  defp event_turn({:turn_ended, outcome, :streamed}, phase) do
-    phase
-    |> encode_phase()
-    |> Map.put("outcome", encode_turn_outcome(outcome))
+  defp event_turn({:turn_ended, outcome, :streamed}, core) do
+    core
+    |> turn_view()
+    |> Map.put("outcome", Map.put(encode_turn_outcome(outcome), "ref", core.next_ref))
     |> Map.put("streamed", true)
   end
 
-  defp event_turn(_event, phase), do: encode_phase(phase)
+  defp event_turn(_event, core), do: turn_view(core)
+
+  defp turn_view(core) do
+    turn = encode_phase(core.phase)
+
+    if core.last_outcome,
+      do:
+        Map.put(
+          turn,
+          "outcome",
+          core.last_outcome
+          |> encode_turn_outcome()
+          |> Map.drop(["text"])
+          |> Map.put("ref", core.next_ref)
+        ),
+      else: turn
+  end
 
   defp encode_phase(:idle), do: %{"state" => "idle"}
 
@@ -432,7 +453,12 @@ defmodule Elara.Protocol do
               "preparing_tool",
               "approval_waiting"
             ] do
-    view = Map.put(view, "turn", Map.drop(turn, ["prompt", "outcome", "streamed"]))
+    turn = Map.drop(turn, ["prompt", "streamed"])
+
+    turn =
+      if turn["outcome"], do: Map.update!(turn, "outcome", &Map.drop(&1, ["text"])), else: turn
+
+    view = Map.put(view, "turn", turn)
     clear_superseded(view, Map.get(op, "supersedes"))
   end
 

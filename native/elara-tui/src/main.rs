@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::fs::File;
 use std::io::{self, Read, Write};
+use std::os::fd::FromRawFd;
 use std::os::unix::process::CommandExt;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -26,6 +28,7 @@ use serde_json::{Value, json};
 
 struct Args {
     preflight: bool,
+    mix_control: bool,
     appearance: bool,
     layout: Option<ViewLayout>,
     theme: Option<Theme>,
@@ -51,6 +54,7 @@ impl Args {
 
     fn parse_from(mut arguments: impl Iterator<Item = String>) -> Result<Self, String> {
         let mut preflight = false;
+        let mut mix_control = false;
         let mut default_new = false;
         let mut appearance = false;
         let mut layout = None;
@@ -82,6 +86,7 @@ impl Args {
                 // Internal Mix/launcher controls; all user arguments use this
                 // same parser before the server starts and before attachment.
                 "--mix-preflight" => preflight = true,
+                "--mix-control" => mix_control = true,
                 "--default-new" => default_new = true,
                 "--cwd" => cwd = Some(next_value(&mut arguments, "--cwd")?),
                 "--appearance" => appearance = true,
@@ -137,6 +142,7 @@ impl Args {
         }
         Ok(Self {
             preflight,
+            mix_control,
             appearance,
             layout,
             theme,
@@ -501,10 +507,11 @@ fn run_interactive(
                     *connection = new_connection;
                     notifications.extend(fresh.notification);
                     model.reconnect_from(fresh);
-                    if let Some(notice) = &pending.resume_notice {
-                        model.notice = Some(format!(
-                            "Reattached; local draft and view restored. {notice}"
-                        ));
+                    if let Some(notice) = &pending.resume_notice
+                        && let Some(reattached) = &mut model.notice
+                    {
+                        reattached.push(' ');
+                        reattached.push_str(notice);
                     }
                     save_cursor(cursors, model);
                     reattaching = None;
@@ -667,7 +674,7 @@ fn run_interactive(
                 }
                 InputAction::Suspend => {
                     drop(guard.take());
-                    unsafe { libc::raise(libc::SIGTSTP) };
+                    suspend(args.mix_control)?;
                     let resumed = TerminalGuard::enter()?;
                     model.enhanced_keyboard = resumed.enhanced_keyboard;
                     guard = Some(resumed);
@@ -712,6 +719,37 @@ fn run_interactive(
         event::poll(Duration::from_millis(30))
             .map_err(|error| format!("terminal input failed: {error}"))?;
     }
+}
+
+fn suspend(mix_control: bool) -> Result<(), String> {
+    if !mix_control {
+        unsafe { libc::raise(libc::SIGTSTP) };
+        return Ok(());
+    }
+
+    // :nouse_stdio reserves fd 3/4 for the Port, leaving the terminal on 0/1.
+    // The launcher stops its shell job and releases us only on foreground fg.
+    let control = |fd| {
+        let owned = unsafe { libc::dup(fd) };
+        if owned < 0 {
+            Err(io::Error::last_os_error().to_string())
+        } else {
+            Ok(unsafe { File::from_raw_fd(owned) })
+        }
+    };
+    let mut input = control(3)?;
+    let mut output = control(4)?;
+    output
+        .write_all(b"suspend\n")
+        .map_err(|error| format!("Cannot suspend launcher: {error}"))?;
+    let mut response = [0; 7];
+    input
+        .read_exact(&mut response)
+        .map_err(|error| format!("Launcher closed while suspended: {error}"))?;
+    if &response != b"resume\n" {
+        return Err("Invalid launcher resume response".into());
+    }
+    Ok(())
 }
 
 fn handle_frame(
@@ -786,35 +824,20 @@ impl Reattach {
         let mode = model.mode.clone();
         let cwd = model.cwd.clone();
         let incarnation = model.projection.incarnation.clone();
-        let head = model.projection.head;
+        let outcome_ref = model.projection.view["turn"]["outcome"]["ref"].as_u64();
         let cursor = cursors.load(&target);
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            // Keep actual completion evidence, not buffered content projections.
-            // The reader exits after shutdown; draining and dropping large frames
-            // happens here, never on the keyboard thread.
-            let mut completion = None;
-            for frame in buffered.into_iter().map_while(Result::ok) {
-                let seq = frame["seq"].as_u64().unwrap_or(0);
-                if frame["version"] == 2
-                    && frame["type"] == "patch"
-                    && frame["incarnation"] == incarnation
-                    && seq > head
-                {
-                    for op in frame["ops"].as_array().into_iter().flatten() {
-                        if op["op"] == "set_turn_state"
-                            && let Some(kind) = op["turn"]["outcome"]["kind"].as_str()
-                        {
-                            completion = Some((seq, kind.to_string()));
-                        }
-                    }
-                }
-            }
+            // The snapshot owns terminal outcomes too. Drop buffered projections
+            // off the keyboard thread instead of depending on raced final events.
+            drop(buffered);
             let result = connect_target(port, &target, &mode, cwd.as_deref(), &cursor).map(
                 |(connection, mut fresh)| {
                     if fresh.projection.incarnation == incarnation
-                        && let Some((seq, kind)) = completion
-                        && seq <= fresh.projection.head
+                        && let Some(fresh_ref) =
+                            fresh.projection.view["turn"]["outcome"]["ref"].as_u64()
+                        && Some(fresh_ref) != outcome_ref
+                        && let Some(kind) = fresh.last_outcome.clone()
                     {
                         fresh.observe_turn_outcome(&kind);
                     }

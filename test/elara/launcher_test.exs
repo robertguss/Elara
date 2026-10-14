@@ -306,6 +306,58 @@ defmodule Elara.LauncherTest do
     refute File.exists?(Path.join(ctx.caller, "ui state/cursors.json"))
   end
 
+  test "stable launcher suspends its shell job and resumes with draft and control", ctx do
+    assert {_, 0} =
+             System.cmd("mix", ["run", "--no-start", "-e", "Mix.Tasks.Elara.Tui.binary!()"],
+               cd: @root,
+               env: ctx.env,
+               stderr_to_stdout: true
+             )
+
+    stable = Path.join(ctx.home, "daily")
+    File.mkdir_p!(stable)
+    File.write!(Path.join(stable, "current"), @root <> "\n")
+
+    for mode <- ["suspend", "suspend-command"] do
+      {:ok, agent} =
+        Agent.start_link(fn ->
+          [{:stream, [{:sleep, 2_000}, "LONG TURN DONE"], {:ok, assistant("LONG TURN DONE")}}]
+        end)
+
+      {:ok, session} =
+        Elara.start_session(
+          provider: {Elara.Provider.Scripted, agent},
+          tools: [],
+          persist: false,
+          cwd: ctx.caller
+        )
+
+      {:ok, server} = Elara.Server.start_link(port: 0)
+
+      {output, status} =
+        System.cmd(
+          System.find_executable("python3") || flunk("python3 is required for PTY checks"),
+          [
+            Path.join(@root, "test/support/tui_pause_pty.py"),
+            Path.join(@root, "bin/elara-stable"),
+            Integer.to_string(Elara.Server.port(server)),
+            session,
+            mode,
+            Path.join(ctx.home, mode),
+            "3"
+          ],
+          cd: ctx.caller,
+          env: Map.put(ctx.env, "ELARA_STABLE_DIR", stable),
+          stderr_to_stdout: true
+        )
+
+      assert status == 0, output
+      assert output =~ "Pause PTY passed: #{mode}"
+      assert Process.alive?(server)
+      GenServer.stop(server)
+    end
+  end
+
   test "launcher retains interactive terminal input and clean detach", ctx do
     # The PTY budget measures interaction, not a cold dependency/native build.
     assert {_, 0} =

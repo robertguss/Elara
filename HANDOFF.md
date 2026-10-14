@@ -162,6 +162,11 @@ The lab's current async-site inventory is pinned in
 connections from session handoff relay tasks. Historical registrations stay
 unchanged. Current lab fixtures use a 16K-token handoff window, trace
 `Context.budget/3` and isolate coding worktrees beside their session state.
+The X2 anecdote is recorded in `docs/lab/x2-unknown-results.md`, with retained
+raw requests, messages, workspace bytes and usage under
+`lab/results/x2-unknown-results/`. Its three scripted-then-real cases are not a
+reliability claim. The rerunnable driver defaults to zero-cost controls;
+paid repeats require separate authorization.
 `docs/lab/README.md` describes recovery registration version 2 and reproduction
 of historical versions. Delivery is tracked in
 [Dev Hub](https://app.notion.com/p/3f8700320c4581a59c2cdf3a839a5ae0).

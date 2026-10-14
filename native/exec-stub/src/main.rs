@@ -11,6 +11,9 @@ use std::time::{Duration, Instant};
 const PROTOCOL_VERSION: u64 = 1;
 const POLL_INTERVAL_MS: i32 = 10;
 
+mod redaction;
+use redaction::Redactor;
+
 struct Request {
     id: String,
     op: String,
@@ -21,6 +24,7 @@ struct Request {
     timeout_ms: u64,
     head_tail: bool,
     capture: Option<Capture>,
+    redactions: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 struct Capture {
@@ -313,6 +317,26 @@ fn parse_request(line: &[u8]) -> Result<Request, String> {
         }
     };
 
+    let mut redactions = Vec::new();
+    if let Some(value) = object.get("redactions") {
+        let rules = value
+            .as_array()
+            .filter(|rules| rules.len() <= 256)
+            .ok_or("invalid redactions")?;
+        for rule in rules {
+            let pair = rule
+                .as_array()
+                .filter(|pair| pair.len() == 2)
+                .ok_or("invalid redactions")?;
+            let secret = pair[0]
+                .as_str()
+                .filter(|s| !s.is_empty() && s.len() <= 65_536)
+                .ok_or("invalid redactions")?;
+            let replacement = pair[1].as_str().ok_or("invalid redactions")?;
+            redactions.push((secret.as_bytes().to_vec(), replacement.as_bytes().to_vec()));
+        }
+    }
+
     Ok(Request {
         id,
         op,
@@ -323,6 +347,7 @@ fn parse_request(line: &[u8]) -> Result<Request, String> {
         timeout_ms,
         head_tail,
         capture,
+        redactions,
     })
 }
 
@@ -496,6 +521,7 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
         },
     };
 
+    let mut redactor = Redactor::new(request.redactions.clone());
     let output = pipe()?;
     set_nonblocking(output[0])?;
     let stdout_fd = duplicate_fd(output[1])?;
@@ -604,6 +630,7 @@ fn guardian_loop(request: &Request, control_fd: RawFd, event_fd: RawFd) -> io::R
                 &mut capture,
                 request.capture.as_ref().map(|spec| spec.max_bytes),
                 &mut bytes_persisted,
+                &mut redactor,
             );
             match drained {
                 Ok(open) => output_closed = !open,
@@ -717,6 +744,7 @@ fn drain_output(
     capture: &mut Option<std::fs::File>,
     capture_limit: Option<u64>,
     bytes_persisted: &mut u64,
+    redactor: &mut Redactor,
 ) -> io::Result<bool> {
     let mut buffer = [0_u8; 8192];
     let head_limit = if !head_tail {
@@ -731,9 +759,6 @@ fn drain_output(
     // Return to the control/deadline poll even with a continuously full pipe.
     for _ in 0..64 {
         let count = unsafe { libc::read(output_fd, buffer.as_mut_ptr().cast(), buffer.len()) };
-        if count == 0 {
-            return Ok(false);
-        }
         if count < 0 {
             let error = io::Error::last_os_error();
             if error.kind() == io::ErrorKind::WouldBlock {
@@ -745,7 +770,10 @@ fn drain_output(
             return Err(error);
         }
 
-        let count = count as usize;
+        let eof = count == 0;
+        let redacted = redactor.feed(&buffer[..count as usize], eof);
+        let buffer = redacted.as_slice();
+        let count = buffer.len();
         *bytes_total += count as u64;
         if let Some(file) = capture {
             let limit = capture_limit.expect("capture has a limit");
@@ -788,6 +816,9 @@ fn drain_output(
         if !head_tail && *bytes_total > max_bytes && *trigger == Trigger::None {
             *trigger = Trigger::Truncated;
             kill_group(pgid);
+        }
+        if eof {
+            return Ok(false);
         }
     }
     Ok(true)
@@ -984,6 +1015,7 @@ mod tests {
                 timeout_ms: 1000,
                 head_tail: false,
                 capture: None,
+                redactions: Vec::new(),
             };
             guardian_loop(&request, control[0], events[1]).unwrap();
             close_fd(control[0]);

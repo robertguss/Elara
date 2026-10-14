@@ -175,7 +175,7 @@ defmodule Elara.Jobs do
         Task.Supervisor.async(Elara.TaskSup, fn ->
           receive do
             :dispatch ->
-              Exec.run(argv,
+              Elara.Fnox.exec(ctx, argv,
                 cwd: store.cwd,
                 timeout_ms: declared.timeout_ms,
                 max_bytes: declared.max_bytes,

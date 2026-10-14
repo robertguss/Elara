@@ -420,7 +420,7 @@ defmodule Elara.Session.Core do
         {:tool_approved, r}
       ) do
     {state, effects} =
-      if pending["kind"] == "rules" do
+      if pending["kind"] in ["rules", "fnox"] do
         {%{state | phase: {:checking_tool, r, call, rest, it}}, [{:check_tool, r, call}]}
       else
         start_tool(state, r, call, rest, it)
@@ -693,7 +693,8 @@ defmodule Elara.Session.Core do
         tool = Map.fetch!(state.config.tools, call.name)
         {ref, state} = take_ref(state)
 
-        if state.config.command_preflight and tool.name == "bash" do
+        if state.config.command_preflight and
+             (tool.name == "bash" or "shell" in tool.capabilities) do
           {%{state | phase: {:checking_tool, ref, call, rest, iteration}},
            [{:check_tool, ref, call}]}
         else

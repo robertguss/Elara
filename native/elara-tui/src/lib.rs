@@ -2724,7 +2724,10 @@ fn validate_turn(turn: &Value) -> Result<(), String> {
             if turn["approval"]["id"].is_string()
                 && turn["approval"]["tool"].is_string()
                 && turn["approval"]["args"].is_object()
-                && matches!(turn["approval"]["kind"].as_str(), Some("call" | "rules")) =>
+                && matches!(
+                    turn["approval"]["kind"].as_str(),
+                    Some("call" | "rules" | "fnox")
+                ) =>
         {
             Ok(())
         }

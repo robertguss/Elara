@@ -207,6 +207,8 @@ defmodule Elara.Exec do
         command =
           if request.capture, do: Map.put(command, "capture", request.capture), else: command
 
+        command = Map.put(command, "redactions", request.redactions)
+
         if send_command(state.port, command) do
           {:noreply, state}
         else
@@ -296,6 +298,7 @@ defmodule Elara.Exec do
     timeout_ms = Keyword.get(opts, :timeout_ms, 30_000)
     output_policy = Keyword.get(opts, :output_policy, :truncate)
     capture = Keyword.get(opts, :capture)
+    trusted = Keyword.get(opts, :trusted_environment)
 
     cond do
       not (is_list(argv) and argv != [] and Enum.all?(argv, &valid_string?/1)) ->
@@ -326,12 +329,13 @@ defmodule Elara.Exec do
         {:error, "execution stub does not support retained output"}
 
       true ->
-        with {:ok, environment} <- Elara.Exec.Environment.command(Map.new(env)) do
+        with {:ok, environment, redactions} <- command_environment(env, trusted) do
           {:ok,
            %{
              argv: argv,
              cwd: cwd,
              env: environment,
+             redactions: redactions,
              max_bytes: max_bytes,
              timeout_ms: timeout_ms,
              output_policy: output_policy,
@@ -340,6 +344,31 @@ defmodule Elara.Exec do
         end
     end
   end
+
+  defp command_environment(env, nil) do
+    with {:ok, values} <- Elara.Exec.Environment.command(Map.new(env)), do: {:ok, values, []}
+  end
+
+  defp command_environment(_env, %Elara.Exec.Environment{values: values, redactions: redactions}) do
+    valid_redactions =
+      is_list(redactions) and length(redactions) <= 256 and
+        Enum.all?(redactions, fn
+          [value, replacement] ->
+            valid_string?(value) and byte_size(value) in 1..65_536 and valid_string?(replacement)
+
+          _ ->
+            false
+        end)
+
+    if valid_environment?(values) and valid_redactions and
+         Enum.all?(Map.keys(values), &(not Elara.Exec.Environment.credential?(&1))) do
+      {:ok, values, redactions}
+    else
+      {:error, "invalid private command environment"}
+    end
+  end
+
+  defp command_environment(_, _), do: {:error, "invalid private command environment"}
 
   defp valid_string?(value), do: is_binary(value) and not String.contains?(value, <<0>>)
 

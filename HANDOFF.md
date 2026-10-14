@@ -42,6 +42,9 @@ writer under the session lock; message and metadata changes commit together.
 Command environment forwarding and `mix elara.env` diagnostics are documented
 in README.md's "Command environment" section. Extra project names belong in
 operator startup config, never an agent-editable project file.
+That section also documents fnox default-profile secrets for model commands,
+effective-config digest approval, pre/post resolution checks, and literal
+redaction before output retention. These are defaults, not a sandbox.
 `native/exec-stub/src/main.rs` buffers each guardian's incomplete event before
 forwarding complete frames. `test/elara/exec_integration_test.exs` checks exact
 per-command heads and tails across concurrent large outputs.

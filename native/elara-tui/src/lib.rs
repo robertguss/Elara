@@ -1313,13 +1313,13 @@ impl ClientConnection {
     }
 
     pub fn connect(port: u16, request: Value) -> Result<(Self, Value), String> {
-        Self::connect_with_status(port, request, |_| {})
+        Self::connect_with_status(port, request, |_| Ok(()))
     }
 
     pub fn connect_with_status(
         port: u16,
         mut request: Value,
-        mut on_status: impl FnMut(Option<&str>),
+        mut on_status: impl FnMut(Option<&str>) -> Result<(), String>,
     ) -> Result<(Self, Value), String> {
         if let Ok(token) = std::env::var("ELARA_SERVER_TOKEN") {
             request
@@ -1351,7 +1351,7 @@ impl ClientConnection {
             if frame["type"] != "startup_status" || frame["version"] != 2 {
                 break frame;
             }
-            on_status(frame["notice"].as_str());
+            on_status(frame["notice"].as_str())?;
         };
         Ok((connection, first))
     }
@@ -3074,7 +3074,10 @@ mod tests {
         let (connection, attached) = ClientConnection::connect_with_status(
             port,
             attach_request("new", "control", &Cursor::default()),
-            |notice| notices.push(notice.map(str::to_owned)),
+            |notice| {
+                notices.push(notice.map(str::to_owned));
+                Ok(())
+            },
         )
         .unwrap();
         assert_eq!(

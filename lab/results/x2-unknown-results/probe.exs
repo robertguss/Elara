@@ -196,8 +196,10 @@ defmodule X2Probe do
       }).accounted
 
     for fault <- [:timeout, :interrupt, :stub_loss] do
-      cwd = Path.join(root, "x2-#{fault}-#{System.unique_integer([:positive])}")
-      File.mkdir_p!(cwd)
+      suffix = Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
+      cwd = Path.join(root, "x2-#{fault}-#{suffix}")
+      File.mkdir!(cwd)
+      false = File.exists?(Path.join(cwd, "orders.log"))
       {_, 0} = System.cmd("git", ["init", "-q", cwd])
       {:ok, stage} = Agent.start_link(fn -> 0 end)
 
@@ -292,6 +294,8 @@ defmodule X2Probe do
             ),
           fault: fault,
           model: @model,
+          workspace: cwd,
+          initial_file_absent: true,
           side_effect_observed_before_fault: true,
           unknown_result: unknown,
           first_result: inspect(first),

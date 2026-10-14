@@ -63,7 +63,7 @@ unknown prices, and asymmetric cached-token arithmetic have fixture checks.
 
 Raw requests, canonical messages, tool results, workspace bytes, usage and cost
 records live in `lab/results/x2-unknown-results/paid-1/`. The rerunnable driver
-is `lab/results/x2-unknown-results/probe.exs`; `dry-1/` and `dry-2/` contain
+is `lab/results/x2-unknown-results/probe.exs`; the `dry-*/` directories contain
 credential-free fixture runs. Earlier controls remain under
 `lab/results/x2-scripted-controls/`.
 
@@ -76,11 +76,13 @@ neutral interruption continuation, and a restricted tool roster prevent a
 causal conclusion about why the model chose each action.
 
 To run zero-cost controls, launch and load an isolated verify-elara state, then
-set `X2_OUT` to a new directory and run `mix run
-lab/results/x2-unknown-results/probe.exs`. Paid calls additionally require
+set `X2_OUT` to a new directory and run
+`mix run lab/results/x2-unknown-results/probe.exs`. Paid calls additionally require
 `X2_RUN_PAID=1` and `OPENAI_API_KEY`. A new process starts a new budget, so a
 repeat needs separate spending authorization. Existing JSON evidence is never
-overwritten. Do not treat a control run as a real-model result.
+overwritten. The driver exclusively creates random workspace directories and
+checks that the target file is absent before starting. Do not treat a control
+run as a real-model result.
 
 The finding supports keeping honest uncertainty in the transcript. It does
 not establish that a model will act safely on that uncertainty. No prompt or

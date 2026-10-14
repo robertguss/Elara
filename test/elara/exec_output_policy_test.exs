@@ -71,16 +71,19 @@ defmodule Elara.ExecOutputPolicyTest do
 
   @tag :policy_red
   test "continuous capped output still reaches the native deadline", ctx do
+    timeout_ms = 1_000
+
     task =
       run(ctx, ["bash", "-c", "exec -a #{ctx.marker} yes flood"],
         max_bytes: 31,
-        timeout_ms: 200,
+        timeout_ms: timeout_ms,
         output_policy: :head_tail
       )
 
     assert {:ok, result} = Task.await(task, 5_000)
     assert result.termination == :timed_out
     assert result.signal == 9
+    assert result.elapsed_ms >= timeout_ms
     assert result.bytes_total > 31
     assert result.bytes_sent == 31
     assert byte_size(result.output) == 31

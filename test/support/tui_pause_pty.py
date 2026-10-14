@@ -128,6 +128,15 @@ try:
         assert termios.tcgetattr(master)[3] & termios.ISIG, "bg disabled shell terminal signals"
         assert b"\x1b[?1049h" not in output[background_start:], "bg redrew the TUI"
         time.sleep(pause)
+        with socket.create_connection(("127.0.0.1", int(port)), timeout=30) as peer:
+            peer.sendall((json.dumps({"version": 2, "command": "attach", "token": os.environ["ELARA_SERVER_TOKEN"],
+                                     "session_id": session, "mode": "observe", "cursor": 0}) + "\n").encode())
+            with peer.makefile("rb") as reader:
+                frame = json.loads(reader.readline())
+            assert frame["type"] == "attached", frame["type"]
+            assert frame["snapshot"]["turn"]["state"] == "idle", "external server did not finish while suspended"
+            assert any(m["role"] == "assistant" and m["text"].endswith("LONG TURN DONE")
+                       for m in frame["snapshot"]["messages"]), "external turn incomplete before fg"
         draft_start = len(output)
         send(b"fg\n")
     fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 32, 119, 0, 0))

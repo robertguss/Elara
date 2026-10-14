@@ -77,6 +77,7 @@ defmodule Elara.Session.Core do
             phase: Elara.Session.Core.phase(),
             streaming: Elara.Session.Core.streaming() | nil,
             tool_usage: Elara.Provider.Visibility.usage() | nil,
+            mcp_guard: map() | nil,
             retry: Elara.Session.Core.retry() | nil,
             pending_runtime_limits: Elara.Session.Core.runtime_limits() | nil,
             runtime_limit_sources: %{optional(Elara.Session.Core.runtime_limit_key()) => :session},
@@ -92,6 +93,7 @@ defmodule Elara.Session.Core do
       phase: :idle,
       streaming: nil,
       tool_usage: nil,
+      mcp_guard: nil,
       retry: nil,
       pending_runtime_limits: nil,
       runtime_limit_sources: %{},
@@ -119,7 +121,7 @@ defmodule Elara.Session.Core do
           | :runtime_limits_changed
           | {:provider_result, ref(), {:ok, Message.Assistant.t()} | {:error, Provider.Error.t()}}
           | {:retry_elapsed, ref()}
-          | {:tool_checked, ref(), :allow | {:deny, String.t()} | {:ask, map()}}
+          | {:tool_checked, ref(), :allow | {:deny, String.t()} | {:ask, map()} | {:mcp, map()}}
           | {:tool_approved, ref()}
           | {:tool_result, ref(), Tool.outcome()}
           | {:tool_usage, ref(), Elara.Provider.Visibility.usage()}
@@ -401,6 +403,14 @@ defmodule Elara.Session.Core do
 
   def step(
         %State{phase: {:checking_tool, r, call, rest, it}} = state,
+        {:tool_checked, r, {:mcp, %{"mutating" => mutating} = guard}}
+      )
+      when is_boolean(mutating) do
+    start_tool(%{state | mcp_guard: guard}, r, call, rest, it)
+  end
+
+  def step(
+        %State{phase: {:checking_tool, r, call, rest, it}} = state,
         {:tool_checked, r, {:deny, reason}}
       ) do
     {state, effects} = reject_call(%{state | phase: :idle}, call, rest, it, reason)
@@ -523,7 +533,9 @@ defmodule Elara.Session.Core do
       end)
 
     effects = emits ++ [{:emit, {:turn_ended, :interrupted}}]
-    {%{state | history: history, phase: :idle, steering?: false, tool_usage: nil}, effects}
+
+    {%{state | history: history, phase: :idle, steering?: false, tool_usage: nil, mcp_guard: nil},
+     effects}
   end
 
   def step(%State{} = state, _fact), do: {state, []}
@@ -532,8 +544,13 @@ defmodule Elara.Session.Core do
   # workspace partially, so it fails closed as indeterminate. A call that never
   # started, or one that cannot mutate, truthfully reports an error.
   defp running_outcome(state, %ToolCall{name: name}, error, uncertain) do
-    case Map.get(state.config.tools, name) do
-      %Tool{mutating: true} ->
+    mutating =
+      if state.mcp_guard,
+        do: state.mcp_guard["mutating"],
+        else: match?(%Tool{mutating: true}, Map.get(state.config.tools, name))
+
+    case mutating do
+      true ->
         {:indeterminate, uncertain <> "; it may have partially changed the workspace"}
 
       _ ->
@@ -652,7 +669,7 @@ defmodule Elara.Session.Core do
   defp finish_tool(state, call, rest, it, outcome) do
     result = Message.tool_result(call, outcome, state.tool_usage)
     history = state.history ++ [result]
-    state = %{state | history: history, phase: :idle, tool_usage: nil}
+    state = %{state | history: history, phase: :idle, tool_usage: nil, mcp_guard: nil}
 
     {state, more} =
       if state.steering? do
@@ -693,8 +710,9 @@ defmodule Elara.Session.Core do
         tool = Map.fetch!(state.config.tools, call.name)
         {ref, state} = take_ref(state)
 
-        if state.config.command_preflight and
-             (tool.name == "bash" or "shell" in tool.capabilities) do
+        if match?(%Tool{plugin: nil, name: "mcp_call"}, tool) or
+             (state.config.command_preflight and
+                (tool.name == "bash" or "shell" in tool.capabilities)) do
           {%{state | phase: {:checking_tool, ref, call, rest, iteration}},
            [{:check_tool, ref, call}]}
         else
@@ -705,6 +723,7 @@ defmodule Elara.Session.Core do
 
   defp start_tool(state, ref, call, rest, iteration) do
     tool = Map.fetch!(state.config.tools, call.name)
+    tool = if state.mcp_guard, do: %{tool | mutating: state.mcp_guard["mutating"]}, else: tool
 
     {%{state | phase: {:running_tool, ref, call, rest, iteration}},
      [{:emit, {:tool_started, call}}, {:run_tool, ref, call, tool}]}

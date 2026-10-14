@@ -133,7 +133,11 @@ The fetch interrupt proof in `test/elara/web_fetch_test.exs` waits for its actua
 linked network worker with a separate startup budget before testing cancellation.
 Personal and project MCP configs, exact-config and catalog approval, explicit
 read-only marks, and the supervised client API are documented in README.md's
-"Approve an MCP server" section. Model-facing tools are a separate integration.
+"Approve an MCP server" section. The fixed `mcp_search` and `mcp_call` tools
+select schemas without changing the provider tool table. Core captures each
+call's operator-approved config/catalog digests and mutation classification;
+dispatch rechecks them. MCP results use retained-output handles, and offline
+replay consumes recorded facts without contacting a server.
 The lab's current async-site inventory is pinned in
 `lab/test/elara/lab_profile_test.exs`; its classifier distinguishes server
 connections from session handoff relay tasks. Historical registrations stay

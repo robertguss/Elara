@@ -180,8 +180,18 @@ defmodule Elara.MCP.Server do
                 {error, state}
             end
 
-          {:call, name, args} ->
-            invoke(state, tools, name, args, cwd, deadline, monitor)
+          {:prepare_call, name} ->
+            with {:ok, marks} <- Trust.check_catalog(state.config, tools),
+                 true <- Enum.any?(tools, &(&1["name"] == name)),
+                 :ok <- current_config(state.config, cwd) do
+              {{:ok, call_guard(state.config, tools, name, marks)}, state}
+            else
+              false -> {{:error, :unknown_mcp_tool}, state}
+              error -> {error, state}
+            end
+
+          {:call, name, args, guard} ->
+            invoke(state, tools, name, args, guard, cwd, deadline, monitor)
         end
 
       {error, state} ->
@@ -237,9 +247,10 @@ defmodule Elara.MCP.Server do
     end
   end
 
-  defp invoke(state, tools, name, args, cwd, deadline, monitor) do
+  defp invoke(state, tools, name, args, guard, cwd, deadline, monitor) do
     with {:ok, marks} <- Trust.check_catalog(state.config, tools),
          %{} = tool <- Enum.find(tools, &(&1["name"] == name)),
+         true <- guard == nil or guard == call_guard(state.config, tools, name, marks),
          {:ok, headers} <- headers(state, tool, args),
          :ok <- current_config(state.config, cwd) do
       {result, state} =
@@ -263,8 +274,20 @@ defmodule Elara.MCP.Server do
       end
     else
       nil -> {{:error, :unknown_mcp_tool}, state}
+      false -> {{:error, :mcp_call_approval_changed}, state}
       error -> {error, state}
     end
+  end
+
+  defp call_guard(config, tools, name, marks) do
+    %{
+      "server" => config.name,
+      "tool" => name,
+      "config_path" => config.path,
+      "config_sha256" => config.sha256,
+      "catalog_digest" => Trust.digest(tools, marks),
+      "mutating" => name not in marks
+    }
   end
 
   defp headers(%{config: %{transport: :http}}, tool, args),

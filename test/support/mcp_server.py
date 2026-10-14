@@ -60,7 +60,9 @@ def answer(request, headers=None):
             time.sleep(2)
         if name == "flood":
             size = request["params"]["arguments"].get("bytes", 16_778_240)
-            return {"result": {"content": [{"type": "text", "text": "x" * size}]}}
+            middle = request["params"]["arguments"].get("middle", "")
+            text = "x" * (size // 2) + middle + "x" * (size - size // 2)
+            return {"result": {"content": [{"type": "text", "text": text}]}}
         if name == "input":
             return {"result": {"resultType": "input_required", "inputRequests": []}}
         return {"result": {"content": [{"type": "text", "text": "echo ✓"}], "isError": False,

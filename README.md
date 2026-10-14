@@ -1528,6 +1528,11 @@ cancellation and the Rust inspector.
 
 ## Develop
 
+`rust-toolchain.toml` pins Rust 1.98.1 with rustfmt and Clippy, matching orb
+setup. With rustup, the first Cargo command in this checkout downloads that
+toolchain if it is missing, including on macOS. The pin keeps strict Clippy
+checks from changing when your default Rust version changes.
+
 `bin/check` runs every check a change must pass before it is pushed, and stops
 at the first failure:
 

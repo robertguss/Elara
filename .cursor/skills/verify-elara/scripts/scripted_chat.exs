@@ -14,17 +14,13 @@ name = if name in [nil, ""], do: nil, else: name
 
 replies =
   cond do
-    replies = System.get_env("ELARA_VERIFY_REPLIES") ->
-      if replies == "" do
-        []
-      else
-        replies
-        |> String.split("||", trim: true)
-        |> Enum.map(fn text ->
-          {:ok, assistant} = Elara.Message.assistant(text, [])
-          {:ok, assistant}
-        end)
-      end
+    (replies = System.get_env("ELARA_VERIFY_REPLIES")) not in [nil, ""] ->
+      replies
+      |> String.split("||", trim: true)
+      |> Enum.map(fn text ->
+        {:ok, assistant} = Elara.Message.assistant(text, [])
+        {:ok, assistant}
+      end)
 
     (reply = System.get_env("ELARA_VERIFY_REPLY")) not in [nil, ""] ->
       {:ok, assistant} = Elara.Message.assistant(reply, [])
@@ -46,45 +42,69 @@ session_opts = [
 
 case Elara.start_session(session_opts) do
   {:ok, session} ->
+    initial_messages = length(Elara.transcript(session))
     {:ok, io} = StringIO.open("")
     task = Task.async(fn -> Elara.Chat.run(session, io) end)
     chat = task.pid
 
-    await_prompt = fn body_so_far, attempts ->
-      Enum.reduce_while(1..attempts, body_so_far, fn _, _ ->
-        {_input, body} = StringIO.contents(io)
+    fail = fn message ->
+      {_input, body} = StringIO.contents(io)
+      File.mkdir_p!(Path.dirname(out))
+      File.write!(out, body)
+      IO.write(:stderr, "scripted_chat: #{message}\n#{body}\n")
+      System.halt(1)
+    end
 
-        if String.ends_with?(body, "> ") do
-          {:halt, body}
+    await_prompt = fn previous_size, attempts ->
+      result =
+        Enum.reduce_while(1..attempts, nil, fn _, _ ->
+          {_input, body} = StringIO.contents(io)
+
+          if byte_size(body) > previous_size and String.ends_with?(body, "> ") and
+               match?(%{phase: :idle}, Elara.status(session)) do
+            {:halt, {:ok, body}}
+          else
+            Process.sleep(20)
+            {:cont, nil}
+          end
+        end)
+
+      case result do
+        {:ok, body} -> body
+        nil -> fail.("did not reach a fresh idle prompt")
+      end
+    end
+
+    body = await_prompt.(0, 200)
+    unless String.contains?(body, "elara  ·  /help"), do: fail.("banner not seen")
+
+    result =
+      Enum.reduce_while(lines, body, fn line, previous ->
+        send(chat, {:stdin, line <> "\n"})
+
+        if String.trim(line) in ["/quit", "/exit", "/q"] do
+          {:halt, :quit}
         else
-          Process.sleep(20)
-          {:cont, body}
+          {:cont, await_prompt.(byte_size(previous), 250)}
         end
       end)
-    end
 
-    case await_prompt.("", 200) do
-      body when is_binary(body) ->
-        if not String.contains?(body, "elara  ·  /help") do
-          IO.write(:stderr, "scripted_chat: banner not seen\n#{body}\n")
-          System.halt(1)
-        end
-
-      _ ->
-        IO.write(:stderr, "scripted_chat: did not reach idle prompt\n")
-        System.halt(1)
-    end
-
-    Enum.each(lines, fn line ->
-      send(chat, {:stdin, line <> "\n"})
-      _ = await_prompt.("", 250)
-    end)
-
-    unless Enum.any?(lines, &(&1 in ["/quit", "/exit", "/q"])) do
+    if result != :quit do
       send(chat, {:stdin, "/quit\n"})
     end
 
     code = Task.await(task, 15_000)
+
+    completed =
+      session
+      |> Elara.transcript()
+      |> Enum.drop(initial_messages)
+      |> Enum.filter(&match?(%Elara.Message.Assistant{}, &1))
+      |> Enum.map(& &1.text)
+
+    expected = Enum.map(replies, fn {:ok, assistant} -> assistant.text end)
+    if completed != expected, do: fail.("expected scripted replies were not completed")
+
     {_input, body} = StringIO.contents(io)
     File.mkdir_p!(Path.dirname(out))
     File.write!(out, body)

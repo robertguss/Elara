@@ -13,6 +13,7 @@ const POLL_INTERVAL_MS: i32 = 10;
 
 mod redaction;
 use redaction::Redactor;
+mod workspace_stat;
 
 struct Request {
     id: String,
@@ -50,6 +51,22 @@ enum Trigger {
 
 fn main() {
     let args: Vec<_> = env::args_os().collect();
+    if args.len() == 3 && args[1] == "--workspace-blobs" {
+        if workspace_stat::blobs(std::path::Path::new(&args[2])).is_err() {
+            std::process::exit(1);
+        }
+        return;
+    }
+    if args.len() == 4 && args[1] == "--workspace-stat" {
+        match workspace_stat::run(
+            std::path::Path::new(&args[2]),
+            std::path::Path::new(&args[3]),
+        ) {
+            Ok(value) => println!("{value}"),
+            Err(_) => std::process::exit(1),
+        }
+        return;
+    }
     if args.len() == 3 && args[1] == "--read-attachment" {
         match read_attachment(std::path::Path::new(&args[2])) {
             Ok(bytes) => {

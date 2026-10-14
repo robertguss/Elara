@@ -113,6 +113,11 @@ Rust owns only the confirmation panel in `workspace_undo.rs`. System notices
 persist in history and provider context, and handoff indexes retain their
 original entry references. Reopening records uncertainty without replaying
 filesystem writes. Changed touched paths or gitlinks refuse the whole undo.
+README.md also documents bounded checkpoint contents and labelled metadata-only
+files. The supervised exec-stub supplies bounded reads and nanosecond metadata;
+no NIF is used. Version 2 banks separate contents from metadata, and version 1
+remains readable. Old unchanged metadata does not block undo; recent, changed,
+or unsupported-filesystem evidence refuses the whole operation.
 New coding worktrees are kept outside protected Elara state; the location and
 operator override are documented under "Persistent delegated children".
 Existing children keep their recorded paths, without relocation or deletion.

@@ -41,6 +41,172 @@ defmodule Elara.WorkspaceDiffTest do
     end
   end
 
+  test "old large logs use metadata without disabling exact diffs or whole-turn undo", %{cwd: cwd} do
+    git(cwd, ["init", "--quiet"])
+    log = Path.join(cwd, "development.log")
+    File.write!(log, :binary.copy("log-data", 150_000))
+    File.write!(Path.join(cwd, "source.ex"), "before\n")
+    git(cwd, ["add", "source.ex"])
+    # ctime cannot be backdated. Cross the racy-git safety margin for this log.
+    Process.sleep(3100)
+
+    session =
+      start(cwd, [
+        {:ok,
+         %Assistant{
+           tool_calls: [
+             call("edit", %{"path" => "source.ex", "old_text" => "before", "new_text" => "after"})
+           ]
+         }},
+        {:ok, %Assistant{text: "done"}}
+      ])
+
+    assert {:ok, "done"} = Elara.ask(session, "change source")
+    assert {:ok, report} = Elara.workspace_diff(session)
+    assert report =~ ~s{"development.log": large file, compared by metadata (unchanged)}
+    assert report =~ "-before"
+    assert report =~ "+after"
+    refute report =~ "log-data"
+    {:ok, store} = Elara.Session.Handoff.store(session)
+    stop(session)
+    session = start(cwd, [], resume: store.path)
+    assert {:ok, ^report} = Elara.workspace_diff(session)
+    assert {:ok, _} = Elara.attach(session, :control)
+    assert {:ok, preview} = Elara.attached_command(session, {:undo, :preview, :latest})
+    assert preview.files == ["source.ex"]
+    assert preview.notice =~ "Large files compared by metadata, unchanged and not restored"
+    assert preview.notice =~ "development.log"
+    assert {:ok, _} = Elara.attached_command(session, {:undo, :apply, preview.token})
+    assert File.read!(Path.join(cwd, "source.ex")) == "before\n"
+    assert File.read!(log) == :binary.copy("log-data", 150_000)
+  end
+
+  test "recent large files and preserved-mtime writes refuse the entire undo", %{cwd: cwd} do
+    git(cwd, ["init", "--quiet"])
+    log = Path.join(cwd, "development.log")
+    original = :binary.copy("x", 1_048_577)
+    File.write!(log, original)
+    File.write!(Path.join(cwd, "source.ex"), "before\n")
+
+    session =
+      start(cwd, [
+        {:ok,
+         %Assistant{
+           tool_calls: [
+             call("edit", %{"path" => "source.ex", "old_text" => "before", "new_text" => "after"})
+           ]
+         }},
+        {:ok, %Assistant{text: "recent"}}
+      ])
+
+    assert {:ok, "recent"} = Elara.ask(session, "change source")
+    assert {:ok, _} = Elara.attach(session, :control)
+    assert {:error, refusal} = Elara.attached_command(session, {:undo, :preview, :latest})
+    assert refusal =~ "development.log"
+    assert refusal =~ "unproven"
+    assert File.read!(Path.join(cwd, "source.ex")) == "after\n"
+    stop(session)
+
+    # The baseline is now old, but the model's same-size overwrite changes
+    # ctime even though touch deliberately restores the original mtime.
+    File.write!(Path.join(cwd, "timestamp"), "")
+    File.touch!(Path.join(cwd, "timestamp"), File.stat!(log).mtime)
+    Process.sleep(3100)
+
+    session =
+      start(cwd, [
+        {:ok,
+         %Assistant{
+           tool_calls: [
+             call("bash", %{
+               "command" =>
+                 "printf Y | dd of=development.log bs=1 count=1 conv=notrunc 2>/dev/null; touch -r timestamp development.log; printf final > source.ex"
+             })
+           ]
+         }},
+        {:ok, %Assistant{text: "changed"}}
+      ])
+
+    assert {:ok, "changed"} = Elara.ask(session, "change both")
+    assert File.stat!(log).mtime == File.stat!(Path.join(cwd, "timestamp")).mtime
+    assert {:ok, report} = Elara.workspace_diff(session)
+    assert report =~ "compared by metadata (changed or unproven"
+    assert {:ok, _} = Elara.attach(session, :control)
+    assert {:error, refusal} = Elara.attached_command(session, {:undo, :preview, :latest})
+    assert refusal =~ "development.log"
+    assert File.read!(Path.join(cwd, "source.ex")) == "final"
+    assert File.read!(log) == "Y" <> binary_part(original, 1, byte_size(original) - 1)
+  end
+
+  test "capture byte budgets preserve exact boundary files and label aggregate omissions", %{
+    cwd: cwd
+  } do
+    git(cwd, ["init", "--quiet"])
+    for n <- 1..9, do: File.write!(Path.join(cwd, "file-#{n}"), :binary.copy("x", 1_048_576))
+
+    session =
+      start(cwd, [
+        {:ok,
+         %Assistant{
+           tool_calls: [
+             call("bash", %{
+               "command" => "printf Y | dd of=file-1 bs=1 count=1 conv=notrunc 2>/dev/null"
+             })
+           ]
+         }},
+        {:ok, %Assistant{text: "done"}}
+      ])
+
+    assert {:ok, "done"} = Elara.ask(session, "change exact boundary")
+    assert {:ok, report} = Elara.workspace_diff(session)
+    assert report =~ ~s("file-1": large file 1048576 → 1048576 bytes)
+    refute report =~ ~s("file-1": large file, compared by metadata)
+    assert report =~ ~s("file-9": large file, compared by metadata)
+    refute report =~ "deleted file"
+  end
+
+  test "version-one checkpoints remain readable and restorable beside new captures", %{cwd: cwd} do
+    git(cwd, ["init", "--quiet"])
+    File.write!(Path.join(cwd, "file.txt"), "before\n")
+
+    session =
+      start(cwd, [
+        {:ok,
+         %Assistant{
+           tool_calls: [
+             call("edit", %{"path" => "file.txt", "old_text" => "before", "new_text" => "after"})
+           ]
+         }},
+        {:ok, %Assistant{text: "done"}}
+      ])
+
+    assert {:ok, "done"} = Elara.ask(session, "change")
+    {:ok, store} = Elara.Session.Handoff.store(session)
+    bank = Elara.WorkspaceDiff.open(store).repo
+    [turn] = Elara.user_entries(session)
+    ref = "refs/elara/turns/" <> Base.encode16(:crypto.hash(:sha256, turn.id), case: :lower)
+    metadata = JSON.encode!(%{version: 1, root: cwd, entry: turn.id})
+    baseline = git(cwd, ["--git-dir=" <> bank, "rev-parse", ref <> "^:contents"]) |> String.trim()
+    endpoint = git(cwd, ["--git-dir=" <> bank, "rev-parse", ref <> ":contents"]) |> String.trim()
+    git_args = ["--git-dir=" <> bank, "-c", "user.name=Test", "-c", "user.email=test@localhost"]
+    parent = git(cwd, git_args ++ ["commit-tree", baseline, "-m", metadata]) |> String.trim()
+
+    commit =
+      git(cwd, git_args ++ ["commit-tree", endpoint, "-p", parent, "-m", metadata])
+      |> String.trim()
+
+    git(cwd, ["--git-dir=" <> bank, "update-ref", ref, commit])
+    stop(session)
+    session = start(cwd, [], resume: store.path)
+    assert {:ok, report} = Elara.workspace_diff(session)
+    assert report =~ "-before"
+    assert report =~ "+after"
+    assert {:ok, _} = Elara.attach(session, :control)
+    assert {:ok, preview} = Elara.attached_command(session, {:undo, :preview, :latest})
+    assert {:ok, _} = Elara.attached_command(session, {:undo, :apply, preview.token})
+    assert File.read!(Path.join(cwd, "file.txt")) == "before\n"
+  end
+
   test "turn and session diffs cover edits and bash, separate outside edits, retain snapshots on reopen",
        %{cwd: cwd} do
     git(cwd, ["init", "--quiet"])

@@ -53,6 +53,7 @@ load_state() {
     export MIX_HOME="${MIX_HOME:-$ELARA_USER_HOME/.mix}"
     export HEX_HOME="${HEX_HOME:-$ELARA_USER_HOME/.hex}"
     export CARGO_HOME="${CARGO_HOME:-$ELARA_USER_HOME/.cargo}"
+    export RUSTUP_HOME="${RUSTUP_HOME:-$ELARA_USER_HOME/.rustup}"
   fi
 }
 

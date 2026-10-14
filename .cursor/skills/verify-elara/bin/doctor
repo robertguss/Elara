@@ -12,6 +12,11 @@ warn() { echo "verify-elara doctor: WARN  $*" >&2; }
 err() { echo "verify-elara doctor: FAIL  $*" >&2; fail=1; }
 ok() { echo "verify-elara doctor: OK    $*"; }
 
+if [ "${1:-}" != "--toolchain-only" ]; then
+  STATE="${1:-$(default_state_path)}"
+  load_state "$STATE"
+fi
+
 require_cmd elixir
 require_cmd mix
 require_cmd cargo
@@ -21,19 +26,17 @@ require_cmd lsof
 elixir_v="$(elixir --version 2>&1 || true)"
 echo "$elixir_v" | grep -q 'Elixir 1.20' && ok "Elixir 1.20" || err "need Elixir 1.20, got: $elixir_v"
 echo "$elixir_v" | grep -q 'Erlang/OTP 29' && ok "OTP 29" || err "need OTP 29, got: $elixir_v"
-ok "cargo $(cargo --version | awk '{print $2}')"
+if cargo_v="$(cargo --version 2>&1)"; then
+  ok "cargo $(printf '%s\n' "$cargo_v" | awk '{print $2}')"
+else
+  err "cargo version probe failed: $cargo_v"
+fi
 ok "flock at $(command -v flock)"
 
 if [ "${1:-}" = "--toolchain-only" ]; then
   credentials_report "${HOME}"
   exit "$fail"
 fi
-
-STATE="${1:-}"
-if [ -z "$STATE" ]; then
-  STATE="$(default_state_path)"
-fi
-load_state "$STATE"
 
 ok "state $ELARA_VERIFY_STATE"
 ok "run $RUN_ID"

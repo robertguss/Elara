@@ -30,7 +30,7 @@ What launch creates:
 - Detached git worktree at `$VERIFY_ROOT/worktree` for Mix tasks (their cwd is the session cwd)
 - A free `ELARA_SERVER_PORT` reserved for this run
 - Compile of the Mix project in the repo (`mix deps.get` + `mix compile`)
-- `MIX_HOME`, `HEX_HOME`, and `CARGO_HOME` pointed at the user's real caches so isolated `HOME` does not trigger a fresh Hex/Cargo download
+- `MIX_HOME`, `HEX_HOME`, `CARGO_HOME`, and `RUSTUP_HOME` pointed at the user's real caches so isolated `HOME` does not trigger a fresh toolchain download. Explicit cache overrides are preserved.
 
 Teardown is `bin/cleanup`. It removes `$VERIFY_ROOT` and the worktree. It does not delete evidence.
 

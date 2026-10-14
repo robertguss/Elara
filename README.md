@@ -934,10 +934,16 @@ UTF-8, or text above the 64 KiB limit leaves the original draft intact. Temporar
 draft files are removed when the editor returns.
 
 The socket reader continues while the editor runs. **Ctrl-Z** (or `/suspend`)
-restores normal terminal modes and suspends the TUI; use your shell's `fg` to
-resume. A suspended process cannot read its socket. On return from either the
-editor or suspension, the TUI requests a fresh snapshot in the same control or
-observe mode instead of replaying buffered updates. A local "Reattaching…"
+restores normal terminal modes and stops the launcher job. This pauses the
+agent, including its embedded server, until your shell's `fg` resumes it.
+`bg` leaves terminal input with the shell and stops the job again. A separately
+running `mix elara.server` keeps working while its TUI is suspended.
+Provider streams or command deadlines can expire during a long pause. Resume
+reports the actual error or uncertain result; it never implies that a paused
+command succeeded. Provider retries still follow the normal before-output rule.
+On return from either the editor or suspension, the TUI requests a fresh
+snapshot in the same control or observe mode instead of replaying buffered
+updates. A local "Reattaching…"
 notice appears before the server confirms the attachment; it does not claim
 control. Socket loss uses the same recovery path.
 The previous transcript stays visible while a background worker prepares its

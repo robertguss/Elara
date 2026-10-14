@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::fs::File;
 use std::io::{self, Read, Write};
+use std::os::fd::FromRawFd;
 use std::os::unix::process::CommandExt;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -26,6 +28,7 @@ use serde_json::{Value, json};
 
 struct Args {
     preflight: bool,
+    mix_control: bool,
     appearance: bool,
     layout: Option<ViewLayout>,
     theme: Option<Theme>,
@@ -51,6 +54,7 @@ impl Args {
 
     fn parse_from(mut arguments: impl Iterator<Item = String>) -> Result<Self, String> {
         let mut preflight = false;
+        let mut mix_control = false;
         let mut default_new = false;
         let mut appearance = false;
         let mut layout = None;
@@ -82,6 +86,7 @@ impl Args {
                 // Internal Mix/launcher controls; all user arguments use this
                 // same parser before the server starts and before attachment.
                 "--mix-preflight" => preflight = true,
+                "--mix-control" => mix_control = true,
                 "--default-new" => default_new = true,
                 "--cwd" => cwd = Some(next_value(&mut arguments, "--cwd")?),
                 "--appearance" => appearance = true,
@@ -137,6 +142,7 @@ impl Args {
         }
         Ok(Self {
             preflight,
+            mix_control,
             appearance,
             layout,
             theme,
@@ -667,7 +673,7 @@ fn run_interactive(
                 }
                 InputAction::Suspend => {
                     drop(guard.take());
-                    unsafe { libc::raise(libc::SIGTSTP) };
+                    suspend(args.mix_control)?;
                     let resumed = TerminalGuard::enter()?;
                     model.enhanced_keyboard = resumed.enhanced_keyboard;
                     guard = Some(resumed);
@@ -712,6 +718,37 @@ fn run_interactive(
         event::poll(Duration::from_millis(30))
             .map_err(|error| format!("terminal input failed: {error}"))?;
     }
+}
+
+fn suspend(mix_control: bool) -> Result<(), String> {
+    if !mix_control {
+        unsafe { libc::raise(libc::SIGTSTP) };
+        return Ok(());
+    }
+
+    // :nouse_stdio reserves fd 3/4 for the Port, leaving the terminal on 0/1.
+    // The launcher stops its shell job and releases us only on foreground fg.
+    let control = |fd| {
+        let owned = unsafe { libc::dup(fd) };
+        if owned < 0 {
+            Err(io::Error::last_os_error().to_string())
+        } else {
+            Ok(unsafe { File::from_raw_fd(owned) })
+        }
+    };
+    let mut input = control(3)?;
+    let mut output = control(4)?;
+    output
+        .write_all(b"suspend\n")
+        .map_err(|error| format!("Cannot suspend launcher: {error}"))?;
+    let mut response = [0; 7];
+    input
+        .read_exact(&mut response)
+        .map_err(|error| format!("Launcher closed while suspended: {error}"))?;
+    if &response != b"resume\n" {
+        return Err("Invalid launcher resume response".into());
+    }
+    Ok(())
 }
 
 fn handle_frame(

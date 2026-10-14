@@ -8,6 +8,33 @@
 > a pointer to Notion, and they do not authorize queued or canceled work.
 > Linear, which tracked Elara in between, is archived in `docs/archive/linear/`.
 
+## Addendum, 14 Oct 2026
+
+The split still governs: Elixir is the single authority and Rust owns the TUI
+and the execution stub across process boundaries, with no NIFs. Since the
+2 Sep text below:
+
+- Elara is Robert's own daily-driver coding agent (decision D2, 2026-10-13),
+  not "primarily a BEAM harness research lab" as the 26 Sep addendum says.
+- Providers stream. `Elara.Provider` has an optional `stream/3` callback
+  (`lib/elara/provider.ex`) that the session shell uses when a provider
+  exports it (`lib/elara/session.ex`). §2's "the provider contract is
+  non-streaming" no longer holds.
+- §5's protocol details are superseded by `lib/elara/protocol.ex` and
+  `lib/elara/server.ex`. Streamed text is an `append_content_delta` patch op,
+  not a separate `delta` message. The first frame carries `version: 2`, a
+  token and a command, not a `protocol: 2` hello. Only version 2 is accepted,
+  so v1 line clients no longer work. There is no 1,000-event ring: every
+  attach answers with a fresh snapshot, not a replay.
+- §6's drop list is done. `System.shell/2` is gone from `lib/`,
+  `lib/elara/effect/opaque_shell.ex` was moved out of `lib/` into a test
+  fixture in #51, and `mix elara.attach`
+  with its Elixir line renderer was removed when SPLIT-4 completed, so §8's
+  mention of it is historical. `mix elara.chat` remains a line client over a
+  local session.
+
+§2, §5 and §6 are labelled "as of 2026-09-02" and left as written.
+
 ## 2026-09-26 lab-pivot addendum
 
 Elara is now primarily a BEAM harness research lab, and SPLIT-5 is canceled. The
@@ -92,7 +119,7 @@ persisted journal and reattachable cursors, and the session model is still
 changing. A Rust actor with an enum reducer could model the same DOM more
 precisely; that becomes attractive once the model stops moving (see §9).
 
-## 2. Why this and not something else
+## 2. Why this and not something else (as of 2026-09-02)
 
 Judged against the owner's priorities — explore novel harness architectures,
 converge to a daily driver for one person, maybe open-source later:
@@ -217,7 +244,7 @@ Lessons from omp v1 that shape the boundary choice:
 - Approval in omp is pre-execution string patterns; the interpreter-time
   capability approval it enables is deferred here with the interpreter.
 
-## 5. Architecture
+## 5. Architecture (as of 2026-09-02)
 
 ```diagram
 ┌──────────────────────────────────────────────────────────────────┐
@@ -272,7 +299,7 @@ Spike B's protocol, hardened:
 One supervised long-lived Port per BEAM; stub death fails all in-flight jobs as
 `indeterminate`, not as success.
 
-## 6. Preserve, drop, defer
+## 6. Preserve, drop, defer (as of 2026-09-02)
 
 Preserve: `Core.step/2` as the transition kernel (evolve its state/events, do
 not replace it); store tree/fork/clone and session identity; seq cursors,

@@ -1,5 +1,10 @@
 # Grok Build TUI: source reference for Elara
 
+> **Historical note (2026-10-14):** a dated pre-pivot note, kept as history.
+> Current planning and status live in [Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1);
+> `ROADMAP.md` is now only a pointer, so references to it here describe its
+> former role.
+
 Research date: 2026-09-04. Scope: interaction contracts and implementation ideas for Elara's daily-driver TUI. This note does not change the roadmap or claim that Elara already supports these behaviors.
 
 ## Reference version and method

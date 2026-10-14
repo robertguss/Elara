@@ -1,5 +1,10 @@
 # Runtime feature priorities
 
+> **Historical note (2026-10-14):** a dated pre-pivot note, kept as history.
+> Current planning and status live in [Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1);
+> `ROADMAP.md` is now only a pointer, so references to it here describe its
+> former role.
+
 Captured 2026-09-06 from a review of both feature-research documents and checkout
 `052a0a7`. This is a research assessment and prioritization reference.
 [ROADMAP.md](../../ROADMAP.md) remains the sole implementation queue and status

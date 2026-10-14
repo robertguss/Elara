@@ -72,7 +72,10 @@ literal name for self-references inside the plugin.
 
 Approve the file, then start a chat or explicitly reload an existing session
 as described below. The plugin tool is then available to the model alongside
-`read`, `write`, `edit`, `bash`, `grep`, and `glob`.
+the built-in roster in `Elara.Tool.builtins/0`: `read`, `write`, `edit`,
+`bash`, `output_read`, `web_fetch`, `web_search`, `mcp_search`, `mcp_call`,
+`grep`, `glob`, `skill`, `start_child`, `test_job`, `job`, `completion_wait`,
+`thread_send`, `thread_read`, `thread_status` and `thread_wait`.
 
 ## Reload without restarting chat
 
@@ -128,10 +131,11 @@ crash-atomic transaction across plugins.
 ## Focused test, fix, and rerun
 
 The repository's `.elara/plugins/elixir_project.exs` exposes project inspection,
-format/compile checks, focused tests, `elixir_last_run`, and `elixir_rerun_last`.
-The last tool repeats the previous Mix invocation using current workspace
-files. It retains the exact test target, increments the run count, and replaces
-the recorded status. Asking for `elixir_last_run` does not change that state.
+format/compile checks, focused tests, `elixir_last_run`, `elixir_rerun_last`,
+`check_evidence` and `diagnose_check`. `elixir_rerun_last` repeats the previous
+Mix invocation using current workspace files. It retains the exact test target,
+increments the run count, and replaces the recorded status. Asking for
+`elixir_last_run` does not change that state.
 
 To exercise live capability addition in a disposable Mix project:
 
@@ -165,6 +169,11 @@ and output excerpts for [check diagnosis](check-diagnosis.md). Version 2's
 remembered invocations remain usable; they acquire evidence when rerun. The
 last completed capture belongs to the session store and survives persistence;
 plugin reload does not replace it or invent evidence for an earlier run.
+
+Version 4 adds `check_evidence` and `diagnose_check`, which moved from the
+built-in roster into this plugin in #52. Both are declared non-mutating and set
+`cancel_on_interrupt: true`; they call `Elara.CheckDiagnosis`, which stays in
+the product app.
 
 The offline acceptance test runs real Mix commands and a built-in edit through
 the public session API with a scripted provider:

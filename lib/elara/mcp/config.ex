@@ -14,10 +14,13 @@ defmodule Elara.MCP.Config do
     end
   end
 
-  def list(cwd) when is_binary(cwd) do
+  def personal_path do
     home = Application.get_env(:elara, :mcp_home, System.user_home!())
-    paths = Enum.uniq([Path.join(home, ".elara/mcp.json"), Path.join(cwd, ".elara/mcp.json")])
+    Path.join(home, ".elara/mcp.json")
+  end
 
+  def list(cwd) when is_binary(cwd) do
+    paths = Enum.uniq([personal_path(), Path.join(cwd, ".elara/mcp.json")])
     load(paths)
   end
 

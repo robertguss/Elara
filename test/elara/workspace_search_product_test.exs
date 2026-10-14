@@ -99,6 +99,84 @@ defmodule Elara.WorkspaceSearchProductTest do
     end
   end
 
+  test "located credentials stay private inside the workspace and extra roots", %{target: target} do
+    extra = Path.join(Path.dirname(target), "extra")
+    File.mkdir_p!(extra)
+
+    env = Map.take(System.get_env(), ~w(CODEX_HOME ELARA_FILE_ROOTS))
+    keys = [:openai_codex_auth_path, :exa_auth_path, :mcp_home]
+    previous = Map.new(keys, &{&1, Application.get_env(:elara, &1)})
+
+    on_exit(fn ->
+      Enum.each(~w(CODEX_HOME ELARA_FILE_ROOTS), &System.delete_env/1)
+      System.put_env(env)
+      Enum.each(previous, fn {key, value} -> restore(key, value) end)
+    end)
+
+    System.put_env("ELARA_FILE_ROOTS", extra)
+
+    for root <- [target, extra] do
+      codex = Path.join(root, "codex[home]")
+      saved_codex = Path.join(root, "saved-codex.json")
+      exa = Path.join(root, "saved-exa.json")
+      personal = Path.join(root, "personal")
+      System.put_env("CODEX_HOME", codex)
+      Application.put_env(:elara, :openai_codex_auth_path, saved_codex)
+      Application.put_env(:elara, :exa_auth_path, exa)
+      Application.put_env(:elara, :mcp_home, personal)
+
+      paths = [
+        Path.join(codex, "auth.json"),
+        saved_codex,
+        exa,
+        Path.join(personal, ".elara/mcp.json")
+      ]
+
+      for {path, index} <- Enum.with_index(paths) do
+        File.mkdir_p!(Path.dirname(path))
+        File.write!(path, "marker PRIVATE_FIXTURE_ONLY")
+        alias_path = Path.join(root, "alias-#{index}.json")
+        File.ln_s!(path, alias_path)
+
+        for candidate <- [path, alias_path] do
+          ctx = %Ctx{cwd: target}
+
+          assert {:error, "file access refused: protected_path"} =
+                   Elara.Tools.read(%{"path" => candidate}, ctx)
+
+          assert {:error, _} =
+                   Elara.Tools.write(%{"path" => candidate, "content" => "changed"}, ctx)
+
+          assert {:error, _} =
+                   Elara.Tools.edit(
+                     %{"path" => candidate, "old_text" => "marker", "new_text" => "changed"},
+                     ctx
+                   )
+
+          for tool <- [:grep, :glob] do
+            assert {:error, "file access refused: protected_path"} =
+                     apply(Search, tool, [%{"pattern" => "*", "path" => candidate}, ctx])
+          end
+        end
+
+        assert File.read!(path) == "marker PRIVATE_FIXTURE_ONLY"
+      end
+
+      File.write!(Path.join(codex, "public.txt"), "marker public")
+      ctx = %Ctx{cwd: root}
+      assert {:ok, "marker public"} = Elara.Tools.read(%{"path" => "codex[home]/public.txt"}, ctx)
+      assert {:ok, grep} = Search.grep(%{"pattern" => "marker"}, ctx)
+      refute grep =~ "PRIVATE_FIXTURE_ONLY"
+      assert grep =~ "codex[home]/public.txt:1:marker public"
+      assert {:ok, glob} = Search.glob(%{"pattern" => "**/*.json"}, ctx)
+      assert glob == "no files"
+
+      project = Path.join(root, ".elara/mcp.json")
+      assert {:ok, _} = Elara.Tools.write(%{"path" => project, "content" => "{}"}, ctx)
+      assert {:ok, "{}"} = Elara.Tools.read(%{"path" => project}, ctx)
+    end
+  end
+
   test "capped glob continues past a protected inventory prefix without inventing a partial filename",
        %{
          target: target

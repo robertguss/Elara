@@ -100,9 +100,11 @@ Local cancellation cannot guarantee that the provider stops remote computation.
 
 One `diagnose_check` invocation adds one provider call. Ordinary agent requests
 before and after it are additional calls. The usual tool deadline applies
-(30 seconds by default; API `tool_timeout_ms` can raise it). Reported diagnosis
-usage enters the canonical transcript, persistence and TUI totals, including
-invalid responses and interruption after usage has arrived. Usage that the
+(600,000 ms by default in `Elara.Config`; `tool_timeout_ms:`,
+`ELARA_TOOL_TIMEOUT_MS` or app config can change it, up to
+`max_tool_timeout_ms`). Reported diagnosis usage enters the canonical
+transcript, persistence and TUI totals, including invalid responses and
+interruption after usage has arrived. Usage that the
 provider never returns remains unknown. There is no new global token budget.
 
 Only the latest completed capture is active in a session. Persistent sessions
@@ -112,10 +114,14 @@ the active capture, and clone/fork start without one. Resuming another saved
 session adopts that session's capture. These conservative rules avoid treating
 evidence from an abandoned branch as current; rerun a check to capture again.
 
-The project plugin still executes Mix through its existing `System.cmd` path.
-The evidence limits bound retained excerpts, not that command's full output
-allocation or external effects. This feature does not add background command
-ownership or automatic command recovery.
+The project plugin executes Mix through `Elara.Fnox.exec`, which runs it under
+the Rust execution stub with the tool deadline and a head/tail byte cap (the
+session's tool-output limit, 16,384 bytes by default). The cap bounds retained
+output; the command keeps running until it exits or reaches its deadline, and
+any termination other than a normal exit is reported as `indeterminate`. The
+evidence limits bound retained excerpts, not the command's external effects.
+This feature does not add background command ownership or automatic command
+recovery.
 
 ## Experiment scope
 

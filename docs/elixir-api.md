@@ -42,12 +42,15 @@ One session runs one turn at a time. Use separate sessions for parallel turns.
 
 receive do
   {:elara, ^session, {:turn_ended, outcome}} -> outcome
+  {:elara, ^session, {:turn_ended, outcome, :streamed}} -> outcome
 end
 ```
 
 Events include `{:turn_started, prompt}`, message appends, tool starts, and
-`{:turn_ended, outcome}`. Call `Elara.interrupt(session)` to cancel the active
-turn. `Elara.transcript/1` returns the current message path.
+`{:turn_ended, outcome}`. A turn whose final answer streamed text ends with
+`{:turn_ended, outcome, :streamed}` instead (`Elara.Event`). Call
+`Elara.interrupt(session)` to cancel the active turn. `Elara.transcript/1`
+returns the current message path.
 
 Public session calls use stable string IDs. `Elara.session_pid/1` resolves an ID
 only when code needs to monitor or explicitly stop the underlying process.
@@ -80,9 +83,20 @@ including when selected through `plugins:`. See [plugin trust](plugins.md).
 | `allowed_capabilities:`  | `:all`                             | Capability names allowed before executor routing.                                  |
 | `workspace_id:`          | derived from `cwd`                 | Logical workspace identity used for remote routing.                                |
 | `router:`                | `Elara.Executor.Router`            | Executor router process or registered name.                                        |
+| `approval_wait:`         | `true`                             | Guarded commands wait for approval; `false` refuses them without executing.        |
 
 `persist: false` cannot be combined with `resume:`. The one-shot Mix task sets
 `persist: false`; direct API sessions and interactive chat persist by default.
+
+`bash` and other `shell`-capability calls pass a command preflight first. A
+call that matches an `ask` command rule, or that needs approval of changed
+project command rules or fnox configuration, is guarded. With the default
+`approval_wait: true`, the turn waits in `approval_waiting` until a controlling
+attachment approves that exact call (the TUI's `/approve`), so `Elara.ask/3`
+can block on it. Subscribers receive `{:approval_required, pending}`, and
+`Elara.interrupt/1` cancels the call without running it. `mix elara.ask` and
+`mix elara.chat` pass `approval_wait: false`, which refuses the call without
+executing it. Command rules are text guardrails, not an OS sandbox.
 
 Default sessions provision a supervised durable local executor for the exact
 built-in `write` tool. Its public `%{"path" => path, "content" => content}`
@@ -91,8 +105,11 @@ write is now an atomic workspace-confined declarative operation with durable
 intent, callback-attempt, and terminal evidence. Resuming a persisted session
 reconciles an unresolved write without blindly retrying it. Custom tools,
 `edit`, `bash`, plugins, and remote execution do not yet use this production
-receipt path. The confinement is enforced by the session/declarative-write path,
-not by calling the low-level `Elara.Tools.write/2` helper directly.
+receipt path. The low-level `Elara.Tools.write/2` helper now resolves paths
+through `Elara.Tools.FileFence` too (the workspace plus `ELARA_FILE_ROOTS`,
+refusing protected startup files, `.git` hooks/config and Elara's own state),
+but calling it directly bypasses the atomic write and its durable evidence.
+The fence is model file-tool policy, not an OS sandbox.
 
 Receipt callbacks run in workers linked to the single serial executor writer.
 Worker loss while that writer survives commits an indeterminate terminal;
@@ -101,8 +118,9 @@ incarnation only under exclusive writer and callback locks plus durable
 VM/writer/callback identity proving the old owners are dead. A different live
 VM refuses takeover, naming its OS PID, node and start time: stop it first.
 Startup never reinvokes a callback.
-Each new attempt records `attempt_incarnation`. Ledger schema 3 migrates schemas
-1 and 2 in place, leaving legacy attempts with `attempt_incarnation: nil`.
+Each new attempt records `attempt_incarnation`. Ledger schema 4 migrates schemas
+1–3 in place, retaining rows and digests; schemas 1 and 2 leave legacy attempts
+with `attempt_incarnation: nil`.
 Legacy attempts never auto-terminalize. Their sessions remain idle and refuse
 new turns for missing proof; `/clone` or `/fork` creates a separate session.
 A live callback timeout retains the queue barrier until a durable terminal
@@ -260,8 +278,8 @@ recording = Elara.recording(session)
 ```
 
 `status/1` reports the current phase/effect, mailbox and task counts,
-subscribers, retained event range, worker health, and recording path/count. It
-also reports `instructions` (absolute paths mapped to loaded text or a read
+subscribers, event head, worker health, and recording path/count. It also
+reports `instructions` (absolute paths mapped to loaded text or a read
 diagnostic) and `skills` (metadata-only selected sources and discovery
 diagnostics). See
 [instruction and skill behavior](../README.md#project-instructions-and-agent-skills).

@@ -66,20 +66,23 @@ mix elara.tui SESSION_ID
 The creating attachment's current directory becomes the new session's working
 directory. Reattaching does not change it.
 
-Disconnecting the attachment with Escape or Ctrl-C does not interrupt the
-current turn or stop the session. `mix elara.tui` is a Rust `ratatui` projection
-client for session protocol v2: every attachment starts from an atomic
-materialized snapshot and then applies ordered patches. The client stores each
-session's last sequence and incarnation in `~/.elara/tui/cursors.json`. A
-sequence gap, malformed patch, or incarnation change causes exactly one fresh
-snapshot request while resynchronization is pending; the client never
-reconstructs current state from an incomplete event history. The server process
-must remain running; this is client detachability, not recovery after the server
-VM exits.
+Ctrl-C clears the prompt; a second Ctrl-C in a row quits, as does `/detach`.
+Against a long-lived server, quitting detaches without interrupting the current
+turn or stopping the session. Against an embedded server the TUI asks for
+confirmation first, because its live sessions end with it. `mix elara.tui` is
+a Rust `ratatui` projection client for session protocol v2: every attachment
+starts from an atomic materialized snapshot and then applies ordered patches.
+The client stores each session's last sequence and incarnation in
+`~/.elara/tui/cursors.json`. A sequence gap, malformed patch, or incarnation
+change causes exactly one fresh snapshot request while resynchronization is
+pending; the client never reconstructs current state from an incomplete event
+history. The server process must remain running; this is client detachability,
+not recovery after the server VM exits.
 
-Inside the TUI, type a prompt and press Enter. Ctrl-X explicitly interrupts the
-active turn. Assistant messages and streaming content render as terminal
-Markdown; user prompts and tool output remain literal. List the server's live
+Inside the TUI, type a prompt and press Enter. Esc interrupts the active turn
+once any open tool viewer or search is closed; `/interrupt` does the same.
+Assistant messages and streaming content render as terminal Markdown; user
+prompts and tool output remain literal. List this directory's saved and live
 sessions without attaching:
 
 ```bash
@@ -93,8 +96,10 @@ clients can observe the event stream:
 mix elara.tui SESSION_ID --observe
 ```
 
-The richer persistent-chat commands such as `/resume`, `/tree`, and `/reload`
-belong to `mix elara.chat`, not the projection client.
+The TUI has its own session commands, including `/sessions` (Ctrl-O), `/new`,
+`/name`, `/tree`, `/fork`, `/clone` and `/reload`; each sends a protocol
+command that the Elixir session carries out. `/resume` belongs to
+`mix elara.chat`.
 
 Port configuration:
 
@@ -121,7 +126,9 @@ the task in `mix eval` can hide the nested task's nonzero exit status.
 ### Session protocol
 
 The loopback TCP protocol uses newline-delimited JSON with a 16 MiB maximum
-message size. Every request includes `version`. The server supports only
+message size. Before authentication the first frame is limited to 16 KiB and
+must arrive within 30 seconds; the 16 MiB limit applies only after the token
+is accepted. Every request includes `version`. The server supports only
 session protocol version 2; v1 (cursor replay of retained events) was retired in
 LAB-2 and is rejected as `unsupported_version`.
 
@@ -130,18 +137,22 @@ LAB-2 and is rejected as `unsupported_version`.
   `cursor` and `incarnation`; the server checks the cursor's shape and ignores
   both. The snapshot contains session identity, the complete encoded message
   history, tool calls with `pending`, `running`, `succeeded`, `failed`, or
-  `indeterminate` status and outcome, current turn state, usage (currently
-  `null`), and reserved content-delta state. Subsequent `patch` messages carry
-  the session incarnation, sequence, and an ordered `ops` array.
+  `indeterminate` status and outcome, current turn state, session usage totals
+  from the provider view, and in-progress content-delta state. Subsequent
+  `patch` messages carry the session incarnation, sequence, and an ordered
+  `ops` array.
 
 V2 has a closed patch operation set: `append_message`, `set_tool_status`,
-`set_turn_state`, `set_usage`, and the `append_content_delta` operation reserved
-for streaming. Clients apply these operations to their last snapshot in sequence
-order. They ignore already-applied sequences. On a gap, malformed patch, or
-incarnation change, they send exactly one `{"version":2,"command":"resnapshot"}`
-while a snapshot is pending. The server replies with a fresh `snapshot` message
-and atomic `head`; queued patches at or below that head are stale and safe to
-ignore.
+`set_turn_state`, `set_usage`, and `append_content_delta`, which carries
+streamed text. Negotiated extensions add `set_runtime_limits`
+(`runtime_limits_v1`), `set_provider_view` (`provider_visibility_v1`) and
+`set_inbox` (`input_queue_v1`); the server strips them, and the matching
+snapshot fields, for clients that did not negotiate the extension. Clients
+apply these operations to their last snapshot in sequence order. They ignore
+already-applied sequences. On a gap, malformed patch, or incarnation change,
+they send exactly one `{"version":2,"command":"resnapshot"}` while a snapshot
+is pending. The server replies with a fresh `snapshot` message and atomic
+`head`; queued patches at or below that head are stale and safe to ignore.
 
 The operation payloads are:
 
@@ -161,8 +172,11 @@ updates the matching snapshot `tool_calls` entry. The Elixir line client used
 during protocol bring-up consumed optional rendering hints on operations; the
 Rust projection client does not need them to build state.
 
-The v1 and v2 attachment command set otherwise remains `create`, `attach`,
-`ask`, `interrupt`, and `inspect`; v2 also accepts `list` as an initial request.
+The initial request is `create`, `attach`, or the read-only `list`. After
+attachment the core commands are `ask`, `interrupt`, `inspect` and
+`resnapshot`; session lifecycle (`session_*`, `child_*`, `thread_parent`,
+`job_*`), `read_only`, `workspace_diff`, `workspace_undo` and the negotiated
+extensions add more. `lib/elara/server.ex` holds the full set.
 Only a controlling attachment may mutate session state; observers receive the
 same events or patches but control commands fail with `not_controller`.
 
@@ -211,7 +225,8 @@ remote_tools =
 
 The worker uses its own mapping for `project-a`; it does not receive or assume
 the brain node's `cwd`. `mix elara.worker --cwd` configures that worker mapping
-only. It is not a `--cwd` option for `mix elara.ask` or `mix elara.chat`.
+only. The `--cwd DIR` option of `mix elara.ask` and `mix elara.chat` is
+separate: it selects the session's local workspace.
 
 Inspect registered executors with `Elara.workers/0`. A session can restrict tool
 permissions before routing with `allowed_capabilities:`:

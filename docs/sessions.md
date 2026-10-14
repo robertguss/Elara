@@ -31,7 +31,13 @@ mix elara.chat --name "fix parser" "inspect the parser tests"
 # New process, newest session for this working directory
 mix elara.chat --continue
 mix elara.chat --continue "continue the previous investigation"
+
+# Another existing workspace, without changing the Mix process's directory
+mix elara.chat --cwd /absolute/path/to/project
 ```
+
+`--cwd DIR` must name an existing directory; it selects the session's working
+directory and session scope. `mix elara.ask` accepts it too.
 
 Session files live under `~/.elara/sessions/<cwd-key>/`. They are scoped by the
 session working directory. Durable JSONL, effects SQLite, `.flight`, and `.lock`
@@ -49,6 +55,15 @@ aliases before loading matching histories.
 Only one turn runs in a session at a time. A second prompt and commands that
 change history are refused until the active turn finishes or you run
 `/interrupt`. Provider failures return to the `> ` prompt without ending chat.
+
+Line chat cannot approve commands. A `bash` or other shell-capability call
+that needs approval (it matches an `ask` command rule, or changed project rules
+or fnox configuration need review) is refused without executing, and the tool
+result tells the model to run the task in the TUI and use `/approve`.
+
+Run `/model` to list the provider's model catalog with context windows and
+reasoning efforts, and `/model ID [EFFORT]` to select the model for the next
+request. Both work during a turn.
 
 ## Resume and name sessions
 
@@ -202,5 +217,6 @@ another VM. Pruning does not remove transcripts or retained outputs.
 | `/fork`, `/fork N`             | List or fork into a new session. | Refused.              |
 | `/clone`                       | Clone the current history path.  | Refused.              |
 | `/name TEXT`                   | Name the session.                | Refused.              |
+| `/model`, `/model ID [EFFORT]` | List or select models.           | List or select.       |
 | `/help`, `/h`, `/?`            | Show help.                       | Show help.            |
 | `/quit`, `/exit`, `/q`, Ctrl-D | Exit.                            | Interrupt, then exit. |

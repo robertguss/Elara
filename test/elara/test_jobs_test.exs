@@ -396,10 +396,12 @@ defmodule Elara.TestJobsTest do
 
   test "saved records reject contradictory lifecycle and terminal evidence", %{
     ctx: ctx,
-    session: session
+    session: session,
+    root: root
   } do
     Elara.interrupt(session)
     assert {:ok, _} = run(ctx, "start", %{"target" => "test/job_test.exs"})
+    await(fn -> File.exists?(Path.join(root, "started")) end)
     assert {:ok, _} = run(ctx, "cancel")
     await(fn -> status(ctx)["status"] == "cancelled" end)
     alias Elara.TestJobs.Record
@@ -483,6 +485,7 @@ defmodule Elara.TestJobsTest do
     assert status(successor_ctx)["job_id"] == "focused"
     assert {:ok, _} = run(successor_ctx, "cancel")
     await(fn -> status(successor_ctx)["status"] == "cancelled" end)
+    await(fn -> match?({:ok, _}, Elara.session_pid(successor)) end)
     await(fn -> Enum.count(inbox(successor), &(&1.kind == :report)) == 1 end)
     refute Enum.any?(inbox(source), &(&1.kind == :report))
     refute_receive {:model, _, _}, 100
@@ -540,6 +543,7 @@ defmodule Elara.TestJobsTest do
       File.rm!(Path.join(root, "release"))
       start = Task.async(fn -> run(other_ctx, "start", %{"target" => "test/job_test.exs"}) end)
       assert {:ok, _} = Task.await(start, 1000)
+      await(fn -> File.read!(Path.join(root, "started")) == "11" end)
       cancel = Task.async(fn -> run(other_ctx, "cancel") end)
       assert {:ok, _} = Task.await(cancel, 1000)
       await(fn -> status(other_ctx)["status"] == "cancelled" end)

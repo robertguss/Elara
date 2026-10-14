@@ -1026,12 +1026,6 @@ defmodule Elara.Session do
     {:noreply, %{shell | effect_recovery_task: nil}}
   end
 
-  def handle_info({:finish_input, outcome}, shell) do
-    shell = finish_active_input(shell, outcome)
-    send(self(), :drain_inputs)
-    {:noreply, shell}
-  end
-
   @impl true
   def handle_info({task_ref, result}, shell) when is_map_key(shell.tasks, task_ref) do
     Process.demonitor(task_ref, [:flush])
@@ -2314,8 +2308,8 @@ defmodule Elara.Session do
   defp emit(event, effect_id, shell, patch_context) do
     shell =
       case event do
-        {:turn_ended, outcome} -> finish_workspace_diff(shell, outcome)
-        {:turn_ended, outcome, _} -> finish_workspace_diff(shell, outcome)
+        {:turn_ended, outcome} -> finish_turn(shell, outcome)
+        {:turn_ended, outcome, _} -> finish_turn(shell, outcome)
         _ -> shell
       end
 
@@ -2380,11 +2374,17 @@ defmodule Elara.Session do
     end
 
     case event do
-      {:turn_ended, outcome} -> send(self(), {:finish_input, outcome})
-      {:turn_ended, outcome, _} -> send(self(), {:finish_input, outcome})
+      {:turn_ended, _} -> send(self(), :drain_inputs)
+      {:turn_ended, _, _} -> send(self(), :drain_inputs)
       _ -> :ok
     end
 
+    shell
+  end
+
+  defp finish_turn(shell, outcome) do
+    shell = shell |> finish_workspace_diff(outcome) |> finish_active_input(outcome)
+    :ok = Store.sync(shell.store)
     shell
   end
 
@@ -3506,7 +3506,7 @@ defmodule Elara.Session do
 
     case Store.put_inbox(shell.store, inbox, shell.store.inputs_paused) do
       {:ok, store} -> inbox_changed(%{shell | store: store})
-      {:error, _} -> shell
+      {:error, reason} -> raise "failed to persist completed input: #{inspect(reason)}"
     end
   end
 

@@ -36,6 +36,9 @@ offline cache, documented Grok windows and typed unverified model IDs.
 `snapshot.provider_view.catalog` and its source/error fields are authoritative;
 Core records catalog changes so window decisions replay without network IO.
 Saved settings from another provider use startup defaults with a visible notice.
+Append-only transcript batches, turn-boundary sync, torn-tail recovery and
+version 1 compatibility are documented in `docs/sessions.md`. Store owns its
+writer under the session lock; message and metadata changes commit together.
 Command environment forwarding and `mix elara.env` diagnostics are documented
 in README.md's "Command environment" section. Extra project names belong in
 operator startup config, never an agent-editable project file.

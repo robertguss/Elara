@@ -435,8 +435,10 @@ defmodule Elara.InputQueueTest do
 
     {:ok, store} = Store.put_inbox(store, [entry], true)
 
-    [header | rest] =
+    [identity, record] =
       File.read!(store.path) |> String.split("\n", trim: true) |> Enum.map(&JSON.decode!/1)
+
+    header = record["batch"]["header"]
 
     duplicate =
       put_in(
@@ -445,11 +447,23 @@ defmodule Elara.InputQueueTest do
         header["inbox"]["entries"] ++ header["inbox"]["entries"]
       )
 
-    File.write!(store.path, Enum.map_join([duplicate | rest], "\n", &JSON.encode!/1) <> "\n")
+    duplicate_record = put_in(record, ["batch", "header"], duplicate)
+
+    File.write!(
+      store.path,
+      Enum.map_join([identity, duplicate_record], "\n", &JSON.encode!/1) <> "\n"
+    )
+
     assert {:error, :bad_header} = Store.open(store.path, root)
 
     foreign = put_in(header, ["inbox", "entries", Access.at(0), "sessionId"], "foreign")
-    File.write!(store.path, Enum.map_join([foreign | rest], "\n", &JSON.encode!/1) <> "\n")
+    foreign_record = put_in(record, ["batch", "header"], foreign)
+
+    File.write!(
+      store.path,
+      Enum.map_join([identity, foreign_record], "\n", &JSON.encode!/1) <> "\n"
+    )
+
     assert {:error, :bad_header} = Store.open(store.path, root)
 
     File.write!(Path.join(root, "source.txt"), "original bytes")

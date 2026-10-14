@@ -875,9 +875,14 @@ defmodule Elara.Session do
 
       true ->
         case Store.delete(shell.store) do
-          :ok -> {:stop, :normal, :ok, shell}
-          {:error, {:recordings_cleanup, _} = reason} -> {:stop, :normal, {:error, reason}, shell}
-          {:error, reason} -> {:reply, {:error, reason}, shell}
+          :ok ->
+            {:stop, :normal, :ok, shell}
+
+          {:error, {kind, _} = reason} when kind in [:recordings_cleanup, :outputs_cleanup] ->
+            {:stop, :normal, {:error, reason}, shell}
+
+          {:error, reason} ->
+            {:reply, {:error, reason}, shell}
         end
     end
   end

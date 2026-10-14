@@ -1314,6 +1314,8 @@ call. Saved handoff headers require this build for resume.
 - `web_fetch` fetches a public HTTP or HTTPS page and converts HTML to Markdown.
   It returns an untrusted-content label, heading outline, and about 6 KiB of text.
   The full page stays behind an `output_read` handle.
+- `web_search` searches Exa for five titles, URLs, and short excerpts. A chosen
+  result is fetched separately through `web_fetch`.
 - `grep` searches workspace file contents for a regular expression and returns
   `path:line:text` per match.
 - `glob` lists workspace files whose path matches a glob pattern, one per line.
@@ -1488,11 +1490,30 @@ Fetched text is evidence, never instructions or permission. Both previews and
 `output_read` pages carry that label. The `network:web` capability can be denied
 to a session or helper independently of file access.
 
-The footer shows "web content in context" after a successful fetch or a read of
+The footer shows "web content in context" after a successful fetch, search, or a read of
 retained web evidence. This is an informational Core fact, not a restriction.
 It survives clearing, rewind, reopen, copies, history-copying children, and
 handoff. Ordinary text or a tool named `web_fetch` cannot set it. These fetch
 defaults do not sandbox `bash` or other tools.
+
+### Search the web through Exa
+
+Run `mix elara.login exa` at an interactive terminal. Input is hidden, and the
+key is stored in `~/.elara/exa-auth.json` with mode `0600`. It never enters model
+commands' environment or tool arguments; file tools refuse protected Elara state.
+Login requires the standard Unix `ps` and `stty` commands.
+
+`web_search` accepts only a non-empty `query`, at most 4096 UTF-8 bytes. It uses
+Exa's auto search with five results and highlights, not full text or a synthesized
+answer. Each excerpt is limited to 800 characters. Search evidence is labeled
+untrusted and retained behind `output_read`, like fetched pages.
+
+Searches may be billed. Each transcript call records the query; successful
+and failed results retain Exa's request ID and reported dollar cost, or `null`
+when unavailable. Rejecting evidence does not discard a received billing receipt.
+The tool never redirects its credential or automatically retries a request.
+Its total deadline is 15 seconds and response limit is 1 MiB. A disconnected,
+timed-out, or invalid response may still have been billed.
 
 Consecutive calls with identical tool names and arguments in one model response
 are rejected as duplicates. An intervening call or a later model response can

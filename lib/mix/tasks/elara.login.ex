@@ -1,11 +1,12 @@
 defmodule Mix.Tasks.Elara.Login do
-  @shortdoc "Log in to Grok or OpenAI Codex"
+  @shortdoc "Log in to Grok, OpenAI Codex, or Exa"
   @moduledoc """
   Device-code login for Grok (the default) or a ChatGPT Codex subscription.
 
       mix elara.login
       mix elara.login grok
       mix elara.login openai
+      mix elara.login exa
   """
   @requirements ["app.start"]
   use Mix.Task
@@ -17,10 +18,51 @@ defmodule Mix.Tasks.Elara.Login do
   def run([]), do: login_grok()
   def run([provider]) when provider in ["grok", "xai"], do: login_grok()
   def run([provider]) when provider in ["openai", "openai-codex"], do: login_openai()
+  def run(["exa"]), do: login_exa()
 
   def run(_argv) do
-    Mix.shell().error("usage: mix elara.login [grok|openai]")
+    Mix.shell().error("usage: mix elara.login [grok|openai|exa]")
     exit({:shutdown, 1})
+  end
+
+  defp login_exa do
+    result =
+      with options when is_list(options) <- :io.getopts(),
+           true <- options[:terminal] == true and options[:stdin] == true,
+           {tty, 0} <- System.cmd("ps", ["-p", System.pid(), "-o", "tty="]),
+           tty = Path.join("/dev", String.trim(tty)),
+           {mode, 0} <-
+             System.cmd("sh", ["-c", "stty -g < \"$1\"", "elara-login", tty],
+               stderr_to_stdout: true
+             ),
+           {_, 0} <-
+             System.cmd("sh", ["-c", "stty -echo < \"$1\"", "elara-login", tty],
+               stderr_to_stdout: true
+             ) do
+        try do
+          case IO.gets("Exa API key (hidden): ") do
+            key when is_binary(key) -> Elara.Auth.Exa.save_key(String.trim(key))
+            _ -> {:error, :no_key}
+          end
+        after
+          System.cmd("sh", ["-c", "stty \"$1\" < \"$2\"", "elara-login", String.trim(mode), tty],
+            stderr_to_stdout: true
+          )
+
+          IO.puts("")
+        end
+      else
+        _ -> {:error, :not_interactive}
+      end
+
+    case result do
+      :ok ->
+        Mix.shell().info("Exa key saved to #{Elara.Auth.Exa.auth_path()}")
+
+      _ ->
+        Mix.shell().error("Exa login failed; enter a non-empty key at an interactive terminal.")
+        exit({:shutdown, 1})
+    end
   end
 
   defp login_grok do

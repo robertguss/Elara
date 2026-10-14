@@ -116,6 +116,8 @@ README.md's "Fetch public pages" section documents vetted public GETs, bounded
 HTML-to-Markdown conversion, and labeled pages behind retained-output handles.
 `inbox.web_content_entered` drives the informational TUI footer marker. Core
 records trusted entry, and copies, history children, and handoff preserve it.
+The fetch interrupt proof in `test/elara/web_fetch_test.exs` waits for its actual
+linked network worker with a separate startup budget before testing cancellation.
 Personal and project MCP configs, exact-config and catalog approval, explicit
 read-only marks, and the supervised client API are documented in README.md's
 "Approve an MCP server" section. Model-facing tools are a separate integration.

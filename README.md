@@ -1344,10 +1344,14 @@ targets, with absolute paths for files outside the cwd. Recursive traversal
 does not follow directory symlinks; an explicit allowed alias works.
 
 Elara first enumerates filenames with ripgrep, then authorizes each target
-through the same policy as `read`. The filename list is bounded at 8 MiB;
-exceeding it returns an error asking for a narrower path, never a partial list
-presented as complete. Content searches use bounded batches with one shared
-timeout and output byte budget. A permitted filename that is not valid UTF-8
+through the same policy as `read`. Searches reuse verified directory components
+only within that invocation; leaves and symlinks are checked individually.
+The filename list is bounded at 8 MiB. A capped `glob` starts with a smaller
+prefix and widens it until enough permitted paths are found or the listing is
+complete. An incomplete result always carries a truncation notice; exhausting
+the inventory cap returns a narrower-path error, never a partial list presented
+as complete. Content searches use bounded batches with one shared timeout and
+output byte budget. A permitted filename that is not valid UTF-8
 also returns a narrower-path error, rather than crashing the command runner or
 substituting a different filename. The fence is not an OS sandbox.
 

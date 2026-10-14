@@ -14,19 +14,26 @@ defmodule Elara.Tools.FileFence do
     end
   end
 
-  def resolve(path, %{cwd: cwd, roots: roots, protected: protected}) when is_binary(path) do
+  def resolve(path, %{} = fence) when is_binary(path) do
+    {result, _directories} = resolve(path, fence, MapSet.new())
+    result
+  end
+
+  @doc "Reuse verified directories within one search invocation; leaves and symlinks are rechecked."
+  def resolve(path, %{cwd: cwd, roots: roots, protected: protected}, directories)
+      when is_binary(path) do
     with :ok <- valid_path(path),
          path =
            if(path == "~" or String.starts_with?(path, "~/"), do: Path.expand(path), else: path),
          full = if(Path.type(path) == :absolute, do: path, else: Path.join(cwd, path)),
          :ok <- unprotected(Path.expand(full), protected),
-         {:ok, resolved} <- canonical(full),
+         {:ok, resolved, directories} <- canonical(full, directories),
          :ok <- unprotected(resolved, protected),
          allowed when is_binary(allowed) <- Enum.find(roots, &inside?(resolved, &1)) do
-      {:ok, {allowed, resolved}}
+      {{:ok, {allowed, resolved}}, directories}
     else
-      nil -> refusal(:path_outside_workspace)
-      {:error, reason} -> refusal(reason)
+      nil -> {refusal(:path_outside_workspace), directories}
+      {:error, reason} -> {refusal(reason), directories}
     end
   end
 
@@ -101,32 +108,46 @@ defmodule Elara.Tools.FileFence do
   defp inside?(path, root), do: path == root or String.starts_with?(path, root <> "/")
 
   # Walk before normalizing '..': a symlink's parent is its resolved parent.
-  defp canonical(path), do: walk(Path.split(Path.absname(path)), "/", 0)
+  defp canonical(path) do
+    with {:ok, resolved, _directories} <- canonical(path, MapSet.new()), do: {:ok, resolved}
+  end
 
-  defp walk(_parts, _parent, links) when links > 40, do: {:error, :symlink_loop}
-  defp walk([], parent, _links), do: {:ok, parent}
-  defp walk(["/" | rest], _parent, links), do: walk(rest, "/", links)
-  defp walk(["." | rest], parent, links), do: walk(rest, parent, links)
-  defp walk([".." | rest], parent, links), do: walk(rest, Path.dirname(parent), links)
+  defp canonical(path, directories),
+    do: walk(Path.split(Path.absname(path)), "/", 0, directories)
 
-  defp walk([part | rest], parent, links) do
+  defp walk(_parts, _parent, links, _directories) when links > 40, do: {:error, :symlink_loop}
+  defp walk([], parent, _links, directories), do: {:ok, parent, directories}
+  defp walk(["/" | rest], _parent, links, dirs), do: walk(rest, "/", links, dirs)
+  defp walk(["." | rest], parent, links, dirs), do: walk(rest, parent, links, dirs)
+  defp walk([".." | rest], parent, links, dirs), do: walk(rest, Path.dirname(parent), links, dirs)
+
+  defp walk([part | rest], parent, links, directories) do
     current = Path.join(parent, part)
 
-    case File.lstat(current) do
-      {:ok, %File.Stat{type: :symlink}} ->
-        with {:ok, target} <- File.read_link(current) do
-          target = if Path.type(target) == :absolute, do: target, else: Path.join(parent, target)
-          walk(Path.split(target) ++ rest, "/", links + 1)
-        end
+    if rest != [] and MapSet.member?(directories, current) do
+      walk(rest, current, links, directories)
+    else
+      case File.lstat(current) do
+        {:ok, %File.Stat{type: :symlink}} ->
+          with {:ok, target} <- File.read_link(current) do
+            target =
+              if Path.type(target) == :absolute, do: target, else: Path.join(parent, target)
 
-      {:ok, _stat} ->
-        walk(rest, current, links)
+            walk(Path.split(target) ++ rest, "/", links + 1, directories)
+          end
 
-      {:error, :enoent} ->
-        walk(rest, current, links)
+        {:ok, %File.Stat{type: :directory}} ->
+          walk(rest, current, links, MapSet.put(directories, current))
 
-      {:error, reason} ->
-        {:error, reason}
+        {:ok, _stat} ->
+          walk(rest, current, links, directories)
+
+        {:error, :enoent} ->
+          walk(rest, current, links, directories)
+
+        {:error, reason} ->
+          {:error, reason}
+      end
     end
   end
 

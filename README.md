@@ -766,6 +766,14 @@ Both include changes made through `bash`. Scope is the repository root's
 Git-visible files (tracked and non-ignored untracked); ignored files are not
 shown. Submodules are gitlink-only summaries. Binary files and files over
 128 KiB are summarized, and each report section is capped at 256 KiB.
+Checkpoint contents are bounded to 1 MiB per file and 8 MiB total per capture.
+Files beyond either budget are labelled **large file, compared by metadata**,
+not silently omitted or treated as deleted. Their size, mode, nanosecond mtime
+and ctime, inode, and device are retained instead of their contents.
+Recent timestamps (within a two-second safety margin), network mounts, and
+unsupported filesystems are unproven. Metadata evidence is supported on local
+APFS, ext-family, XFS, Btrfs, tmpfs, and overlay filesystems. Captures exceeding
+32,768 visible paths or the native reader's bounded work report unavailable.
 Changes observed between turns or after the latest endpoint appear separately
 as **Changed outside Elara**. Private, ref-rooted snapshots live under Elara's
 session state, without changing the workspace's index or HEAD. A non-Git
@@ -786,6 +794,11 @@ an older turn on the current path. Enter confirms, and Esc cancels without
 restoring anything. Undo includes `bash` changes and leaves files the turn did
 not touch alone. It refuses the whole operation, naming the files, if a touched
 file changed since the endpoint or the turn changed a submodule gitlink.
+An old metadata-only file with identical evidence at both endpoints does not
+block undo and is not restored. The preview labels those files. Changed or
+unproven metadata refuses the whole undo, naming the affected files, because
+their original contents were not captured. Waiting later does not make a
+previously unproven checkpoint safe.
 Interrupt an active turn first. Undo follows the active handoff owner; missing
 or inherited pre-copy snapshots are unavailable, never replaced with HEAD.
 

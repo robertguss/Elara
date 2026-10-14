@@ -43,11 +43,16 @@ defmodule Elara.WorkspaceDiff do
                     "Unavailable before successor start; showing from there (#{DateTime.utc_now()}).\n",
                   else: "Fresh baseline at fork/clone copy time (#{DateTime.utc_now()}).\n"
 
-              origin = %{"root" => handle.root, "entry" => store.leaf, "notice" => notice}
+              origin = %{
+                "version" => 2,
+                "root" => handle.root,
+                "entry" => store.leaf,
+                "notice" => notice
+              }
 
               with {:ok, tree} <- capture(handle),
                    {:ok, commit} <-
-                     bank(handle, ["commit-tree", tree, "-m", JSON.encode!(origin)]),
+                     bank(handle, ["commit-tree", tree_oid(tree), "-m", JSON.encode!(origin)]),
                    {:ok, _} <- bank(handle, ["update-ref", ref, String.trim(commit), @zero]) do
                 {:ok, Map.put(origin, "tree", tree)}
               end
@@ -303,7 +308,7 @@ defmodule Elara.WorkspaceDiff do
     Enum.reduce_while(pairs ++ joins ++ tail, {:ok, ""}, fn {left, right, label}, {:ok, text} ->
       result =
         if left && right && left.closed?,
-          do: compare(handle, left.tree, right.before),
+          do: compare(handle, left.tree, right.before, :boundary),
           else:
             {:ok,
              "Outside-edit boundary unavailable #{label}; source work and outside edits cannot be separated.\n"}
@@ -338,10 +343,11 @@ defmodule Elara.WorkspaceDiff do
 
   defp read_origin(handle, ref) do
     with {:ok, encoded} <- bank(handle, ["log", "-1", "--format=%B", ref]),
-         {:ok, origin} <- JSON.decode(String.trim(encoded)),
+         {:ok, origin} when is_map(origin) <- JSON.decode(String.trim(encoded)),
+         true <- origin["version"] in [nil, 1, 2],
          true <- origin["root"] == handle.root,
          {:ok, tree} <- bank(handle, ["rev-parse", ref <> "^{tree}"]) do
-      {:ok, Map.put(origin, "tree", String.trim(tree))}
+      {:ok, Map.put(origin, "tree", versioned_tree(origin["version"], String.trim(tree)))}
     end
   end
 
@@ -361,7 +367,10 @@ defmodule Elara.WorkspaceDiff do
       end
 
     with {:ok, %{closed?: true} = record} <- checkpoint(handle, id),
-         {:ok, changes} <- raw_changes(handle, record.before, record.tree),
+         {:ok, before} <- evidence(handle, record.before),
+         {:ok, endpoint} <- evidence(handle, record.tree),
+         :ok <- restorable_metadata(before, endpoint),
+         {:ok, changes} <- raw_changes(handle, before.tree, endpoint.tree),
          :ok <- restorable(changes),
          :ok <- undo_preflight(handle, changes),
          {:ok, root} <- File.lstat(handle.root) do
@@ -370,6 +379,7 @@ defmodule Elara.WorkspaceDiff do
         turn: id,
         root_inode: root.inode,
         root_device: root.major_device,
+        metadata_paths: metadata_paths(before, endpoint),
         changes: changes
       }
 
@@ -445,9 +455,14 @@ defmodule Elara.WorkspaceDiff do
 
   def undo_paths(plan), do: Enum.map(plan.changes, & &1.path)
 
-  def undo_limits,
-    do:
-      "Cannot reverse migrations that ran, ignored folders such as deps/ and _build/, or pushes. Submodules are gitlink-only."
+  def undo_limits(plan \\ nil) do
+    "Cannot reverse migrations that ran, ignored folders such as deps/ and _build/, or pushes. Submodules are gitlink-only." <>
+      if(plan && plan.metadata_paths != [],
+        do:
+          " Large files compared by metadata, unchanged and not restored: #{undo_names(plan.metadata_paths)}.",
+        else: ""
+      )
+  end
 
   defp decode_undo_recovery(bytes) do
     case JSON.decode(bytes) do
@@ -804,8 +819,12 @@ defmodule Elara.WorkspaceDiff do
 
   defp publish(handle, id, tree, parent) do
     ref = turn_ref(id)
-    metadata = JSON.encode!(%{version: 1, root: handle.root, entry: id})
-    args = ["commit-tree", tree] ++ if(parent, do: ["-p", parent], else: []) ++ ["-m", metadata]
+    version = if is_tuple(tree), do: 2, else: 1
+    metadata = JSON.encode!(%{version: version, root: handle.root, entry: id})
+
+    args =
+      ["commit-tree", tree_oid(tree)] ++
+        if(parent, do: ["-p", parent], else: []) ++ ["-m", metadata]
 
     with {:ok, commit} <- bank(handle, args),
          {:ok, _} <- bank(handle, ["update-ref", ref, String.trim(commit), parent || @zero]) do
@@ -814,7 +833,8 @@ defmodule Elara.WorkspaceDiff do
   end
 
   defp keep_live(handle, tree) do
-    with {:ok, commit} <- bank(handle, ["commit-tree", tree, "-m", "Live workspace inspection"]),
+    with {:ok, commit} <-
+           bank(handle, ["commit-tree", tree_oid(tree), "-m", "Live workspace inspection"]),
          {:ok, _} <- bank(handle, ["update-ref", "refs/elara/live", String.trim(commit)]) do
       {:ok, commit}
     end
@@ -828,19 +848,23 @@ defmodule Elara.WorkspaceDiff do
     ref = prefix <> component(id)
 
     with {:ok, message} <- bank(handle, ["log", "-1", "--format=%B", ref]),
-         {:ok, %{"version" => 1, "root" => root, "entry" => ^id}} <-
+         {:ok, %{"version" => version, "root" => root, "entry" => ^id}} when version in [1, 2] <-
            JSON.decode(String.trim(message)),
          true <- root == handle.root,
          {:ok, graph} <- bank(handle, ["rev-list", "--parents", "-n", "1", ref]),
          [commit | parents] when length(parents) <= 1 <- String.split(String.trim(graph)),
          {:ok, tree} <- bank(handle, ["rev-parse", commit <> "^{tree}"]),
          {:ok, before} <-
-           bank(handle, ["rev-parse", (List.first(parents) || commit) <> "^{tree}"]) do
+           bank(handle, ["rev-parse", (List.first(parents) || commit) <> "^{tree}"]),
+         {:ok, before_message} <-
+           bank(handle, ["log", "-1", "--format=%B", List.first(parents) || commit]),
+         {:ok, %{"version" => before_version}} when before_version in [1, 2] <-
+           JSON.decode(String.trim(before_message)) do
       {:ok,
        %{
          commit: commit,
-         tree: String.trim(tree),
-         before: String.trim(before),
+         tree: versioned_tree(version, String.trim(tree)),
+         before: versioned_tree(before_version, String.trim(before)),
          closed?: parents != []
        }}
     else
@@ -849,6 +873,8 @@ defmodule Elara.WorkspaceDiff do
   end
 
   defp capture(handle) do
+    started = System.os_time(:second)
+
     with :ok <- File.mkdir_p(handle.repo),
          :ok <- File.chmod(handle.repo, 0o700),
          {:ok, _} <- bank(handle, ["init", "--bare", "--quiet", handle.repo]),
@@ -856,11 +882,13 @@ defmodule Elara.WorkspaceDiff do
          {:ok, untracked} <-
            git(handle.root, ["ls-files", "--others", "--exclude-standard", "-z"]),
          {:ok, entries} <- workspace_entries(handle, tracked, untracked),
+         {:ok, entries, metadata} <- bounded_contents(entries, started),
          {:ok, entries} <- hash_files(handle, entries),
          {:ok, _} <- bank(handle, ["read-tree", "--empty"]),
          {:ok, _} <- write_index(handle, index_records(entries)),
-         {:ok, tree} <- bank(handle, ["write-tree"]) do
-      {:ok, String.trim(tree)}
+         {:ok, tree} <- bank(handle, ["write-tree"]),
+         {:ok, envelope} <- envelope(handle, String.trim(tree), metadata) do
+      {:ok, {:bounded, envelope}}
     end
   end
 
@@ -877,73 +905,266 @@ defmodule Elara.WorkspaceDiff do
       |> Enum.uniq()
       |> Enum.sort()
 
-    Enum.reduce_while(paths, {:ok, []}, fn path, {:ok, entries} ->
-      full = Path.join(handle.root, path)
+    with true <- length(paths) <= 32_768,
+         {:ok, stats} <- stat_paths(handle, paths) do
+      Enum.reduce_while(Enum.zip(paths, stats), {:ok, []}, fn {path, stat}, {:ok, entries} ->
+        full = Path.join(handle.root, path)
 
-      case File.lstat(full) do
-        {:error, :enoent} ->
-          {:cont, {:ok, entries}}
+        case stat do
+          nil ->
+            {:cont, {:ok, entries}}
 
-        {:ok, %{type: :regular, mode: mode}} ->
-          entry = %{
-            path: path,
-            source: full,
-            mode: if(band(mode, 0o111) != 0, do: "100755", else: "100644")
-          }
+          %{"mode" => mode, "size" => size} when band(mode, 0o170000) == 0o100000 ->
+            entry = %{
+              path: path,
+              source: full,
+              size: size,
+              stat: stat,
+              mode: if(band(mode, 0o111) != 0, do: "100755", else: "100644")
+            }
 
-          {:cont, {:ok, [entry | entries]}}
+            {:cont, {:ok, [entry | entries]}}
 
-        {:ok, %{type: :symlink}} ->
-          with {:ok, target} <- File.read_link(full),
-               source = Path.join(handle.repo, "link-" <> component(path)),
-               :ok <- File.write(source, target) do
-            {:cont, {:ok, [%{path: path, source: source, mode: "120000"} | entries]}}
-          else
-            _ -> {:halt, {:error, :unreadable_link}}
-          end
+          %{"mode" => mode} when band(mode, 0o170000) == 0o120000 ->
+            with {:ok, target} <- File.read_link(full),
+                 source = Path.join(handle.repo, "link-" <> component(path)),
+                 :ok <- File.write(source, target) do
+              {:cont,
+               {:ok,
+                [
+                  %{
+                    path: path,
+                    source: source,
+                    size: byte_size(target),
+                    mode: "120000",
+                    stat: stat
+                  }
+                  | entries
+                ]}}
+            else
+              _ -> {:halt, {:error, :unreadable_link}}
+            end
 
-        {:ok, %{type: :directory}} ->
-          case Map.get(tracked, path) do
-            {"160000", oid} ->
-              revision =
-                case git(full, ["rev-parse", "HEAD"]) do
-                  {:ok, value} -> String.trim(value)
-                  _ -> oid
-                end
+          %{"mode" => mode} when band(mode, 0o170000) == 0o040000 ->
+            case Map.get(tracked, path) do
+              {"160000", oid} ->
+                revision =
+                  case git(full, ["rev-parse", "HEAD"]) do
+                    {:ok, value} -> String.trim(value)
+                    _ -> oid
+                  end
 
-              {:cont, {:ok, [%{path: path, oid: revision, mode: "160000"} | entries]}}
+                {:cont, {:ok, [%{path: path, oid: revision, mode: "160000"} | entries]}}
 
-            _ ->
-              {:halt, {:error, :unsupported_directory}}
-          end
+              _ ->
+                {:halt, {:error, :unsupported_directory}}
+            end
 
-        _ ->
-          {:halt, {:error, :unreadable_file}}
-      end
-    end)
+          _ ->
+            {:halt, {:error, :unreadable_file}}
+        end
+      end)
+    else
+      _ -> {:error, :inventory_unavailable}
+    end
   end
 
   defp hash_files(handle, entries) do
-    entries
-    |> Enum.chunk_every(100)
-    |> Enum.reduce_while({:ok, []}, fn chunk, {:ok, acc} ->
-      files = Enum.filter(chunk, &Map.has_key?(&1, :source))
+    files = Enum.filter(entries, &(Map.has_key?(&1, :data) or Map.has_key?(&1, :source)))
 
-      case bank(handle, ["hash-object", "-w", "--no-filters", "--" | Enum.map(files, & &1.source)]) do
-        {:ok, output} ->
-          hashes = String.split(output, "\n", trim: true)
+    with {:ok, output} <- import_blobs(handle, files),
+         hashes = String.split(output, "\n", trim: true),
+         true <- length(hashes) == length(files) do
+      mapped = Map.new(Enum.zip(Enum.map(files, & &1.path), hashes))
+      {:ok, Enum.map(entries, &Map.put_new(&1, :oid, mapped[&1.path]))}
+    else
+      _ -> {:error, :incomplete_hashes}
+    end
+  end
 
-          if length(hashes) == length(files) do
-            mapped = Map.new(Enum.zip(Enum.map(files, & &1.path), hashes))
-            {:cont, {:ok, acc ++ Enum.map(chunk, &Map.put_new(&1, :oid, mapped[&1.path]))}}
-          else
-            {:halt, {:error, :incomplete_hashes}}
-          end
+  defp import_blobs(handle, [%{data: _} | _] = files) do
+    stream =
+      Enum.with_index(files, 1)
+      |> Enum.map(fn {file, n} ->
+        ["blob\nmark :#{n}\ndata #{byte_size(file.data)}\n", file.data, "\nget-mark :#{n}\n"]
+      end)
 
-        error ->
-          {:halt, error}
+    bank_input(handle, ["fast-import", "--quiet", "--done"], [stream, "done\n"])
+  end
+
+  defp import_blobs(handle, files) do
+    manifest =
+      Path.join(
+        handle.repo,
+        "capture-#{Base.url_encode64(:crypto.strong_rand_bytes(8), padding: false)}.json"
+      )
+
+    stream = Path.rootname(manifest) <> ".blobs"
+    helper = Application.app_dir(:elara, "priv/native/exec-stub")
+
+    sources =
+      Enum.map(files, fn file ->
+        Map.take(file, [:source, :size])
+        |> Map.put(:root, if(file.mode == "120000", do: handle.repo, else: handle.root))
+      end)
+
+    with :ok <- File.write(manifest, JSON.encode!(sources)) do
+      try do
+        with {:ok, %{termination: :exited, code: 0}} <-
+               Elara.Exec.run([helper, "--workspace-blobs", manifest],
+                 cwd: handle.root,
+                 max_bytes: 1024,
+                 timeout_ms: 250
+               ) do
+          command(
+            handle.root,
+            "sh",
+            [
+              "-c",
+              "exec git --git-dir=\"$1\" fast-import --quiet --done < \"$2\"",
+              "sh",
+              handle.repo,
+              stream
+            ],
+            bank_env(handle)
+          )
+        else
+          _ -> {:error, :bounded_read_failed}
+        end
+      catch
+        :exit, _ -> {:error, :native_reader_unavailable}
+      after
+        File.rm(manifest)
+        File.rm(stream)
       end
-    end)
+    end
+  end
+
+  defp bounded_contents(entries, started) do
+    {exact, omitted} =
+      Enum.split_with(entries, fn entry ->
+        Map.has_key?(entry, :oid) or entry.stat["capture"] == true
+      end)
+
+    metadata =
+      Map.new(omitted, fn entry ->
+        stat = entry.stat
+
+        reliable =
+          stat["local"] == true and
+            Enum.all?([stat["mtime"], stat["ctime"]], fn
+              [seconds, nanos] when is_integer(seconds) and is_integer(nanos) ->
+                seconds < started - 2
+
+              _ ->
+                false
+            end)
+
+        {entry.path, %{"stat" => stat, "proven" => reliable}}
+      end)
+
+    {:ok, exact, metadata}
+  end
+
+  defp stat_paths(_handle, []), do: {:ok, []}
+
+  defp stat_paths(handle, paths) do
+    input = Path.join(handle.repo, "stat-input")
+    helper = Application.app_dir(:elara, "priv/native/exec-stub")
+
+    with :ok <- File.write(input, Enum.map(paths, &[&1, <<0>>])) do
+      try do
+        with {:ok, %{termination: :exited, code: 0, output: output}} <-
+               Elara.Exec.run([helper, "--workspace-stat", handle.root, input],
+                 cwd: handle.root,
+                 max_bytes: 8 * 1024 * 1024,
+                 timeout_ms: 250
+               ),
+             {:ok, stats} when is_list(stats) <- JSON.decode(output),
+             true <- length(stats) == length(paths) do
+          {:ok, stats}
+        else
+          _ -> {:error, :metadata_unavailable}
+        end
+      catch
+        :exit, _ -> {:error, :native_stat_unavailable}
+      after
+        File.rm(input)
+      end
+    end
+  end
+
+  defp tree_oid({:bounded, tree}), do: tree
+  defp tree_oid(tree) when is_binary(tree), do: tree
+  defp versioned_tree(2, tree), do: {:bounded, tree}
+  defp versioned_tree(version, tree) when version in [nil, 1], do: tree
+
+  defp envelope(handle, tree, metadata) do
+    with {:ok, [entry]} <- hash_files(handle, [%{path: "evidence", data: JSON.encode!(metadata)}]),
+         {:ok, result} <-
+           bank_input(handle, ["mktree", "-z"], [
+             "040000 tree #{tree}\tcontents",
+             <<0>>,
+             "100644 blob #{entry.oid}\tevidence",
+             <<0>>
+           ]) do
+      {:ok, String.trim(result)}
+    end
+  end
+
+  defp evidence(handle, {:bounded, tree}) do
+    with {:ok, contents} <- bank(handle, ["rev-parse", tree <> ":contents"]),
+         {:ok, encoded} <- bank(handle, ["show", tree <> ":evidence"]),
+         {:ok, metadata} when is_map(metadata) <- JSON.decode(encoded),
+         true <-
+           Enum.all?(metadata, fn {path, value} ->
+             is_binary(path) and is_map(value) and is_boolean(value["proven"]) and
+               valid_stat?(value["stat"])
+           end) do
+      {:ok, %{tree: String.trim(contents), metadata: metadata}}
+    else
+      _ -> {:error, :invalid_capture_evidence}
+    end
+  end
+
+  defp evidence(_handle, tree) when is_binary(tree), do: {:ok, %{tree: tree, metadata: %{}}}
+
+  defp valid_stat?(%{
+         "mode" => mode,
+         "size" => size,
+         "inode" => inode,
+         "device" => device,
+         "mtime" => [mtime, mnano],
+         "ctime" => [ctime, cnano],
+         "local" => local,
+         "capture" => false
+       }) do
+    Enum.all?([mode, size, inode, device, mtime, ctime, mnano, cnano], &is_integer/1) and
+      size >= 0 and inode >= 0 and device >= 0 and is_boolean(local) and
+      mnano in 0..999_999_999 and cnano in 0..999_999_999
+  end
+
+  defp valid_stat?(_), do: false
+
+  defp metadata_paths(before, endpoint),
+    do: Enum.uniq(Map.keys(before.metadata) ++ Map.keys(endpoint.metadata)) |> Enum.sort()
+
+  defp unchanged_metadata?(%{"proven" => true} = left, %{"proven" => true} = right),
+    do: left == right
+
+  defp unchanged_metadata?(_, _), do: false
+
+  defp restorable_metadata(before, endpoint) do
+    uncertain =
+      Enum.reject(metadata_paths(before, endpoint), fn path ->
+        unchanged_metadata?(before.metadata[path], endpoint.metadata[path])
+      end)
+
+    if uncertain == [],
+      do: :ok,
+      else:
+        {:error,
+         "Undo refused: large files compared by metadata changed or are unproven (recent timestamps or unsupported filesystem): #{undo_names(uncertain)}. No files restored."}
   end
 
   defp index_records(entries) do
@@ -971,9 +1192,35 @@ defmodule Elara.WorkspaceDiff do
     end
   end
 
-  defp compare(handle, before, after_tree) do
-    with {:ok, changes} <- raw_changes(handle, before, after_tree) do
-      Enum.reduce_while(changes, {:ok, ""}, fn change, {:ok, text} ->
+  defp compare(handle, before, after_tree, scope \\ :net) do
+    with {:ok, left} <- evidence(handle, before),
+         {:ok, right} <- evidence(handle, after_tree),
+         {:ok, changes} <- raw_changes(handle, left.tree, right.tree) do
+      omitted = metadata_paths(left, right)
+
+      notices =
+        Enum.reduce_while(omitted, "", fn path, text ->
+          unchanged = unchanged_metadata?(left.metadata[path], right.metadata[path])
+
+          status =
+            if unchanged,
+              do: "unchanged",
+              else: "changed or unproven; contents unavailable"
+
+          notice =
+            if scope == :boundary and unchanged,
+              do: "",
+              else: "#{inspect(path)}: large file, compared by metadata (#{status}).\n"
+
+          if byte_size(text) + byte_size(notice) > @report_limit,
+            do:
+              {:halt, text <> "Remaining metadata comparisons omitted: report exceeds 256 KiB.\n"},
+            else: {:cont, text <> notice}
+        end)
+
+      changes = Enum.reject(changes, &(&1.path in omitted))
+
+      Enum.reduce_while(changes, {:ok, notices}, fn change, {:ok, text} ->
         %{
           path: path,
           before: %{mode: old_mode, oid: old_oid},
@@ -985,8 +1232,8 @@ defmodule Elara.WorkspaceDiff do
              {:ok, diff} <-
                file_diff(
                  handle,
-                 before,
-                 after_tree,
+                 left.tree,
+                 right.tree,
                  path,
                  old_mode,
                  new_mode,
@@ -1077,7 +1324,7 @@ defmodule Elara.WorkspaceDiff do
       Stream.map(pairs, fn [left, right] ->
         with {:ok, %{closed?: true} = previous} <- checkpoint(handle, left),
              {:ok, next} <- checkpoint(handle, right) do
-          compare(handle, previous.tree, next.before)
+          compare(handle, previous.tree, next.before, :boundary)
         else
           _ -> {:ok, "Outside-edit boundary unavailable.\n"}
         end
@@ -1089,7 +1336,7 @@ defmodule Elara.WorkspaceDiff do
           Stream.map([List.first(ids)], fn id ->
             with {:ok, first} <-
                    if(id, do: checkpoint(handle, id), else: {:ok, %{before: current}}) do
-              compare(handle, handle.origin["tree"], first.before)
+              compare(handle, handle.origin["tree"], first.before, :boundary)
             end
           end)
 
@@ -1101,7 +1348,7 @@ defmodule Elara.WorkspaceDiff do
     gaps =
       case checkpoint(handle, List.last(ids)) do
         {:ok, %{closed?: true} = latest} ->
-          Stream.concat(gaps, Stream.map([latest], &compare(handle, &1.tree, current)))
+          Stream.concat(gaps, Stream.map([latest], &compare(handle, &1.tree, current, :boundary)))
 
         _ ->
           gaps
@@ -1127,7 +1374,11 @@ defmodule Elara.WorkspaceDiff do
   end
 
   defp write_index(handle, bytes) do
-    input = Path.join(handle.repo, "index-input")
+    bank_input(handle, ["update-index", "-z", "--index-info"], bytes)
+  end
+
+  defp bank_input(handle, args, bytes) do
+    input = Path.join(handle.repo, "bank-input")
 
     with :ok <- File.write(input, bytes) do
       try do
@@ -1136,10 +1387,10 @@ defmodule Elara.WorkspaceDiff do
           "sh",
           [
             "-c",
-            "exec git --git-dir=\"$1\" update-index -z --index-info < \"$2\"",
+            "repo=$1; input=$2; shift 2; exec git --literal-pathspecs --git-dir=\"$repo\" \"$@\" < \"$input\"",
             "sh",
             handle.repo,
-            input
+            input | args
           ],
           bank_env(handle)
         )

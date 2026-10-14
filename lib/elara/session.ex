@@ -2821,7 +2821,7 @@ defmodule Elara.Session do
                 token: plan.id,
                 turn_id: plan.turn,
                 files: Elara.WorkspaceDiff.undo_paths(plan),
-                notice: Elara.WorkspaceDiff.undo_limits()
+                notice: Elara.WorkspaceDiff.undo_limits(plan)
               }
 
               {:reply, {:ok, response}, %{shell | undo_preview: preview}}

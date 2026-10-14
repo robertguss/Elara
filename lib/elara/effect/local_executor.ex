@@ -4,19 +4,72 @@ defmodule Elara.Effect.LocalExecutor do
   alias Elara.Effect.Executor
   alias Elara.Session.Store
 
-  @spec open(String.t(), String.t()) :: {:ok, Executor.t()} | {:error, term()}
-  def open(cwd, workspace_id) when is_binary(cwd) and is_binary(workspace_id) do
+  @lock_wait_notice "waiting for the previous session's lock to clear"
+
+  @spec open(String.t(), String.t(), keyword()) :: {:ok, Executor.t()} | {:error, term()}
+  def open(cwd, workspace_id, opts \\ []) when is_binary(cwd) and is_binary(workspace_id) do
     cwd = Path.expand(cwd)
     id = executor_id(cwd, workspace_id)
     name = name(id)
+    on_status = Keyword.get(opts, :on_status, &print_status/1)
+    task = Task.async(fn -> open_registered(ledger_path(cwd, id), id, name) end)
+    await_open(task, name, on_status, nil)
+  end
 
+  defp open_registered(path, id, name) do
     case Registry.lookup(Elara.EffectExecutors, id) do
-      [{pid, _value}] ->
-        if Process.alive?(pid), do: {:ok, name}, else: start(id, ledger_path(cwd, id), name)
+      [{pid, nil}] ->
+        if Process.alive?(pid), do: {:ok, name}, else: start(id, path, name)
+
+      [{_pid, {:failed, reason}}] ->
+        {:error, reason}
+
+      [{_pid, status}] when status in [:initializing, :waiting_for_lock] ->
+        Process.sleep(25)
+        open_registered(path, id, name)
 
       [] ->
-        start(id, ledger_path(cwd, id), name)
+        start(id, path, name)
     end
+  catch
+    :exit, reason -> {:error, reason}
+  end
+
+  defp await_open(task, name, on_status, previous) do
+    case Task.yield(task, 25) do
+      {:ok, result} ->
+        if previous, do: on_status.(nil)
+        result
+
+      nil ->
+        notice = lock_wait_notice(name)
+        if notice != previous, do: on_status.(notice)
+        await_open(task, name, on_status, notice)
+    end
+  end
+
+  defp print_status(nil), do: :ok
+  defp print_status(notice), do: IO.puts(:stderr, notice)
+
+  @doc false
+  def lock_wait_notice({:via, Registry, {Elara.EffectExecutors, id}}) do
+    case Registry.lookup(Elara.EffectExecutors, id) do
+      [{_pid, :waiting_for_lock}] -> @lock_wait_notice
+      _ -> nil
+    end
+  end
+
+  def lock_wait_notice(_executor), do: nil
+
+  @doc false
+  def lock_status(id, status) do
+    Registry.update_value(Elara.EffectExecutors, id, fn _ -> status end)
+
+    for pid <- Registry.select(Elara.Sessions, [{{:_, :"$1", :_}, [], [:"$1"]}]) do
+      send(pid, {:effect_lock_status, name(id)})
+    end
+
+    :ok
   end
 
   @doc false
@@ -33,7 +86,7 @@ defmodule Elara.Effect.LocalExecutor do
     opts = [
       id: id,
       path: path,
-      name: name
+      name: {:via, Registry, {Elara.EffectExecutors, id, :initializing}}
     ]
 
     child = %{
@@ -44,9 +97,14 @@ defmodule Elara.Effect.LocalExecutor do
     }
 
     case DynamicSupervisor.start_child(Elara.EffectExecutorSup, child) do
-      {:ok, _pid} -> {:ok, name}
-      {:error, {:already_started, _pid}} -> {:ok, name}
-      {:error, reason} -> {:error, reason}
+      {:ok, _pid} ->
+        {:ok, name}
+
+      {:error, {:already_started, _pid}} ->
+        open_registered(path, id, name)
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

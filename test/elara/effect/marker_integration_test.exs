@@ -353,7 +353,7 @@ defmodule Elara.Effect.MarkerIntegrationTest do
       )
     end)
 
-    assert_receive {:replacement_start, {:error, :locked}}, 1_000
+    assert_receive {:replacement_start, {:error, :locked}}, 5_000
     assert Process.alive?(executor)
     assert :ok = Executor.close(executor)
   end

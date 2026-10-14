@@ -169,6 +169,26 @@ defmodule Elara.Effect.ExecutorProtocolTest do
     assert_receive {:DOWN, ^monitor, :process, ^executor, :killed}
     assert Agent.get(mutations, & &1) == 0
 
+    holder =
+      spawn(fn ->
+        {:ok, lock} =
+          Elara.Effect.Ownership.acquire(context.path <> ".writer.lock", :exclusive)
+
+        send(parent, :writer_lock_held)
+
+        receive do
+          :release -> :ok = Elara.Effect.Ownership.release(lock)
+        end
+      end)
+
+    on_exit(fn -> if Process.alive?(holder), do: Process.exit(holder, :kill) end)
+    assert_receive :writer_lock_held, 5_000
+
+    spawn(fn ->
+      Process.sleep(500)
+      send(holder, :release)
+    end)
+
     reopened = start_executor(context.path)
 
     assert {:accepted, %Record{callback_attempt_count: 0}} =

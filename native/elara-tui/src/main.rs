@@ -266,7 +266,13 @@ fn run(args: Args) -> Result<(), String> {
     let mut request = attach_request(&args.target, mode, &saved);
     request["cwd"] = json!(args.cwd.to_string_lossy());
     let started = Instant::now();
-    let (mut connection, attached) = ClientConnection::connect(args.port, request)?;
+    let (mut connection, attached) =
+        ClientConnection::connect_with_status(args.port, request, |notice| {
+            if let Some(notice) = notice {
+                eprintln!("{notice}");
+            }
+            Ok(())
+        })?;
     dump_frame(args.event_dump, started, &attached);
     let mut model = attached_model(&attached, mode)?;
     model.set_appearance(appearance);
@@ -503,7 +509,12 @@ fn run_interactive(
         let mut notifications = Vec::new();
         if let Some(pending) = &reattaching {
             match pending.receiver.try_recv() {
-                Ok(Ok((new_connection, fresh))) => {
+                Ok(ReattachEvent::Status(notice)) => {
+                    model.startup_notice = notice;
+                    dirty = true;
+                }
+                Ok(ReattachEvent::Ready(Ok(attached))) => {
+                    let (new_connection, fresh) = *attached;
                     *connection = new_connection;
                     notifications.extend(fresh.notification);
                     model.reconnect_from(fresh);
@@ -517,7 +528,8 @@ fn run_interactive(
                     reattaching = None;
                     dirty = true;
                 }
-                Ok(Err(error)) => {
+                Ok(ReattachEvent::Ready(Err(error))) => {
+                    model.startup_notice = None;
                     model.mark_disconnected(&error);
                     model.notice = Some(format!(
                         "Reattach failed: {error}. Draft retained; use /sessions to retry."
@@ -537,7 +549,15 @@ fn run_interactive(
         {
             attempted_handoff = Some(target.clone());
             let source = model.clone();
-            match reconnect(args.port, &target, model, cursors, &mut session_models) {
+            match reconnect(
+                args.port,
+                &target,
+                model,
+                cursors,
+                &mut session_models,
+                &mut terminal,
+                &mut renderer,
+            ) {
                 Ok(new_connection) => {
                     *connection = new_connection;
                     model.inherit_handoff_draft(&source);
@@ -574,7 +594,15 @@ fn run_interactive(
                     if let Err(error) = handle_frame(connection, model, cursors, frame) {
                         model.mark_disconnected(&error);
                     } else if let Some(target) = created {
-                        match reconnect(args.port, &target, model, cursors, &mut session_models) {
+                        match reconnect(
+                            args.port,
+                            &target,
+                            model,
+                            cursors,
+                            &mut session_models,
+                            &mut terminal,
+                            &mut renderer,
+                        ) {
                             Ok(new_connection) => {
                                 *connection = new_connection;
                                 if let Some(prompt) = fork_prompt {
@@ -691,7 +719,15 @@ fn run_interactive(
                 | InputAction::Session(request) => Some(request),
                 InputAction::Reconnect(target) => {
                     reattaching = None;
-                    match reconnect(args.port, &target, model, cursors, &mut session_models) {
+                    match reconnect(
+                        args.port,
+                        &target,
+                        model,
+                        cursors,
+                        &mut session_models,
+                        &mut terminal,
+                        &mut renderer,
+                    ) {
                         Ok(new_connection) => *connection = new_connection,
                         Err(error) => {
                             model.notice =
@@ -801,13 +837,21 @@ fn handle_frame(
         Some("ok") => model.command_reply(None),
         Some("error") => model.command_reply(Some(frame["error"].as_str().unwrap_or("unknown"))),
         Some("status") => model.notice = Some(format!("Status: {}", frame["status"])),
+        Some("startup_status") if frame["version"] == 2 => {
+            model.startup_notice = frame["notice"].as_str().map(str::to_owned);
+        }
         _ => return Err("server returned an invalid protocol v2 frame".to_string()),
     }
     Ok(())
 }
 
+enum ReattachEvent {
+    Status(Option<String>),
+    Ready(Result<Box<(ClientConnection, Model)>, String>),
+}
+
 struct Reattach {
-    receiver: std::sync::mpsc::Receiver<Result<(ClientConnection, Model), String>>,
+    receiver: std::sync::mpsc::Receiver<ReattachEvent>,
     resume_notice: Option<String>,
 }
 
@@ -831,20 +875,23 @@ impl Reattach {
             // The snapshot owns terminal outcomes too. Drop buffered projections
             // off the keyboard thread instead of depending on raced final events.
             drop(buffered);
-            let result = connect_target(port, &target, &mode, cwd.as_deref(), &cursor).map(
-                |(connection, mut fresh)| {
-                    if fresh.projection.incarnation == incarnation
-                        && let Some(fresh_ref) =
-                            fresh.projection.view["turn"]["outcome"]["ref"].as_u64()
-                        && Some(fresh_ref) != outcome_ref
-                        && let Some(kind) = fresh.last_outcome.clone()
-                    {
-                        fresh.observe_turn_outcome(&kind);
-                    }
-                    (connection, fresh)
-                },
-            );
-            let _ = sender.send(result);
+            let result = connect_target(port, &target, &mode, cwd.as_deref(), &cursor, |notice| {
+                sender
+                    .send(ReattachEvent::Status(notice.map(str::to_owned)))
+                    .map_err(|_| "reattach status receiver closed".to_owned())
+            })
+            .map(|(connection, mut fresh)| {
+                if fresh.projection.incarnation == incarnation
+                    && let Some(fresh_ref) =
+                        fresh.projection.view["turn"]["outcome"]["ref"].as_u64()
+                    && Some(fresh_ref) != outcome_ref
+                    && let Some(kind) = fresh.last_outcome.clone()
+                {
+                    fresh.observe_turn_outcome(&kind);
+                }
+                Box::new((connection, fresh))
+            });
+            let _ = sender.send(ReattachEvent::Ready(result));
         });
         model.connection = ConnectionState::Resynchronizing;
         model.notice = Some(match &resume_notice {
@@ -864,14 +911,27 @@ fn reconnect(
     model: &mut Model,
     cursors: &CursorStore,
     cache: &mut HashMap<String, Model>,
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    renderer: &mut LiveRenderer,
 ) -> Result<ClientConnection, String> {
-    let (connection, fresh) = connect_target(
+    let mode = model.mode.clone();
+    let cwd = model.cwd.clone();
+    let result = connect_target(
         port,
         target,
-        &model.mode,
-        model.cwd.as_deref(),
+        &mode,
+        cwd.as_deref(),
         &cursors.load(target),
-    )?;
+        |notice| {
+            model.startup_notice = notice.map(str::to_owned);
+            terminal
+                .draw(|frame| draw_model_live(frame, model, renderer))
+                .map_err(|error| format!("terminal failed: {error}"))?;
+            Ok(())
+        },
+    );
+    model.startup_notice = None;
+    let (connection, fresh) = result?;
     if target == model.session_id {
         model.reconnect_from(fresh);
         save_cursor(cursors, model);
@@ -897,6 +957,7 @@ fn connect_target(
     mode: &str,
     cwd: Option<&str>,
     cursor: &Cursor,
+    mut on_status: impl FnMut(Option<&str>) -> Result<(), String>,
 ) -> Result<(ClientConnection, Model), String> {
     let mut request = attach_request(target, mode, cursor);
     if let Some(cwd) = cwd {
@@ -904,7 +965,8 @@ fn connect_target(
     }
     let deadline = Instant::now() + Duration::from_secs(5);
     let (mut connection, attached) = loop {
-        let (connection, attached) = ClientConnection::connect(port, request.clone())?;
+        let (connection, attached) =
+            ClientConnection::connect_with_status(port, request.clone(), &mut on_status)?;
         if attached["type"] != "error"
             || attached["error"] != "control_taken"
             || Instant::now() >= deadline

@@ -122,6 +122,14 @@ and its writer/callback PIDs. Startup holds both locks exclusively and checks
 the durable owner identities while it repairs orphaned attempts. Loss of a lock
 Port alone is not proof that its Erlang callback stopped.
 
+After an executor crash, its operating-system lock holder can outlive the BEAM
+process briefly. Acquisition waits up to two seconds for that holder to exit,
+within the existing five-second startup lock budget. After about 300 ms, status
+shows "waiting for the previous session's lock to clear". The TUI shows the
+notice above the composer, or before its initial attachment. A live competing
+writer still refuses takeover, and acquisition still requires the durable
+ownership proof below. Waiting never authorizes a callback replay.
+
 A guardian alone cannot supply durable ownership proof across writer or VM
 loss. A single lock changed from exclusive to shared would leave a gap during
 the ownership change. Two lockfiles keep writer ownership separate from callback

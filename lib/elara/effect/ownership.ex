@@ -259,8 +259,14 @@ defmodule Elara.Effect.Ownership do
 
   defp process_start(_), do: :unknown
 
-  @spec acquire(String.t(), :shared | :exclusive) :: {:ok, port()} | {:error, term()}
-  def acquire(path, mode) when mode in [:shared, :exclusive] do
+  @spec acquire(String.t(), :shared | :exclusive, keyword()) :: {:ok, port()} | {:error, term()}
+  def acquire(path, mode, opts \\ []) when mode in [:shared, :exclusive] do
+    now = System.monotonic_time(:millisecond)
+    deadline = Keyword.get(opts, :deadline, now + 5_000)
+    wait_deadline = min(Keyword.get(opts, :wait_deadline, now + 2_000), deadline)
+    wait_seconds = Float.to_string(max(wait_deadline - now, 0) / 1_000)
+    on_wait = Keyword.get(opts, :on_wait, fn -> :ok end)
+
     with :ok <- File.mkdir_p(Path.dirname(path)),
          flock when is_binary(flock) <- System.find_executable("flock") do
       flag = if mode == :shared, do: "-s", else: "-x"
@@ -269,24 +275,35 @@ defmodule Elara.Effect.Ownership do
         Port.open({:spawn_executable, flock}, [
           :binary,
           :exit_status,
-          {:args, ["-n", flag, path, "sh", "-c", "printf ready; read stop"]}
+          {:args, ["-w", wait_seconds, flag, path, "sh", "-c", "printf ready; read stop"]}
         ])
 
-      receive do
-        {^port, {:data, "ready"}} ->
-          :ok = File.chmod(path, 0o600)
-          {:ok, port}
-
-        {^port, {:exit_status, _}} ->
-          {:error, :locked}
-      after
-        5_000 ->
-          release(port)
-          {:error, :lock_timeout}
-      end
+      await_lock(port, path, deadline, on_wait, 300)
     else
       nil -> {:error, :lock_unavailable}
       error -> error
+    end
+  end
+
+  defp await_lock(port, path, deadline, on_wait, interval) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    receive do
+      {^port, {:data, "ready"}} ->
+        :ok = File.chmod(path, 0o600)
+        {:ok, port}
+
+      {^port, {:exit_status, _}} ->
+        {:error, :locked}
+    after
+      min(interval, remaining) ->
+        if System.monotonic_time(:millisecond) >= deadline do
+          if Port.info(port), do: Port.close(port)
+          {:error, :lock_timeout}
+        else
+          :ok = on_wait.()
+          await_lock(port, path, deadline, fn -> :ok end, remaining)
+        end
     end
   end
 

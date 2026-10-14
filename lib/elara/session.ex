@@ -337,6 +337,7 @@ defmodule Elara.Session do
       recorded_transitions: shell.recorder.sequence,
       instructions: shell.instructions,
       skills: shell.skills,
+      lock_wait_notice: Elara.Effect.LocalExecutor.lock_wait_notice(shell.effect_executor),
       worker_health: Router.workers(shell.router)
     }
 
@@ -907,6 +908,11 @@ defmodule Elara.Session do
 
   def handle_info(:drain_inputs, shell), do: {:noreply, drain_inputs(shell)}
   def handle_info(:inbox_changed, shell), do: {:noreply, inbox_changed(shell)}
+
+  def handle_info({:effect_lock_status, executor}, %{effect_executor: executor} = shell),
+    do: {:noreply, inbox_changed(shell)}
+
+  def handle_info({:effect_lock_status, _executor}, shell), do: {:noreply, shell}
 
   def handle_info(:refresh_catalog, shell) do
     if shell.core.config.provider_catalog &&
@@ -3677,6 +3683,7 @@ defmodule Elara.Session do
         "mode" => "trusted_local",
         "read_only" => Handoff.read_only(shell),
         "read_only_notice" => shell.store.context["read_only_notice"],
+        "lock_wait_notice" => Elara.Effect.LocalExecutor.lock_wait_notice(shell.effect_executor),
         "allowed_capabilities" => shell.allowed_capabilities
       }
     }

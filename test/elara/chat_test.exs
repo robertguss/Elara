@@ -4,6 +4,27 @@ defmodule Elara.ChatTest do
   alias Elara.Message
   alias Elara.Session.Store
 
+  setup do
+    existing = Elara.live_sessions() |> Enum.map(& &1.id) |> MapSet.new()
+    cwd = Path.join(System.tmp_dir!(), "elara-chat-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(cwd)
+    {_, 0} = System.cmd("git", ["init", "--quiet", cwd])
+    File.write!(Path.join(cwd, "README.md"), "Chat fixture\n")
+
+    on_exit(fn ->
+      for %{id: id} <- Elara.live_sessions(), not MapSet.member?(existing, id) do
+        case Elara.session_pid(id) do
+          {:ok, pid} -> DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+          _ -> :ok
+        end
+      end
+
+      File.rm_rf!(cwd)
+    end)
+
+    %{cwd: cwd}
+  end
+
   defp script(replies) do
     {:ok, agent} = Agent.start_link(fn -> replies end)
     {Elara.Provider.Scripted, agent}
@@ -61,9 +82,9 @@ defmodule Elara.ChatTest do
     end) || flunk("did not return to prompt after #{inspect(snippet)}")
   end
 
-  test "two scripted turns then /quit" do
+  test "two scripted turns then /quit", %{cwd: cwd} do
     provider = script([{:ok, asst("alpha")}, {:ok, asst("beta")}])
-    {:ok, session} = Elara.start_session(provider: provider, tools: [])
+    {:ok, session} = Elara.start_session(provider: provider, tools: [], cwd: cwd)
     {:ok, out} = StringIO.open("")
 
     task = Task.async(fn -> Elara.Chat.run(session, out) end)
@@ -87,13 +108,13 @@ defmodule Elara.ChatTest do
     refute body =~ "\e["
   end
 
-  test "prints scripted content deltas before the final assistant is available" do
+  test "prints scripted content deltas before the final assistant is available", %{cwd: cwd} do
     provider =
       script([
         {:stream, ["hel", {:sleep, 150}, "lo", {:sleep, 150}], {:ok, asst("hello")}}
       ])
 
-    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
+    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false, cwd: cwd)
     {:ok, out} = StringIO.open("")
     task = Task.async(fn -> Elara.Chat.run(session, out) end)
     chat = task.pid
@@ -101,7 +122,7 @@ defmodule Elara.ChatTest do
     assert await_output(out, "> ")
     send(chat, {:stdin, "stream\n"})
 
-    partial = await_output(out, "hel")
+    partial = await_output(out, "\nhel")
     refute partial =~ "hello\n"
 
     complete = await_idle_after(out, "hello\n")
@@ -112,13 +133,13 @@ defmodule Elara.ChatTest do
     assert 0 = Task.await(task, 5_000)
   end
 
-  test "interrupt marks streamed partial text and never presents it as complete" do
+  test "interrupt marks streamed partial text and never presents it as complete", %{cwd: cwd} do
     provider =
       script([
         {:stream, ["partial", {:sleep, 5_000}, " stale"], {:ok, asst("partial stale")}}
       ])
 
-    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false)
+    {:ok, session} = Elara.start_session(provider: provider, tools: [], persist: false, cwd: cwd)
     {:ok, out} = StringIO.open("")
     task = Task.async(fn -> Elara.Chat.run(session, out) end)
     chat = task.pid
@@ -137,8 +158,8 @@ defmodule Elara.ChatTest do
     assert 0 = Task.await(task, 5_000)
   end
 
-  test "/reload reports when no plugins are loaded" do
-    {:ok, session} = Elara.start_session(provider: script([]), tools: [], plugins: [])
+  test "/reload reports when no plugins are loaded", %{cwd: cwd} do
+    {:ok, session} = Elara.start_session(provider: script([]), tools: [], plugins: [], cwd: cwd)
     {:ok, out} = StringIO.open("")
     task = Task.async(fn -> Elara.Chat.run(session, out) end)
     chat = task.pid
@@ -152,9 +173,9 @@ defmodule Elara.ChatTest do
     assert 0 = Task.await(task, 5_000)
   end
 
-  test "killed session returns status 1" do
+  test "killed session returns status 1", %{cwd: cwd} do
     provider = script([{:ok, asst("hello")}])
-    {:ok, session} = Elara.start_session(provider: provider, tools: [])
+    {:ok, session} = Elara.start_session(provider: provider, tools: [], cwd: cwd)
     {:ok, out} = StringIO.open("")
 
     task = Task.async(fn -> Elara.Chat.run(session, out) end)

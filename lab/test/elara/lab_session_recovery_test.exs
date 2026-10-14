@@ -368,7 +368,7 @@ defmodule Elara.Lab.SessionRecoveryTest do
              StoreView.read_markers(dir, coordinator, started + 20)
 
     assert System.monotonic_time(:millisecond) - started < 140
-    assert_receive {^writer, {:exit_status, 0}}, 500
+    assert_receive {^writer, {:exit_status, 0}}
     Process.sleep(10)
     assert Coordinator.snapshot(coordinator).helpers == []
   end
@@ -499,7 +499,7 @@ defmodule Elara.Lab.SessionRecoveryTest do
     assert System.monotonic_time(:millisecond) - started < 180
     refute cleanup.confirmed
     refute cleanup.discovery_confirmed
-    assert_receive {^writer, {:exit_status, 0}}, 500
+    assert_receive {^writer, {:exit_status, 0}}
     File.rm!(store.path)
   end
 

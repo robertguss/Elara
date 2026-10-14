@@ -1,5 +1,10 @@
 # Amp threads: reference research for Elara
 
+> **Historical note (2026-10-14):** a dated pre-pivot note, kept as history.
+> Current planning and status live in [Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1);
+> `ROADMAP.md` is now only a pointer, so references to it here describe its
+> former role.
+
 Researched 2026-09-04. This is a research note, not an implementation plan or a change to ROADMAP.md. Sources are official Amp documentation and dated announcements. Documentation was inspected on the research date; undated pages do not establish feature introduction dates. Product behavior was not tested.
 
 ## What Amp calls a thread

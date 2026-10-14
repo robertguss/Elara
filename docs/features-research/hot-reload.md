@@ -1,5 +1,10 @@
 # Hot reload and what the BEAM unlocks
 
+> **Historical note (2026-10-14):** a dated pre-pivot note, kept as history.
+> Current planning and status live in [Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1);
+> `ROADMAP.md` is now only a pointer, so references to it here describe its
+> former role.
+
 > **Status:** exploration note, observed 2026-09-06 on Elixir 1.20.3 / OTP 29.0.5.
 > This file records what live code reload does and does not do in Elara today,
 > the evidence, and the capabilities it makes cheap. It is not a queue.

@@ -1,7 +1,9 @@
 # Approved Elara TUI visual references
 
 Recorded 2026-09-04. This document preserves design provenance; requirements and
-execution status live only in [ROADMAP.md](../ROADMAP.md).
+execution status live only in
+[Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1).
+`ROADMAP.md`, the former status source, is now a pointer.
 
 ## Approved directions
 

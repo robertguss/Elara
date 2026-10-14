@@ -162,11 +162,14 @@ retry, and changed-source evidence. Re-run `mix test`, `mix format
 baseline failures rather than hiding them. Record one live-model exercise
 separately from deterministic regression checks.
 
-Implementation belongs in the supervised `Elara.TestJobs` owner, with source
-identity isolated in its workspace helper and durable schema in its record helper. Reuse `Elara.Exec` for processes and
-`Elara.submit_input/2` for delivery. The session reducer, Rust protocol, and
-generic effect-recovery guarantees do not need a replacement. No cron, remote
-jobs, automatic command replay, new UI framework, or dedicated eval framework.
+Implementation belongs in the supervised `Elara.Jobs` manager (registered as
+`Elara.TestJobs`; `lib/elara/jobs.ex`), with source identity isolated in
+`Elara.TestJobs.Workspace` and durable schema in `Elara.TestJobs.Record`.
+`Elara.TestJobs` itself is the `test_job` tool facade over the `mix_test`
+profile. Reuse `Elara.Exec` for processes and `Elara.submit_input/2` for
+delivery. The session reducer, Rust protocol, and generic effect-recovery
+guarantees do not need a replacement. No cron, remote jobs, automatic command
+replay, new UI framework, or dedicated eval framework.
 
 
 The [JOB-4 repository experiment](harness-experiments.md#2026-09-07-longer-context-recovery-job-and-concurrent-session--job-4)

@@ -22,6 +22,7 @@ defmodule Elara.ThreadCommunicationTest do
 
     File.mkdir_p!(root)
     previous = Application.get_env(:elara, :sessions_root)
+    :ok = Supervisor.terminate_child(Elara.Supervisor, Comm)
     Application.put_env(:elara, :sessions_root, Path.join(root, "sessions"))
     previous_worktrees = System.get_env("ELARA_WORKTREES_ROOT")
     System.put_env("ELARA_WORKTREES_ROOT", Path.join(root, "worktrees"))
@@ -32,6 +33,7 @@ defmodule Elara.ThreadCommunicationTest do
         GenServer.stop(pid)
       end
 
+      :ok = Supervisor.terminate_child(Elara.Supervisor, Comm)
       Application.put_env(:elara, :sessions_root, previous)
 
       if previous_worktrees,
@@ -39,7 +41,10 @@ defmodule Elara.ThreadCommunicationTest do
         else: System.delete_env("ELARA_WORKTREES_ROOT")
 
       File.rm_rf!(root)
+      {:ok, _} = Supervisor.restart_child(Elara.Supervisor, Comm)
     end)
+
+    {:ok, _} = Supervisor.restart_child(Elara.Supervisor, Comm)
 
     {:ok, parent} =
       Elara.start_session(cwd: root, provider: {Controlled, self()}, pause_inputs: true)

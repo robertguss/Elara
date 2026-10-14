@@ -8,6 +8,7 @@ defmodule Elara.Lab.ConcurrencyTest do
   @moduletag timeout: 120_000
 
   # Registered-shape workload scaled down to run in about two seconds.
+  # Keep the registered watchdog: real Git/session startup does not scale down.
   @tiny %{
     "sessions" => "2",
     "turns" => "2",
@@ -19,7 +20,6 @@ defmodule Elara.Lab.ConcurrencyTest do
     "duration_ms" => "1500",
     "window_start_ms" => "0",
     "drain_ms" => "5000",
-    "watchdog_ms" => "2000",
     "baseline_ms" => "100",
     "sample_ms" => "50",
     "shutdown_ms" => "5000",

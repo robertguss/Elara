@@ -3188,11 +3188,15 @@ defmodule Elara.Session do
   end
 
   defp snapshot(shell) do
+    inbox = inbox_view(shell)
+
     %{
       id: shell.id,
       incarnation: shell.incarnation,
       head: shell.next_event_seq - 1,
-      snapshot: materialized_view(shell) |> Map.put("inbox", inbox_view(shell))
+      snapshot:
+        materialized_view(shell, inbox["context"]["estimate_tokens"])
+        |> Map.put("inbox", inbox)
     }
   end
 
@@ -3232,8 +3236,8 @@ defmodule Elara.Session do
 
   defp listing_updated_at(_store), do: System.system_time(:millisecond)
 
-  defp materialized_view(shell) do
-    Protocol.snapshot(shell.id, shell.incarnation, shell.core)
+  defp materialized_view(shell, estimated_tokens \\ nil) do
+    Protocol.snapshot(shell.id, shell.incarnation, shell.core, estimated_tokens)
     |> Map.put("runtime_limits", runtime_limits_view(shell))
   end
 

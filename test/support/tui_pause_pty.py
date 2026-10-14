@@ -56,10 +56,16 @@ def drain(seconds=0.1):
                 send(b"\x1b[1;1R")
 
 
-def wait_for(needle, offset=0):
+def wait_for(needle, offset=0, redraw=False):
     until = time.monotonic() + 45
     while time.monotonic() < until:
-        drain()
+        if redraw:
+            for width in (119, 120):
+                fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 32, width, 0, 0))
+                os.kill(pid, signal.SIGWINCH)
+                drain(.05)
+        else:
+            drain()
         visible = re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", output[offset:])
         if needle.replace(b" ", b"") in visible.replace(b" ", b""):
             return
@@ -97,7 +103,9 @@ try:
     wait_for(b"LONG TURN DONE")
     wait_for(b"kept draft", draft_start)
     if mode == "suspend":
-        wait_for(b"Reattached; local draft and view restored.")
+        # The notice can be a cursor-addressed diff with unchanged letters
+        # omitted. Request one full frame before matching its exact bytes.
+        wait_for(b"Reattached; local draft and view restored.", redraw=True)
     assert os.tcgetpgrp(master) == pid, "resumed TUI is not the foreground job"
     assert not termios.tcgetattr(master)[3] & termios.ICANON, "resumed TUI input is not raw"
     print(f"Resumed {mode}: foreground and raw input verified", flush=True)
@@ -129,9 +137,7 @@ try:
         assert [m["text"] for m in view["messages"] if m["role"] == "user"] == ["long-turn"]
         assert len([m for m in view["messages"] if m["role"] == "assistant" and m["text"].endswith("LONG TURN DONE")]) == 1
     drain(0.3)
-    fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 32, 120, 0, 0))
-    os.kill(pid, signal.SIGWINCH)
-    wait_for(b"Read-only from the next tool call")
+    wait_for(b"Read-only from the next tool call", redraw=True)
     print(f"Pause PTY passed: {mode}, {pause}s, control retained, exact transcript")
 finally:
     (dest / "terminal.ansi").write_bytes(output)

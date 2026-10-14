@@ -347,7 +347,7 @@ fn reasoning_for_turn(model: &Model, selected: usize) -> Vec<&Value> {
 }
 
 pub(super) fn public_entries(
-    model: &Model,
+    model: &reconstruction::Input,
     id: &str,
     parts: &[Value],
     live: bool,
@@ -404,7 +404,7 @@ pub(super) fn public_entries(
 }
 
 // Index the source user message once per transcript build, including live summaries.
-pub(super) fn summary_turns(model: &Model) -> HashSet<usize> {
+pub(super) fn summary_turns(model: &reconstruction::Input) -> HashSet<usize> {
     let mut turns = HashSet::new();
     let mut current = None;
     for (index, message) in model.projection.view["messages"]
@@ -441,7 +441,7 @@ pub(super) fn summary_turns(model: &Model) -> HashSet<usize> {
 /// The `◇ THINKING` heading placed under a user message in the Ember layout.
 /// Other layouts keep the entry (identity, copy ranges) but draw nothing.
 pub(super) fn inline_thinking(
-    model: &Model,
+    model: &reconstruction::Input,
     id: &str,
     has_summary: bool,
     last_turn: bool,
@@ -450,7 +450,7 @@ pub(super) fn inline_thinking(
     {
         return None;
     }
-    let state = if !last_turn || model.turn_state() == "idle" {
+    let state = if !last_turn || model.projection.view["turn"]["state"] == "idle" {
         "complete"
     } else {
         "live"
@@ -1144,7 +1144,8 @@ pub(crate) mod tests {
         let parts = [
             json!({"kind":"reasoning_summary","item_id":"r","output_index":0,"part_index":0,"text":body}),
         ];
-        let live = public_entries(&model, "s:message:1", &parts, true);
+        let input = reconstruction::Input::from(&model);
+        let live = public_entries(&input, "s:message:1", &parts, true);
         assert_eq!(live[0].text, body);
         let id = live[0].id.clone();
         for interrupted in [false, true] {
@@ -1164,7 +1165,7 @@ pub(crate) mod tests {
             ));
             assert_eq!(state.copy_entry().as_deref(), Some(body));
             assert_eq!(state.copy_selection().as_deref(), Some("selection 👩‍💻"));
-            let mut canonical = public_entries(&model, "s:message:1", &parts, false);
+            let mut canonical = public_entries(&input, "s:message:1", &parts, false);
             if interrupted {
                 canonical.insert(
                     0,
@@ -1184,11 +1185,12 @@ pub(crate) mod tests {
     #[test]
     fn public_answers_and_commentary_use_markdown_styles_and_code_blocks() {
         let model = preview();
+        let input = reconstruction::Input::from(&model);
         for kind in ["final_answer", "commentary"] {
             let parts = [
                 json!({"kind":kind,"item_id":"m","output_index":1,"part_index":0,"text":"**Bold** and *italic*\n\n```rust\nlet value = 1;\n```"}),
             ];
-            let entries = public_entries(&model, "s:message:1", &parts, false);
+            let entries = public_entries(&input, "s:message:1", &parts, false);
             let lines = &entries[0].lines;
             assert!(
                 lines
@@ -1211,7 +1213,7 @@ pub(crate) mod tests {
                 .join("\n");
             assert!(frame.contains("let value = 1;"));
             assert!(!frame.contains("**Bold**") && !frame.contains("```"));
-            let live = public_entries(&model, "s:message:1", &parts, true);
+            let live = public_entries(&input, "s:message:1", &parts, true);
             let body = entries[0].text.clone();
             assert_eq!(live[0].text, body);
             assert!(!body.contains("Assistant") && !body.contains("· live"));
@@ -1245,7 +1247,7 @@ pub(crate) mod tests {
             json!({"id":"c|tool","name":"read","args":{"ok":{"path":"file"}},"output_index":1});
         model.projection.view["messages"] = json!([{"role":"user","text":"question"},{"role":"assistant","text":"after","public_content":[part(0,"before","reasoning_summary"),part(2,"after","commentary")],"tool_calls":[call]}]);
         model.projection.view["tool_calls"] = json!([{"id":"c|tool","name":"read","args":{"ok":{"path":"file"}},"output_index":1,"status":"succeeded","outcome":{"ok":"body"}}]);
-        let entries = transcript_entries(&model);
+        let entries = transcript_entries(&reconstruction::Input::from(&model));
         let before = entries
             .iter()
             .position(|entry| entry.text.contains("before"))
@@ -1266,7 +1268,7 @@ pub(crate) mod tests {
             .pop();
         model.projection.view["provider_view"] = json!({"streaming":{"id":"assistant-1","public_content":[part(0,"before","reasoning_summary")]}});
         assert!(
-            transcript_entries(&model)
+            transcript_entries(&reconstruction::Input::from(&model))
                 .iter()
                 .any(|entry| entry.id == id)
         );

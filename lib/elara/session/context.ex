@@ -126,7 +126,7 @@ defmodule Elara.Session.Context do
     }
   end
 
-  def budget(core, limit \\ nil, provider \\ nil) do
+  def budget(core, limit \\ nil, provider \\ nil, estimated_tokens \\ nil) do
     window =
       Elara.Provider.Visibility.context_window(
         if(core.config.provider_settings,
@@ -159,25 +159,32 @@ defmodule Elara.Session.Context do
         end
       end)
 
-    bytes = Enum.sum(Enum.map(newer, &byte_size(JSON.encode!(public_message(&1)))))
     images = Enum.sum(Enum.map(newer, &images/1))
 
-    bytes =
-      if reported do
-        bytes
-      else
-        bytes + byte_size(core.config.system) + 4096 +
-          byte_size(
-            JSON.encode!(
-              Enum.map(
-                Map.values(core.config.tools),
-                &Map.take(&1, [:name, :description, :parameters])
+    estimate =
+      if is_nil(estimated_tokens) do
+        bytes = Enum.sum(Enum.map(newer, &byte_size(JSON.encode!(public_message(&1)))))
+
+        bytes =
+          if reported do
+            bytes
+          else
+            bytes + byte_size(core.config.system) + 4096 +
+              byte_size(
+                JSON.encode!(
+                  Enum.map(
+                    Map.values(core.config.tools),
+                    &Map.take(&1, [:name, :description, :parameters])
+                  )
+                )
               )
-            )
-          )
+          end
+
+        (reported || 0) + div(bytes + 3, 4) + images * 32_768
+      else
+        estimated_tokens
       end
 
-    estimate = (reported || 0) + div(bytes + 3, 4) + images * 32_768
     headroom = limit - div(limit * 9, 10)
 
     %{

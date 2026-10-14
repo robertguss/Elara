@@ -93,11 +93,9 @@ defmodule Mix.Tasks.Elara.Tui do
 
     crate = Path.expand("../../../native/elara-tui", __DIR__)
     target = Path.join(Mix.Project.build_path(), "elara-tui-target")
-    release? = Mix.env() == :prod
-    args = ["build", "--locked"] ++ if(release?, do: ["--release"], else: [])
 
     {output, status} =
-      System.cmd(cargo, args,
+      System.cmd(cargo, ["build", "--locked", "--release"],
         cd: crate,
         env: [{"CARGO_TARGET_DIR", target}],
         stderr_to_stdout: true
@@ -109,8 +107,7 @@ defmodule Mix.Tasks.Elara.Tui do
       Mix.raise("failed to build native/elara-tui with cargo (exit #{status})")
     end
 
-    profile = if release?, do: "release", else: "debug"
-    source = Path.join([target, profile, "elara-tui"])
+    source = Path.join([target, "release", "elara-tui"])
     File.mkdir_p!(Path.dirname(destination))
     File.cp!(source, destination)
     File.chmod!(destination, 0o755)
@@ -128,7 +125,7 @@ defmodule Mix.Tasks.Elara.Tui do
       |> Enum.map(fn path -> [Path.relative_to(path, crate), 0, File.read!(path), 0] end)
 
     :sha256
-    |> :crypto.hash(content)
+    |> :crypto.hash([File.read!(__ENV__.file), 0, content])
     |> Base.encode16(case: :lower)
   end
 

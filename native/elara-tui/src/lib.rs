@@ -6,8 +6,10 @@ mod attachments;
 mod inbox;
 mod limits;
 mod presentation;
+mod reconstruction;
 mod sessions;
 pub use appearance::{Appearance, Theme, ViewLayout};
+pub use reconstruction::LiveRenderer;
 mod clipboard;
 mod editor;
 mod syntax;
@@ -268,7 +270,9 @@ impl Model {
 
     /// Install authoritative connection state while retaining this session's Rust-owned UI state.
     pub fn reconnect_from(&mut self, fresh: Model) {
+        let generation = self.projection.snapshot_generation.wrapping_add(1);
         self.projection = fresh.projection;
+        self.projection.snapshot_generation = generation;
         self.editor.set_history(user_prompts(&self.projection.view));
         self.last_outcome = fresh.last_outcome;
         self.connection = ConnectionState::Connected;
@@ -595,6 +599,16 @@ impl Model {
         self.notification = Some(message);
     }
 
+    pub fn observe_turn_outcome(&mut self, kind: &str) {
+        self.last_outcome = Some(kind.to_string());
+        self.ask_sent_at = None;
+        match kind {
+            "completed" => self.notify("Turn complete"),
+            "provider_error" | "turn_limit" => self.notify("Turn ended with an error"),
+            _ => {}
+        }
+    }
+
     fn observe_ops(&mut self, ops: &Value) {
         let Some(ops) = ops.as_array() else {
             return;
@@ -627,15 +641,7 @@ impl Model {
                             Some(started.elapsed().as_secs_f64() * 1_000.0);
                     }
                     if let Some(kind) = turn["outcome"]["kind"].as_str() {
-                        self.last_outcome = Some(kind.to_string());
-                        self.ask_sent_at = None;
-                        match kind {
-                            "completed" => self.notify("Turn complete"),
-                            "provider_error" | "turn_limit" => {
-                                self.notify("Turn ended with an error")
-                            }
-                            _ => {}
-                        }
+                        self.observe_turn_outcome(kind);
                     }
                 }
                 Some("append_content_delta") => {
@@ -1257,6 +1263,12 @@ impl ClientConnection {
         let _ = self.writer.shutdown(std::net::Shutdown::Both);
     }
 
+    pub fn close_and_take_frames(&mut self) -> Receiver<Result<Value, String>> {
+        self.close();
+        let (_, empty) = mpsc::channel();
+        std::mem::replace(&mut self.receiver, empty)
+    }
+
     pub fn connect(port: u16, mut request: Value) -> Result<(Self, Value), String> {
         if let Ok(token) = std::env::var("ELARA_SERVER_TOKEN") {
             request
@@ -1556,7 +1568,19 @@ pub fn render_ansi(model: &Model, width: u16, height: u16) -> Result<String, Str
 }
 
 pub fn draw_model(frame: &mut ratatui::Frame<'_>, model: &Model) {
-    draw_content(frame, model);
+    draw_model_inner(frame, model, None);
+}
+
+pub fn draw_model_live(frame: &mut ratatui::Frame<'_>, model: &Model, renderer: &mut LiveRenderer) {
+    draw_model_inner(frame, model, Some(renderer));
+}
+
+fn draw_model_inner(
+    frame: &mut ratatui::Frame<'_>,
+    model: &Model,
+    renderer: Option<&mut LiveRenderer>,
+) {
+    draw_content(frame, model, renderer);
     presentation::finish(frame, model);
     attachments::draw(frame, model);
     sessions::draw(frame, model);
@@ -1634,7 +1658,11 @@ fn draw_session_detail(frame: &mut ratatui::Frame<'_>, model: &Model) {
     }
 }
 
-fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
+fn draw_content(
+    frame: &mut ratatui::Frame<'_>,
+    model: &Model,
+    renderer: Option<&mut LiveRenderer>,
+) {
     let area = frame.area();
     if model.show_help {
         frame.render_widget(
@@ -1672,27 +1700,12 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
         };
         let mut state = model.transcript.borrow_mut();
         state.rect = viewer_area.inner(ratatui::layout::Margin::new(1, 1));
-        let source_key = (
-            model.session_id.clone(),
-            model.projection.incarnation.clone(),
-            model.projection.head,
-            model.projection.snapshot_generation,
-        );
-        let entries = if state.source_key.as_ref() != Some(&source_key) {
-            state.source_key = Some(source_key);
-            Some(vec![
-                call.map(|call| tools::inspection(&model.session_id, call))
-                    .unwrap_or_else(|| {
-                        transcript::Entry::plain(id, "Tool unavailable in current snapshot.", false)
-                    }),
-            ])
-        } else {
-            None
-        };
-        state.update(
-            entries,
+        reconstruction::update(
+            model,
+            &mut state,
             state_width(viewer_area.width),
             viewer_area.height.saturating_sub(2) as usize,
+            renderer,
         );
         frame.render_widget(
             Paragraph::new(state.visible_lines()).block(
@@ -1774,36 +1787,17 @@ fn draw_content(frame: &mut ratatui::Frame<'_>, model: &Model) {
     let transcript_area = presentation::panes(frame, model, chunks[1]);
     let mut state = model.transcript.borrow_mut();
     state.rect = transcript_area.inner(ratatui::layout::Margin::new(1, 0));
-    let source_key = (
-        model.session_id.clone(),
-        model.projection.incarnation.clone(),
-        model.projection.head,
-        model.projection.snapshot_generation,
-    );
-    let entries = if state.source_key.as_ref() != Some(&source_key) {
-        state.source_key = Some(source_key);
-        Some(transcript_entries(model))
-    } else {
-        None
-    };
-    state.update(
-        entries,
+    reconstruction::update(
+        model,
+        &mut state,
         state_width(transcript_area.width),
         transcript_area.height as usize,
+        renderer,
     );
     frame.render_widget(Paragraph::new(state.visible_lines()), state.rect);
     let transcript_focused = state.focused;
     let transcript_status = if state.searching || !state.query.is_empty() {
-        Some(format!(
-            "/{} · {}/{} matches",
-            state.query,
-            if state.matches.is_empty() {
-                0
-            } else {
-                state.match_index + 1
-            },
-            state.matches.len()
-        ))
+        Some(state.search_status())
     } else if state.focused {
         Some(format!(
             "{} · {}",
@@ -2243,7 +2237,7 @@ fn state_width(width: u16) -> usize {
     width.saturating_sub(2).max(1) as usize
 }
 
-fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
+fn transcript_entries(model: &reconstruction::Input) -> Vec<transcript::Entry> {
     use transcript::Entry;
     let mut entries = Vec::new();
     let view = &model.projection.view;
@@ -2448,7 +2442,7 @@ fn transcript_entries(model: &Model) -> Vec<transcript::Entry> {
 
 /// Frame consecutive tool calls (rules, or boxes in Workbench) and close each
 /// Ember thinking block with its footer. Presentation only: no text changes.
-fn decorate_runs(model: &Model, entries: &mut [transcript::Entry]) {
+fn decorate_runs(model: &reconstruction::Input, entries: &mut [transcript::Entry]) {
     use transcript::Synthetic;
     let tool_prefix = format!("{}:tool:", model.session_id);
     let is_tool = |entry: &transcript::Entry| entry.id.starts_with(&tool_prefix);
@@ -3426,7 +3420,7 @@ mod tests {
         model.projection.view["content_deltas"] =
             json!({"assistant-1":"UNIQUE_ANSWER", "other":"OTHER_STREAM"});
         model.projection.view["provider_view"] = json!({"streaming":{"id":"assistant-1","public_content":[{"kind":"final_answer","item_id":"m","output_index":0,"part_index":0,"text":"UNIQUE_ANSWER"}]}});
-        let entries = transcript_entries(&model);
+        let entries = transcript_entries(&reconstruction::Input::from(&model));
         assert_eq!(
             entries
                 .iter()
@@ -3444,7 +3438,7 @@ mod tests {
         model.projection.view["provider_view"]["streaming"]["public_content"][0]["text"] =
             json!("Reasoning only");
         assert!(
-            transcript_entries(&model)
+            transcript_entries(&reconstruction::Input::from(&model))
                 .iter()
                 .any(|entry| entry.text == "UNIQUE_ANSWER")
         );
@@ -3744,12 +3738,12 @@ mod transcript_input_tests {
         let mut model = fixture_model("idle");
         model.projection.view["messages"].as_array_mut().unwrap().push(json!({"role":"tool","call_id":"stable","name":"bash","outcome":{"ok":"a\tb\nresult"}}));
         model.projection.view["tool_calls"] = json!([{"id":"stable","name":"bash","args":{"ok":{"command":"echo result"}},"status":"succeeded","outcome":{"ok":"a\tb\nresult"}}]);
-        let entries = transcript_entries(&model);
+        let entries = transcript_entries(&reconstruction::Input::from(&model));
         let last = entries.last().unwrap();
         assert!(last.id.ends_with(":tool:stable"));
         model.expanded_tools.insert("stable".into());
         assert!(
-            transcript_entries(&model)
+            transcript_entries(&reconstruction::Input::from(&model))
                 .last()
                 .unwrap()
                 .text

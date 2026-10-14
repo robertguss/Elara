@@ -1,7 +1,7 @@
 defmodule Elara.Lab.InputObserverTest do
   use ExUnit.Case, async: false
 
-  alias Elara.Lab.InputObserver
+  alias Elara.Lab.{InputObserver, StoreFixture}
   alias Elara.Message.{Assistant, ToolCall, ToolResult, User}
   alias Elara.Session.Store
 
@@ -54,14 +54,14 @@ defmodule Elara.Lab.InputObserverTest do
         inbox: [receipt(successor.id, ctx.expected["B"], :queued)]
     }
 
-    {:ok, successor} = Store.save(successor)
+    {:ok, successor} = StoreFixture.write(successor)
     assert {:ok, view} = InputObserver.read(source.path, ctx.expected)
     assert view.inputs["B"].state == :paused
     refute view.all_terminal
     refute view.all_completed
 
     {:ok, _} =
-      Store.save(%{
+      StoreFixture.write(%{
         successor
         | inputs_paused: false,
           inbox: [receipt(successor.id, ctx.expected["B"], :consumed)]
@@ -81,7 +81,7 @@ defmodule Elara.Lab.InputObserverTest do
         ctx.expected["B"].user
       ])
 
-    {:ok, _} = Store.save(stale)
+    {:ok, _} = StoreFixture.write(stale)
     assert {:ok, view} = InputObserver.read(source.path, ctx.expected)
     assert view.inputs["B"].state == :incomplete
 
@@ -91,7 +91,7 @@ defmodule Elara.Lab.InputObserverTest do
         %Assistant{text: "done older input"}
       ])
 
-    {:ok, _} = Store.save(wrong)
+    {:ok, _} = StoreFixture.write(wrong)
     assert {:ok, view} = InputObserver.read(source.path, ctx.expected)
     assert view.inputs["B"].state == :incomplete
   end
@@ -99,13 +99,13 @@ defmodule Elara.Lab.InputObserverTest do
   test "rejects duplicate consumption and forged receipt identities", ctx do
     {source, successor} = fixture(ctx)
     duplicate = history(successor, [ctx.expected["B"].user, %Assistant{text: "done B"}])
-    {:ok, _} = Store.save(duplicate)
+    {:ok, _} = StoreFixture.write(duplicate)
     assert {:ok, view} = InputObserver.read(source.path, ctx.expected)
     refute view.checks.at_most_once_consumption
     refute view.all_terminal
 
     wrong = %{successor | inbox: [Map.put(hd(successor.inbox), :sender_id, "other")]}
-    {:ok, _} = Store.save(wrong)
+    {:ok, _} = StoreFixture.write(wrong)
     assert {:ok, view} = InputObserver.read(source.path, ctx.expected)
     refute view.checks.input_identities
     refute view.all_terminal
@@ -117,13 +117,13 @@ defmodule Elara.Lab.InputObserverTest do
     extra =
       history(successor, [%User{text: "unplanned input"}, %Assistant{text: "unplanned answer"}])
 
-    {:ok, _} = Store.save(extra)
+    {:ok, _} = StoreFixture.write(extra)
     assert {:ok, view} = InputObserver.read(source.path, ctx.expected)
     refute view.checks.known_history_inputs
     refute view.all_terminal
 
     unexpected = receipt(successor.id, Map.put(ctx.expected["B"], :id, "unplanned-id"), :accepted)
-    {:ok, _} = Store.save(%{successor | inbox: [unexpected | successor.inbox]})
+    {:ok, _} = StoreFixture.write(%{successor | inbox: [unexpected | successor.inbox]})
     assert {:ok, view} = InputObserver.read(source.path, ctx.expected)
     refute view.checks.known_receipts
     refute view.all_terminal
@@ -132,7 +132,7 @@ defmodule Elara.Lab.InputObserverTest do
   test "a durable failed receipt is terminal but cannot be counted as success", ctx do
     {source, successor} = fixture(ctx)
     failed = receipt(successor.id, ctx.expected["B"], :failed) |> Map.put(:error, "provider died")
-    {:ok, _} = Store.save(%{successor | inbox: [failed]})
+    {:ok, _} = StoreFixture.write(%{successor | inbox: [failed]})
     assert {:ok, view} = InputObserver.read(source.path, ctx.expected)
     assert view.all_terminal
     assert view.inputs["B"].state == :failed
@@ -142,7 +142,7 @@ defmodule Elara.Lab.InputObserverTest do
   test "only an interrupted event after its own observed input can establish interruption", ctx do
     {source, _successor} = fixture(ctx)
     source = history(%{source | entries: [], leaf: nil}, [ctx.expected["A"].user])
-    {:ok, source} = Store.save(source)
+    {:ok, source} = StoreFixture.write(source)
     user = %{session: source.id, event: {:message_appended, ctx.expected["A"].user}}
     ended = %{session: source.id, event: {:turn_ended, :interrupted}}
 
@@ -163,24 +163,24 @@ defmodule Elara.Lab.InputObserverTest do
     end
 
     call = %ToolCall{id: "A-call", name: "write", args: {:ok, %{}}}
-    {:ok, _} = Store.save(history(source, [%Assistant{tool_calls: [call]}]))
+    {:ok, _} = StoreFixture.write(history(source, [%Assistant{tool_calls: [call]}]))
     assert {:ok, view} = InputObserver.read(source.path, ctx.expected, [user, ended])
     assert view.inputs["A"].state == :incomplete
   end
 
   test "rejects wrong handoff identity, parent, and cycles", ctx do
     {source, successor} = fixture(ctx)
-    {:ok, _} = Store.save(put_in(source.context["handoff"]["id"], "wrong-id"))
+    {:ok, _} = StoreFixture.write(put_in(source.context["handoff"]["id"], "wrong-id"))
     assert {:error, :handoff_identity_mismatch} = InputObserver.read(source.path, ctx.expected)
-    {:ok, _} = Store.save(source)
-    {:ok, _} = Store.save(%{successor | parent_session: "wrong-parent"})
+    {:ok, _} = StoreFixture.write(source)
+    {:ok, _} = StoreFixture.write(%{successor | parent_session: "wrong-parent"})
     assert {:error, :invalid_handoff_parent} = InputObserver.read(source.path, ctx.expected)
 
-    {:ok, _} = Store.save(%{successor | cwd: Path.join(ctx.dir, "another-workspace")})
+    {:ok, _} = StoreFixture.write(%{successor | cwd: Path.join(ctx.dir, "another-workspace")})
     assert {:error, :invalid_handoff_parent} = InputObserver.read(source.path, ctx.expected)
 
     {:ok, _} =
-      Store.save(%{
+      StoreFixture.write(%{
         successor
         | context:
             Map.put(successor.context, "handoff", %{
@@ -205,7 +205,7 @@ defmodule Elara.Lab.InputObserverTest do
         %Assistant{text: "done B"}
       ])
 
-    {:ok, _} = Store.save(missing)
+    {:ok, _} = StoreFixture.write(missing)
     assert {:ok, view} = InputObserver.read(source.path, ctx.expected)
     assert view.inputs["B"].state == :incomplete
 
@@ -218,7 +218,7 @@ defmodule Elara.Lab.InputObserverTest do
         %Assistant{text: "done B"}
       ])
 
-    {:ok, _} = Store.save(misplaced)
+    {:ok, _} = StoreFixture.write(misplaced)
     assert {:ok, view} = InputObserver.read(source.path, ctx.expected)
     refute view.checks.call_result_identity
   end
@@ -268,10 +268,8 @@ defmodule Elara.Lab.InputObserverTest do
     |> Map.put(:created_at, 0)
   end
 
-  defp history(store, messages),
-    do:
-      Enum.reduce(messages, store, fn message, store ->
-        {:ok, store} = Store.append(store, message)
-        store
-      end)
+  defp history(store, messages) do
+    {:ok, history} = Store.append_all(%{store | persist?: false}, messages)
+    %{history | persist?: store.persist?}
+  end
 end

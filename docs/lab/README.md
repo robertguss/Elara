@@ -88,6 +88,11 @@ it starts a job, within its existing setup deadline. Recovery timing still
 starts at the nominated fault. Socket-owner tests wait for accepted sockets to
 leave the acceptor before inspecting their connection tasks.
 
+Persisted mutation tests use `Elara.Lab.StoreFixture.write/1` from the test
+helper to replace disposable transcripts with the intended forged history and
+metadata. The production Store encoder writes those fixtures. Normal session
+saves remain append-only, and historical experiment results are unchanged.
+
 Repetition `r` uses seed `S + r` in its own temporary sessions root, skills
 home and coding worktree root, so runs never touch `~/.elara` or
 `~/.elara-worktrees`. Worktrees sit beside protected session state, not inside

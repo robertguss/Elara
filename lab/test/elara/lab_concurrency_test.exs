@@ -524,6 +524,7 @@ defmodule Elara.Lab.ConcurrencyTest do
   end
 
   test "a changed execution epoch leaves cleanup unconfirmed" do
+    wait_for_exec_idle()
     os_pid = Elara.Exec.status().os_pid
 
     spawn(fn ->

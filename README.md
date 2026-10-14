@@ -607,10 +607,12 @@ mix elara.ask "summarize this repository"
 
 The command prints tool activity and the answer. It exits with status 1 on a
 provider error, interruption, timeout waiting for the turn, or turn limit. This
-one-shot command does not persist its session. A tool that times out (10 minutes
-by default; `bash` reports an unknown result) is reported to the model; if the
-model then completes the turn, `mix elara.ask` exits 0. This differs from the CLI timing out while waiting for
-the turn itself.
+one-shot command does not persist its session. A tool that times out (`bash` reports an
+unknown result) is reported to the model; if the model then completes the turn,
+`mix elara.ask` exits 0. The CLI itself exits 1 after 10 minutes without a
+session event. That equals the default command timeout, so a silent command
+that runs to its timeout usually ends the ask first; set a lower
+`ELARA_TOOL_TIMEOUT_MS` when a one-shot run should see tool timeouts.
 
 Start a persistent conversation:
 
@@ -637,7 +639,7 @@ Common chat commands:
 | `/name TEXT`                      | Name the current session.                                       |
 | `/reload`                         | Reload this session's local plugins.                            |
 | `/why` / `/why N`                 | Explain the transition behind the latest event or event N.      |
-| `/model` / `/model ID [EFFORT]`   | List models with their windows, or select one for the next turn. |
+| `/model` / `/model ID [EFFORT]`   | List models with their windows, or select one for the next request. |
 | `/quit`, `/exit`, `/q`, or Ctrl-D | Exit; during a turn, interrupt first.                           |
 
 Prefix a prompt with `//` to send text beginning with `/`. Commands that change
@@ -1375,8 +1377,9 @@ call. Saved handoff headers require this build for resume.
   [Project instructions and Agent Skills](#project-instructions-and-agent-skills).
 - `test_job` and `job` run supervised background jobs whose completion arrives
   through the inbox; see [Supervised test jobs](docs/test-jobs.md).
-- `completion_wait`, `thread_wait`, `thread_send`, `thread_read` and
-  `thread_status` wait for and talk to delegated children; see
+- `completion_wait` waits for an owned job's or a delegated child's completion.
+- `thread_wait`, `thread_send`, `thread_read` and `thread_status` wait for and
+  talk to delegated children; see
   [Thread communication and navigation](#thread-communication-and-navigation).
 
 ## Workspace search

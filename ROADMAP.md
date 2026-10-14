@@ -10,8 +10,7 @@ current (decision D27).
 - [Roadmap](https://app.notion.com/p/3f8700320c4581c29be5f5f9a4fef5bc): nine
   phases, from 0 (Reset) to 8 (every language Robert uses).
 - [Phase 1, Usable every day](https://app.notion.com/p/3f8700320c45817e807fc65b894b9013):
-  the current phase. Its build is merged; Robert's acceptance week and X1
-  remain.
+  the current phase, with its spec, plan and status.
 - [Product Brief](https://app.notion.com/p/3f8700320c4581c1b555e8b655313cc5):
   Elara is Robert's daily-driver coding agent, built on two bets, uniforms and
   surgical context.

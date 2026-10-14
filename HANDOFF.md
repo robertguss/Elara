@@ -78,14 +78,23 @@ rustup downloads it on the first Cargo command.
 - Context meter, handoff and clearing old tool results: README.md, "Automatic
   context handoff". The TUI meter reads `snapshot.inbox.context`.
 - TUI server limits, external editor, suspend and reattach: README.md, "Rust
-  TUI".
+  TUI". A local "Reattaching…" notice does not claim control.
+- Long-session redraw: `native/elara-tui/src/reconstruction.rs` owns one
+  background layout worker and one replaceable pending snapshot. Old transcript
+  rows stay visible until a matching replacement is ready; prompt and
+  navigation state stay on the UI thread. Rows keep source ranges, and
+  per-grapheme cells are built only for the viewport. Session snapshots reuse
+  the inbox token estimate while keeping provider window and image-cost
+  semantics separate. The lazy TUI builder always uses the release profile,
+  including the daily build, and its cache digest includes the build recipe.
 - Keys, the keymap file and help: README.md, "Custom keys";
   `native/elara-tui/src/actions.rs`.
 - `/diff`, `/undo` and bounded checkpoints: README.md, "Rust TUI";
   `Elara.WorkspaceDiff`, `native/elara-tui/src/workspace_diff.rs` and
   `workspace_undo.rs`.
-- `/read-only`, `/limits` and `output_read`: README.md, "Rust TUI";
-  `docs/plugins.md` for plugin declarations.
+- `/read-only`: README.md, "Rust TUI"; `docs/plugins.md` for plugin
+  declarations. `/limits`, retained output and `output_read`: README.md,
+  "Workspace search" (the execution limits that follow it).
 - Syntax colors: `native/elara-tui/src/syntax.rs`, with goldens in
   `native/elara-tui/tests/goldens/syntax-*.txt`.
 - Footer usage and meter: `presentation::usage_footer`, with goldens in

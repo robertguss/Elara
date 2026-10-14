@@ -44,8 +44,8 @@ Elixir 1.20, Erlang/OTP 29, and Rust 1.98.1 with `cargo`, `rustfmt`, and
 Clippy, pinned by `rust-toolchain.toml` (rustup fetches it; the crates declare a
 1.88 minimum), plus the `flock` command (session locking), `rg` (the `grep` and
 `glob` tools) and `python3` (PTY-driven TUI tests). Distro Rust 1.85 is too old
-for the TUI dependencies. `.agents/setup` provisions
-this in cloud environments.
+for the TUI dependencies. `.agents/setup` provisions Elixir, OTP and Rust in
+cloud environments; `rg` and `python3` come from the base image.
 
 ## Commands
 
@@ -67,8 +67,8 @@ mix test test/elara/session_test.exs:120      # one test by line
   refuses to replace a stub binary that a running Elara process still holds
   (`:etxtbsy`) — stop long-lived sessions or use a separate `MIX_BUILD_PATH`.
 - `native/elara-tui` is built lazily (always in release mode) on the first
-  `mix elara.tui`, cached against a source digest in the app build's
-  `priv/native/elara-tui/`.
+  `mix elara.tui`, cached against a source digest (which includes the build
+  recipe) in the app build's `priv/native/elara-tui.sha256`.
 - `bin/check` raises the file-descriptor soft limit to at least 4096 and
   refuses an insufficient hard limit.
 - Rust TUI frame goldens live in `native/elara-tui/tests/goldens/`; regenerate
@@ -125,8 +125,8 @@ else saved Grok OAuth. Other env vars: `ELARA_MODEL`, `ELARA_BASE_URL`,
 `ELARA_CONTEXT_KEEP_RESULTS`, `ELARA_CONTEXT_KEEP_TOKENS`,
 `ELARA_COMMAND_RULES`, `ELARA_COMMAND_ENV`, `ELARA_FILE_ROOTS`,
 `ELARA_WORKTREES_ROOT` (default `~/.elara-worktrees`), `ELARA_STABLE_DIR`
-(daily build, default `~/.elara/daily`) and `XAI_MODEL`. README.md documents
-each.
+(daily build, default `~/.elara/daily`) and `XAI_MODEL`. README.md and
+`docs/detached-and-remote.md` document each.
 
 State lives under `~/.elara/`: `sessions/<cwd-key>/` (JSONL transcripts),
 `sessions/_threads/` (delegated children), `sessions/_thread_messages/`

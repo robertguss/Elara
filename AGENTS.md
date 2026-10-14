@@ -78,8 +78,8 @@ things that are non-obvious in the Cloud environment.
   provider credentials. `ELARA_PROVIDER=openai-codex` after
   `mix elara.login openai` uses a ChatGPT/Codex subscription; otherwise
   `ELARA_API_KEY` or `XAI_API_KEY`, or `mix elara.login` for Grok (tokens land
-  in `~/.elara/`). Without credentials these commands stop at startup with a
-  "Not logged in" message.
+  in `~/.elara/`). Without credentials these commands stop at startup: ask and
+  chat print "Not logged in", and the TUI reports `not_logged_in`.
 - To exercise the full agent loop (session + read/write/edit/bash tools) without
   credentials, drive it with the scripted provider via the public API:
   `Elara.start_session(provider: {Elara.Provider.Scripted, agent_pid}, cwd: dir, persist: false)`,

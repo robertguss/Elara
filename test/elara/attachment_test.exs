@@ -434,15 +434,27 @@ defmodule Elara.AttachmentTimeoutTest do
       File.rm_rf!(cwd)
     end)
 
+    {:ok, unrelated} =
+      Task.Supervisor.start_child(Elara.TaskSup, fn ->
+        receive do
+          :finish -> :ok
+        end
+      end)
+
+    unrelated_ref = Process.monitor(unrelated)
+    on_exit(fn -> Task.Supervisor.terminate_child(Elara.TaskSup, unrelated) end)
     before_tasks = Task.Supervisor.children(Elara.TaskSup)
     :ok = :sys.suspend(Elara.Exec)
 
     try do
+      send(unrelated, :finish)
+      assert_receive {:DOWN, ^unrelated_ref, :process, ^unrelated, :normal}, 2_000
+
       assert {:error, :file_read_timeout_retry} =
                Elara.ask_input(session, "retained draft", ["input"], [], 2_000)
 
       assert [] = Elara.transcript(session)
-      assert Task.Supervisor.children(Elara.TaskSup) == before_tasks
+      assert Task.Supervisor.children(Elara.TaskSup) -- before_tasks == []
     after
       :sys.resume(Elara.Exec)
     end

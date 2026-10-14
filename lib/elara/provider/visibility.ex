@@ -117,7 +117,7 @@ defmodule Elara.Provider.Visibility do
 
   def valid_part?(_), do: false
 
-  def view(core) do
+  def view(core, estimated_tokens \\ nil) do
     settings = core.config.provider_settings
     snapshot = core.config.provider_catalog
     catalog = if snapshot, do: snapshot["models"], else: if(settings, do: catalog(), else: [])
@@ -137,7 +137,7 @@ defmodule Elara.Provider.Visibility do
         catalog
       end
 
-    budget = Elara.Session.Context.budget(core)
+    budget = Elara.Session.Context.budget(core, nil, nil, estimated_tokens)
 
     last =
       core.history

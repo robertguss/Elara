@@ -1,7 +1,7 @@
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use std::collections::{HashMap, HashSet};
-use unicode_segmentation::UnicodeSegmentation;
+use unicode_segmentation::{GraphemeCursor, UnicodeSegmentation};
 use unicode_width::UnicodeWidthStr;
 
 /// A presentation-only row placed above or below an entry's source lines.
@@ -126,24 +126,131 @@ pub(crate) struct Point {
 }
 #[derive(Clone, Debug)]
 struct Cell {
-    text: String,
+    display: Option<String>,
+    width: usize,
     style: Style,
     start: usize,
     end: usize,
     chrome: bool,
-    /// A literal source space: a soft-wrap opportunity.
-    space: bool,
+}
+impl Cell {
+    fn text<'a>(&'a self, entry: &'a Entry) -> &'a str {
+        self.display
+            .as_deref()
+            .unwrap_or_else(|| &entry.text[self.start..self.end])
+    }
 }
 #[derive(Clone, Debug)]
 struct Row {
     id: String,
     start: usize,
-    cells: Vec<Cell>,
+    cells: RowCells,
     /// Position among consecutive rows of this entry sharing `start`, so a
     /// viewport pinned on a synthetic row does not drift onto its neighbour.
     ordinal: usize,
     /// Row background applied by `fill`; focus highlighting may replace it.
     fill_bg: Option<Color>,
+}
+#[derive(Clone, Debug)]
+enum RowCells {
+    Chrome(Vec<Cell>),
+    Source(BodyRow),
+}
+#[derive(Clone, Debug)]
+struct BodyRow {
+    line: usize,
+    first: (usize, usize),
+    end: (usize, usize),
+    tabs: Vec<((usize, usize), usize)>,
+    last: bool,
+    cursor: bool,
+}
+struct Glyph {
+    span: usize,
+    offset: usize,
+    len: usize,
+    byte: usize,
+    width: usize,
+    space: bool,
+    tab: bool,
+}
+impl Row {
+    fn cells<'a>(&'a self, entry: &Entry, width: usize) -> std::borrow::Cow<'a, [Cell]> {
+        match &self.cells {
+            RowCells::Chrome(cells) => std::borrow::Cow::Borrowed(cells),
+            RowCells::Source(source) => {
+                let mut builder = RowBuilder::new(entry, width);
+                let line = &entry.lines[source.line];
+                let decor = entry.line_decor.get(&source.line);
+                let fill = decor
+                    .and_then(|d| d.fill)
+                    .or(entry.fill)
+                    .unwrap_or_default();
+                let (_, capacity) = builder.metrics(source.line);
+                let mut body = Vec::new();
+                let mut byte = self.start;
+                for (span_index, span) in line
+                    .spans
+                    .iter()
+                    .enumerate()
+                    .skip(source.first.0)
+                    .take(source.end.0 - source.first.0 + 1)
+                {
+                    let from = if span_index == source.first.0 {
+                        source.first.1
+                    } else {
+                        0
+                    };
+                    let to = if span_index == source.end.0 {
+                        source.end.1
+                    } else {
+                        span.content.len()
+                    };
+                    for (offset, grapheme) in span.content[from..to].grapheme_indices(true) {
+                        let chrome = span_index < entry.prefix;
+                        let end = if chrome { byte } else { byte + grapheme.len() };
+                        let display = if grapheme == "\t" {
+                            let position = (span_index, from + offset);
+                            let width = source
+                                .tabs
+                                .iter()
+                                .find(|(at, _)| *at == position)
+                                .expect("planned tab")
+                                .1;
+                            Some(" ".repeat(width))
+                        } else if grapheme.width() > capacity {
+                            Some("�".into())
+                        } else if chrome {
+                            Some(grapheme.into())
+                        } else {
+                            None
+                        };
+                        let width = display
+                            .as_deref()
+                            .map_or_else(|| grapheme.width(), UnicodeWidthStr::width);
+                        body.push(Cell {
+                            display,
+                            width,
+                            style: fill.patch(line.style).patch(span.style),
+                            start: byte,
+                            end,
+                            chrome,
+                        });
+                        byte = end;
+                    }
+                }
+                if source.cursor {
+                    body.push(RowBuilder::chrome("▌", Style::default(), byte));
+                }
+                builder.finish(body, self.start, decor, source.last);
+                let RowCells::Chrome(cells) = builder.rows.pop().expect("decorated row").cells
+                else {
+                    unreachable!()
+                };
+                std::borrow::Cow::Owned(cells)
+            }
+        }
+    }
 }
 /// Builds the visual rows of one entry: source lines are wrapped first, then
 /// each row is assembled as `gutter | indent | body | tail | padding | edge`.
@@ -173,19 +280,20 @@ impl<'a> RowBuilder<'a> {
         }
     }
     fn chrome(text: impl Into<String>, style: Style, byte: usize) -> Cell {
+        let text = text.into();
         Cell {
-            text: text.into(),
+            width: text.width(),
+            display: Some(text),
             style,
             start: byte,
             end: byte,
             chrome: true,
-            space: false,
         }
     }
     /// Soft-wrap at the last space in `row` so words stay whole. Returns the
     /// cells carried to the next row and that row's first source byte; an
     /// unbreakable row starts the next one empty at `byte`.
-    fn break_word(row: &mut Vec<Cell>, byte: usize) -> (Vec<Cell>, usize) {
+    fn break_word(row: &mut Vec<Glyph>, byte: usize) -> (Vec<Glyph>, usize) {
         let space = row
             .iter()
             .rposition(|cell| cell.space)
@@ -194,7 +302,7 @@ impl<'a> RowBuilder<'a> {
             return (Vec::new(), byte);
         };
         let carried = row.split_off(space + 1);
-        let start = carried[0].start;
+        let start = carried[0].byte;
         (carried, start)
     }
     fn fixed(&self, spans: &[Span<'static>], budget: usize, base: Style, byte: usize) -> Vec<Cell> {
@@ -230,8 +338,8 @@ impl<'a> RowBuilder<'a> {
             .saturating_sub(self.gutter_width + self.edge_width + 1);
         let indent = decor.map_or(&[][..], |d| d.indent.as_slice());
         cells.extend(self.fixed(indent, indent_budget, base, start));
-        let mut used: usize = cells.iter().map(|c| c.text.width()).sum();
-        used += body.iter().map(|c| c.text.width()).sum::<usize>();
+        let mut used: usize = cells.iter().map(|c| c.width).sum();
+        used += body.iter().map(|c| c.width).sum::<usize>();
         cells.extend(body);
         let remaining = self.width.saturating_sub(used + self.edge_width);
         let tail = decor
@@ -257,7 +365,7 @@ impl<'a> RowBuilder<'a> {
         self.rows.push(Row {
             id: entry.id.clone(),
             start,
-            cells,
+            cells: RowCells::Chrome(cells),
             ordinal: 0,
             fill_bg: fill.and_then(|s| s.bg),
         });
@@ -267,7 +375,7 @@ impl<'a> RowBuilder<'a> {
             Synthetic::Blank => self.rows.push(Row {
                 id: self.entry.id.clone(),
                 start: byte,
-                cells: Vec::new(),
+                cells: RowCells::Chrome(Vec::new()),
                 ordinal: 0,
                 fill_bg: None,
             }),
@@ -289,7 +397,7 @@ impl<'a> RowBuilder<'a> {
                 self.rows.push(Row {
                     id: self.entry.id.clone(),
                     start: byte,
-                    cells: vec![Self::chrome(text, *style, byte)],
+                    cells: RowCells::Chrome(vec![Self::chrome(text, *style, byte)]),
                     ordinal: 0,
                     fill_bg: style.bg,
                 });
@@ -309,84 +417,104 @@ impl<'a> RowBuilder<'a> {
             }
         }
     }
-    /// Wrap the entry's source lines and append the stream cursor to the body.
+    fn metrics(&self, line: usize) -> (usize, usize) {
+        let indent = self
+            .entry
+            .line_decor
+            .get(&line)
+            .map_or(0, |d| spans_width(&d.indent))
+            .min(
+                self.width
+                    .saturating_sub(self.gutter_width + self.edge_width + 1),
+            );
+        let offset = self.gutter_width + indent;
+        (
+            offset,
+            self.width.saturating_sub(offset + self.edge_width).max(1),
+        )
+    }
+    fn plan(&mut self, line: usize, glyphs: &[Glyph], start: usize, last: bool, cursor: bool) {
+        let fill = self
+            .entry
+            .line_decor
+            .get(&line)
+            .and_then(|d| d.fill)
+            .or(self.entry.fill);
+        self.rows.push(Row {
+            id: self.entry.id.clone(),
+            start,
+            ordinal: 0,
+            fill_bg: fill.and_then(|s| s.bg),
+            cells: RowCells::Source(BodyRow {
+                line,
+                first: glyphs.first().map_or((0, 0), |g| (g.span, g.offset)),
+                end: glyphs.last().map_or((0, 0), |g| (g.span, g.offset + g.len)),
+                tabs: glyphs
+                    .iter()
+                    .filter(|g| g.tab)
+                    .map(|g| ((g.span, g.offset), g.width))
+                    .collect(),
+                last,
+                cursor,
+            }),
+        });
+    }
+    /// Index every wrapped row, materializing body cells only when displayed.
     fn body(&mut self) {
         let entry = self.entry;
         let mut byte = 0;
         for (line_index, line) in entry.lines.iter().enumerate() {
-            let decor = entry.line_decor.get(&line_index);
-            let fill = decor
-                .and_then(|d| d.fill)
-                .or(entry.fill)
-                .unwrap_or_default();
-            let indent_width = decor.map_or(0, |d| spans_width(&d.indent)).min(
-                self.width
-                    .saturating_sub(self.gutter_width + self.edge_width + 1),
-            );
-            let offset = self.gutter_width + indent_width;
-            let capacity = self.width.saturating_sub(offset + self.edge_width).max(1);
-            let mut flow: Vec<Vec<Cell>> = vec![Vec::new()];
-            let mut starts = vec![byte];
+            let (offset, capacity) = self.metrics(line_index);
+            let mut flow = Vec::new();
+            let mut row_start = byte;
             let mut column = 0;
             for (span_index, span) in line.spans.iter().enumerate() {
-                for grapheme in span.content.graphemes(true) {
+                for (position, grapheme) in span.content.grapheme_indices(true) {
                     let chrome = span_index < entry.prefix;
                     let size = if grapheme == "\t" {
                         4 - (offset + column) % 4
                     } else {
                         grapheme.width()
                     };
-                    if column + size > capacity && !flow.last().unwrap().is_empty() {
+                    if column + size > capacity && !flow.is_empty() {
                         let (carried, start) = if grapheme == " " {
                             (Vec::new(), byte)
                         } else {
-                            Self::break_word(flow.last_mut().unwrap(), byte)
+                            Self::break_word(&mut flow, byte)
                         };
-                        column = carried.iter().map(|cell| cell.text.width()).sum();
-                        flow.push(carried);
-                        starts.push(start);
+                        column = carried.iter().map(|cell| cell.width).sum();
+                        self.plan(line_index, &flow, row_start, false, false);
+                        flow = carried;
+                        row_start = start;
                     }
                     let end = if chrome { byte } else { byte + grapheme.len() };
-                    let display = if grapheme == "\t" {
-                        " ".repeat((4 - (offset + column) % 4).min(capacity))
+                    let width = if grapheme == "\t" {
+                        (4 - (offset + column) % 4).min(capacity)
                     } else if grapheme.width() > capacity {
-                        "�".into()
+                        1
                     } else {
-                        grapheme.into()
+                        size
                     };
-                    let size = display.width();
-                    flow.last_mut().unwrap().push(Cell {
-                        text: display,
-                        style: fill.patch(line.style).patch(span.style),
-                        start: byte,
-                        end,
-                        chrome,
+                    flow.push(Glyph {
+                        span: span_index,
+                        offset: position,
+                        len: grapheme.len(),
+                        byte,
+                        width,
                         space: !chrome && grapheme == " ",
+                        tab: grapheme == "\t",
                     });
                     byte = end;
-                    column += size;
+                    column += width;
                 }
             }
-            if entry.stream && line_index + 1 == entry.lines.len() {
-                let full = flow
-                    .last()
-                    .unwrap()
-                    .iter()
-                    .map(|cell| cell.text.width())
-                    .sum::<usize>()
-                    >= capacity;
-                if full {
-                    flow.push(Vec::new());
-                    starts.push(byte);
-                }
-                flow.last_mut()
-                    .unwrap()
-                    .push(Self::chrome("▌", Style::default(), byte));
+            let cursor = entry.stream && line_index + 1 == entry.lines.len();
+            if cursor && column >= capacity {
+                self.plan(line_index, &flow, row_start, false, false);
+                flow.clear();
+                row_start = byte;
             }
-            let count = flow.len();
-            for (index, (cells, start)) in flow.into_iter().zip(starts).enumerate() {
-                self.finish(cells, start, decor, index + 1 == count);
-            }
+            self.plan(line_index, &flow, row_start, true, cursor);
             if line_index + 1 < entry.lines.len() {
                 byte += 1;
             }
@@ -480,75 +608,7 @@ impl Transcript {
     pub fn update(&mut self, entries: Option<Vec<Entry>>, width: usize, height: usize) {
         let source_changed = entries.is_some();
         if let Some(entries) = entries {
-            let remap = |point: &mut Point| {
-                if !entries.iter().any(|e| e.id == point.id) {
-                    let old = self
-                        .entries
-                        .iter()
-                        .position(|e| e.id == point.id)
-                        .unwrap_or(0);
-                    let candidate = self
-                        .entries
-                        .get(old)
-                        .and_then(|previous| previous.final_id.as_ref())
-                        .and_then(|id| entries.iter().find(|e| &e.id == id));
-                    let survivor = self
-                        .entries
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(index, previous)| {
-                            entries
-                                .iter()
-                                .find(|entry| entry.id == previous.id)
-                                .map(|entry| (index.abs_diff(old), index, entry))
-                        })
-                        .min_by_key(|(distance, index, _)| (*distance, *index))
-                        .map(|(_, _, entry)| entry);
-                    if let Some(entry) = candidate.or(survivor).or_else(|| entries.first()) {
-                        point.id.clone_from(&entry.id);
-                    }
-                }
-                if let Some(entry) = entries.iter().find(|e| e.id == point.id) {
-                    if let Some(previous) = self.entries.iter().find(|e| e.id == point.id)
-                        && let Some((name, old)) = previous
-                            .sections
-                            .iter()
-                            .find(|(_, range)| range.start <= point.byte && point.byte <= range.end)
-                        && let Some((_, new)) =
-                            entry.sections.iter().find(|(section, _)| section == name)
-                    {
-                        point.byte = new.start + (point.byte - old.start).min(new.len());
-                    }
-                    point.byte = point.byte.min(entry.text.len());
-                    point.byte = entry
-                        .text
-                        .grapheme_indices(true)
-                        .map(|(i, _)| i)
-                        .chain(std::iter::once(entry.text.len()))
-                        .take_while(|&i| i <= point.byte)
-                        .last()
-                        .unwrap_or(0);
-                }
-            };
-            if let Some(anchor) = &mut self.anchor {
-                remap(anchor);
-            }
-            if let Some(id) = &mut self.selected {
-                let mut point = Point {
-                    id: id.clone(),
-                    byte: 0,
-                };
-                remap(&mut point);
-                *id = point.id;
-            }
-            if let Some((a, b)) = &mut self.selection {
-                remap(a);
-                remap(b);
-            }
-            if let Some((a, b)) = &mut self.drag_anchor {
-                remap(a);
-                remap(b);
-            }
+            self.remap_points(&entries);
             self.entries = entries;
             self.entry_ranks = self
                 .entries
@@ -569,6 +629,98 @@ impl Transcript {
                 self.rows.extend(RowBuilder::new(entry, width).build());
             }
         }
+        self.resize_height(height);
+    }
+
+    pub fn install(&mut self, mut prepared: Self, height: usize) -> Self {
+        let initial_search = self.width == 0 && !self.query.is_empty();
+        self.remap_points(&prepared.entries);
+        std::mem::swap(&mut self.entries, &mut prepared.entries);
+        std::mem::swap(&mut self.rows, &mut prepared.rows);
+        std::mem::swap(&mut self.entry_ranks, &mut prepared.entry_ranks);
+        std::mem::swap(&mut self.matches, &mut prepared.matches);
+        std::mem::swap(&mut self.match_starts, &mut prepared.match_starts);
+        std::mem::swap(&mut self.width, &mut prepared.width);
+        self.match_index = self.match_index.min(self.matches.len().saturating_sub(1));
+        self.resize_height(height);
+        if initial_search {
+            self.show_match();
+        }
+        prepared
+    }
+
+    fn remap_points(&mut self, entries: &[Entry]) {
+        let remap = |point: &mut Point| {
+            if !entries.iter().any(|e| e.id == point.id) {
+                let old = self
+                    .entries
+                    .iter()
+                    .position(|e| e.id == point.id)
+                    .unwrap_or(0);
+                let candidate = self
+                    .entries
+                    .get(old)
+                    .and_then(|previous| previous.final_id.as_ref())
+                    .and_then(|id| entries.iter().find(|e| &e.id == id));
+                let survivor = self
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, previous)| {
+                        entries
+                            .iter()
+                            .find(|entry| entry.id == previous.id)
+                            .map(|entry| (index.abs_diff(old), index, entry))
+                    })
+                    .min_by_key(|(distance, index, _)| (*distance, *index))
+                    .map(|(_, _, entry)| entry);
+                if let Some(entry) = candidate.or(survivor).or_else(|| entries.first()) {
+                    point.id.clone_from(&entry.id);
+                }
+            }
+            if let Some(entry) = entries.iter().find(|e| e.id == point.id) {
+                if let Some(previous) = self.entries.iter().find(|e| e.id == point.id)
+                    && let Some((name, old)) = previous
+                        .sections
+                        .iter()
+                        .find(|(_, range)| range.start <= point.byte && point.byte <= range.end)
+                    && let Some((_, new)) =
+                        entry.sections.iter().find(|(section, _)| section == name)
+                {
+                    point.byte = new.start + (point.byte - old.start).min(new.len());
+                }
+                point.byte = point.byte.min(entry.text.len());
+                while !entry.text.is_char_boundary(point.byte) {
+                    point.byte -= 1;
+                }
+                let mut cursor = GraphemeCursor::new(point.byte, entry.text.len(), true);
+                if !cursor.is_boundary(&entry.text, 0).unwrap() {
+                    point.byte = cursor.prev_boundary(&entry.text, 0).unwrap().unwrap_or(0);
+                }
+            }
+        };
+        if let Some(anchor) = &mut self.anchor {
+            remap(anchor);
+        }
+        if let Some(id) = &mut self.selected {
+            let mut point = Point {
+                id: id.clone(),
+                byte: 0,
+            };
+            remap(&mut point);
+            *id = point.id;
+        }
+        if let Some((a, b)) = &mut self.selection {
+            remap(a);
+            remap(b);
+        }
+        if let Some((a, b)) = &mut self.drag_anchor {
+            remap(a);
+            remap(b);
+        }
+    }
+
+    pub fn resize_height(&mut self, height: usize) {
         self.height = height.max(1);
         self.top = if self.follow {
             self.rows.len().saturating_sub(self.height)
@@ -811,9 +963,11 @@ impl Transcript {
         let row = self
             .rows
             .get((self.top + y).min(self.rows.len().saturating_sub(1)))?;
+        let entry = &self.entries[self.entry_ranks[&row.id]];
+        let cells = row.cells(entry, self.width);
         let mut width = 0;
-        for cell in &row.cells {
-            width += cell.text.width();
+        for cell in cells.iter() {
+            width += cell.width;
             if x < width {
                 return Some(Point {
                     id: row.id.clone(),
@@ -823,7 +977,7 @@ impl Transcript {
         }
         Some(Point {
             id: row.id.clone(),
-            byte: row.cells.last().map_or(row.start, |c| c.end),
+            byte: cells.last().map_or(row.start, |c| c.end),
         })
     }
     /// The entry and source byte at which the visual row under the mouse starts.
@@ -846,8 +1000,9 @@ impl Transcript {
             .skip(self.top)
             .take(self.height)
             .map(|row| {
+                let entry = &self.entries[self.entry_ranks[&row.id]];
                 Line::from(
-                    row.cells
+                    row.cells(entry, self.width)
                         .iter()
                         .map(|cell| {
                             let selected = selection.is_some_and(|(a, b)| {
@@ -858,7 +1013,7 @@ impl Transcript {
                             let matched = !cell.chrome
                                 && self.match_starts.contains(&rank(&row.id, cell.start));
                             Span::styled(
-                                cell.text.clone(),
+                                cell.text(entry).to_owned(),
                                 if selected {
                                     cell.style.bg(Color::Blue).fg(Color::White)
                                 } else if matched {
@@ -880,6 +1035,22 @@ impl Transcript {
             })
             .collect()
     }
+    pub fn search_status(&self) -> String {
+        let query = format!("/{}", self.query);
+        if self.width == 0 {
+            return query;
+        }
+        format!(
+            "{query} · {}/{} matches",
+            if self.matches.is_empty() {
+                0
+            } else {
+                self.match_index + 1
+            },
+            self.matches.len()
+        )
+    }
+
     pub fn title(&self) -> String {
         let mode = if self.follow { "FOLLOW" } else { "PAUSED" };
         let focus = if self.focused {
@@ -888,16 +1059,7 @@ impl Transcript {
             "prompt focus"
         };
         let search = if self.searching || !self.query.is_empty() {
-            format!(
-                " · /{} · {}/{} matches",
-                self.query,
-                if self.matches.is_empty() {
-                    0
-                } else {
-                    self.match_index + 1
-                },
-                self.matches.len()
-            )
+            format!(" · {}", self.search_status())
         } else {
             String::new()
         };
@@ -1100,12 +1262,13 @@ mod navigation_tests {
         entry.stream = true;
         let mut state = Transcript::default();
         state.layout(vec![entry], 1, 20);
-        assert!(
-            state
-                .rows
+        assert!(state.rows.iter().all(|row| {
+            row.cells(&state.entries[0], 1)
                 .iter()
-                .all(|row| row.cells.iter().map(|c| c.text.width()).sum::<usize>() <= 1)
-        );
+                .map(|c| c.width)
+                .sum::<usize>()
+                <= 1
+        }));
         assert_eq!(state.copy_entry().as_deref(), Some("👩‍💻\t漢"));
     }
     #[test]
@@ -1116,7 +1279,12 @@ mod navigation_tests {
         let rows: Vec<String> = state
             .rows
             .iter()
-            .map(|row| row.cells.iter().map(|c| c.text.as_str()).collect())
+            .map(|row| {
+                row.cells(&state.entries[0], 16)
+                    .iter()
+                    .map(|c| c.text(&state.entries[0]))
+                    .collect()
+            })
             .collect();
         assert_eq!(
             rows,
@@ -1128,12 +1296,13 @@ mod navigation_tests {
         );
         // Unbreakable runs still wrap per grapheme rather than overflowing.
         state.layout(vec![Entry::plain("m1", "abcdefghij", false)], 4, 20);
-        assert!(
-            state
-                .rows
+        assert!(state.rows.iter().all(|row| {
+            row.cells(&state.entries[0], 4)
                 .iter()
-                .all(|row| row.cells.iter().map(|c| c.text.width()).sum::<usize>() <= 4)
-        );
+                .map(|c| c.width)
+                .sum::<usize>()
+                <= 4
+        }));
         assert_eq!(state.rows.len(), 3);
     }
     #[test]

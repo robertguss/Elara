@@ -25,8 +25,17 @@ README.md's TUI section documents the server's 16 KiB authentication frame,
 16 MiB authenticated line limit, and five-second blocked-send timeout.
 Dropping a stalled client releases its control lease without stopping its session.
 The TUI keeps reading during external editing; Ctrl-Z and `/suspend` restore
-terminal modes for job control. A lost socket reattaches in the original mode
-with a fresh snapshot, retained drafts and a notice, never resending commands.
+terminal modes for job control. Editor return, resume and socket loss reattach
+in the original mode with a fresh snapshot, retained drafts and a notice,
+never resending commands. A local "Reattaching…" notice does not claim control.
+`native/elara-tui/src/reconstruction.rs` owns one background layout worker and
+one replaceable pending snapshot. Old transcript rows remain visible until a
+matching replacement is ready; prompt and navigation state stay on the UI thread.
+Rows retain source ranges rather than per-grapheme cells, which are materialized
+only for the viewport. Session snapshots reuse the inbox token estimate while
+keeping provider window and image-cost semantics separate.
+The lazy TUI builder always uses the optimized Rust release profile, including
+the dev-environment daily build. Its cache digest includes the build recipe.
 The usage-anchored context meter, handoff recovery, delivery routing, and
 independent copies are documented in README.md's "Automatic context handoff"
 section. The runtime catalog supplies model windows through

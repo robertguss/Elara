@@ -17,8 +17,8 @@ use crossterm::terminal::{
 };
 use elara_tui::{
     Appearance, ClientConnection, ConnectionState, Cursor, CursorStore, DEFAULT_PORT, Ingest,
-    InputAction, MAX_INPUT_BYTES, Model, Theme, ViewLayout, attach_request, attached_model,
-    command, draw_model, handle_input, render_frame,
+    InputAction, LiveRenderer, MAX_INPUT_BYTES, Model, Theme, ViewLayout, attach_request,
+    attached_model, command, draw_model_live, handle_input, render_frame,
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
@@ -490,11 +490,43 @@ fn run_interactive(
     let mut session_models: HashMap<String, Model> = HashMap::new();
     let mut attempted_handoff = None;
     let mut focused = None;
+    let mut renderer = LiveRenderer::default();
+    let mut reattaching: Option<Reattach> = None;
 
     loop {
         let mut notifications = Vec::new();
+        if let Some(pending) = &reattaching {
+            match pending.receiver.try_recv() {
+                Ok(Ok((new_connection, fresh))) => {
+                    *connection = new_connection;
+                    notifications.extend(fresh.notification);
+                    model.reconnect_from(fresh);
+                    if let Some(notice) = &pending.resume_notice {
+                        model.notice = Some(format!(
+                            "Reattached; local draft and view restored. {notice}"
+                        ));
+                    }
+                    save_cursor(cursors, model);
+                    reattaching = None;
+                    dirty = true;
+                }
+                Ok(Err(error)) => {
+                    model.mark_disconnected(&error);
+                    model.notice = Some(format!(
+                        "Reattach failed: {error}. Draft retained; use /sessions to retry."
+                    ));
+                    reattaching = None;
+                    dirty = true;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    return Err("reattach worker stopped unexpectedly".into());
+                }
+            }
+        }
         if let Some(target) = model.handoff_target()
             && attempted_handoff.as_ref() != Some(&target)
+            && reattaching.is_none()
         {
             attempted_handoff = Some(target.clone());
             let source = model.clone();
@@ -511,14 +543,19 @@ fn run_interactive(
             }
             dirty = true;
         }
-        if dirty {
+        if dirty || renderer.is_ready() {
             terminal
-                .draw(|frame| draw_model(frame, model))
+                .draw(|frame| draw_model_live(frame, model, &mut renderer))
                 .map_err(|error| format!("terminal failed: {error}"))?;
             dirty = false;
         }
 
-        while model.connection != ConnectionState::Detached {
+        let receive_started = Instant::now();
+        while reattaching.is_none()
+            && model.connection != ConnectionState::Detached
+            && receive_started.elapsed() < Duration::from_millis(10)
+            && !event::poll(Duration::ZERO).map_err(|error| error.to_string())?
+        {
             match connection.try_recv() {
                 Ok(Some(frame)) => {
                     dump_frame(args.event_dump, started, &frame);
@@ -551,16 +588,8 @@ fn run_interactive(
                 Ok(None) => break,
                 Err(error) => {
                     model.mark_disconnected(&error);
-                    connection.close();
-                    let target = model.session_id.clone();
-                    match reconnect(args.port, &target, model, cursors, &mut session_models) {
-                        Ok(new_connection) => *connection = new_connection,
-                        Err(error) => {
-                            model.notice = Some(format!(
-                                "Reattach failed: {error}. Draft retained; use /sessions to retry."
-                            ))
-                        }
-                    }
+                    reattaching =
+                        Some(Reattach::start(args.port, connection, model, cursors, None));
                     dirty = true;
                     break;
                 }
@@ -630,6 +659,10 @@ fn run_interactive(
                             model.notice = Some(format!("{error}; original draft retained."))
                         }
                     }
+                    let notice = model.notice.take();
+                    reattaching = Some(Reattach::start(
+                        args.port, connection, model, cursors, notice,
+                    ));
                     None
                 }
                 InputAction::Suspend => {
@@ -640,6 +673,8 @@ fn run_interactive(
                     guard = Some(resumed);
                     focused = None;
                     terminal.clear().map_err(|error| error.to_string())?;
+                    reattaching =
+                        Some(Reattach::start(args.port, connection, model, cursors, None));
                     None
                 }
                 InputAction::Submit => model.prepare_submit(),
@@ -648,6 +683,7 @@ fn run_interactive(
                 | InputAction::Attachment(request)
                 | InputAction::Session(request) => Some(request),
                 InputAction::Reconnect(target) => {
+                    reattaching = None;
                     match reconnect(args.port, &target, model, cursors, &mut session_models) {
                         Ok(new_connection) => *connection = new_connection,
                         Err(error) => {
@@ -732,6 +768,73 @@ fn handle_frame(
     Ok(())
 }
 
+struct Reattach {
+    receiver: std::sync::mpsc::Receiver<Result<(ClientConnection, Model), String>>,
+    resume_notice: Option<String>,
+}
+
+impl Reattach {
+    fn start(
+        port: u16,
+        connection: &mut ClientConnection,
+        model: &mut Model,
+        cursors: &CursorStore,
+        resume_notice: Option<String>,
+    ) -> Self {
+        let buffered = connection.close_and_take_frames();
+        let target = model.session_id.clone();
+        let mode = model.mode.clone();
+        let cwd = model.cwd.clone();
+        let incarnation = model.projection.incarnation.clone();
+        let head = model.projection.head;
+        let cursor = cursors.load(&target);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            // Keep actual completion evidence, not buffered content projections.
+            // The reader exits after shutdown; draining and dropping large frames
+            // happens here, never on the keyboard thread.
+            let mut completion = None;
+            for frame in buffered.into_iter().map_while(Result::ok) {
+                let seq = frame["seq"].as_u64().unwrap_or(0);
+                if frame["version"] == 2
+                    && frame["type"] == "patch"
+                    && frame["incarnation"] == incarnation
+                    && seq > head
+                {
+                    for op in frame["ops"].as_array().into_iter().flatten() {
+                        if op["op"] == "set_turn_state"
+                            && let Some(kind) = op["turn"]["outcome"]["kind"].as_str()
+                        {
+                            completion = Some((seq, kind.to_string()));
+                        }
+                    }
+                }
+            }
+            let result = connect_target(port, &target, &mode, cwd.as_deref(), &cursor).map(
+                |(connection, mut fresh)| {
+                    if fresh.projection.incarnation == incarnation
+                        && let Some((seq, kind)) = completion
+                        && seq <= fresh.projection.head
+                    {
+                        fresh.observe_turn_outcome(&kind);
+                    }
+                    (connection, fresh)
+                },
+            );
+            let _ = sender.send(result);
+        });
+        model.connection = ConnectionState::Resynchronizing;
+        model.notice = Some(match &resume_notice {
+            Some(notice) => format!("Reattaching… {notice}"),
+            None => "Reattaching… local draft retained.".into(),
+        });
+        Self {
+            receiver,
+            resume_notice,
+        }
+    }
+}
+
 fn reconnect(
     port: u16,
     target: &str,
@@ -739,29 +842,13 @@ fn reconnect(
     cursors: &CursorStore,
     cache: &mut HashMap<String, Model>,
 ) -> Result<ClientConnection, String> {
-    let mut request = attach_request(target, &model.mode, &cursors.load(target));
-    if let Some(cwd) = &model.cwd {
-        request["cwd"] = json!(cwd);
-    }
-    let deadline = Instant::now() + Duration::from_secs(5);
-    let (mut connection, attached) = loop {
-        let (connection, attached) = ClientConnection::connect(port, request.clone())?;
-        if attached["type"] != "error"
-            || attached["error"] != "control_taken"
-            || Instant::now() >= deadline
-        {
-            break (connection, attached);
-        }
-        drop(connection);
-        std::thread::sleep(Duration::from_millis(50));
-    };
-    let fresh = attached_model(&attached, &model.mode)?;
-    if fresh.session_id != target {
-        return Err("attachment identity does not match selected session".into());
-    }
-    if let Some(request) = fresh.pending_input_status() {
-        connection.send(&request)?;
-    }
+    let (connection, fresh) = connect_target(
+        port,
+        target,
+        &model.mode,
+        model.cwd.as_deref(),
+        &cursors.load(target),
+    )?;
     if target == model.session_id {
         model.reconnect_from(fresh);
         save_cursor(cursors, model);
@@ -779,6 +866,39 @@ fn reconnect(
     cache.insert(old_id, old);
     save_cursor(cursors, model);
     Ok(connection)
+}
+
+fn connect_target(
+    port: u16,
+    target: &str,
+    mode: &str,
+    cwd: Option<&str>,
+    cursor: &Cursor,
+) -> Result<(ClientConnection, Model), String> {
+    let mut request = attach_request(target, mode, cursor);
+    if let Some(cwd) = cwd {
+        request["cwd"] = json!(cwd);
+    }
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let (mut connection, attached) = loop {
+        let (connection, attached) = ClientConnection::connect(port, request.clone())?;
+        if attached["type"] != "error"
+            || attached["error"] != "control_taken"
+            || Instant::now() >= deadline
+        {
+            break (connection, attached);
+        }
+        drop(connection);
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    let fresh = attached_model(&attached, mode)?;
+    if fresh.session_id != target {
+        return Err("attachment identity does not match selected session".into());
+    }
+    if let Some(request) = fresh.pending_input_status() {
+        connection.send(&request)?;
+    }
+    Ok((connection, fresh))
 }
 
 fn save_cursor(cursors: &CursorStore, model: &Model) {

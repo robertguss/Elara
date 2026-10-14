@@ -655,6 +655,11 @@ Start a new TUI session with one command:
 mix elara.tui new
 ```
 
+The lazy build uses Rust's optimized release profile in every Mix environment.
+`bin/elara-update` uses the same builder for the daily build selected by
+`bin/elara-stable`. Direct `cargo build` and `cargo test` keep their usual debug
+profile unless you pass `--release`.
+
 When no server is listening, the Mix task starts one inside the same VM before
 launching the Rust client. That embedded server and its live sessions end when
 the command exits. To let turns continue while the TUI is closed and reattach
@@ -909,12 +914,16 @@ draft files are removed when the editor returns.
 
 The socket reader continues while the editor runs. **Ctrl-Z** (or `/suspend`)
 restores normal terminal modes and suspends the TUI; use your shell's `fg` to
-resume. A suspended process cannot read its socket. If the server drops a
-blocked connection, the TUI automatically reattaches to the same session in
-the same control or observe mode with a fresh snapshot and a one-line notice.
-Local drafts remain; commands are never automatically resent. Another client's
-control lease is never taken over. If reattachment fails, the notice explains
-the error and `/sessions` can retry.
+resume. A suspended process cannot read its socket. On return from either the
+editor or suspension, the TUI requests a fresh snapshot in the same control or
+observe mode instead of replaying buffered updates. A local "Reattaching…"
+notice appears before the server confirms the attachment; it does not claim
+control. Socket loss uses the same recovery path.
+The previous transcript stays visible while a background worker prepares its
+replacement, and the prompt remains editable. Local drafts and navigation stay
+intact; commands are never automatically resent. Another client's control lease
+is never taken over. If reattachment fails, the notice explains the error and
+`/sessions` can retry.
 
 When a turn completes or ends with a provider error or turn limit, the TUI sends
 a terminal bell and an OSC 777 desktop notification (supported by WezTerm).

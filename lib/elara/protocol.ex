@@ -87,9 +87,9 @@ defmodule Elara.Protocol do
     end
   end
 
-  @spec snapshot(String.t(), String.t(), Core.State.t()) :: map()
-  def snapshot(session_id, incarnation, %Core.State{} = core) do
-    provider_view = Elara.Provider.Visibility.view(core)
+  @spec snapshot(String.t(), String.t(), Core.State.t(), non_neg_integer() | nil) :: map()
+  def snapshot(session_id, incarnation, %Core.State{} = core, estimated_tokens \\ nil) do
+    provider_view = Elara.Provider.Visibility.view(core, estimated_tokens)
 
     %{
       "session" => %{"id" => session_id, "incarnation" => incarnation},

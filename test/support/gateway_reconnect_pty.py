@@ -92,7 +92,16 @@ try:
     fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
     os.kill(pid, signal.SIGWINCH)
     deadline = time.monotonic() + 8
+    columns = 120
+    repaint_at = 0
     while (not connected.is_set() or b"Reattached;" not in terminal_bytes) and not errors and time.monotonic() < deadline:
+        # Reattaching -> Reattached can be cursor-addressed cell deltas.
+        # A real resize requests the complete current notice, not stale bytes.
+        if connected.is_set() and time.monotonic() >= repaint_at:
+            repaint_at = time.monotonic() + 0.1
+            columns = 119 if columns == 120 else 120
+            fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 40, columns, 0, 0))
+            os.kill(pid, signal.SIGWINCH)
         drain()
     assert sessions and connected.is_set() and not errors, "native reconnect did not attach with authentication"
     assert b"Reattached;" in terminal_bytes, "automatic reattachment notice was not shown"

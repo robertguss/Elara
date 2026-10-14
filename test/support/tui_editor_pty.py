@@ -98,6 +98,22 @@ else:
                 return
         raise AssertionError(description + repr(bytes(output[-4000:])))
 
+    def wait_editor_return(notice):
+        until = time.monotonic() + 8
+        columns = 120
+        while time.monotonic() < until:
+            start = len(output)
+            columns = 119 if columns == 120 else 120
+            fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 32, columns, 0, 0))
+            os.kill(pid, signal.SIGWINCH)
+            drain()
+            # Editor completion precedes asynchronous reattachment. A real
+            # resize makes the current notice contiguous, unlike cell deltas.
+            fresh = output[start:]
+            if b"Reattached;" in fresh and notice in fresh:
+                return
+        raise AssertionError("editor returned and reattached" + repr(bytes(output[-4000:])))
+
     try:
         fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 32, 120, 0, 0))
         os.kill(pid, signal.SIGWINCH)
@@ -111,7 +127,7 @@ else:
         ], 1):
             before = len(output)
             send(b"\x07")
-            wait_for(lambda: notice in output[before:], "editor return notice")
+            wait_editor_return(notice)
             records = json.loads(audit.read_text())
             assert len(records) == number
             assert records[-1]["text"] == (draft if number == 1 else expected)
@@ -124,6 +140,7 @@ else:
         send(b"/editor\r")
         wait_for(lambda: len(json.loads(audit.read_text())) == 6, "slash editor opens")
         assert json.loads(audit.read_text())[-1]["text"] == ""
+        wait_editor_return(b"Editor saved")
         send(b"\r")
         wait_for(lambda: prompts() == [expected, "\nfrom editor 界 👩‍💻"], "slash draft submitted")
         send(b"/detach\r")

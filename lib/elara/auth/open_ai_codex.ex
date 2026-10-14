@@ -33,6 +33,17 @@ defmodule Elara.Auth.OpenAICodex do
     end
   end
 
+  @spec codex_auth_path(map()) :: String.t()
+  def codex_auth_path(env \\ System.get_env()) do
+    home =
+      case Map.get(env, "CODEX_HOME") do
+        value when is_binary(value) and value != "" -> value
+        _ -> Path.join(System.user_home!(), ".codex")
+      end
+
+    Path.join(home, "auth.json")
+  end
+
   @spec request_device_code(keyword()) :: {:ok, map()} | {:error, term()}
   def request_device_code(opts \\ []) do
     http = Keyword.get(opts, :http, &Req.post/2)
@@ -125,13 +136,7 @@ defmodule Elara.Auth.OpenAICodex do
   def load_tokens(:elara, _env), do: load_tokens()
 
   def load_tokens(:codex, env) do
-    home =
-      case Map.get(env, "CODEX_HOME") do
-        value when is_binary(value) and value != "" -> value
-        _ -> Path.join(System.user_home!(), ".codex")
-      end
-
-    with {:ok, body} <- File.read(Path.join(home, "auth.json")),
+    with {:ok, body} <- File.read(codex_auth_path(env)),
          {:ok, map} <- decode_map(body),
          {:ok, tokens} <- tokens_from_codex_map(map) do
       refresh_if_needed(tokens)

@@ -15,10 +15,12 @@ existing agents.
 The TUI is Elara's primary interactive interface. The `bin/elara` launcher runs
 it from this source checkout while working in your current project. It is not
 a standalone release: keep the checkout and toolchain installed.
-You need Elixir 1.20, Erlang/OTP 29, Rust 1.88 or newer with
-Cargo, rustfmt, and Clippy, plus the `flock` command. The Rust components can be
-installed with `rustup component add rustfmt clippy`; distribution-provided Rust
-1.85 is too old for the TUI dependencies. Mix builds the Rust execution stub
+You need Elixir 1.20, Erlang/OTP 29, Rust with Cargo, rustfmt, and Clippy, the
+`flock` command, and [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) for
+the `grep` and `glob` tools. With rustup, `rust-toolchain.toml` pins Rust 1.98.1
+with rustfmt and Clippy and installs it on the first Cargo command. Without
+rustup, Rust 1.88 or newer builds, but the strict Clippy gate is only checked
+on 1.98.1; distribution-provided Rust 1.85 is too old for the TUI dependencies. Mix builds the Rust execution stub
 automatically and builds the Rust TUI on first use; a missing Cargo installation
 fails with setup instructions.
 
@@ -206,7 +208,9 @@ use the API. Logging in again will not fix it; use an API key instead.
 ### API key
 
 `ELARA_API_KEY` takes precedence over `XAI_API_KEY`. Either selects the
-OpenAI-compatible provider.
+OpenAI-compatible provider. `ELARA_PROVIDER=openai-codex` or
+`ELARA_PROVIDER=grok` overrides both and uses that saved login; without any of
+these, Elara uses the saved Grok login.
 
 ```bash
 export ELARA_API_KEY='...'
@@ -529,6 +533,16 @@ trust storage, `.git/config`, `.git/hooks/**`, shell startup files (including
 `.profile`, `.bashrc`, `.bash_profile`, `.zshrc`, `.zshenv`, and
 `fish/config.fish`), `.envrc`, and `.iex.exs`. Protected names apply at any
 depth, and aliases to protected destinations are refused too.
+
+Credential protection follows the auth loaders' locations: this includes
+`$CODEX_HOME/auth.json` when configured, Grok's `~/.grok/auth.json`, saved
+Codex and Exa auth paths (including application overrides), and the personal
+MCP config. Project `.elara/mcp.json` stays editable and needs exact-byte
+reapproval before use. Server and worker tokens arrive through environment
+variables or options; Elara does not locate token files. Fnox locates its own
+provider key files, not Elara; fnox's materialized secret files remain inside
+protected session storage.
+
 Older coding children whose saved worktrees are inside `~/.elara` can still
 reopen with retained evidence, but their model file tools refuse those paths.
 Start a new coding child to work in the unprotected worktree root; existing
@@ -603,10 +617,12 @@ mix elara.ask "summarize this repository"
 
 The command prints tool activity and the answer. It exits with status 1 on a
 provider error, interruption, timeout waiting for the turn, or turn limit. This
-one-shot command does not persist its session. A tool's 30-second timeout is
-reported to the model as a tool error; if the model then completes the turn,
-`mix elara.ask` exits 0. This differs from the CLI timing out while waiting for
-the turn itself.
+one-shot command does not persist its session. A tool that times out (`bash` reports an
+unknown result) is reported to the model; if the model then completes the turn,
+`mix elara.ask` exits 0. The CLI itself exits 1 after 10 minutes without a
+session event. That equals the default command timeout, so a silent command
+that runs to its timeout usually ends the ask first; set a lower
+`ELARA_TOOL_TIMEOUT_MS` when a one-shot run should see tool timeouts.
 
 Start a persistent conversation:
 
@@ -633,6 +649,7 @@ Common chat commands:
 | `/name TEXT`                      | Name the current session.                                       |
 | `/reload`                         | Reload this session's local plugins.                            |
 | `/why` / `/why N`                 | Explain the transition behind the latest event or event N.      |
+| `/model` / `/model ID [EFFORT]`   | List models with their windows, or select one for the next request. |
 | `/quit`, `/exit`, `/q`, or Ctrl-D | Exit; during a turn, interrupt first.                           |
 
 Prefix a prompt with `//` to send text beginning with `/`. Commands that change
@@ -667,7 +684,9 @@ later, run `mix elara.server` separately; the TUI automatically uses it. See
 [Detached sessions and remote workers](docs/detached-and-remote.md) for the
 long-lived mode. Assistant responses and in-progress content render as terminal
 Markdown, including styled headings, emphasis, code, lists, quotes, links, and
-tables. User prompts and tool output remain literal.
+tables. User prompts and tool output remain literal, except that fenced code in
+replies, `read` results and `edit` snippets are colored by language with the
+theme's colors; copying keeps the original bytes.
 
 Long-lived servers require the same `ELARA_SERVER_TOKEN` (32–512 bytes) in
 the server and client terminals. The embedded Mix TUI creates a random token
@@ -730,14 +749,16 @@ The controls described here are defaults. Put a JSON object in
 Each entry replaces all shortcuts for that action with one key. Restart the
 TUI to load changes; reconnecting or switching sessions keeps its map. `/help` and
 on-screen hints show the effective keys. Slash commands do not change. Actions
-without a default shortcut, including `read_only` and `undo`, can be bound.
+without a default shortcut, including `read_only`, `undo` and `approve`, can be
+bound.
 
 Action names are `appearance`, `files`, `image`, `attachments`,
 `provider_settings`, `thinking`, `thinking_view`, `turns`, `focus`, `toggle_tool`,
 `tool_viewer`, `up`, `down`, `page_up`, `page_down`, `home`, `tail`, `previous_turn`,
 `next_turn`, `search`, `next_match`, `previous_match`, `copy`, `copy_entry`, `help`,
 `paste`, `external_editor`, `suspend`, `submit`, `newline`, `interrupt`, `escape`,
-`clear_or_quit`, `sessions`, `queue`, `steer`, `read_only`, `undo` and `select_all`.
+`clear_or_quit`, `sessions`, `queue`, `steer`, `read_only`, `undo`, `approve` and
+`select_all`.
 Their scope stays the same: transcript-only actions remain transcript-only;
 help opens on an empty prompt; observer restrictions still apply.
 
@@ -1091,7 +1112,8 @@ under `~/.elara`; existing children use their recorded workspace location,
 including the old location inside session storage. No worktree is relocated
 or deleted automatically.
 `/delegate research TASK` shares the checkout with only the parent's available
-built-in `read` and `skill` tools and read capabilities. This is trusted-local
+built-in `read`, `output_read` and `skill` tools, its thread communication and
+completion-wait tools, and read capabilities. This is trusted-local
 capability restriction, not an OS sandbox. Coding tools can still access paths
 outside their checkout; the managed worktree isolates ordinary relative-path
 edits, not hostile code.
@@ -1150,8 +1172,9 @@ current tree, no ignored files, and a clean child worktree (commit the child's
 integrated changes first). It never uses forced removal. The child branch,
 transcript and integration patches remain; a cleaned workspace cannot resume.
 
-Metadata/workspaces live under `~/.elara/sessions/_threads/` (or the configured
-Store root). Programmatic entry points are
+Child metadata lives under `~/.elara/sessions/_threads/` (or the configured
+Store root); new coding worktrees live under `ELARA_WORKTREES_ROOT` (default
+`~/.elara-worktrees`). Programmatic entry points are
 `Elara.Threads.start_child(parent_id, assignment, coding: true)`, `list/1`,
 `resume/2`, `review_child/2`, `acknowledge_child/4`, `integrate/2`, `cleanup/2`,
 and `stop_subtree/1`. Generic
@@ -1337,8 +1360,8 @@ call. Saved handoff headers require this build for resume.
 
 - `read` reads a file.
 - `start_child` starts persistent delegated work as described above.
-- `write` atomically writes a workspace-relative regular file and creates parent
-  directories. It records durable controller intent and executor receipts before
+- `write` atomically writes a regular file inside the
+  [file-tool fence](#file-tool-fence) and creates parent directories. It records durable controller intent and executor receipts before
   and after mutation.
 - `edit` replaces exactly one occurrence of `old_text` with `new_text`, or every
   non-overlapping literal occurrence when `replace_all: true`.
@@ -1358,6 +1381,16 @@ call. Saved handoff headers require this build for resume.
 - `grep` searches workspace file contents for a regular expression and returns
   `path:line:text` per match.
 - `glob` lists workspace files whose path matches a glob pattern, one per line.
+- `mcp_search` and `mcp_call` find and call tools on approved MCP servers; see
+  [Approve an MCP server](#approve-an-mcp-server).
+- `skill` loads an Agent Skill's body on demand; see
+  [Project instructions and Agent Skills](#project-instructions-and-agent-skills).
+- `test_job` and `job` run supervised background jobs whose completion arrives
+  through the inbox; see [Supervised test jobs](docs/test-jobs.md).
+- `completion_wait` waits for an owned job's or a delegated child's completion.
+- `thread_wait`, `thread_send`, `thread_read` and `thread_status` wait for and
+  talk to delegated children; see
+  [Thread communication and navigation](#thread-communication-and-navigation).
 
 ## Workspace search
 
@@ -1425,14 +1458,11 @@ not an atomic edit or a concurrent-writer protection mechanism. Edit is tool
 version 2; mismatched workers reject the call. Restart existing processes to
 load the updated built-in tool.
 
-Relative paths and shell commands use the session working directory. `write`
-rejects absolute paths, `..`, symlink path components, and non-file targets so
-its observed preimage and atomic replacement stay inside that workspace. `read`
-and `edit` still call `Path.expand/2`, and `bash` is unrestricted, so those
-tools can reach outside the working directory. Use a container or other OS
-sandbox when the model or workspace is not trusted. This confinement belongs to
-the default session's declarative-write path; the low-level
-`Elara.Tools.write/2` helper is not itself a workspace-confinement boundary.
+Relative paths and shell commands use the session working directory. `read`,
+`write`, `edit`, `grep` and `glob` go through the
+[file-tool fence](#file-tool-fence); `bash` is unrestricted, so a command can
+reach outside the working directory. Use a container or other OS sandbox when
+the model or workspace is not trusted.
 
 The local write executor stores its durable ledger under
 `~/.elara/sessions/_effect_executors/`; persistent sessions keep their
@@ -1451,7 +1481,7 @@ VM refuses takeover, naming its OS PID, node and start time: stop it first.
 No callback is replayed, and workspace bytes still
 cannot prove causal completion.
 
-Schema 3 migrates schema 1 and 2 ledgers in place. Legacy attempts retain
+Ledger schema 4 migrates schemas 1–3 in place. Schema 1 and 2 attempts retain
 `attempt_incarnation: nil` and never auto-terminalize. A session blocked by such
 an attempt stays idle and refuses a new turn for missing proof. Use `/clone` or
 `/fork` to continue in a new session without changing the original receipt.
@@ -1573,8 +1603,6 @@ cancellation and the Rust inspector.
 
 ## More user guides
 
-- [Harness experiments](docs/harness-experiments.md): what we tried, what we
-  learned, and which functionality the experiments added.
 - [Supervised test jobs](docs/test-jobs.md): run a focused Mix test between model
   turns and receive completion through the inbox without polling.
 - [Sessions and chat](docs/sessions.md): resume, branch, clone, and inspect why
@@ -1584,7 +1612,10 @@ cancellation and the Rust inspector.
 - [Detached sessions and remote workers](docs/detached-and-remote.md): keep a
   session alive after a client disconnects and execute tools elsewhere.
 - [Elixir API](docs/elixir-api.md): target another directory, subscribe to
-  events, configure sessions, replay recordings, and coordinate child sessions.
+  events, configure sessions, replay recordings, and delegate child sessions.
+- [Lab experiments](docs/lab/README.md): current experiment notes, one page
+  each. [Pre-pivot harness experiments](docs/harness-experiments.md) are kept
+  as history.
 - [Elara in Notion](https://app.notion.com/p/3f5700320c45817a9782f7e2e62bf2a1):
   the sole current planning and status source; [Roadmap](ROADMAP.md) links the
   Product Brief, Roadmap and Working Agreement. Linear's history is archived in

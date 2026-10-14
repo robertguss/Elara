@@ -414,6 +414,8 @@ defmodule Elara.ServerTest do
     assert %{"type" => "attached", "session_id" => ^id} = recv_json(resumed)
     send_json(resumed, %{"version" => 2, "command" => "session_create"})
     assert %{"type" => "session_created", "session_id" => disposable} = recv_json(resumed)
+    disposable_recording = Elara.status(disposable).recording_path
+    assert File.exists?(disposable_recording)
 
     send_json(resumed, %{
       "version" => 2,
@@ -429,6 +431,20 @@ defmodule Elara.ServerTest do
              recv_json(resumed)
 
     assert {:error, :session_not_found} = Elara.Session.Store.find(cwd, disposable)
+    refute File.exists?(disposable_recording)
+
+    send_json(resumed, %{"version" => 2, "command" => "session_create"})
+    assert %{"type" => "session_created", "session_id" => blocked} = recv_json(resumed)
+    blocked_recording = Elara.status(blocked).recording_path
+    File.mkdir_p!(Path.rootname(blocked_recording) <> "-blocked.flight")
+    {:ok, blocked_pid} = Elara.session_pid(blocked)
+    monitor = Process.monitor(blocked_pid)
+    send_json(resumed, %{"version" => 2, "command" => "session_delete", "session_id" => blocked})
+    assert %{"type" => "session_error", "error" => error} = recv_json(resumed)
+    assert error =~ "recordings_cleanup"
+    assert_receive {:DOWN, ^monitor, :process, ^blocked_pid, :normal}
+    assert {:error, :session_not_found} = Elara.Session.Store.find(cwd, blocked)
+    assert {:error, :session_not_found} = Elara.session_pid(blocked)
 
     send_json(resumed, %{"version" => 2, "command" => "session_delete", "session_id" => id})
     assert %{"type" => "session_error", "error" => "switch_first"} = recv_json(resumed)

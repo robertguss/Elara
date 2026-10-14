@@ -369,9 +369,17 @@ defmodule Elara.Session.Store do
          {:ok, persisted} <- open(path, store.cwd),
          true <- persisted.id == store.id do
       case File.rm(path) do
-        :ok -> :ok
-        {:error, :enoent} -> {:error, :session_not_found}
-        error -> error
+        :ok ->
+          case Elara.Recordings.delete(path) do
+            :ok -> :ok
+            {:error, reason} -> {:error, {:recordings_cleanup, reason}}
+          end
+
+        {:error, :enoent} ->
+          {:error, :session_not_found}
+
+        error ->
+          error
       end
     else
       false -> {:error, :session_not_found}

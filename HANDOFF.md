@@ -39,6 +39,11 @@ Saved settings from another provider use startup defaults with a visible notice.
 Append-only transcript batches, turn-boundary sync, torn-tail recovery and
 version 1 compatibility are documented in `docs/sessions.md`. Store owns its
 writer under the session lock; message and metadata changes commit together.
+Flight format 3 caches immutable history/config fingerprints and syncs after
+the terminal event link, while format 2 keeps its original replay hash domain.
+README.md and `docs/sessions.md` document `mix elara.recordings` diagnostics
+and explicit age pruning. Preview is the default; live session locks prevent
+pruning across VMs. Session deletion removes its incarnation recordings.
 Command environment forwarding and `mix elara.env` diagnostics are documented
 in README.md's "Command environment" section. Extra project names belong in
 operator startup config, never an agent-editable project file.

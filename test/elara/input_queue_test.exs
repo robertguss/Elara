@@ -7,6 +7,27 @@ defmodule Elara.InputQueueTest do
   alias Elara.Session.Store
   alias Elara.Tool
 
+  setup do
+    existing = Elara.live_sessions() |> Enum.map(& &1.id) |> MapSet.new()
+    cwd = Path.join(System.tmp_dir!(), "elara-input-queue-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(cwd)
+    {_, 0} = System.cmd("git", ["init", "--quiet", cwd])
+    File.write!(Path.join(cwd, "README.md"), "Input queue fixture\n")
+
+    on_exit(fn ->
+      for %{id: id} <- Elara.live_sessions(), not MapSet.member?(existing, id) do
+        case Elara.session_pid(id) do
+          {:ok, pid} -> DynamicSupervisor.terminate_child(Elara.SessionSup, pid)
+          _ -> :ok
+        end
+      end
+
+      File.rm_rf!(cwd)
+    end)
+
+    %{cwd: cwd}
+  end
+
   defmodule SlowTool do
     def run(%{"owner" => owner}, _ctx) do
       owner = String.to_existing_atom(owner)
@@ -29,11 +50,11 @@ defmodule Elara.InputQueueTest do
     message
   end
 
-  defp session(replies) do
+  defp session(cwd, replies) do
     {:ok, agent} = Agent.start_link(fn -> replies end)
 
     {:ok, session} =
-      Elara.start_session(provider: {Elara.Provider.Scripted, agent}, persist: false)
+      Elara.start_session(provider: {Elara.Provider.Scripted, agent}, cwd: cwd, persist: false)
 
     session
   end
@@ -91,9 +112,10 @@ defmodule Elara.InputQueueTest do
     value
   end
 
-  test "normal submissions execute FIFO and duplicate IDs are idempotent but conflicting payloads reject" do
+  test "normal submissions execute FIFO and duplicate IDs are idempotent but conflicting payloads reject",
+       %{cwd: cwd} do
     session =
-      session([{:stream, [{:sleep, 50}], {:ok, assistant("one")}}, {:ok, assistant("two")}])
+      session(cwd, [{:stream, [{:sleep, 50}], {:ok, assistant("one")}}, {:ok, assistant("two")}])
 
     assert {:ok, first} = Elara.submit_input(session, attrs("one", "first"))
     assert {:ok, duplicate} = Elara.submit_input(session, attrs("one", "first"))
@@ -109,8 +131,8 @@ defmodule Elara.InputQueueTest do
              ["first", "second"]
   end
 
-  test "queued input can be cancelled while consumed input cannot be rewritten" do
-    session = session([{:stream, [{:sleep, 80}], {:ok, assistant("done")}}])
+  test "queued input can be cancelled while consumed input cannot be rewritten", %{cwd: cwd} do
+    session = session(cwd, [{:stream, [{:sleep, 80}], {:ok, assistant("done")}}])
     {:ok, _} = Elara.submit_input(session, attrs("active", "active"))
     {:ok, _} = Elara.submit_input(session, attrs("queued", "queued"))
     assert {:ok, %{state: :cancelled}} = Elara.cancel_input(session, "queued")
@@ -119,9 +141,10 @@ defmodule Elara.InputQueueTest do
     refute Enum.any?(Elara.materialized_view(session)["messages"], &(&1["text"] == "queued"))
   end
 
-  test "legacy completion retries gain correlation without rewriting evidence or accepting conflicts" do
+  test "legacy completion retries gain correlation without rewriting evidence or accepting conflicts",
+       %{cwd: cwd} do
     error = %Error{kind: :bad_response, message: "completion processing failed"}
-    session = session([{:error, error}])
+    session = session(cwd, [{:error, error}])
     on_exit(fn -> stop(session) end)
     :ok = Elara.interrupt(session)
     original = attrs("completion", "original evidence", :report)
@@ -171,17 +194,17 @@ defmodule Elara.InputQueueTest do
     assert {:ok, ^receipt} = Elara.input_status(session, "failed-completion")
   end
 
-  test "provider errors produce a failed durable receipt and do not redeliver" do
+  test "provider errors produce a failed durable receipt and do not redeliver", %{cwd: cwd} do
     error = %Error{kind: :bad_response, message: "provider broke"}
-    session = session([{:error, error}])
+    session = session(cwd, [{:error, error}])
     {:ok, _} = Elara.submit_input(session, attrs("failed", "once"))
     receipt = await_state(session, "failed", :failed)
     assert receipt.error =~ "provider broke"
     assert Enum.count(Elara.materialized_view(session)["messages"], &(&1["text"] == "once")) == 1
   end
 
-  test "attached snapshots include inbox and inbox events have recorder causality" do
-    session = session([{:stream, [{:sleep, 100}], {:ok, assistant("done")}}])
+  test "attached snapshots include inbox and inbox events have recorder causality", %{cwd: cwd} do
+    session = session(cwd, [{:stream, [{:sleep, 100}], {:ok, assistant("done")}}])
     {:ok, _} = Elara.submit_input(session, attrs("snapshot", "visible"))
     Process.sleep(10)
     {:ok, attached} = Elara.attach(session, :observe)
@@ -262,7 +285,8 @@ defmodule Elara.InputQueueTest do
              ["active persisted", "queued persisted", "new ordinary"]
   end
 
-  test "steering waits for the active tool, suppresses siblings, drains priority FIFO, and clears steering" do
+  test "steering waits for the active tool, suppresses siblings, drains priority FIFO, and clears steering",
+       %{cwd: cwd} do
     Process.register(self(), :input_queue_test_owner)
 
     on_exit(fn ->
@@ -295,6 +319,7 @@ defmodule Elara.InputQueueTest do
       Elara.start_session(
         provider: {Elara.Provider.Scripted, agent},
         tools: tools,
+        cwd: cwd,
         persist: false
       )
 
@@ -330,7 +355,9 @@ defmodule Elara.InputQueueTest do
     assert {:ok, "after explicit interrupt"} = Elara.ask(session, "subsequent")
   end
 
-  test "TCP input queue negotiation enforces observer writes and filters legacy inbox patches" do
+  test "TCP input queue negotiation enforces observer writes and filters legacy inbox patches", %{
+    cwd: cwd
+  } do
     {:ok, session} =
       Elara.start_session(
         provider:
@@ -340,6 +367,7 @@ defmodule Elara.InputQueueTest do
              1
            )},
         tools: [],
+        cwd: cwd,
         persist: false
       )
 

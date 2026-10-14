@@ -90,8 +90,9 @@ Esc closes panels or interrupts, and consecutive Ctrl-C requests a safe quit.
 outcome, not reply text or early Idle. Full redraws preserve diagnostic words.
 TUI test teardown stops its new session actors before restoring global roots
 and deleting state; client detach alone does not settle the closing turn.
-Line-chat fixtures own small Git workspaces and stop their new session actors;
-the partial-stream marker includes its line boundary so it cannot match `/help`.
+Line-chat and input-queue fixtures own small Git workspaces and stop their new
+session actors. The chat partial-stream marker includes its line boundary so
+it cannot match `/help`.
 Thread-communication fixtures stop the shared transport before changing or
 restoring the sessions root, and teardown restarts it even after an assertion
 interrupts a transport-recovery test.

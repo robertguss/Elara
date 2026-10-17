@@ -285,6 +285,57 @@ defmodule Elara.InputQueueTest do
              ["active persisted", "queued persisted", "new ordinary"]
   end
 
+  test "restart after a crash continues the active turn without duplicating its user" do
+    root =
+      Path.join(System.tmp_dir!(), "elara-queue-resume-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(root)
+    previous = Application.get_env(:elara, :sessions_root)
+    Application.put_env(:elara, :sessions_root, root)
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:elara, :sessions_root, previous),
+        else: Application.delete_env(:elara, :sessions_root)
+
+      File.rm_rf!(root)
+    end)
+
+    {:ok, agent} =
+      Agent.start_link(fn -> [{:stream, [{:sleep, 5_000}], {:ok, assistant("late")}}] end)
+
+    {:ok, session} =
+      Elara.start_session(provider: {Elara.Provider.Scripted, agent}, cwd: root, tools: [])
+
+    {:ok, _} = Elara.submit_input(session, attrs("active", "active persisted"))
+    await_state(session, "active", :consumed)
+    {:ok, info} = Store.newest(root)
+    stop(session)
+
+    # A clean stop pauses the inbox. A crash leaves it running with the input
+    # still active, which is the state restarted here.
+    {:ok, disk} = Store.open(info.path, root)
+    {:ok, disk} = Store.put_inbox(disk, disk.inbox, false, nil, "active")
+    Store.release(disk)
+
+    {:ok, resumed_agent} = Agent.start_link(fn -> [{:ok, assistant("resumed answer")}] end)
+
+    {:ok, resumed} =
+      Elara.start_session(
+        provider: {Elara.Provider.Scripted, resumed_agent},
+        cwd: root,
+        tools: [],
+        resume: info.path
+      )
+
+    on_exit(fn -> if match?({:ok, _}, Elara.session_pid(resumed)), do: stop(resumed) end)
+    await_state(resumed, "active", :consumed)
+    await_idle(resumed)
+
+    assert [%Message.User{text: "active persisted"}, %Message.Assistant{text: "resumed answer"}] =
+             Elara.transcript(resumed)
+  end
+
   test "steering waits for the active tool, suppresses siblings, drains priority FIFO, and clears steering",
        %{cwd: cwd} do
     Process.register(self(), :input_queue_test_owner)

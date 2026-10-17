@@ -102,6 +102,23 @@ defmodule Elara.Tool do
       tool.placement == :any and tool.mutating
   end
 
+  @replay_safe %{
+    "read" => {Elara.Tools, :read},
+    "output_read" => {Elara.Tools, :output_read},
+    "grep" => {Elara.Tools.Search, :grep},
+    "glob" => {Elara.Tools.Search, :glob}
+  }
+
+  @doc """
+  True for the built-in read-only tools a restart may run again. A plugin or
+  any other tool, however it is flagged, is never replayed.
+  """
+  @spec replay_safe?(t() | nil) :: boolean()
+  def replay_safe?(%__MODULE__{plugin: nil, mutating: false, name: name, run: run}),
+    do: Map.get(@replay_safe, name) == run
+
+  def replay_safe?(_tool), do: false
+
   @doc "Table keyed by name. Duplicate names are an ArgumentError at session start."
   @spec table([t()]) :: %{String.t() => t()}
   def table(tools) when is_list(tools) do

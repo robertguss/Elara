@@ -785,4 +785,103 @@ defmodule Elara.Session.CoreTest do
         :ok
     end)
   end
+
+  describe "resuming an interrupted turn" do
+    defp resume_config do
+      config = config([])
+      read = Enum.find(Tool.builtins(), &(&1.name == "read"))
+      %{config | tools: Map.put(config.tools, "read", read)}
+    end
+
+    defp run_tool_effects(effects) do
+      for {:run_tool, _ref, %ToolCall{} = call, _tool} <- effects, do: call.id
+    end
+
+    test "a transcript ending at the user message calls the provider again" do
+      state = Core.new(resume_config(), [Message.user("go")], resume: true)
+      assert Core.resume_plan(state.config.tools, state.history) == :provider
+
+      {state, effects} = Core.step(state, :resume_turn)
+
+      assert {:calling_provider, _ref, 1} = state.phase
+      assert {:emit, {:turn_started, "go"}} in effects
+      assert [{:call_provider, _, _}] = for({:call_provider, _, _} = e <- effects, do: e)
+      assert state.history == [Message.user("go")]
+    end
+
+    test "a fully answered tool round calls the provider for the next iteration" do
+      first = call("c1", "echo")
+      assistant = asst(nil, [first])
+      history = [Message.user("go"), assistant, Message.tool_result(first, {:ok, "a"})]
+
+      {state, _} = Core.step(Core.new(resume_config(), history, resume: true), :resume_turn)
+
+      assert {:calling_provider, _ref, 2} = state.phase
+      assert state.history == history
+    end
+
+    test "an unanswered replay-safe boundary and the calls after it run again" do
+      read = call("c1", "read", {:ok, %{"path" => "a.txt"}})
+      later = call("c2", "echo")
+      assistant = asst(nil, [read, later])
+      history = [Message.user("go"), assistant]
+
+      state = Core.new(resume_config(), history, resume: true)
+      assert state.history == history
+      assert {:tools, [^read, ^later]} = Core.resume_plan(state.config.tools, state.history)
+
+      {state, effects} = Core.step(state, :resume_turn)
+
+      assert {:running_tool, _ref, ^read, [^later], 1} = state.phase
+      assert run_tool_effects(effects) == ["c1"]
+    end
+
+    test "an unanswered boundary that is not replay safe is repaired" do
+      boundary = call("c1", "echo")
+      assistant = asst(nil, [boundary])
+      history = [Message.user("go"), assistant]
+
+      assert Core.resume_plan(resume_config().tools, history) == nil
+
+      state = Core.new(resume_config(), history, resume: true)
+
+      assert [_, ^assistant, %Message.ToolResult{outcome: {:indeterminate, @restarted}}] =
+               state.history
+    end
+
+    test "a boundary the transcript cannot prove was parsed is not replayed" do
+      malformed = call("c1", "read", {:malformed, "{"})
+
+      assert Core.resume_plan(resume_config().tools, [Message.user("go"), asst(nil, [malformed])]) ==
+               nil
+    end
+
+    test "a finished turn and an interrupted answer are not resumed" do
+      tools = resume_config().tools
+      assert Core.resume_plan(tools, [Message.user("go"), asst("done")]) == nil
+      assert Core.resume_plan(tools, []) == nil
+    end
+
+    test "resume does not repair when the caller did not ask for it" do
+      read = call("c1", "read", {:ok, %{"path" => "a.txt"}})
+      history = [Message.user("go"), asst(nil, [read])]
+
+      state = Core.new(resume_config(), history)
+
+      assert [_, _, %Message.ToolResult{outcome: {:indeterminate, @restarted}}] = state.history
+    end
+  end
+
+  test "only built-in read tools are replay safe" do
+    builtin = fn name -> Enum.find(Tool.builtins(), &(&1.name == name)) end
+
+    for name <- ~w(read grep glob output_read), do: assert(Tool.replay_safe?(builtin.(name)))
+
+    for name <- ~w(write edit bash mcp_call web_fetch),
+        do: refute(Tool.replay_safe?(builtin.(name)))
+
+    refute Tool.replay_safe?(%{builtin.("read") | run: {__MODULE__, :echo}})
+    refute Tool.replay_safe?(%{builtin.("read") | mutating: true})
+    refute Tool.replay_safe?(nil)
+  end
 end

@@ -133,6 +133,7 @@ defmodule Elara.Session.Core do
           | {:tool_timeout, ref()}
           | :interrupt
           | :steer
+          | :resume_turn
 
   @type effect ::
           {:call_provider, ref(), Provider.Request.t()}
@@ -153,12 +154,65 @@ defmodule Elara.Session.Core do
   Build an idle state from persisted history, repairing unresolved tool calls.
   `boundary:` names the one call that may have been running when the session
   stopped (default: the first unresolved call; `nil`: none); see
-  `repair_history/2`.
+  `repair_history/2`. With `resume: true`, a trailing boundary call that
+  `resume_plan/3` can run again stays unresolved for `:resume_turn` instead of
+  being repaired.
   """
   @spec new(Config.t(), [Message.t()], keyword()) :: State.t()
   def new(%Config{} = config, history, opts \\ []) when is_list(history) do
     boundary = Keyword.get(opts, :boundary, :first_unresolved)
-    %State{config: config, history: repair_history(history, boundary), phase: :idle, next_ref: 1}
+
+    history =
+      if Keyword.get(opts, :resume, false) and
+           match?({:tools, _}, resume_plan(config.tools, history, boundary)),
+         do: history,
+         else: repair_history(history, boundary)
+
+    %State{config: config, history: history, phase: :idle, next_ref: 1}
+  end
+
+  @doc """
+  What `:resume_turn` would continue from an unrepaired transcript, or nil when
+  the turn must stay stopped. A trailing user message or a fully answered tool
+  round needs only the next provider call. An unanswered round resumes only
+  when its boundary call is `Tool.replay_safe?/1` with parsed arguments: the
+  calls after it never started, so they run as usual. Anything else fails
+  closed through `repair_history/2`.
+  """
+  @spec resume_plan(
+          %{String.t() => Tool.t()},
+          [Message.t()],
+          :first_unresolved | String.t() | nil
+        ) ::
+          :provider | {:tools, [ToolCall.t()]} | nil
+  def resume_plan(tools, history, boundary \\ :first_unresolved) when is_list(history) do
+    case Enum.reverse(history) do
+      [%User{} | _] ->
+        :provider
+
+      reversed ->
+        {results, rest} = Enum.split_while(reversed, &is_struct(&1, ToolResult))
+
+        with [%Assistant{tool_calls: [_ | _] = calls} | _] <- rest do
+          answered = MapSet.new(results, & &1.call_id)
+
+          case Enum.reject(calls, &MapSet.member?(answered, &1.id)) do
+            [] ->
+              :provider
+
+            [%ToolCall{args: {:ok, _}} = first | _] = unresolved ->
+              if boundary in [:first_unresolved, first.id] and
+                   Tool.replay_safe?(Map.get(tools, first.name)),
+                 do: {:tools, unresolved},
+                 else: nil
+
+            _ ->
+              nil
+          end
+        else
+          _ -> nil
+        end
+    end
   end
 
   @spec rebase_history(State.t(), [Message.t()]) :: State.t()
@@ -214,6 +268,15 @@ defmodule Elara.Session.Core do
 
   defp restart_outcome(%ToolCall{id: id, args: {:ok, _}}, id), do: {:indeterminate, @restarted}
   defp restart_outcome(%ToolCall{}, _boundary), do: {:error, "interrupted"}
+
+  # The user message that opened the turn and the provider-call iteration the
+  # transcript tail belongs to: one per assistant message since that message.
+  defp resume_position(history) do
+    case history |> Enum.reverse() |> Enum.split_while(&(not is_struct(&1, User))) do
+      {since, [%User{text: prompt} | _]} -> {prompt, Enum.count(since, &is_struct(&1, Assistant))}
+      {_since, []} -> nil
+    end
+  end
 
   @spec idle?(State.t()) :: boolean()
   def idle?(%State{phase: :idle}), do: true
@@ -317,6 +380,31 @@ defmodule Elara.Session.Core do
        {:emit, :provider_view_changed},
        call_provider_effect(state, ref)
      ]}
+  end
+
+  def step(%State{phase: :idle} = state, :resume_turn) do
+    with plan when plan != nil <- resume_plan(state.config.tools, state.history),
+         {prompt, iteration} <- resume_position(state.history) do
+      state = %{
+        state
+        | config: struct!(state.config, runtime_limits(state)),
+          last_outcome: nil,
+          pending_runtime_limits: nil,
+          deferred_calls: [],
+          steering?: false,
+          retry: nil
+      }
+
+      {state, effects} =
+        case plan do
+          :provider -> next_provider_call(state, iteration + 1)
+          {:tools, calls} -> dispatch_next(state, calls, iteration)
+        end
+
+      {state, [{:emit, {:turn_started, prompt}} | effects]}
+    else
+      _ -> {state, []}
+    end
   end
 
   def step(%State{phase: :idle} = state, _fact), do: {state, []}

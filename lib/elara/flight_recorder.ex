@@ -847,6 +847,7 @@ defmodule Elara.FlightRecorder do
   defp normalize_fact({:tool_timeout, ref}), do: %{kind: :tool_timeout, ref: ref}
   defp normalize_fact(:interrupt), do: %{kind: :interrupt}
   defp normalize_fact(:steer), do: %{kind: :steer}
+  defp normalize_fact(:resume_turn), do: %{kind: :resume_turn}
   defp normalize_fact(:inbox_changed), do: %{kind: :inbox_changed}
   defp normalize_fact(:runtime_limits_changed), do: %{kind: :runtime_limits_changed}
 
@@ -911,6 +912,7 @@ defmodule Elara.FlightRecorder do
   defp denormalize_fact(%{kind: :tool_timeout, ref: ref}), do: {:tool_timeout, ref}
   defp denormalize_fact(%{kind: :interrupt}), do: :interrupt
   defp denormalize_fact(%{kind: :steer}), do: :steer
+  defp denormalize_fact(%{kind: :resume_turn}), do: :resume_turn
   defp denormalize_fact(%{kind: :inbox_changed}), do: :inbox_changed
   defp denormalize_fact(%{kind: :runtime_limits_changed}), do: :runtime_limits_changed
 

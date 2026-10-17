@@ -181,6 +181,17 @@ if the session dies again while executor-backed recovery is still writing its
 results, a later reopen may record a call that never started as
 `indeterminate`. That errs toward uncertainty, never toward a false error.
 
+A reopened session continues the turn that was running instead of failing its
+input when nothing holds the transcript still (inputs not paused, no handoff
+in flight) and the transcript shows what is left to do. A transcript that ends
+at the user message, or at a fully answered tool round, calls the provider
+again. An unanswered round continues only when its first unresolved call is a
+built-in `read`, `grep`, `glob` or `output_read` with parsed arguments; that
+call and the ones after it, which never started, run again. Every other
+boundary is repaired as above and the input fails. A cut-off provider call is
+sent again only because nothing of it reached the transcript. This is not
+exactly-once execution and not a sandbox: plugin tools are never replayed.
+
 ## Explain an event with `/why`
 
 Every session keeps a deterministic flight recording of state transitions. After

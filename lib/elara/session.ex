@@ -92,6 +92,7 @@ defmodule Elara.Session do
       tasks: %{},
       pending_effects: %{},
       effect_recovery_pending: [],
+      resume_turn?: false,
       timers: %{},
       retry_timer: nil,
       consuming_id: nil,
@@ -126,6 +127,7 @@ defmodule Elara.Session do
     provider = Keyword.fetch!(opts, :provider)
     cwd = Keyword.fetch!(opts, :cwd)
     store = Keyword.fetch!(opts, :store)
+    resume? = resume_candidate?(store, core_config, opts)
 
     core_config = restore_provider_settings(core_config, store, provider)
 
@@ -149,7 +151,7 @@ defmodule Elara.Session do
       fault_hook: effect_fault_hook
     }
 
-    case prepare_session(store, core_config, recovery) do
+    case prepare_session(store, core_config, recovery, resume?) do
       {:ok, store, core, effect_journal, effect_recovery_pending} ->
         store =
           if Keyword.get(opts, :pause_inputs, false),
@@ -225,6 +227,7 @@ defmodule Elara.Session do
             effect_fault_hook: effect_fault_hook,
             effect_journal: effect_journal,
             effect_recovery_pending: effect_recovery_pending,
+            resume_turn?: resume?,
             provider: provider,
             cwd: cwd,
             base_system: Keyword.get(opts, :base_system, core.config.system),
@@ -1194,23 +1197,37 @@ defmodule Elara.Session do
     {:stop, {:session_lock_lost, status}, shell}
   end
 
+  def handle_info(:resume_turn, %{resume_turn?: true} = shell) do
+    shell = %{shell | resume_turn?: false}
+
+    if Core.idle?(shell.core) and not shell.store.inputs_paused and
+         not Handoff.frozen?(shell.store) and
+         Core.resume_plan(shell.core.config.tools, shell.core.history) != nil do
+      {:noreply, feed(:resume_turn, shell)}
+    else
+      {:noreply, abandon_resume(shell)}
+    end
+  end
+
+  def handle_info(:resume_turn, shell), do: {:noreply, shell}
+
   def handle_info(_msg, shell), do: {:noreply, shell}
 
-  defp prepare_session(store, config, %{executor: nil}) do
-    case hydrate(store, config) do
+  defp prepare_session(store, config, %{executor: nil}, resume?) do
+    case hydrate(store, config, resume?) do
       {:ok, store, core} -> {:ok, store, core, nil, []}
       {:error, _reason} = error -> error
     end
   end
 
-  defp prepare_session(store, config, recovery) do
+  defp prepare_session(store, config, recovery, resume?) do
     case Store.claim(store) do
-      {:ok, store} -> prepare_claimed_session(store, config, recovery)
+      {:ok, store} -> prepare_claimed_session(store, config, recovery, resume?)
       {:error, _reason} = error -> error
     end
   end
 
-  defp prepare_claimed_session(store, config, recovery) do
+  defp prepare_claimed_session(store, config, recovery, resume?) do
     case ControllerJournal.start_link(path: recovery.journal_path) do
       {:ok, journal} ->
         # Fix the possibly running call before reconciliation resolves any call,
@@ -1223,7 +1240,7 @@ defmodule Elara.Session do
 
         case recover_store(store, config.tools, journal, recovery) do
           {:ok, store} ->
-            core = Core.new(config, Store.history(store), boundary: boundary)
+            core = Core.new(config, Store.history(store), boundary: boundary, resume: resume?)
 
             case persist_repairs(store, core) do
               {:ok, store, core} ->
@@ -1670,10 +1687,19 @@ defmodule Elara.Session do
      feed({:provider_catalog, catalog}, %{shell | catalog_task: nil, catalog_timer: nil})}
   end
 
-  defp hydrate(store, config) do
+  defp hydrate(store, config, resume? \\ false) do
     with {:ok, store} <- Store.claim(store) do
-      persist_repairs(store, Core.new(config, Store.history(store)))
+      persist_repairs(store, Core.new(config, Store.history(store), resume: resume?))
     end
+  end
+
+  # Only a turn that was running (its input still active) can continue, and only
+  # while nothing holds the transcript still. The plan is recomputed from the
+  # same history by Core, so this just decides whether to skip the repair.
+  defp resume_candidate?(store, config, opts) do
+    store.active_input_id != nil and not store.inputs_paused and
+      not Keyword.get(opts, :pause_inputs, false) and not Handoff.frozen?(store) and
+      Core.resume_plan(config.tools, Store.history(store)) != nil
   end
 
   defp copy_store(shell) do
@@ -3631,8 +3657,32 @@ defmodule Elara.Session do
     end
   end
 
+  # Resuming was ruled out after the repair had been skipped: repair now, as a
+  # restart without resume would have, and fail the input.
+  defp abandon_resume(shell) do
+    core = %{shell.core | history: Core.repair_history(shell.core.history)}
+
+    case persist_repairs(shell.store, core) do
+      {:ok, store, core} ->
+        {store, recovered?} = fail_restarted_input(store)
+        if recovered?, do: send(self(), :inbox_changed)
+        send(self(), :drain_inputs)
+        %{shell | core: core, store: store}
+
+      {:error, reason} ->
+        raise "failed to persist restart repair: #{inspect(reason)}"
+    end
+  end
+
   defp finish_restart_recovery(%Shell{effect_recovery_pending: [_ | _]} = shell),
     do: {shell, false}
+
+  # The interrupted turn keeps its active input: Core continues it from the
+  # transcript instead of failing it.
+  defp finish_restart_recovery(%Shell{resume_turn?: true} = shell) do
+    send(self(), :resume_turn)
+    {shell, false}
+  end
 
   defp finish_restart_recovery(shell) do
     {store, recovered?} = fail_restarted_input(shell.store)

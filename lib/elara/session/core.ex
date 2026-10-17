@@ -179,7 +179,11 @@ defmodule Elara.Session.Core do
   calls after it never started, so they run as usual. Anything else fails
   closed through `repair_history/2`.
   """
-  @spec resume_plan(%{String.t() => Tool.t()}, [Message.t()], :first_unresolved | String.t() | nil) ::
+  @spec resume_plan(
+          %{String.t() => Tool.t()},
+          [Message.t()],
+          :first_unresolved | String.t() | nil
+        ) ::
           :provider | {:tools, [ToolCall.t()]} | nil
   def resume_plan(tools, history, boundary \\ :first_unresolved) when is_list(history) do
     case Enum.reverse(history) do

@@ -1699,8 +1699,13 @@ defmodule Elara.Session do
   defp resume_candidate?(store, config, opts) do
     store.active_input_id != nil and not store.inputs_paused and
       not Keyword.get(opts, :pause_inputs, false) and not Handoff.frozen?(store) and
+      not handoff_successor?(store) and
       Core.resume_plan(config.tools, Store.history(store)) != nil
   end
+
+  # A handoff successor owns its recovery: an uncertain start pauses for the
+  # operator and never re-issues the request.
+  defp handoff_successor?(store), do: is_binary(store.context["source"])
 
   defp copy_store(shell) do
     context =

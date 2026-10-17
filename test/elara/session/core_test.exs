@@ -805,7 +805,7 @@ defmodule Elara.Session.CoreTest do
 
       assert {:calling_provider, _ref, 1} = state.phase
       assert {:emit, {:turn_started, "go"}} in effects
-      assert [{:call_provider, _, _}] = for {:call_provider, _, _} = e <- effects, do: e
+      assert [{:call_provider, _, _}] = for({:call_provider, _, _} = e <- effects, do: e)
       assert state.history == [Message.user("go")]
     end
 
@@ -851,7 +851,9 @@ defmodule Elara.Session.CoreTest do
 
     test "a boundary the transcript cannot prove was parsed is not replayed" do
       malformed = call("c1", "read", {:malformed, "{"})
-      assert Core.resume_plan(resume_config().tools, [Message.user("go"), asst(nil, [malformed])]) == nil
+
+      assert Core.resume_plan(resume_config().tools, [Message.user("go"), asst(nil, [malformed])]) ==
+               nil
     end
 
     test "a finished turn and an interrupted answer are not resumed" do
@@ -874,7 +876,9 @@ defmodule Elara.Session.CoreTest do
     builtin = fn name -> Enum.find(Tool.builtins(), &(&1.name == name)) end
 
     for name <- ~w(read grep glob output_read), do: assert(Tool.replay_safe?(builtin.(name)))
-    for name <- ~w(write edit bash mcp_call web_fetch), do: refute(Tool.replay_safe?(builtin.(name)))
+
+    for name <- ~w(write edit bash mcp_call web_fetch),
+        do: refute(Tool.replay_safe?(builtin.(name)))
 
     refute Tool.replay_safe?(%{builtin.("read") | run: {__MODULE__, :echo}})
     refute Tool.replay_safe?(%{builtin.("read") | mutating: true})

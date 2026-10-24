@@ -6,7 +6,6 @@ A turn can read a file, write a workspace-relative file, replace one string, or 
 
 - `tool-read` returns file contents through a turn.
 - `tool-write` creates parent directories and writes the exact bytes.
-- `tool-edit` replaces exactly one occurrence.
 - `tool-bash` runs `/bin/sh -c` in the session cwd with stdout and stderr merged.
 - `tool-write-reject` rejects absolute paths, `..`, and non-file write targets.
 - `tool-grep` returns `path:line:text` for a regex across the session cwd.
@@ -16,7 +15,7 @@ A turn can read a file, write a workspace-relative file, replace one string, or 
 ## How to get to it (user POV)
 
 - Ask `mix elara.ask` or chat to read, write, edit, or run a command.
-- Observe `  -> read:` / `  -> write:` / `  -> edit:` / `  -> bash:` and a following `  <- ok` or `  <- error:`.
+- Observe `  -> read:` / `  -> write:` / `  -> edit:` / `  -> bash:` / `  -> grep:` / `  -> glob:` and a following `  <- ok` or `  <- error:`.
 
 ## Driving it with verify-elara
 
@@ -32,13 +31,13 @@ Preconditions:
 - **Glob.** Seed `$WORKSPACE` first, then run `.cursor/skills/verify-elara/bin/drive scripted-ask --feature tools --prompt "list the modules" --tool glob --pattern '**/*.ex' --reply "listed them"`. Exit code `0`. Render contains `  -> glob:` and `  <- ok`, and the result names only seeded workspace paths, sorted.
 - **Grep.** Run `.cursor/skills/verify-elara/bin/drive scripted-ask --feature tools --prompt "find the marker" --tool grep --pattern '@marker' --reply "found it"`. Exit code `0`. Render contains `  -> grep:` and `  <- ok` with `path:line:text`.
 - **Search path rejection.** Repeat the grep drive with `--path ..`. Exit code `0` for the turn, but the render shows `  <- error:` naming the working directory. A search that silently widens its scope is a failure.
-- **Proof.** Keep `render.txt` and a copy of any written file under `artifacts/tools/<run-id>/`. A tool line without the file bytes is incomplete. A file write without the `  -> write:` line is incomplete.
+- **Proof.** Keep `render.txt` and a copy of any written file under `$VERIFY_ROOT/evidence/tools/<run-id>/`. A tool line without the file bytes is incomplete. A file write without the `  -> write:` line is incomplete.
 
 ## Gotchas
 
-- `write` is workspace-relative. Absolute paths and `..` must fail. `read`, `edit`, and `bash` can reach outside the cwd; that is why drives use a disposable workspace.
+- `read`, `write`, `edit`, `grep`, and `glob` are fenced by FileFence (workspace plus `ELARA_FILE_ROOTS`; protected paths refused). `bash` is not. That is why drives use a disposable workspace.
 - Default local `write` also records a durable ledger under `$HOME/.elara/sessions/_effect_executors/`. Proof of write is still the file bytes plus the tool lines.
-- `edit` needs exactly one `old_text` match. Zero or many matches leave the file unchanged.
+- `edit` replaces one `old_text` match, or every match when `replace_all` is true. Zero matches leave the file unchanged. There is no scripted `edit` drive.
 - Model-selected tools on a credentialed Mix drive are probabilistic. If the model ignores the request, record a usability miss; do not infer the tool is broken. Use scripted-ask to force the tool call.
 - Shell output kept in history is capped at 16 KiB. A 30-second tool timeout is the default.
 - `grep` and `glob` need the `rg` executable. Without it they return one error naming the install; there is no fallback matcher, so do not read an empty result as "no matches" until `rg --version` is confirmed.

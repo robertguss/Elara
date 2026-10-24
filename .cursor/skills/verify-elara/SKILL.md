@@ -5,7 +5,7 @@ description: Drive Elara's Mix CLI, persistent chat, and Rust TUI the way a user
 
 # Verify Elara
 
-Elara is a Mix-run coding agent. A user touches `mix elara.ask`, `mix elara.chat`, and `mix elara.tui`. There is no web UI. The public Elixir API is the only way to set `cwd:` because the Mix tasks use process cwd and have no `--cwd` flag.
+Elara is a Mix-run coding agent. A user touches `mix elara.ask`, `mix elara.chat`, and `mix elara.tui`. There is no web UI. Mix tasks default to the process cwd; `--cwd DIR` selects an existing directory.
 
 This skill is for a later agent that has never seen the app. Read `features/README.md`, then the feature file, then drive that path. Do not substitute `mix test` for a user-path proof.
 
@@ -28,11 +28,12 @@ What launch creates:
 - Isolated `HOME` at `$VERIFY_ROOT/home` so sessions land in that tree, not `~/.elara`
 - Scratch API cwd at `$VERIFY_ROOT/workspace`
 - Detached git worktree at `$VERIFY_ROOT/worktree` for Mix tasks (their cwd is the session cwd)
+- Evidence at `$VERIFY_ROOT/evidence`
 - A free `ELARA_SERVER_PORT` reserved for this run
 - Compile of the Mix project in the repo (`mix deps.get` + `mix compile`)
 - `MIX_HOME`, `HEX_HOME`, `CARGO_HOME`, and `RUSTUP_HOME` pointed at the user's real caches so isolated `HOME` does not trigger a fresh toolchain download. Explicit cache overrides are preserved.
 
-Teardown is `bin/cleanup`. It removes `$VERIFY_ROOT` and the worktree. It does not delete evidence.
+Teardown is `bin/cleanup`. It removes `$VERIFY_ROOT` (including evidence) and the worktree.
 
 If the checkout does not compile, stop and fix that before driving.
 
@@ -77,7 +78,7 @@ Stable handles (not coordinates):
 | `mix elara.ask` | `  -> <tool>:` | tool started |
 | `mix elara.ask` | `  <- ok (` / `  <- error:` | tool finished |
 | `mix elara.ask` | `[done]` | successful turn |
-| `mix elara.ask` with no prompt | `usage: mix elara.ask "prompt"` | usage error |
+| `mix elara.ask` with no prompt | `usage: mix elara.ask [--cwd DIR] [--] "prompt"` | usage error |
 | `mix elara.ask` without auth | `Not logged in. Run \`mix elara.login\`` | config gate |
 | `mix elara.chat` | `elara  ·  /help  /interrupt  /reload  /resume  /quit` | banner |
 | `mix elara.chat` | `> ` | idle prompt |
@@ -101,7 +102,7 @@ Never attach to `127.0.0.1:4048` unless this run started that listener and recor
 Write under:
 
 ```
-.cursor/skills/verify-elara/artifacts/<feature>/<run-id>/
+$VERIFY_ROOT/evidence/<feature>/<run-id>/
 ```
 
 `bin/drive` always writes `command.txt`, `stdout.txt`, `stderr.txt`, `exit_code.txt`, and `meta.txt`. Scripted chat also writes `transcript.txt`. Scripted ask also writes `render.txt`.
@@ -121,9 +122,9 @@ Proof standards:
 .cursor/skills/verify-elara/bin/cleanup
 ```
 
-Kills only PIDs listed in `state.env`. Removes `$VERIFY_ROOT` (must be `/tmp/elara-verify-*`) and `git worktree remove --force` on the worktree. Leaves `.cursor/skills/verify-elara/artifacts/` in place.
+Kills only PIDs listed in `state.env`. Removes `$VERIFY_ROOT` (must be `/tmp/elara-verify-*`, including `$VERIFY_ROOT/evidence`) and `git worktree remove --force` on the worktree.
 
-After cleanup, confirm the evidence directory still exists. If a drive failed, run cleanup before the next launch so ports and worktrees are not stranded.
+Inspect evidence before cleanup. If a drive failed, run cleanup before the next launch so ports and worktrees are not stranded.
 
 ## Isolate
 

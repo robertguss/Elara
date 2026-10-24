@@ -48,4 +48,4 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Persistent chat](./chat.md) covers the banner, idle prompt, slash commands, and a scripted turn.
 - [Rust TUI](./tui.md) covers `mix elara.tui new --headless`, list, and attach-by-id.
 - [Sessions](./sessions.md) covers persist, `--continue`, `/resume`, `/name`, `/tree`, `/fork`, and `/clone`.
-- [Built-in tools](./tools.md) covers `read`, `write`, `edit`, and `bash` as a user sees them through a turn.
+- [Built-in tools](./tools.md) covers `read`, `write`, `edit`, `bash`, `grep`, and `glob` as a user sees them through a turn.

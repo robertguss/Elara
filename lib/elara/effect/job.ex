@@ -135,9 +135,6 @@ defmodule Elara.Effect.Job do
     }
   end
 
-  @spec schema_version() :: pos_integer()
-  def schema_version, do: @schema_version
-
   @doc false
   @spec decode(binary()) :: {:ok, t()} | {:error, :invalid_job}
   def decode(binary) when is_binary(binary) do

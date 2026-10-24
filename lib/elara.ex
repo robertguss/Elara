@@ -238,14 +238,6 @@ defmodule Elara do
   def user_entries(session) when is_pid(session) or is_binary(session),
     do: call(session, :user_entries)
 
-  @doc false
-  @spec history_before(session_ref(), String.t()) ::
-          {:ok, [Elara.Message.t()]} | {:error, term()}
-  def history_before(session, id)
-      when (is_pid(session) or is_binary(session)) and is_binary(id) do
-    call(session, {:history_before, id})
-  end
-
   @spec tree(session_ref(), String.t()) ::
           {:ok, String.t(), [Elara.Message.t()]} | {:error, term()}
   def tree(session, id) when (is_pid(session) or is_binary(session)) and is_binary(id) do

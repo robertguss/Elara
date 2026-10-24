@@ -42,10 +42,6 @@ defmodule Elara.Effect.Executor do
   end
 
   @doc false
-  @spec configuration(t()) :: map()
-  def configuration(executor), do: GenServer.call(executor, :configuration)
-
-  @doc false
   @spec close(t()) :: :ok
   def close(executor), do: GenServer.stop(executor, :normal)
 end
@@ -204,10 +200,6 @@ defmodule Elara.Effect.Executor.Server do
 
   def handle_call({:continue, job_id, operation_digest, operation}, from, state) do
     continue_reply(state, from, job_id, operation_digest, operation)
-  end
-
-  def handle_call(:configuration, _from, state) do
-    {:reply, state.ledger.configuration, state}
   end
 
   @impl true

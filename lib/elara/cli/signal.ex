@@ -23,8 +23,4 @@ defmodule Elara.CLI.Signal do
       :shutdown -> :ok
     end
   end
-
-  @doc "VM flags that make Ctrl-C terminate instead of opening BREAK."
-  @spec erl_no_break() :: String.t()
-  def erl_no_break, do: "+Bc"
 end

@@ -89,9 +89,6 @@ defmodule Elara.Effect.DeclarativeWrite do
   @type expected :: :absent | {:regular, String.t()}
   @type hook :: (atom() -> :ok)
 
-  @spec schema() :: String.t()
-  def schema, do: @schema
-
   @spec arguments(String.t(), expected(), String.t()) :: map()
   def arguments(path, expected, content) when is_binary(path) and is_binary(content) do
     %{

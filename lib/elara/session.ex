@@ -673,10 +673,6 @@ defmodule Elara.Session do
     {:reply, entries, shell}
   end
 
-  def handle_call({:history_before, id}, _from, shell) do
-    {:reply, Store.history_before_user(shell.store, id), shell}
-  end
-
   def handle_call({:tree, id}, _from, shell) do
     idle_store_change(shell, fn store -> Store.move_before_user(store, id) end)
   end

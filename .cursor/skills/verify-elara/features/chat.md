@@ -28,7 +28,7 @@ Preconditions:
 - **Help while idle.** Run `.cursor/skills/verify-elara/bin/drive scripted-chat --feature chat --lines '/help,/quit'`. Exit code `0`. `transcript.txt` contains the banner `elara  ·  /help`, the help line `/help       this list`, `/quit       exit`, and returns to `> ` after help.
 - **Scripted turn.** Run `.cursor/skills/verify-elara/bin/drive scripted-chat --feature chat --lines 'hello,/quit' --reply 'hello from elara'`. Exit code `0`. Transcript contains `  you` / `  hello` and `hello from elara`, then returns to `> ` before quit.
 - **Mix chat.** `bin/drive mix-chat` refuses without a TTY. A credentialed Mix chat is a separate entry point; drive it only in a real terminal with exported credentials, from `$WORKTREE`. Do not mark Mix chat verified from scripted-chat.
-- **Proof.** Keep `transcript.txt` plus the standard drive files under `artifacts/chat/<run-id>/`. The transcript must show both the action (`/help` or `hello`) and the resulting help text or reply, not only the final `> `.
+- **Proof.** Keep `transcript.txt` plus the standard drive files under `$VERIFY_ROOT/evidence/chat/<run-id>/`. The transcript must show both the action (`/help` or `hello`) and the resulting help text or reply, not only the final `> `.
 
 `scripted-chat` waits for new output and an idle session before sending each next line. It exits nonzero if that wait expires or the completed assistant texts differ from `--reply` or `--replies`. The failed transcript stays in the evidence folder. An old prompt or an interrupted turn is not a successful proof.
 

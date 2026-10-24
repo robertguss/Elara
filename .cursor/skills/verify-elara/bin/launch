@@ -17,14 +17,13 @@ require_cmd git
 require_cmd python3
 
 REPO_ROOT="$(repo_root)"
-SKILL_ROOT="$(skill_root)"
 RUN_ID="${ELARA_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}"
 VERIFY_ROOT="${ELARA_VERIFY_ROOT:-/tmp/elara-verify-$RUN_ID}"
 WORKSPACE="$VERIFY_ROOT/workspace"
 WORKTREE="$VERIFY_ROOT/worktree"
 ISOLATED_HOME="$VERIFY_ROOT/home"
 TUI_STATE="$VERIFY_ROOT/tui"
-EVIDENCE_ROOT="$SKILL_ROOT/artifacts"
+EVIDENCE_ROOT="$VERIFY_ROOT/evidence"
 ELARA_USER_HOME="${HOME}"
 
 if [ -e "$VERIFY_ROOT" ]; then
@@ -35,7 +34,7 @@ fi
 mkdir -p "$WORKSPACE" "$ISOLATED_HOME" "$TUI_STATE" "$EVIDENCE_ROOT"
 printf 'verification workspace\n' >"$WORKSPACE/README.md"
 
-# Mix CLI tasks use process cwd as the session cwd and have no --cwd flag.
+# Mix tasks default to process cwd; --cwd DIR selects an existing directory.
 # A detached worktree keeps write/edit/bash off the user's checkout.
 git -C "$REPO_ROOT" worktree add --detach "$WORKTREE" HEAD >/dev/null
 

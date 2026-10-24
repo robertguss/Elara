@@ -30,7 +30,7 @@ Preconditions:
 - **Embedded new.** Run `.cursor/skills/verify-elara/bin/drive tui-headless --feature tui`. Exit code `0`. stdout is a headless frame. stderr contains `summary session=` and `incarnation=`. The frame or summary identifies a session. Do not pass `--ask` on this drive.
 - **Port ownership.** After the command exits, the embedded server is gone. `bin/doctor` must still report the port free. A leftover listener that we did not record is a failed cleanup, not a pass.
 - **Ask.** Only with a real provider or a server started with a scripted provider. Run `.cursor/skills/verify-elara/bin/drive tui-headless --feature tui --ask "Reply with exactly: tui works"`. Exit code `0`. Frame contains the reply. This is a different entry point from `tui-new-headless`.
-- **Proof.** Keep stdout frame, stderr summary, and the standard drive files under `artifacts/tui/<run-id>/`. The summary must include `session=` from this run, not a session on port 4048.
+- **Proof.** Keep stdout frame, stderr summary, and the standard drive files under `$VERIFY_ROOT/evidence/tui/<run-id>/`. The summary must include `session=` from this run, not a session on port 4048.
 
 ## Gotchas
 

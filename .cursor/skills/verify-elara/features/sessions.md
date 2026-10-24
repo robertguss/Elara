@@ -31,7 +31,7 @@ Preconditions:
 - **Continue miss.** After cleanup of session files only (not evidence), `--continue` with no saved session fails with `No saved session for this directory.`
 - **Name.** In a persisted scripted chat, send `/name verify-renamed,/quit`. Transcript contains `session named`.
 - **Resume list.** Send `/resume,/quit`. Transcript lists the cwd-scoped session, newest first.
-- **Proof.** Copy or `ls -l` the JSONL into `artifacts/sessions/<run-id>/` along with the transcript. A second drive that continues must show the first prompt in the reprinted transcript. Do not keep these files in the user's `~/.elara`.
+- **Proof.** Copy or `ls -l` the JSONL into `$VERIFY_ROOT/evidence/sessions/<run-id>/` along with the transcript. A second drive that continues must show the first prompt in the reprinted transcript. Do not keep these files in the user's `~/.elara`.
 
 ## Gotchas
 

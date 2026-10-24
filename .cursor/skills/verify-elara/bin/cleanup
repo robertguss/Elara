@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tear down the instance this run started. Proof artifacts are not deleted.
+# Tear down the instance this run started. Evidence lives under VERIFY_ROOT.
 
 set -euo pipefail
 
@@ -62,5 +62,5 @@ if [ -n "${VERIFY_ROOT:-}" ] && [ -d "$VERIFY_ROOT" ]; then
   esac
 fi
 
-echo "verify-elara cleanup: evidence retained at $EVIDENCE_ROOT"
+echo "verify-elara cleanup: evidence was at ${EVIDENCE_ROOT:-} (removed with VERIFY_ROOT)"
 echo "verify-elara cleanup: done"

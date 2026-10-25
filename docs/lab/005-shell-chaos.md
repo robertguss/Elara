@@ -29,7 +29,7 @@
   held in 20/20 provider runs and the predicted finding held in 10/10 marker
   runs. LAB-5 subsequently completed its registered finite matrix on 2026-10-06:
   1200/1200 eligible and passed, 50 rows at each of 24 checkpoints. See the
-  final result below and ROB-1085 in Linear; this is not arbitrary-schedule or
+  final result below and ROB-1085; this is not arbitrary-schedule or
   real-model coverage.
 
 ## Method

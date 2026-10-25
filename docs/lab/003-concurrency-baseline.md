@@ -12,8 +12,8 @@
 - **Status:** the sessions curve has been measured: the timing and count sweeps
   ran on 2026-09-27. The child-thread variant ran the same day. Subsequent
   attribution profiles and diagnostics are recorded below: only N = 10 supports
-  eligible attribution; both N = 500 profiles failed `users_ok`. LAB-3 remains
-  unfinished and paused under the original owner-host protocol; see Linear.
+  eligible attribution; both N = 500 profiles failed `users_ok`. Closed as
+  refuted (archive ROB-1083).
 
 ## Reference workload
 
@@ -805,17 +805,9 @@ That is not enough to rank a throughput or latency bottleneck for LAB-3. Waiting
 
 Memory is also not attributed. Table N describes holders at two census instants; it does not say where bytes were allocated or what held the run's peak. At N = 10, unique binary bytes are about 25.4–25.7 MB while separately sampled VM binary memory is 48.9–50.8 MB, leaving a positive unreconciled difference. At invalid supplementary N = 500 the censuses occurred after the missed window and are unranked.
 
-Because the supplementary N = 500 profile is invalid, LAB-3 stays unfinished unless the owner revises scope or authorizes a new run. N = 10 may be read as a valid low-N attribution profile only.
+N = 10 may be read as a valid low-N attribution profile only.
 
-Proposed Linear Result for the driver:
-
-1. Ran registered profile sweep at `eaa88f9`, seed 42, N=10 registered and N=500 supplementary, on owner M3 Max as authorized.
-2. N=10 is clean/valid/eligible; own-time ranking is session-heavy (`:json` 55.5% ranked, `:erlang` 11.4%, `:crypto` 5.9%, `Elara.FlightRecorder` 5.3%).
-3. N=500 supplementary exited 1 (`users_ok`), activation missed the registered window and overlap was 0 ms; it is invalid/unranked under the fallback rule.
-4. No high-N bottleneck is attributed: own-time and waiting evidence do not both apply to a valid high-N profile; memory censuses are holders, not allocations.
-5. LAB-3 remains unfinished and should pause for ROB-1091 / owner direction before any rerun or later lab work.
-
-The owner-approved N = 500 supplementary instrumented rerun does not close the high-N attribution gap. It failed `users_ok` again, retained 29 `:no_client` user failures, and missed the load-end handling deadline by 12,673 ms, with 12,684 ms lateness against the nominal target, a sampled coordinator queue of 2,147 at handling time and p99 1,721 during the load. The profile-start timer itself was on time; the gap appeared after profile-start handling and before the pre-activation census. Those observations describe where the rerun was late, but they do not prove why the queue accumulated or why the user failures occurred. Since the profile is invalid and unranked under the registered rule, no N = 500 bottleneck judgement can be made from it, and LAB-3 remains unfinished.
+The owner-approved N = 500 supplementary instrumented rerun does not close the high-N attribution gap. It failed `users_ok` again, retained 29 `:no_client` user failures, and missed the load-end handling deadline by 12,673 ms, with 12,684 ms lateness against the nominal target, a sampled coordinator queue of 2,147 at handling time and p99 1,721 during the load. The profile-start timer itself was on time; the gap appeared after profile-start handling and before the pre-activation census. Those observations describe where the rerun was late, but they do not prove why the queue accumulated or why the user failures occurred. Since the profile is invalid and unranked under the registered rule, no N = 500 bottleneck judgement can be made from it.
 
 ### Child-thread variant
 

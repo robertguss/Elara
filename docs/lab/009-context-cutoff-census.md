@@ -6,7 +6,7 @@
   branch and identify the first differing branch at the inclusive cutoff;
   missing data never counts as a match. Any skipped gate, precedence error,
   baseline mismatch or comparison past the first divergence/gap refutes H1.
-- **Queue:** [ROB-1098](https://linear.app/robert-guss/issue/ROB-1098)
+- **Queue:** [ROB-1098](../archive/linear/2026-10-elara/issues/ROB-1098.md)
   · **Registered:** 2026-10-07, Linear comment
   `31f52817-5489-475f-b9f7-0eb103a53dc6`, before runtime edits.
 - **Baseline:** [PR #64](https://github.com/robertguss/Elara/pull/64).

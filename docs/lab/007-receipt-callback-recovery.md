@@ -106,4 +106,4 @@ pins match, and no BEAM VM remains. These finite scripted rows are separate from
 the retained LAB-5 corpus and do not resume LAB-3. Original failed evidence,
 detached descendants, writer/VM loss, disk damage, arbitrary callbacks and real
 models remain outside this surviving-writer result. Current review and merged
-delivery evidence is in ROB-1104 in Linear.
+delivery evidence is in ROB-1104.

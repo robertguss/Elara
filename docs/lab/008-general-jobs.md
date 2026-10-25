@@ -8,7 +8,7 @@
   Net increase or behavior loss refutes the hypothesis.
 - **Queue item:** LAB-8 / ROB-1088 · **Date:** 2026-10-06
 - **Baseline:** `a4f8013da2e5ac6af047e293e53b5cc58d4bf640` after LAB-5/LAB-6 and
-  receipt callback recovery. Linear selection and plan are authoritative.
+  receipt callback recovery.
 
 ## Scope and comparison
 
@@ -23,9 +23,7 @@ authority or automatic owner acceptance. The separately approved capped
 real-model awaited-completion run remains a genuine owner gate; perform all
 independent scripted work before Needs Input and continue other issues.
 
-The baseline count manifest is
-`lab/results/rob-1088-general-jobs-20261006/baseline-source-counts.json`:
-126 tracked source/infrastructure files, 48,375 lines. The declared scope is all
+The baseline is 126 tracked source/infrastructure files, 48,375 lines. The declared scope is all
 tracked `.ex/.exs/.rs/.sh/.py` except tests, docs, raw lab results and TUI examples;
 it includes native inline test blocks and all new compatibility/native/runtime/
 infrastructure files. Report test and raw orchestration sizes separately; do not
@@ -250,7 +248,7 @@ mutations restore byte-exact. A first script-generation syntax error happened
 before mutation; early test setup/assertion and header reopen failures remain
 retained as preparations. No original lab corpus or real model is reused.
 
-`completion-source-counts.json` independently reproduces the baseline and prior
+Count independently reproduces the baseline and prior
 profile manifests:129 files/49,206 source/infrastructure lines, +466 this chunk,
 +831 cumulative versus48,375 baseline. Session grows203 lines; one named
 thread_wait execution branch becomes one shared wait branch. Test changes add548
@@ -370,5 +368,5 @@ is resolved. The net-reduction hypothesis is refuted by the measured increase.
 Final scripted PR#59 merged at77591c02a659c0fcda495331d5469a377251d559,
 2026-10-06T15:38:37Z; main tree-equal to reviewed7ca63a3 after both actual
 exact-head Socket checks passed. Self-review2d2d74e9 and deliveryee7513fa retain
-source/full/registration/results boundaries. Overall LAB8 is Needs Input for
-the separately approved real-model gate, with no executable lab remaining.
+source/full/registration/results boundaries. Scripted work merged, reduction
+refuted, real-model gate moved to Phase 4 in Notion.

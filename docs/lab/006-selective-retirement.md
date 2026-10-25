@@ -10,8 +10,7 @@
 
 ## Method and deliberate removals
 
-Retire in reviewed delivery chunks; current status and exact review/merge
-revisions are in Linear. Raw checks go under
+Retire in reviewed delivery chunks. Raw checks go under
 `lab/results/rob-1086-retirement-20261006/`.
 
 Coordinator/Engine, its supervisor and public `start_coordinator/2` are removed

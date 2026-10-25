@@ -69,9 +69,6 @@ defmodule Elara.Lab.Verdict do
 
   defp throughput(_complete, _throughput), do: "undetermined"
 
-  @doc "The memory ceiling in bytes per session (5 MiB)."
-  def memory_ceiling_bytes, do: @memory_ceiling_bytes
-
   @doc "The latency bound in milliseconds; an observation at or above it fails."
   def latency_bound_ms, do: @latency_bound_ms
 end

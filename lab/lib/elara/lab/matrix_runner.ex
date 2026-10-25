@@ -1,73 +1,7 @@
 defmodule Elara.Lab.MatrixRunner do
   @moduledoc "Bounded frozen-code matrix launch; retained rows never substitute outcome for causal evidence."
-  alias Elara.Lab.{Artifacts, Matrix, MatrixPeer, ProcessProbe, VM}
+  alias Elara.Lab.{Matrix, MatrixPeer, ProcessProbe, VM}
 
-  def registration(repo, qualification_root, measurement_root) do
-    artifacts = Artifacts.snapshot(Path.expand(repo))
-
-    %{
-      schema: 1,
-      registration_version: 2,
-      commit: artifacts.source.commit,
-      repo: Path.expand(repo),
-      artifacts: artifacts,
-      timeout_ms: 60_000,
-      qualification: %{root: Path.expand(qualification_root), cells: Matrix.plan(1, 1_084_900)},
-      measurement: %{root: Path.expand(measurement_root), cells: Matrix.plan(50, 1_085_000)}
-    }
-  end
-
-  def cli([manifest, mode]) when mode in ["qualification", "measurement"] do
-    summary = run(manifest, mode)
-    IO.puts(JSON.encode!(summary))
-    System.halt(if(summary.completed, do: 0, else: 1))
-  end
-
-  def run(manifest_path, mode) when mode in ["qualification", "measurement"] do
-    manifest_path = Path.expand(manifest_path)
-    bytes = File.read!(manifest_path)
-    manifest = JSON.decode!(bytes)
-
-    expected =
-      if mode == "measurement", do: Matrix.plan(50, 1_085_000), else: Matrix.plan(1, 1_084_900)
-
-    true = manifest["schema"] == 1 and manifest["timeout_ms"] == 60_000
-    true = manifest["registration_version"] == 2
-    true = manifest[mode]["cells"] == json(expected)
-    true = manifest["artifacts"]["source"] == %{"commit" => manifest["commit"], "dirty" => false}
-    true = Artifacts.verify(manifest["artifacts"]).verified
-    root = manifest[mode]["root"]
-    File.mkdir_p!(Path.dirname(root))
-    File.mkdir!(root)
-    frozen_manifest = Path.join(root, "registration.json")
-    File.write!(frozen_manifest, bytes, [:sync])
-
-    results =
-      Enum.reduce_while(expected, [], fn cell, results ->
-        row_root = Path.join(root, String.pad_leading(to_string(cell.index), 4, "0"))
-
-        result =
-          execute(cell, frozen_manifest, row_root,
-            repo: manifest["repo"],
-            commit: manifest["commit"]
-          )
-
-        IO.puts(
-          JSON.encode!(%{index: cell.index, case_id: cell.case_id, verdict: result.verdict})
-        )
-
-        next = [result | results]
-        if result.verdict.stop, do: {:halt, next}, else: {:cont, next}
-      end)
-      |> Enum.reverse()
-
-    summary = summarize(results, length(expected))
-    VM.write(root, "summary", summary)
-    summary
-  end
-
-  # The lower-level entry permits disposable fixture peers and short deadlines in controls.
-  # Registered runs above always use MatrixPeer and the fixed 60-second bound.
   def execute(cell, manifest_path, root, opts \\ []) do
     File.mkdir!(root)
     repo = Keyword.fetch!(opts, :repo)
@@ -239,5 +173,4 @@ defmodule Elara.Lab.MatrixRunner do
   end
 
   defp boot_stopped?(_boot, _launch), do: false
-  defp json(value), do: value |> JSON.encode!() |> JSON.decode!()
 end

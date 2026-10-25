@@ -74,9 +74,7 @@ dependencies. Run every lab command from `lab/`:
 
 Commands quoted in notes written before the lab moved (2026-10-13) ran from the
 repository root. Run them from `lab/`, where `--results lab/results/...` becomes
-`--results results/...`; it is the same directory. A recovery matrix
-registration (`Elara.Lab.MatrixRunner.registration/3`) takes the repository
-root, `..` from `lab/`, so the product's source is frozen with the lab's.
+`--results results/...`; it is the same directory.
 
 New recovery matrix manifests use `registration_version: 2`. Handoff cells
 record `context_limit=16000`, so the unchanged 60,000-byte scripted answer

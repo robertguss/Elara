@@ -23,9 +23,6 @@ defmodule Elara.Executor.Router do
     GenServer.call(router, {:register, opts})
   end
 
-  @spec unregister(GenServer.server(), String.t()) :: :ok
-  def unregister(router \\ __MODULE__, id), do: GenServer.call(router, {:unregister, id})
-
   @spec workers(GenServer.server()) :: [map()]
   def workers(router \\ __MODULE__), do: GenServer.call(router, :workers)
 
@@ -63,10 +60,6 @@ defmodule Elara.Executor.Router do
     }
 
     {:reply, :ok, put_in(state.workers[worker.id], worker)}
-  end
-
-  def handle_call({:unregister, id}, _from, state) do
-    {:reply, :ok, %{state | workers: Map.delete(state.workers, id)}}
   end
 
   def handle_call(:workers, _from, state) do

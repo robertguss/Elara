@@ -71,6 +71,7 @@ defmodule Elara.MixProject do
       version: "0.1.0",
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:exec_stub] ++ Mix.compilers(),
       test_ignore_filters: [
         ~r"test/support/(context_restart|fixtures/elixir_project_v1)\.exs$",
@@ -100,4 +101,7 @@ defmodule Elara.MixProject do
       {:stream_data, "~> 1.1", only: :test}
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 end

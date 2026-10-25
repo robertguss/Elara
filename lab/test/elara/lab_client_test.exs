@@ -84,8 +84,16 @@ defmodule Elara.Lab.ClientTest do
     %{request: request} = start()
 
     assert %{"command" => "attach", "session_id" => "session-1", "mode" => "observe"} = request
-    assert request["extensions"] == Client.extensions()
-    assert length(Client.extensions()) == 5
+
+    assert request["extensions"] == [
+             "provider_visibility_v1",
+             "input_attachments_v1",
+             "input_queue_v1",
+             "thread_communication_v1",
+             "plugin_reload_v1"
+           ]
+
+    assert length(request["extensions"]) == 5
   end
 
   test "bookkeeping never advances progress; an observed delta does" do

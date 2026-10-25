@@ -11,6 +11,9 @@ defmodule Elara.Lab.Scenarios.GroupRecovery do
   @recovery_ms 5_000
 
   @impl true
+  def curve_fields, do: [{"recovery_ms", ["recovery_ms"]}]
+
+  @impl true
   def run(context) do
     stage = context.params["stage"] || "owner_running"
     unless stage in @stages, do: raise(ArgumentError, "unknown group stage #{inspect(stage)}")

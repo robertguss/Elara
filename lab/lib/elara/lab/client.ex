@@ -18,9 +18,6 @@ defmodule Elara.Lab.Client do
   @delta_text ~s("op":"append_content_delta","text":")
   @active 100
 
-  @doc "The five extensions every client negotiates (frozen in note 003)."
-  def extensions, do: @extensions
-
   @doc """
   Start an unlinked client. `opts`: `:owner` (receives guard reports and the
   final summary), `:sim_id`, `:ledger`, `:accounting` (keyword for

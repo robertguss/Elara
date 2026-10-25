@@ -26,9 +26,6 @@ defmodule Elara.Lab.Profile do
     {:erts_code_purger, :soft_purge, 1}
   ]
 
-  @doc "The ranked classes; `client`, `threads`, `transport` and `other` are descriptive."
-  def ranked, do: @ranked
-
   @doc """
   Activate the profile, in the registered order: spawn observation on
   `Elara.SessionSup` and `Elara.TaskSup`; `call_time` patterns on every function

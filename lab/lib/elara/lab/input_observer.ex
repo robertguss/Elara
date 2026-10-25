@@ -17,7 +17,7 @@ defmodule Elara.Lab.InputObserver do
     end
   end
 
-  def judge(stores, expected, events \\ []) do
+  defp judge(stores, expected, events) do
     entries = for store <- stores, entry <- store.entries, do: {store, entry}
 
     inputs =

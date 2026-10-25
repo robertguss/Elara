@@ -30,14 +30,14 @@ defmodule Elara.InstructionsTest do
 
   test "ancestor and invocation scope is ordered and siblings stay unloaded", ctx do
     nested = Path.join(ctx.cwd, "nested/deep")
-    system = Prompt.system(nested)
+    system = Prompt.render(Prompt.base(), Prompt.instructions(nested), "")
     assert {a, _} = :binary.match(system, "ANCESTOR:")
     assert {b, _} = :binary.match(system, "ROOT:")
     assert {c, _} = :binary.match(system, "NESTED:")
     assert a < b and b < c
     assert system =~ "Nearest scoped instructions specialize parent guidance"
     assert system =~ "Explicit user directions take"
-    refute Prompt.system(ctx.cwd) =~ "NESTED:"
+    refute Prompt.render(Prompt.base(), Prompt.instructions(ctx.cwd), "") =~ "NESTED:"
     assert system =~ "Scope: #{Path.join(ctx.cwd, "nested")} and descendants"
   end
 

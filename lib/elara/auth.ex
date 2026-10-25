@@ -25,9 +25,6 @@ defmodule Elara.Auth do
           token_type: String.t() | nil
         }
 
-  @spec client_id() :: String.t()
-  def client_id, do: @client_id
-
   @spec auth_path() :: String.t()
   def auth_path do
     Path.join([System.user_home!(), @auth_dir_name, @auth_file_name])

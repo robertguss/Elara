@@ -72,7 +72,7 @@ defmodule Elara.AuthTest do
     assert {:ok,
             %Auth{access_token: "sess-current", refresh_token: "do-not-lose", expires_at: exp}} =
              Auth.tokens_from_map(%{
-               "https://auth.x.ai::#{Auth.client_id()}" => %{
+               "https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828" => %{
                  "key" => "sess-current",
                  "expires_at" => "2099-01-01T00:00:00Z",
                  "refresh_token" => "do-not-lose"
@@ -86,7 +86,9 @@ defmodule Elara.AuthTest do
     assert {:ok, %Auth{access_token: "preferred"}} =
              Auth.tokens_from_map(%{
                "https://accounts.x.ai/sign-in" => %{"key" => "legacy"},
-               "https://auth.x.ai::#{Auth.client_id()}" => %{"key" => "preferred"}
+               "https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828" => %{
+                 "key" => "preferred"
+               }
              })
   end
 

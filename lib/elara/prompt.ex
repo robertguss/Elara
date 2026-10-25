@@ -12,11 +12,6 @@ defmodule Elara.Prompt do
 
   def base, do: String.trim(@base)
 
-  @spec system(String.t()) :: String.t()
-  def system(cwd) when is_binary(cwd) do
-    render(base(), instructions(cwd), "")
-  end
-
   @doc "Read ancestor guidance, outermost first. Targets are explicit filesystem paths."
   def instructions(cwd, targets \\ []) do
     [Path.expand(cwd) | Enum.map(targets, &target_directory(&1, cwd))]

@@ -1349,13 +1349,6 @@ defmodule Elara.Lab.Scenarios.Concurrency do
   @user_failure_limit 20
   @user_failure_bytes 200
 
-  @doc false
-  def user_failure_report_for_test(reasons),
-    do:
-      reasons
-      |> Enum.reduce(empty_user_failures(), &user_failure(&2, &1))
-      |> user_failures_report()
-
   defp user_failures, do: empty_user_failures()
 
   defp empty_user_failures, do: %{total: 0, retained: %{}, omitted: 0}
@@ -1708,11 +1701,7 @@ defmodule Elara.Lab.Scenarios.Concurrency do
     }
   end
 
-  @doc false
-  # Session files sit at `root/<cwd key>/<id>.jsonl`. A key can begin with "_" or
-  # "." (a child's worktree basename is a random token), so internal directories
-  # are not excluded by prefix; none of them holds a .jsonl at that depth.
-  def session_files(root),
+  defp session_files(root),
     do: Path.wildcard(Path.join([root, "*", "*.jsonl"]), match_dot: true)
 
   # A child that ran a turn began with its assignment; one that ran none still

@@ -12,7 +12,7 @@ defmodule Elara.Lab.Matrix do
     {"vm_recovery", "stage", ~w(provider_running mutation_running)}
   ]
 
-  def cases do
+  defp cases do
     for {scenario, key, values} <- @families, value <- values do
       params =
         if scenario == "handoff_recovery",

@@ -171,8 +171,8 @@ defmodule Elara.Provider.OpenAITest do
     chunks = for <<byte <- wire>>, do: <<byte>>
     parent = self()
 
-    assert {:ok, %Message.Assistant{text: "Hello é", tool_calls: [first, second]}} =
-             OpenAI.parse_stream_chunks(chunks, fn text ->
+    assert {:ok, %Message.Assistant{text: "Hello é", tool_calls: [first, second]}, _config} =
+             stream_chunks(chunks, fn text ->
                send(parent, {:delta, text})
                :ok
              end)
@@ -188,15 +188,15 @@ defmodule Elara.Provider.OpenAITest do
   end
 
   test "stream parser fails malformed or truncated streams closed" do
-    assert {:error, %Error{kind: :bad_response, message: malformed}} =
-             OpenAI.parse_stream_chunks(["data: {nope}\n\n"], fn _ -> :ok end)
+    assert {:error, %Error{kind: :bad_response, message: malformed}, _config} =
+             stream_chunks(["data: {nope}\n\n"], fn _ -> :ok end)
 
     assert malformed =~ "invalid SSE JSON"
 
     event = JSON.encode!(%{"choices" => [%{"delta" => %{"content" => "partial"}}]})
 
-    assert {:error, %Error{kind: :bad_response, message: truncated}} =
-             OpenAI.parse_stream_chunks(["data: #{event}\n\n"], fn _ -> :ok end)
+    assert {:error, %Error{kind: :bad_response, message: truncated}, _config} =
+             stream_chunks(["data: #{event}\n\n"], fn _ -> :ok end)
 
     assert truncated =~ "before [DONE]"
   end
@@ -239,10 +239,9 @@ defmodule Elara.Provider.OpenAITest do
       wire =
         "data: #{JSON.encode!(first)}\n\ndata: #{JSON.encode!(final)}\n\ndata: [DONE]\n\n"
 
-      assert {:ok, streamed} =
-               OpenAI.parse_stream_chunks(:binary.bin_to_list(wire) |> Enum.map(&<<&1>>), fn _ ->
-                 :ok
-               end)
+      chunks = :binary.bin_to_list(wire) |> Enum.map(&<<&1>>)
+
+      assert {:ok, streamed, _config} = stream_chunks(chunks, fn _ -> :ok end)
 
       assert streamed.text == "answer"
       assert streamed.usage == expected
@@ -375,7 +374,9 @@ defmodule Elara.Provider.OpenAITest do
              }
 
       assert assistant.billing_receipt == %{"kind" => "subscription", "provider" => "grok_oauth"}
-      assert Elara.Provider.Billing.cost(assistant) == :tokens_only
+      assert Elara.Provider.Billing.summary([assistant])["subscription_records"] == 1
+      assert Elara.Provider.Billing.summary([assistant])["priced_records"] == 0
+      assert Elara.Provider.Billing.summary([assistant])["unpriced_records"] == 0
       assert {:ok, %{"model" => "grok-4"}} = JSON.decode(await_server(server.task))
 
       {:ok, recorded} = Agent.start_link(fn -> [{:ok, assistant}] end)
@@ -449,6 +450,18 @@ defmodule Elara.Provider.OpenAITest do
 
     assert_receive {:delayed_delta, "delayed"}
     assert {:ok, %{"stream" => true}} = JSON.decode(await_server(server.task))
+  end
+
+  defp stream_chunks(chunks, sink) do
+    server = start_loopback_server(fn socket -> send_chunked_response(socket, chunks) end)
+
+    result =
+      run_provider(fn ->
+        OpenAI.stream(loopback_config(server.port), request(), sink)
+      end)
+
+    _ = Task.yield(server.task, @loopback_timeout) || Task.shutdown(server.task, :brutal_kill)
+    result
   end
 
   defp loopback_config(port) do
@@ -554,7 +567,7 @@ defmodule Elara.Provider.OpenAITest do
   end
 
   defp send_chunked_response(socket, fragments) do
-    :ok =
+    _ =
       :gen_tcp.send(socket, [
         "HTTP/1.1 200 OK\r\n",
         "content-type: text/event-stream\r\n",
@@ -564,7 +577,7 @@ defmodule Elara.Provider.OpenAITest do
 
     Enum.each(fragments, fn fragment ->
       size = fragment |> byte_size() |> Integer.to_string(16)
-      :ok = :gen_tcp.send(socket, [size, "\r\n", fragment, "\r\n"])
+      _ = :gen_tcp.send(socket, [size, "\r\n", fragment, "\r\n"])
     end)
 
     :gen_tcp.send(socket, "0\r\n\r\n")

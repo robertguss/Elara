@@ -8,7 +8,7 @@ defmodule Elara.Fnox do
   @flags ~w(--config fnox.toml --profile default --no-daemon --non-interactive --if-missing error --no-color)
   @changed "fnox config changed; /approve again"
 
-  def present?(cwd) do
+  defp present?(cwd) do
     Enum.any?(@filenames, &File.exists?(Path.join(cwd, &1))) or
       (Path.dirname(cwd) != cwd and present?(Path.dirname(cwd)))
   end

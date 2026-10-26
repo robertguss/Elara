@@ -134,13 +134,13 @@ defmodule Elara.MCP.Tools do
 
   def call(_, _), do: {:error, "mcp_call requires a prepared operator-approved target"}
 
-  def failure(reason)
-      when reason in [:mcp_config_approval_required, :mcp_catalog_approval_required],
-      do:
-        "MCP approval required: #{reason}; operator must use mix elara.mcp to approve the server"
+  defp failure(reason)
+       when reason in [:mcp_config_approval_required, :mcp_catalog_approval_required],
+       do:
+         "MCP approval required: #{reason}; operator must use mix elara.mcp to approve the server"
 
-  def failure(:mcp_call_approval_changed),
+  defp failure(:mcp_call_approval_changed),
     do: "MCP config or catalog approval changed before dispatch; no call sent"
 
-  def failure(reason), do: "MCP failed: #{inspect(reason)}"
+  defp failure(reason), do: "MCP failed: #{inspect(reason)}"
 end

@@ -207,15 +207,14 @@ defmodule Elara.Auth.OpenAICodex do
   end
 
   @spec expired?(t(), integer()) :: boolean()
-  def expired?(%__MODULE__{expires_at: expires_at}, now)
-      when is_integer(expires_at) and is_integer(now),
-      do: now >= expires_at - @refresh_skew_seconds
+  defp expired?(%__MODULE__{expires_at: expires_at}, now)
+       when is_integer(expires_at) and is_integer(now),
+       do: now >= expires_at - @refresh_skew_seconds
 
-  def expired?(%__MODULE__{}, _now), do: true
+  defp expired?(%__MODULE__{}, _now), do: true
 
-  @doc false
   @spec account_id(String.t()) :: {:ok, String.t()} | {:error, :invalid_access_token}
-  def account_id(access_token) when is_binary(access_token) do
+  defp account_id(access_token) when is_binary(access_token) do
     with [_header, payload, _signature] <- String.split(access_token, "."),
          {:ok, json} <- Base.url_decode64(payload, padding: false),
          {:ok, claims} <- decode_map(json),

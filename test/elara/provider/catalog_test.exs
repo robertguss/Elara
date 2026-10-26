@@ -209,7 +209,11 @@ defmodule Elara.Provider.CatalogTest do
   end
 
   test "catalog updates change the current meter without changing an already captured request" do
-    initial = Catalog.builtin("grok")
+    provider =
+      {Grok,
+       Grok.new(%Elara.Auth{access_token: "catalog-meter-fixture", expires_at: 4_000_000_000})}
+
+    initial = Catalog.offline(provider)
 
     core =
       Core.new(%Core.Config{

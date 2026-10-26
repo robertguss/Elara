@@ -126,24 +126,6 @@ defmodule Elara.Provider.OpenAI do
          message: "Image attachments require the OpenAI Codex provider"
        }, config}
 
-  @doc false
-  @spec parse_stream_chunks([binary()], Provider.delta_sink()) ::
-          {:ok, Assistant.t()} | {:error, Error.t()}
-  def parse_stream_chunks(chunks, sink) when is_list(chunks) and is_function(sink, 1) do
-    result =
-      Enum.reduce_while(chunks, {:ok, new_stream_state()}, fn chunk, {:ok, state} ->
-        case consume_stream_data(state, chunk, sink) do
-          {:ok, state} -> {:cont, {:ok, state}}
-          {:error, error, state} -> {:halt, {:error, error, state}}
-        end
-      end)
-
-    case result do
-      {:ok, state} -> finish_stream({:ok, %Req.Response{status: 200}}, state)
-      {:error, error, _state} -> {:error, error}
-    end
-  end
-
   @doc "Pure. Request to OpenAI wire body."
   @spec build_body(config(), Provider.Request.t()) :: map()
   def build_body(%__MODULE__{} = config, %Provider.Request{} = request) do

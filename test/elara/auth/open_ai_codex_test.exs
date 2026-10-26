@@ -142,9 +142,33 @@ defmodule Elara.Auth.OpenAICodexTest do
   end
 
   test "JWT account extraction and inspect fail closed without exposing credentials" do
-    token = access_token("account-123")
-    assert {:ok, "account-123"} = OpenAICodex.account_id(token)
-    assert {:error, :invalid_access_token} = OpenAICodex.account_id("not-a-jwt")
+    current = %OpenAICodex{
+      access_token: access_token("old-account"),
+      refresh_token: "old-refresh",
+      expires_at: 1,
+      account_id: "old-account"
+    }
+
+    http = fn "https://auth.openai.com/oauth/token", _opts ->
+      response(%{
+        "access_token" => access_token("account-123"),
+        "refresh_token" => "new-refresh",
+        "expires_in" => 3_600
+      })
+    end
+
+    assert {:ok, %OpenAICodex{account_id: "account-123"}} =
+             OpenAICodex.refresh(current, http: http)
+
+    http_bad = fn "https://auth.openai.com/oauth/token", _opts ->
+      response(%{
+        "access_token" => "not-a-jwt",
+        "refresh_token" => "new-refresh",
+        "expires_in" => 3_600
+      })
+    end
+
+    assert {:error, :invalid_access_token} = OpenAICodex.refresh(current, http: http_bad)
 
     inspected =
       inspect(%OpenAICodex{

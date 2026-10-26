@@ -42,7 +42,7 @@ defmodule Elara.Provider.Catalog do
     end
   end
 
-  def builtin("codex"),
+  defp builtin("codex"),
     do: %{
       "version" => 1,
       "kind" => "codex",
@@ -50,7 +50,7 @@ defmodule Elara.Provider.Catalog do
       "models" => Visibility.catalog()
     }
 
-  def builtin("grok") do
+  defp builtin("grok") do
     models =
       Enum.map(["grok-4", "grok-4.6", "grok-4.7"], fn model ->
         %{

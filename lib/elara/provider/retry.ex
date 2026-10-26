@@ -133,15 +133,10 @@ defmodule Elara.Provider.Retry do
     |> parse_retry_after()
   end
 
-  @doc """
-  Pure `Retry-After` parse, delay-seconds form only. A missing, malformed or
-  HTTP-date value is nil, never zero, so the caller's own backoff stays in
-  charge rather than retrying immediately on a header we cannot read.
-  """
   @spec parse_retry_after(String.t() | nil) :: non_neg_integer() | nil
-  def parse_retry_after(nil), do: nil
+  defp parse_retry_after(nil), do: nil
 
-  def parse_retry_after(value) when is_binary(value) do
+  defp parse_retry_after(value) when is_binary(value) do
     case value |> String.trim() |> Integer.parse() do
       {seconds, ""} when seconds >= 0 -> seconds * 1_000
       _ -> nil

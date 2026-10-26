@@ -9,6 +9,8 @@ defmodule Elara.Provider.OpenAICodexTest do
   alias Elara.Provider.OpenAICodex
   alias Elara.Tool
 
+  @loopback_timeout 10_000
+
   defp config do
     OpenAICodex.new(
       %Tokens{
@@ -82,9 +84,11 @@ defmodule Elara.Provider.OpenAICodexTest do
     data = Enum.map_join(events, &("data: " <> JSON.encode!(&1) <> "\r\n\r\n"))
     chunks = for <<byte <- data>>, do: <<byte>>
 
-    {:ok, assistant} =
-      OpenAICodex.parse_stream_chunks(chunks, fn delta ->
-        send(self(), {:public_test, delta})
+    parent = self()
+
+    {:ok, assistant, _config} =
+      stream_chunks(chunks, fn delta ->
+        send(parent, {:public_test, delta})
         :ok
       end)
 
@@ -114,8 +118,8 @@ defmodule Elara.Provider.OpenAICodexTest do
     event =
       "data: {\r\ndata: \"type\":\"response.completed\",\"response\":{\"output\":[{\"id\":\"m\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}]}}\r\n\r\n"
 
-    assert {:ok, %{text: "ok"}} =
-             OpenAICodex.parse_stream_chunks(for(<<byte <- event>>, do: <<byte>>), fn _ -> :ok end)
+    assert {:ok, %{text: "ok"}, _config} =
+             stream_chunks(for(<<byte <- event>>, do: <<byte>>), fn _ -> :ok end)
   end
 
   test "build_body maps instructions, messages, and function tools" do
@@ -279,8 +283,8 @@ defmodule Elara.Provider.OpenAICodexTest do
     chunks = for <<byte <- wire>>, do: <<byte>>
     parent = self()
 
-    assert {:ok, assistant} =
-             OpenAICodex.parse_stream_chunks(chunks, fn text ->
+    assert {:ok, assistant, _config} =
+             stream_chunks(chunks, fn text ->
                send(parent, {:delta, text})
                :ok
              end)
@@ -340,9 +344,11 @@ defmodule Elara.Provider.OpenAICodexTest do
       %{"type" => "response.completed", "response" => %{"output" => [commentary, final]}}
     ]
 
-    {:ok, assistant} =
-      OpenAICodex.parse_stream_chunks(Enum.map(events, &event/1), fn delta ->
-        send(self(), {:compatibility, delta})
+    parent = self()
+
+    {:ok, assistant, _config} =
+      stream_chunks(Enum.map(events, &event/1), fn delta ->
+        send(parent, {:compatibility, delta})
         :ok
       end)
 
@@ -353,8 +359,8 @@ defmodule Elara.Provider.OpenAICodexTest do
   end
 
   test "stream parser fails malformed, incomplete, and unterminated streams closed" do
-    assert {:error, %Error{kind: :bad_response, message: "invalid SSE JSON"}} =
-             OpenAICodex.parse_stream_chunks(["data: {bad}\n\n"], fn _ -> :ok end)
+    assert {:error, %Error{kind: :bad_response, message: "invalid SSE JSON"}, _config} =
+             stream_chunks(["data: {bad}\n\n"], fn _ -> :ok end)
 
     incomplete =
       event(%{
@@ -365,13 +371,13 @@ defmodule Elara.Provider.OpenAICodexTest do
         }
       })
 
-    assert {:error, %Error{kind: :bad_response, message: message}} =
-             OpenAICodex.parse_stream_chunks([incomplete], fn _ -> :ok end)
+    assert {:error, %Error{kind: :bad_response, message: message}, _config} =
+             stream_chunks([incomplete], fn _ -> :ok end)
 
     assert message =~ "max_output_tokens"
 
-    assert {:error, %Error{kind: :bad_response, message: unterminated}} =
-             OpenAICodex.parse_stream_chunks([], fn _ -> :ok end)
+    assert {:error, %Error{kind: :bad_response, message: unterminated}, _config} =
+             stream_chunks([], fn _ -> :ok end)
 
     assert unterminated =~ "before a terminal response"
 
@@ -381,8 +387,8 @@ defmodule Elara.Provider.OpenAICodexTest do
         "response" => %{"status" => "completed", "output" => []}
       })
 
-    assert {:error, %Error{kind: :bad_response, message: trailing}} =
-             OpenAICodex.parse_stream_chunks([complete <> "data: {"], fn _ -> :ok end)
+    assert {:error, %Error{kind: :bad_response, message: trailing}, _config} =
+             stream_chunks([complete <> "data: {"], fn _ -> :ok end)
 
     assert trailing =~ "incomplete SSE frame"
   end
@@ -412,8 +418,7 @@ defmodule Elara.Provider.OpenAICodexTest do
         "response" => %{"status" => "completed", "output" => output}
       })
 
-    assert {:ok, assistant} =
-             OpenAICodex.parse_stream_chunks([completed], fn _ -> :ok end)
+    assert {:ok, assistant, _config} = stream_chunks([completed], fn _ -> :ok end)
 
     assert assistant.provider_state == %{"openai_codex" => %{"output" => output}}
 
@@ -435,4 +440,131 @@ defmodule Elara.Provider.OpenAICodexTest do
   end
 
   defp event(map), do: "data: #{JSON.encode!(map)}\n\n"
+
+  defp stream_chunks(chunks, sink) do
+    server = start_loopback_server(fn socket -> send_chunked_response(socket, chunks) end)
+
+    result =
+      run_provider(fn ->
+        OpenAICodex.stream(
+          %{config() | base_url: "http://127.0.0.1:#{server.port}"},
+          request(),
+          sink
+        )
+      end)
+
+    _ = Task.yield(server.task, @loopback_timeout) || Task.shutdown(server.task, :brutal_kill)
+    result
+  end
+
+  defp request do
+    %Provider.Request{system: "system", messages: [Message.user("inspect")], tools: []}
+  end
+
+  defp start_loopback_server(send_response) do
+    {:ok, listener} =
+      :gen_tcp.listen(0, [
+        :binary,
+        packet: :raw,
+        active: false,
+        reuseaddr: true,
+        ip: {127, 0, 0, 1}
+      ])
+
+    {:ok, {{127, 0, 0, 1}, port}} = :inet.sockname(listener)
+
+    task =
+      Task.async(fn ->
+        {:ok, socket} = :gen_tcp.accept(listener, @loopback_timeout)
+
+        try do
+          request_body = receive_request_body(socket)
+          :ok = send_response.(socket)
+          request_body
+        after
+          :gen_tcp.close(socket)
+        end
+      end)
+
+    on_exit(fn ->
+      :gen_tcp.close(listener)
+
+      if Process.alive?(task.pid) do
+        Task.shutdown(task, :brutal_kill)
+      end
+    end)
+
+    %{port: port, task: task}
+  end
+
+  defp receive_request_body(socket) do
+    {header, buffered_body} = receive_headers(socket, "")
+
+    content_length =
+      header
+      |> String.split("\r\n", trim: true)
+      |> Enum.find_value(0, fn line ->
+        case String.split(line, ":", parts: 2) do
+          [name, value] ->
+            if String.downcase(name) == "content-length",
+              do: value |> String.trim() |> String.to_integer()
+
+          _other ->
+            nil
+        end
+      end)
+
+    receive_body(socket, buffered_body, content_length)
+  end
+
+  defp receive_headers(socket, buffer) do
+    case :binary.match(buffer, "\r\n\r\n") do
+      {index, 4} ->
+        header = binary_part(buffer, 0, index)
+        body_offset = index + 4
+        body = binary_part(buffer, body_offset, byte_size(buffer) - body_offset)
+        {header, body}
+
+      :nomatch ->
+        {:ok, data} = :gen_tcp.recv(socket, 0, @loopback_timeout)
+        receive_headers(socket, buffer <> data)
+    end
+  end
+
+  defp receive_body(_socket, body, content_length) when byte_size(body) >= content_length,
+    do: binary_part(body, 0, content_length)
+
+  defp receive_body(socket, body, content_length) do
+    {:ok, data} =
+      :gen_tcp.recv(socket, content_length - byte_size(body), @loopback_timeout)
+
+    receive_body(socket, body <> data, content_length)
+  end
+
+  defp send_chunked_response(socket, fragments) do
+    _ =
+      :gen_tcp.send(socket, [
+        "HTTP/1.1 200 OK\r\n",
+        "content-type: text/event-stream\r\n",
+        "transfer-encoding: chunked\r\n",
+        "connection: close\r\n\r\n"
+      ])
+
+    Enum.each(fragments, fn fragment ->
+      size = fragment |> byte_size() |> Integer.to_string(16)
+      _ = :gen_tcp.send(socket, [size, "\r\n", fragment, "\r\n"])
+    end)
+
+    :gen_tcp.send(socket, "0\r\n\r\n")
+  end
+
+  defp run_provider(fun) do
+    task = Task.async(fun)
+
+    case Task.yield(task, @loopback_timeout) || Task.shutdown(task, :brutal_kill) do
+      {:ok, result} -> result
+      {:exit, reason} -> flunk("provider task exited: #{inspect(reason)}")
+      nil -> flunk("provider task timed out after #{@loopback_timeout}ms")
+    end
+  end
 end

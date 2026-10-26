@@ -374,9 +374,7 @@ defmodule Elara.Session.Handoff do
     end)
   end
 
-  # Extractive, deterministic generation cannot invent completion or promote a
-  # tool's instruction claims. Full evidence stays at immutable source entry IDs.
-  def summary(shell, sources) do
+  defp summary(shell, sources) do
     entries =
       Enum.flat_map(sources, fn source ->
         store =

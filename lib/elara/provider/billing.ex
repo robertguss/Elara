@@ -104,14 +104,14 @@ defmodule Elara.Provider.Billing do
   defp valid_price?(_), do: false
 
   @spec cost(Assistant.t() | ToolResult.t()) :: non_neg_integer() | :tokens_only | :unknown
-  def cost(%Assistant{billing_receipt: %{"kind" => "subscription"}}), do: :tokens_only
+  defp cost(%Assistant{billing_receipt: %{"kind" => "subscription"}}), do: :tokens_only
 
-  def cost(%Assistant{
-        billing_receipt: %{"kind" => "api", "price" => price},
-        usage: usage,
-        response_model: model
-      })
-      when is_map(price) and is_map(usage) do
+  defp cost(%Assistant{
+         billing_receipt: %{"kind" => "api", "price" => price},
+         usage: usage,
+         response_model: model
+       })
+       when is_map(price) and is_map(usage) do
     with %{"input_tokens" => input, "cached_input_tokens" => cached, "output_tokens" => output} <-
            usage,
          true <- price["model"] == model and cached <= input,
@@ -127,7 +127,7 @@ defmodule Elara.Provider.Billing do
     end
   end
 
-  def cost(_), do: :unknown
+  defp cost(_), do: :unknown
 
   @spec summary([Elara.Message.t()]) :: map()
   def summary(history) do

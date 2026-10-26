@@ -9,6 +9,12 @@ defmodule Elara.Provider.RetryTest do
   defp http(status, opts \\ []),
     do: struct!(%Error{kind: :http, status: status, message: "#{status}"}, opts)
 
+  defp retry_after(nil), do: Retry.from_response(%Req.Response{status: 429})
+
+  defp retry_after(value) do
+    Retry.from_response(%Req.Response{status: 429, headers: %{"retry-after" => [value]}})
+  end
+
   describe "classification" do
     test "retryable HTTP statuses are the overload and gateway family" do
       for status <- [408, 425, 429, 500, 502, 503, 504, 509, 529] do
@@ -93,20 +99,15 @@ defmodule Elara.Provider.RetryTest do
       assert :stop = Retry.schedule(Retry.default(), 1, 0, http(403, retry_after_ms: 10))
     end
 
-    test "delay-seconds parse to milliseconds and anything else is nil" do
-      assert Retry.parse_retry_after("30") == 30_000
-      assert Retry.parse_retry_after(" 0 ") == 0
-      assert Retry.parse_retry_after(nil) == nil
-      assert Retry.parse_retry_after("") == nil
-      assert Retry.parse_retry_after("-1") == nil
-      assert Retry.parse_retry_after("soon") == nil
-      assert Retry.parse_retry_after("Wed, 21 Oct 2026 07:28:00 GMT") == nil
-    end
-
-    test "from_response reads the header off a response" do
-      response = %Req.Response{status: 429, headers: %{"retry-after" => ["7"]}}
-
-      assert Retry.from_response(response) == 7_000
+    test "from_response reads delay-seconds and treats anything else as nil" do
+      assert retry_after("30") == 30_000
+      assert retry_after(" 0 ") == 0
+      assert retry_after("7") == 7_000
+      assert retry_after(nil) == nil
+      assert retry_after("") == nil
+      assert retry_after("-1") == nil
+      assert retry_after("soon") == nil
+      assert retry_after("Wed, 21 Oct 2026 07:28:00 GMT") == nil
       assert Retry.from_response(%Req.Response{status: 429}) == nil
     end
   end

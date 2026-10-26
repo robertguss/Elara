@@ -2,9 +2,9 @@ defmodule Elara.ProviderLegacyStreamTest do
   use ExUnit.Case, async: false
 
   defmodule PausedCodexStream do
-    # Exercise the production Codex SSE parser with a deterministic completion gate.
-    # No credentials or live HTTP are needed to test the session/socket projection.
-    def stream(owner, _request, sink) do
+    @loopback_timeout 10_000
+
+    def stream(owner, request, sink) do
       item = %{
         "id" => "m",
         "type" => "message",
@@ -24,9 +24,21 @@ defmodule Elara.ProviderLegacyStreamTest do
       ]
 
       frames = Enum.map(events, &("data: " <> JSON.encode!(&1) <> "\n\n"))
+      server = start_loopback_server(fn socket -> send_chunked_response(socket, frames) end)
+
+      config =
+        Elara.Provider.OpenAICodex.new(
+          %Elara.Auth.OpenAICodex{
+            access_token: "access",
+            refresh_token: "refresh",
+            expires_at: System.system_time(:second) + 3_600,
+            account_id: "account"
+          },
+          base_url: "http://127.0.0.1:#{server.port}"
+        )
 
       result =
-        Elara.Provider.OpenAICodex.parse_stream_chunks(frames, fn delta ->
+        Elara.Provider.OpenAICodex.stream(config, request, fn delta ->
           :ok = sink.(delta)
 
           if is_binary(delta) do
@@ -42,9 +54,109 @@ defmodule Elara.ProviderLegacyStreamTest do
           :ok
         end)
 
+      _ = await_server(server.task)
+
       case result do
-        {:ok, assistant} -> {:ok, assistant, owner}
-        {:error, error} -> {:error, error, owner}
+        {:ok, assistant, _config} -> {:ok, assistant, owner}
+        {:error, error, _config} -> {:error, error, owner}
+      end
+    end
+
+    defp start_loopback_server(send_response) do
+      {:ok, listener} =
+        :gen_tcp.listen(0, [
+          :binary,
+          packet: :raw,
+          active: false,
+          reuseaddr: true,
+          ip: {127, 0, 0, 1}
+        ])
+
+      {:ok, {{127, 0, 0, 1}, port}} = :inet.sockname(listener)
+
+      task =
+        Task.async(fn ->
+          {:ok, socket} = :gen_tcp.accept(listener, @loopback_timeout)
+
+          try do
+            request_body = receive_request_body(socket)
+            :ok = send_response.(socket)
+            request_body
+          after
+            :gen_tcp.close(socket)
+            :gen_tcp.close(listener)
+          end
+        end)
+
+      %{port: port, task: task}
+    end
+
+    defp receive_request_body(socket) do
+      {header, buffered_body} = receive_headers(socket, "")
+
+      content_length =
+        header
+        |> String.split("\r\n", trim: true)
+        |> Enum.find_value(0, fn line ->
+          case String.split(line, ":", parts: 2) do
+            [name, value] ->
+              if String.downcase(name) == "content-length",
+                do: value |> String.trim() |> String.to_integer()
+
+            _other ->
+              nil
+          end
+        end)
+
+      receive_body(socket, buffered_body, content_length)
+    end
+
+    defp receive_headers(socket, buffer) do
+      case :binary.match(buffer, "\r\n\r\n") do
+        {index, 4} ->
+          header = binary_part(buffer, 0, index)
+          body_offset = index + 4
+          body = binary_part(buffer, body_offset, byte_size(buffer) - body_offset)
+          {header, body}
+
+        :nomatch ->
+          {:ok, data} = :gen_tcp.recv(socket, 0, @loopback_timeout)
+          receive_headers(socket, buffer <> data)
+      end
+    end
+
+    defp receive_body(_socket, body, content_length) when byte_size(body) >= content_length,
+      do: binary_part(body, 0, content_length)
+
+    defp receive_body(socket, body, content_length) do
+      {:ok, data} =
+        :gen_tcp.recv(socket, content_length - byte_size(body), @loopback_timeout)
+
+      receive_body(socket, body <> data, content_length)
+    end
+
+    defp send_chunked_response(socket, fragments) do
+      _ =
+        :gen_tcp.send(socket, [
+          "HTTP/1.1 200 OK\r\n",
+          "content-type: text/event-stream\r\n",
+          "transfer-encoding: chunked\r\n",
+          "connection: close\r\n\r\n"
+        ])
+
+      Enum.each(fragments, fn fragment ->
+        size = fragment |> byte_size() |> Integer.to_string(16)
+        _ = :gen_tcp.send(socket, [size, "\r\n", fragment, "\r\n"])
+      end)
+
+      :gen_tcp.send(socket, "0\r\n\r\n")
+    end
+
+    defp await_server(task) do
+      case Task.yield(task, @loopback_timeout) || Task.shutdown(task, :brutal_kill) do
+        {:ok, request_body} -> request_body
+        {:exit, reason} -> exit(reason)
+        nil -> exit(:timeout)
       end
     end
   end

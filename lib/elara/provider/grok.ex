@@ -73,9 +73,8 @@ defmodule Elara.Provider.Grok do
     end
   end
 
-  @doc "Map xAI HTTP 403 to a named entitlement error. Re-login will not help."
   @spec classify_error(Error.t()) :: Error.t()
-  def classify_error(%Error{kind: :http, status: 403}) do
+  defp classify_error(%Error{kind: :http, status: 403}) do
     %Error{
       kind: :entitlement,
       status: 403,
@@ -84,7 +83,7 @@ defmodule Elara.Provider.Grok do
     }
   end
 
-  def classify_error(%Error{} = err), do: err
+  defp classify_error(%Error{} = err), do: err
 
   defp maybe_refresh(%__MODULE__{} = config) do
     if Auth.expired?(config.tokens, System.system_time(:second)) do

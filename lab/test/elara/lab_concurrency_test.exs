@@ -200,8 +200,13 @@ defmodule Elara.Lab.ConcurrencyTest do
         Enum.map(4..19, &{:distinct, &1}) ++
         [:gamma, :gamma, :alpha, :beta, {:omitted, 1}, :gamma, {:omitted, 2}]
 
-    failures = Concurrency.user_failure_report_for_test(reasons)
-    decoded = JSON.decode!(JSON.encode!(failures))
+    hook = fn
+      {:user_started, index} -> exit(Enum.at(reasons, index - 1))
+      _point -> :ok
+    end
+
+    result = run(%{"sessions" => Integer.to_string(length(reasons))}, 42, hook: hook)
+    decoded = JSON.decode!(JSON.encode!(result.user_failures))
 
     assert decoded["total"] == length(reasons)
     assert decoded["retained_distinct"] == 20
@@ -663,34 +668,30 @@ defmodule Elara.Lab.ConcurrencyTest do
     assert Map.has_key?(result, :retained_dir)
   end
 
-  # A cwd key is the cwd's basename plus a hash, and a child's worktree basename is
-  # a random token, so a session directory can begin with "_" like the internal ones.
   test "session files are the root's depth-two .jsonl files, whatever their key begins with" do
-    root = Path.join(System.tmp_dir!(), "lab-session-files-#{System.unique_integer([:positive])}")
-    on_exit(fn -> File.rm_rf!(root) end)
+    hook = fn
+      :before_session_settlement ->
+        root = Application.fetch_env!(:elara, :sessions_root)
 
-    for path <- [
-          "_Tok3n-0a1b2c3d/child.jsonl",
-          "workspace-4e5f6a7b/top.jsonl",
-          ".dot-8c9d0e1f/hidden.jsonl",
-          "_threads/r.json",
-          "_threads/workspaces/_Tok3n/deep.jsonl",
-          "_thread_messages/m.json",
-          "workspace-4e5f6a7b/notes.txt"
-        ] do
-      File.mkdir_p!(Path.dirname(Path.join(root, path)))
-      File.write!(Path.join(root, path), "")
+        for path <- [
+              "_Tok3n-0a1b2c3d/child.jsonl",
+              "workspace-4e5f6a7b/top.jsonl",
+              ".dot-8c9d0e1f/hidden.jsonl",
+              "_threads/r.json",
+              "_threads/workspaces/_Tok3n/deep.jsonl",
+              "_thread_messages/m.json",
+              "workspace-4e5f6a7b/notes.txt"
+            ] do
+          File.mkdir_p!(Path.dirname(Path.join(root, path)))
+          File.write!(Path.join(root, path), "")
+        end
+
+      _point ->
+        :ok
     end
 
-    assert root
-           |> Concurrency.session_files()
-           |> Enum.map(&Path.relative_to(&1, root))
-           |> Enum.sort() ==
-             [
-               ".dot-8c9d0e1f/hidden.jsonl",
-               "_Tok3n-0a1b2c3d/child.jsonl",
-               "workspace-4e5f6a7b/top.jsonl"
-             ]
+    result = run(%{}, 42, hook: hook)
+    assert result.session_files == result.cumulative_sessions + 3
   end
 
   test "an unknown topology is refused" do

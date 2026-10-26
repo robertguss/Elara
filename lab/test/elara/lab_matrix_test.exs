@@ -4,14 +4,14 @@ defmodule Elara.Lab.MatrixTest do
 
   test "the registered finite grid is round-major with 1200 distinct row identities and seeds" do
     rows = Matrix.plan(50, 1_085_000)
-    assert length(Matrix.cases()) == 24
+    case_ids = Enum.map(Matrix.plan(1, 1_085_000), & &1.case_id)
+    assert length(case_ids) == 24
     assert length(rows) == 1_200
     assert Enum.map(rows, & &1.index) == Enum.to_list(0..1_199)
     assert Enum.map(rows, & &1.seed) == Enum.to_list(1_085_000..1_086_199)
-    assert Enum.map(Enum.take(rows, 24), & &1.case_id) == Enum.map(Matrix.cases(), & &1.case_id)
+    assert Enum.map(Enum.take(rows, 24), & &1.case_id) == case_ids
 
-    assert Enum.map(Enum.slice(rows, 24, 24), & &1.case_id) ==
-             Enum.map(Matrix.cases(), & &1.case_id)
+    assert Enum.map(Enum.slice(rows, 24, 24), & &1.case_id) == case_ids
 
     assert Enum.all?(Enum.frequencies_by(rows, & &1.case_id), fn {_, n} -> n == 50 end)
 

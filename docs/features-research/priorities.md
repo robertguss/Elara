@@ -6,9 +6,8 @@
 > former role.
 
 Captured 2026-09-06 from a review of both feature-research documents and checkout
-`052a0a7`. This is a research assessment and prioritization reference.
-[ROADMAP.md](../../ROADMAP.md) remains the sole implementation queue and status
-source; this list does not schedule work or change existing milestone status.
+`052a0a7`. This is a research assessment and prioritization reference; it does
+not schedule work or change existing milestone status.
 
 The owner selected **live plugin discovery and reload** as the first experiment
 and then authorized the focused test→fix→rerun workflow. Its decisions live in the

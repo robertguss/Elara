@@ -7,10 +7,9 @@
 > former role.
 
 This evidence log connects experiments to changes in Elara's harness. It is not
-a second implementation queue: [ROADMAP.md](../ROADMAP.md) owns current status,
-publication commits, and what is authorized next. The
-[feature priorities](features-research/priorities.md) capture the original
-assessment; research proposals are not implemented capabilities.
+a second implementation queue. The [feature priorities](features-research/priorities.md)
+capture the original assessment; research proposals are not implemented
+capabilities.
 
 For each completed experiment, record its question, setup, observed result,
 operator assistance, useful functionality, checks, and limits here or in a

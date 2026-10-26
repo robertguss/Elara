@@ -34,8 +34,8 @@ The reusable ideas are durable source conversations, selective retrieval, explic
 
 The parent review supplied the following source findings; this research subtask did not independently inspect or test those modules:
 
-- `lib/elara/coordinator.ex:55` already configures a `DynamicSupervisor`, concurrency limits (default three), and budgets. The coordinator starts real sessions, monitors them, and asks asynchronously through its engine.
-- The coordinator engine's child options disable persistence and plugins; coding children receive temporary detached worktrees at HEAD. Results are truncated to a configured bound, and coordinator termination stops children and removes worktrees.
+- At review time, `lib/elara/coordinator.ex:55` configured a `DynamicSupervisor`, concurrency limits (default three), and budgets. The coordinator started real sessions, monitored them, and asked asynchronously through its engine. That API was later retired under ROB-1095/LAB-6; see [Delegate child sessions](elixir-api.md#delegate-child-sessions).
+- The coordinator engine's child options disabled persistence and plugins; coding children received temporary detached worktrees at HEAD. Results were truncated to a configured bound, and coordinator termination stopped children and removed worktrees.
 - `lib/elara/tool.ex:66` exposes read/write/edit/bash built-ins, not model-callable thread spawning or messaging. `docs/detached-and-remote.md` distinguishes the embedded VM, which ends with the TUI, from a long-lived server that supports detachment.
 - `lib/elara/session/store.ex:177` already persists a source session reference as `parent_session` when cloning. Some fork lineage therefore exists; durable coordination is still a separate requirement.
 
